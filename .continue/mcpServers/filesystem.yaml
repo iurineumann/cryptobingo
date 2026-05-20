@@ -1,0 +1,11 @@
+name: filesystem
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: filesystem
+    command: "npx.cmd"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "D:\\Projetos\\cryptobingo\\" # Substitua pelo diretório raiz que a IA pode ler/escrever
+    env: {}

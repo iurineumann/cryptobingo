@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: Bingo GameFi - REST API (Off-chain Engine)
+  version: 1.0.0
+  description: |
+    Interface HTTP estática do Microsserviço Node.js.
+    Responsável pela injeção segura de entropia inicial (RNG Cartel Generation) com assinatura criptográfica, 
+    prevenindo ataques de falsificação no Smart Contract C++. Provê também rotas de reconciliação de estado.
+servers:
+  - url: https://api.seubingo.com/v1
+    description: Cluster Kubernetes (Resolution Engine Pods)
+
+security:
+  - jwtAuth: []
+
+paths:
+  /games/{game_id}/tickets/generate:
+    get:
+      summary: Geração de Cartelas (Drafting & Re-roll)
+      description: |
+        Gera matrizes aleatorizadas usando Arranjos matemáticos. 
+        Garante unicidade no Redis e devolve a matriz envelopada com a assinatura privada da plataforma.
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: count
+          in: query
+          required: true
+          description: Quantidade de cartelas para o lote (Otimização para o Carrinho).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Lote de cartelas gerado e assinado com sucesso.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TicketDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Jogo não encontrado ou já passou do estado FUNDING.
+
+  /games/{game_id}/sync:
+    get:
+      summary: Recuperação de Estado (Packet Loss Fallback)
+      description: |
+        Endpoint de emergência acionado pelo Frontend quando o WebSocket detecta um salto 
+        no número de sequência (order) das bolas sorteadas.
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: last_order
+          in: query
+          required: true
+          description: O último índice recebido com sucesso pelo cliente.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Retorna o array de dezenas sorteadas a partir do índice solicitado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  minimum: 1
+                  maximum: 75
+
+components:
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Exige validação da sessão do WharfKit para prevenir exaustão de geração de RNG.
+
+  schemas:
+    TicketDraft:
+      type: object
+      required:
+        - matrix
+        - signature
+      properties:
+        matrix:
+          type: array
+          description: Vetor plano de 24 posições (índices 0 a 24, pulando o centro 12).
+          items:
+            type: integer
+            minimum: 1
+            maximum: 75
+          minItems: 24
+          maxItems: 24
+        signature:
+          type: string
+          description: Assinatura ECDSA da matriz serializada usando a chave privada microservice@active.
+          example: "SIG_K1_K5GvG9y... (Base58 encoded)"
+
+  responses:
+    BadRequest:
+      description: Erro de validação de payload ou parâmetros.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer

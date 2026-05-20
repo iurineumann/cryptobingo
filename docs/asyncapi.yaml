@@ -1,0 +1,194 @@
+asyncapi: 2.6.0
+info:
+  title: Bingo GameFi - Event Stream API
+  version: 1.0.0
+  description: |
+    Barramento de eventos de alta performance para sincronização de estado (Slow Reveal) e multiplexing de salas.
+    Implementa resiliência de rede via sequenciamento de pacotes (Idempotência) e isolamento de escopo por `game_id`.
+servers:
+  production:
+    url: wss://ws.seubingo.com/v1/stream
+    protocol: wss
+    description: Cluster Kubernetes com balanceamento de carga (HPA) e roteamento via NGINX Ingress.
+    security:
+      - jwtAuth: []
+
+channels:
+  game.{game_id}:
+    description: Canal dinâmico para multiplexing. O cliente escuta múltiplas salas isolando o estado no Frontend.
+    parameters:
+      game_id:
+        description: Identificador unívoco da rodada on-chain.
+        schema:
+          type: integer
+          minimum: 1
+    subscribe:
+      description: Eventos emitidos pelo Broadcaster Worker (Servidor -> Cliente).
+      message:
+        oneOf:
+          - $ref: '#/components/messages/GameLocked'
+          - $ref: '#/components/messages/BallDrawn'
+          - $ref: '#/components/messages/WinnerFound'
+          - $ref: '#/components/messages/GameAborted'
+    publish:
+      description: Comandos de controle de presença emitidos pelo cliente (Cliente -> Servidor).
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SubscribeRoom'
+          - $ref: '#/components/messages/SyncState'
+
+components:
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Handshake inicial exige token WharfKit validado para evitar exaustão de conexões abertas (DDoS).
+
+  messages:
+    # --------------------------------------------------------
+    # MENSAGENS: SERVIDOR -> CLIENTE (DOWNSTREAM)
+    # --------------------------------------------------------
+    GameLocked:
+      name: game_locked
+      title: Rodada Fechada
+      summary: Emitido quando a FSM on-chain transita para LOCKED e bloqueia novas compras.
+      payload:
+        type: object
+        required: [event, game_id, timestamp]
+        properties:
+          event:
+            type: string
+            const: game_locked
+          game_id:
+            type: integer
+          timestamp:
+            type: string
+            format: date-time
+
+    BallDrawn:
+      name: ball_drawn
+      title: Bola Sorteada (Slow Reveal)
+      summary: Emitido a cada ciclo de animação (aprox. 3s). Carrega ID de ordem para reconciliação de rede.
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: ball_drawn
+          game_id:
+            type: integer
+          payload:
+            type: object
+            required: [order, number, timestamp]
+            properties:
+              order:
+                type: integer
+                description: Posição ordinal do sorteio (1 a 75). Vital para detecção de perda de pacotes (Packet Loss).
+              number:
+                type: integer
+                minimum: 1
+                maximum: 75
+              timestamp:
+                type: string
+                format: date-time
+
+    WinnerFound:
+      name: winner_found
+      title: Vencedores Detectados
+      summary: Clímax do jogo. Contém cálculos de resolução algébrica e pagamentos fracionados (Multidrop).
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: winner_found
+          game_id:
+            type: integer
+          payload:
+            type: object
+            required: [winning_ball, winners]
+            properties:
+              winning_ball:
+                type: integer
+                description: A dezena exata que cruzou o threshold do Bitmasking.
+              winners:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WinnerObject'
+
+    GameAborted:
+      name: game_aborted
+      title: Fail-Safe Acionado
+      summary: Cancela animações do UI e libera fallback visual para estorno O(1).
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: game_aborted
+          game_id:
+            type: integer
+          payload:
+            type: object
+            required: [reason]
+            properties:
+              reason:
+                type: string
+                enum: [ORACLE_TIMEOUT, LOW_QUORUM, ADMIN_HALT]
+
+    # --------------------------------------------------------
+    # MENSAGENS: CLIENTE -> SERVIDOR (UPSTREAM)
+    # --------------------------------------------------------
+    SubscribeRoom:
+      name: subscribe_room
+      title: Entrar na Sala
+      payload:
+        type: object
+        required: [action, game_id]
+        properties:
+          action:
+            type: string
+            const: subscribe
+          game_id:
+            type: integer
+
+    SyncState:
+      name: sync_state
+      title: Sincronização de Estado (Reconciliação)
+      summary: Se o cliente detectar salto no `order` (ex. rede celular oscilou), pede payload de correção.
+      payload:
+        type: object
+        required: [action, game_id, last_order]
+        properties:
+          action:
+            type: string
+            const: sync
+          game_id:
+            type: integer
+          last_order:
+            type: integer
+            description: O último identificador ordinal recebido com sucesso pelo cliente.
+
+  schemas:
+    WinnerObject:
+      type: object
+      required: [account, ticket_id, win_pattern, payouts]
+      properties:
+        account:
+          type: string
+          description: Conta WAX validada (ex. iuri.wax).
+        ticket_id:
+          type: integer
+        win_pattern:
+          type: string
+          enum: [ROW_1, COL_1, DIAGONAL, FULL_HOUSE]
+        payouts:
+          type: array
+          description: Vetor de extended_assets creditados na wallet interna (Suporta Multidrop Sponsorship).
+          items:
+            type: string
+            pattern: '^[0-9]+\.[0-9]+ [A-Z]+$'

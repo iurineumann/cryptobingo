@@ -1,0 +1,1 @@
+[IN_PROGRESS] Implementar bingo.hpp (Smart Contract) conforme SPEC.md e ADR-001.
