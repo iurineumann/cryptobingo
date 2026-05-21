@@ -13,14 +13,14 @@ Sempre que uma tarefa for solicitada, o Agente DEVE seguir esta ordem estrita de
 # GOVERNANÇA DE MULTI-AGENTES:
 
 Antes de iniciar qualquer tarefa, o agente DEVE checar o `TASKS.md`.
-
 Se a tarefa depender de outra (coluna 'Dependência'), o agente deve verificar se o status da tarefa anterior é [DONE].
-
 Ao finalizar, o agente DEVE atualizar o `TASKS.md` e o `TRACE.md` antes de sinalizar conclusão.
 
-# Antes de escrever código C++, o Agente deve:
+# REGRAS ESTRITAS PARA CÓDIGO C++ (ANTELOPE):
 
+Antes de escrever código C++, o Agente deve:
 - Listar as bibliotecas necessárias.
-- Explicar como a serialização será feita para o buffer.
-- Comparar a lógica com a estrutura do .hpp aberto.
+- **Serialização de Hash (Anti-Replay):** O Agente DEVE usar `eosio::datastream<char*>` com um buffer estático ou um vetor pré-alocado para serializar structs ou múltiplos parâmetros antes de passar para `eosio::sha256()`. Nunca use concatenação de `std::string` ou `reinterpret_cast` direto em tipos complexos como `name`.
+- **Validação de Assinatura:** O Agente DEVE buscar a chave pública administrativa instanciando o `config_singleton`. Use `eosio::assert_recover_key(hash, signature, config.signer_key)` para validar.
+- Comparar a lógica com a estrutura do `.hpp` aberto.
 - SOMENTE após validar os pontos acima, escrever o código.

@@ -4,9 +4,18 @@
 #include <eosio/asset.hpp>
 #include <eosio/extended_asset.hpp>
 #include <eosio/singleton.hpp>
+#include <eosio/crypto.hpp> // Necessário para public_key e signature
 
 namespace bingo {
     using namespace eosio;
+
+    // Tabela de Configuração Global (Singleton)
+    struct [[eosio::table]] config_state {
+        public_key signer_key; // Chave pública do Backend (Microservice)
+    };
+    typedef singleton<"config"_n, config_state> config_singleton;
+    // Dummy table para o singleton persistir na RAM corretamente
+    typedef multi_index<"config"_n, config_state> config_singleton_abi;
 
     // Tabela de Balanço: Cada conta possui N registros de tokens diferentes
     struct [[eosio::table]] balance_record {
@@ -44,8 +53,11 @@ namespace bingo {
     public:
         using contract::contract;
 
+        // Action de setup administrativo
+        [[eosio::action]]
+        void setconfig(public_key signer_key);
+
         // Implementação conforme ADR-001: Assinatura Contextual
-        // A assinatura deve validar hash(matrix + game_id + owner)
         [[eosio::action]]
         void buytickets(name owner, uint64_t game_id, std::vector<std::vector<uint8_t>> matrices, std::vector<signature> signatures);
 
@@ -53,6 +65,7 @@ namespace bingo {
         void lockgame(uint64_t game_id);
 
     private:
-        // Helper para checagem de autorização e assinaturas
+        // Helper para inicializar e validar o singleton
+        config_state get_config();
     };
 }
