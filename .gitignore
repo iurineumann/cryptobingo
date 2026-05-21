@@ -1,1 +1,43 @@
+# Dependencies
+node_modules
+
+# Build
+dist
+build
+
+# Logs
+logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# AI
+.cline/sessions
+.cline/cache
+.continue/.cache
+
+# OS
+.DS_Store
+Thumbs.db
+
+node_modules
+
+dist
+build
+
+*.tsbuildinfo
+
+local.db
+*.sqlite
+*.sqlite3
+
+.env
+.env.*
+
+.cline/sessions
+.cline/cache
+
+.continue/.cache
 .aider*
