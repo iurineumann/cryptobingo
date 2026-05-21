@@ -1,6 +1,6 @@
-import { PrivateKey, Session } from '@wharfkit/session';
+import { APIClient, PrivateKey, Session } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
-import { Serializer, Checksum256, Name, UInt64, ExtendedAsset } from '@wharfkit/antelope';
+import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -8,6 +8,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
 
 const url = process.env.RPC_URL || 'http://127.0.0.1:8888';
 const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
+const client = new APIClient({ url });
 
 const eosioKey = PrivateKey.from(process.env.EOSIO_KEY!);
 const playerKey = PrivateKey.from(process.env.JOGADOR1_KEY!);
@@ -18,98 +19,118 @@ const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', ch
 const playerSession = new Session({ actor: 'jogador1', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(playerKey) });
 const microserviceSession = new Session({ actor: 'microservice', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioKey) });
 
-describe("Bingo FSM Integration Tests", () => {
+let currentGameId: UInt64;
+let currentGameIdStr: string;
+
+describe("Bingo Autônomo (DeFi) FSM Tests", () => {
     
     beforeAll(async () => {
+        const chars = 'abcdefghijklmnopqrstuvwxyz12345';
+        let randomStr = 'game.';
+        for (let i = 0; i < 5; i++) {
+            randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        const gameName = Name.from(randomStr);
+        currentGameIdStr = gameName.toString();
+        currentGameId = gameName.value; 
+        
+        console.log(`\n🎲 Iniciando testes com Jogo ID: ${currentGameIdStr}\n`);
+
         try {
-            // CORREÇÃO 1: Criação, Compra de RAM e Delegação de Recursos na MESMA transação!
             await rootSession.transact({
                 actions: [
-                    {
-                        account: 'eosio', name: 'newaccount',
-                        authorization: [rootSession.permissionLevel],
-                        data: {
-                            creator: 'eosio', name: 'microservice',
-                            owner: { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] },
-                            active: { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] },
-                        },
-                    },
-                    {
-                        account: 'eosio', name: 'buyrambytes',
-                        authorization: [rootSession.permissionLevel],
-                        data: { payer: 'eosio', receiver: 'microservice', bytes: 8192000 }
-                    },
-                    {
-                        account: 'eosio', name: 'delegatebw',
-                        authorization: [rootSession.permissionLevel],
-                        data: { from: 'eosio', receiver: 'microservice', stake_net_quantity: '100.0000 WAX', stake_cpu_quantity: '100.0000 WAX', transfer: false }
-                    }
+                    { account: 'eosio', name: 'newaccount', authorization: [rootSession.permissionLevel], data: { creator: 'eosio', name: 'microservice', owner: { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] }, active: { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] } } },
+                    { account: 'eosio', name: 'buyrambytes', authorization: [rootSession.permissionLevel], data: { payer: 'eosio', receiver: 'microservice', bytes: 8192000 } },
+                    { account: 'eosio', name: 'delegatebw', authorization: [rootSession.permissionLevel], data: { from: 'eosio', receiver: 'microservice', stake_net_quantity: '100.0000 WAX', stake_cpu_quantity: '100.0000 WAX', transfer: false } }
                 ]
             }, { broadcast: true });
-        } catch (e) {
-            // Se já existir, tudo bem.
-            console.log("Aviso no setup (conta pode já existir):", (e as Error).message);
-        }
+        } catch (e) { /* Conta já existe */ }
     });
 
-    test("Deve criar um novo jogo (creategame)", async () => {
+    test("Passo 1: Criar um novo jogo (creategame)", async () => {
         const result = await bingoSession.transact({
-            actions: [{
-                account: 'bingo.game', name: 'creategame',
-                authorization: [bingoSession.permissionLevel],
-                data: {
-                    game_id: 1,
-                    ticket_price: ExtendedAsset.from({ quantity: "10.0000 TLM", contract: "eosio.token" }),
-                },
-            }]
+            actions: [{ account: 'bingo.game', name: 'creategame', authorization: [bingoSession.permissionLevel], data: { game_id: currentGameId, ticket_price: ExtendedAsset.from({ quantity: "10.0000 TLM", contract: "eosio.token" }) } }]
         }, { broadcast: true });
         expect(result.response).toBeDefined();
     });
 
-    test("Deve gerar assinatura e comprar cartela (buytickets)", async () => {
-        // A cartela real tem 24 números (pulamos o espaço central livre)
-        const matrix = [1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19,20,21,22,23,24,25];
-        
-        // Converte a matriz para HexString (a língua materna do Wharfkit para o tipo 'bytes')
-        const matrixHex = Buffer.from(matrix).toString('hex');
-        
-        const gameId = UInt64.from(1);
+    test("Passo 2: Jogador deposita fundos reais (deposit via on_notify)", async () => {
+        const result = await playerSession.transact({
+            actions: [{ account: 'eosio.token', name: 'transfer', authorization: [playerSession.permissionLevel], data: { from: 'jogador1', to: 'bingo.game', quantity: '50.0000 TLM', memo: 'Deposit para jogar' } }]
+        }, { broadcast: true });
+        expect(result.response).toBeDefined();
+    });
+
+    test("Passo 3: Assinar e comprar cartela (buytickets)", async () => {
+        const matrix = [1,2,3,4,5, 6,7,8,9,10, 11,12,13,14,15, 16,17,18,19,20, 21,22,23,24,25];
+        const matrixBytesObj = Bytes.from(new Uint8Array(matrix));
         const owner = Name.from('jogador1');
 
-        // Serializamos para bytes usando o HexString para gerar a assinatura exatamente como o C++ espera
-        const matrixBytes = Serializer.encode({ type: 'bytes', object: matrixHex }).array;
-        const gameIdBytes = Serializer.encode({ type: 'uint64', object: gameId }).array;
+        const matrixBytes = Serializer.encode({ type: 'bytes', object: matrixBytesObj }).array;
+        const gameIdBytes = Serializer.encode({ type: 'uint64', object: currentGameId }).array;
         const ownerBytes = Serializer.encode({ type: 'name', object: owner }).array;
 
         const buffer = new Uint8Array([...matrixBytes, ...gameIdBytes, ...ownerBytes]);
         const hash = Checksum256.hash(buffer);
-        
-        const signature = eosioKey.signDigest(hash).toString();
+        const signatureObj = bingoKey.signDigest(hash);
 
         const result = await playerSession.transact({
-            actions: [{
-                account: 'bingo.game',
-                name: 'buytickets',
-                authorization: [playerSession.permissionLevel],
-                data: {
-                    owner: 'jogador1',
-                    game_id: 1,
-                    matrices: [matrixHex], // Passamos o HexString (24 bytes cravados)
-                    signatures: [signature],
-                },
-            }]
+            actions: [{ account: 'bingo.game', name: 'buytickets', authorization: [playerSession.permissionLevel], data: { owner: owner, game_id: currentGameId, matrices: [matrixBytesObj], signatures: [signatureObj] } }]
         }, { broadcast: true });
-        
         expect(result.response).toBeDefined();
     });
 
-    test("Deve travar o jogo (lockgame)", async () => {
+    test("Passo 4: Travar o jogo (lockgame)", async () => {
         const result = await microserviceSession.transact({
-            actions: [{
-                account: 'bingo.game', name: 'lockgame',
-                authorization: [microserviceSession.permissionLevel],
-                data: { game_id: 1 },
+            actions: [{ account: 'bingo.game', name: 'lockgame', authorization: [microserviceSession.permissionLevel], data: { game_id: currentGameId } }]
+        }, { broadcast: true });
+        expect(result.response).toBeDefined();
+    });
+
+    test("Passo 5: Iniciar o Sorteio (startdraw)", async () => {
+        const result = await microserviceSession.transact({
+            actions: [{ account: 'bingo.game', name: 'startdraw', authorization: [microserviceSession.permissionLevel], data: { game_id: currentGameId } }]
+        }, { broadcast: true });
+        expect(result.response).toBeDefined();
+    });
+
+    test("Passo 6: Registrar vitória e pagar prêmio RTP (claimwin)", async () => {
+        // O SEGREDO DEFINITIVO: json: false!
+        // Ignora completamente o ABI e extrai a RAM bruta da blockchain em Hexadecimal.
+        const tableResult = await client.v1.chain.get_table_rows({ 
+            code: 'bingo.game', 
+            scope: currentGameIdStr, 
+            table: 'tickets', 
+            json: false 
+        });
+        
+        expect(tableResult.rows.length).toBeGreaterThan(0);
+        
+        // A linha bruta (rowHex) é uma string. Os primeiros 8 bytes (16 caracteres) são o ticket_id em Little Endian.
+        const rowHex = tableResult.rows[0];
+        const ticketIdHexLE = rowHex.substring(0, 16);
+        
+        // Invertemos para Big Endian para o JavaScript conseguir converter para um número UInt64 exato.
+        const ticketIdHexBE = ticketIdHexLE.match(/../g)!.reverse().join('');
+        const ticketId = UInt64.from('0x' + ticketIdHexBE);
+
+        console.log(`🎟️ Ticket ID decodificado da RAM: ${ticketId.toString()}`);
+
+        const result = await microserviceSession.transact({
+            actions: [{ 
+                account: 'bingo.game', 
+                name: 'claimwin', 
+                authorization: [microserviceSession.permissionLevel], 
+                data: { game_id: currentGameId, ticket_id: ticketId, ball_count: 45, win_pattern_mask: UInt64.from(1) } 
             }]
+        }, { broadcast: true });
+        expect(result.response).toBeDefined();
+    });
+
+    test("Passo 7: Sacar ganhos para a carteira externa (withdraw)", async () => {
+        const result = await playerSession.transact({
+            actions: [{ account: 'bingo.game', name: 'withdraw', authorization: [playerSession.permissionLevel], data: { owner: 'jogador1', amount: ExtendedAsset.from({ quantity: "8.5000 TLM", contract: "eosio.token" }) } }]
         }, { broadcast: true });
         expect(result.response).toBeDefined();
     });

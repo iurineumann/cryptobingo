@@ -82,12 +82,26 @@
             ]
         },
         {
-            "name": "config_state",
+            "name": "startdraw",
             "base": "",
             "fields": [
                 {
-                    "name": "signer_key",
-                    "type": "public_key"
+                    "name": "game_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "withdraw",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "extended_asset"
                 }
             ]
         }
@@ -117,17 +131,19 @@
             "name": "setconfig",
             "type": "setconfig",
             "ricardian_contract": ""
-        }
-    ],
-    "tables": [
+        },
         {
-            "name": "config",
-            "type": "config_state",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+            "name": "startdraw",
+            "type": "startdraw",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdraw",
+            "type": "withdraw",
+            "ricardian_contract": ""
         }
     ],
+    "tables": [],
     "ricardian_clauses": [],
     "variants": [],
     "action_results": []

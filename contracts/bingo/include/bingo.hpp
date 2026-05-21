@@ -8,18 +8,18 @@
 namespace bingo {
     using namespace eosio;
 
-    struct [[eosio::table]] config_state {
+    struct [[eosio::table("config")]] config_state {
         public_key signer_key;
     };
     typedef singleton<"config"_n, config_state> config_singleton;
 
-    struct [[eosio::table]] balance_record {
+    struct [[eosio::table("balances")]] balance_record {
         extended_asset balance;
-        uint64_t primary_key() const { return balance.get_extended_symbol().get_symbol().raw(); }
+        uint64_t primary_key() const { return balance.quantity.symbol.code().raw(); }
     };
     typedef multi_index<"balances"_n, balance_record> balances_table;
 
-    struct [[eosio::table]] game_state {
+    struct [[eosio::table("games")]] game_state {
         uint64_t game_id;
         name status; 
         extended_asset ticket_price;
@@ -30,7 +30,8 @@ namespace bingo {
     };
     typedef multi_index<"games"_n, game_state> games_table;
 
-    struct [[eosio::table]] ticket_record {
+    // A MÁGICA ACONTECE AQUI:
+    struct [[eosio::table("tickets")]] ticket_record {
         uint64_t ticket_id;
         name owner;
         std::vector<uint8_t> matrix;
@@ -60,7 +61,19 @@ namespace bingo {
         [[eosio::action]]
         void lockgame(uint64_t game_id);
 
+        // NOVO: Transição de estado de 'locked' para 'drawing'
+        [[eosio::action]]
+        void startdraw(uint64_t game_id);
+
         [[eosio::action]]
         void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask);
+
+        // NOVO: Escuta transferências de tokens para o contrato (Depósitos Reais)
+        [[eosio::on_notify("eosio.token::transfer")]]
+        void deposit(name from, name to, eosio::asset quantity, std::string memo);
+
+        // NOVO: Saque de fundos pelo usuário
+        [[eosio::action]]
+        void withdraw(name owner, extended_asset amount);
     };
 }

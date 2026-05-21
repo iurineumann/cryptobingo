@@ -20,7 +20,6 @@ namespace bingo {
             g.game_id = game_id;
             g.status = "funding"_n; 
             g.ticket_price = ticket_price;
-            // Correção da inicialização do extended_asset
             g.prize_pool = extended_asset(asset(0, ticket_price.quantity.symbol), ticket_price.contract);
         });
     }
@@ -43,7 +42,7 @@ namespace bingo {
         tickets_table tickets(get_self(), game_id);
 
         for (size_t i = 0; i < matrices.size(); ++i) {
-            size_t buffer_size = matrices[i].size() + sizeof(uint64_t) + sizeof(name);
+            size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
             std::vector<char> buffer(buffer_size);
             datastream<char*> ds(buffer.data(), buffer.size());
             
@@ -99,6 +98,19 @@ namespace bingo {
         });
     }
 
+    void bingo_contract::startdraw(uint64_t game_id) {
+        require_auth("microservice"_n); 
+
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.find(game_id);
+        check(game_itr != games.end(), "Game not found.");
+        check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
+
+        games.modify(game_itr, get_self(), [&](auto& g) {
+            g.status = "drawing"_n;
+        });
+    }
+
     void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask) {
         require_auth("microservice"_n); 
 
@@ -142,6 +154,48 @@ namespace bingo {
         games.modify(game_itr, get_self(), [&](auto& g) {
             g.status = "archived"_n;
         });
+    }
+
+    void bingo_contract::deposit(name from, name to, eosio::asset quantity, std::string memo) {
+        // Ignora transferências de saída ou spam
+        if (from == get_self() || to != get_self()) {
+            return;
+        }
+
+        // Recupera quem é o emissor do token que chamou o transfer (ex: eosio.token)
+        name token_contract = get_first_receiver(); 
+        extended_asset deposit_asset(quantity, token_contract);
+
+        balances_table balances(get_self(), from.value);
+        auto bal_itr = balances.find(deposit_asset.quantity.symbol.code().raw());
+        
+        if (bal_itr == balances.end()) {
+            balances.emplace(get_self(), [&](auto& b) { b.balance = deposit_asset; });
+        } else {
+            balances.modify(bal_itr, get_self(), [&](auto& b) { b.balance += deposit_asset; });
+        }
+    }
+
+    void bingo_contract::withdraw(name owner, extended_asset amount) {
+        require_auth(owner); 
+
+        balances_table balances(get_self(), owner.value);
+        auto bal_itr = balances.find(amount.quantity.symbol.code().raw());
+        
+        check(bal_itr != balances.end(), "Nenhum saldo encontrado para este token.");
+        check(bal_itr->balance >= amount, "Saldo insuficiente para saque.");
+
+        balances.modify(bal_itr, get_self(), [&](auto& b) {
+            b.balance -= amount;
+        });
+
+        // Disparo autônomo (inline) para devolver o token ao jogador
+        action(
+            permission_level{get_self(), "active"_n},
+            amount.contract, // O contrato nativo (ex: eosio.token)
+            "transfer"_n,
+            std::make_tuple(get_self(), owner, amount.quantity, std::string("Saque via CryptoBingo"))
+        ).send();
     }
 
 } // namespace bingo
