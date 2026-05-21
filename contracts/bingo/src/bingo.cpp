@@ -2,6 +2,29 @@
 
 namespace bingo {
 
+    void bingo_contract::setconfig(public_key signer_key) {
+        require_auth(get_self()); 
+        
+        config_singleton config_table(get_self(), get_self().value);
+        config_state config = { signer_key };
+        config_table.set(config, get_self());
+    }
+
+    void bingo_contract::creategame(uint64_t game_id, extended_asset ticket_price) {
+        require_auth(get_self()); 
+        
+        games_table games(get_self(), get_self().value);
+        check(games.find(game_id) == games.end(), "Game ID already exists.");
+
+        games.emplace(get_self(), [&](auto& g) {
+            g.game_id = game_id;
+            g.status = "funding"_n; 
+            g.ticket_price = ticket_price;
+            // Correção da inicialização do extended_asset
+            g.prize_pool = extended_asset(asset(0, ticket_price.quantity.symbol), ticket_price.contract);
+        });
+    }
+
     void bingo_contract::buytickets(name owner, uint64_t game_id, std::vector<std::vector<uint8_t>> matrices, std::vector<signature> signatures) {
         require_auth(owner);
 
@@ -64,7 +87,7 @@ namespace bingo {
     }
 
     void bingo_contract::lockgame(uint64_t game_id) {
-        require_auth("microservice"_n); // Conforme spec de arquitetura isolada
+        require_auth("microservice"_n); 
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.find(game_id);

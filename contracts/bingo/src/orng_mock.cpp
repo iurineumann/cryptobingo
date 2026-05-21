@@ -1,12 +1,13 @@
 #include <orng_mock.hpp>
 
 namespace orng {
+    using namespace eosio;
 
-    void orng_mock::requestrand(uint64_t assoc_id, uint64_t signing_value, eosio::name caller) {
+    void orng_mock::requestrand(uint64_t assoc_id, uint64_t signing_value, name caller) {
         require_auth(caller);
 
         requests_table requests(get_self(), get_self().value);
-        requests.emplace(_self, [&](auto& req) {
+        requests.emplace(caller, [&](auto& req) {
             req.assoc_id = assoc_id;
             req.caller = caller;
         });
@@ -24,7 +25,7 @@ namespace orng {
             random_bytes[i - 1] = i;
         }
 
-        eosio::action(
+        action(
             permission_level{get_self(), "active"_n},
             request_itr->caller,
             "receiverand"_n,
@@ -33,5 +34,4 @@ namespace orng {
 
         requests.erase(request_itr);
     }
-
 }

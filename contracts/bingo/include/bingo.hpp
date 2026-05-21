@@ -2,7 +2,6 @@
 
 #include <eosio/eosio.hpp>
 #include <eosio/asset.hpp>
-#include <eosio/extended_asset.hpp>
 #include <eosio/singleton.hpp>
 #include <eosio/crypto.hpp>
 
@@ -13,7 +12,6 @@ namespace bingo {
         public_key signer_key;
     };
     typedef singleton<"config"_n, config_state> config_singleton;
-    typedef multi_index<"config"_n, config_state> config_singleton_abi;
 
     struct [[eosio::table]] balance_record {
         extended_asset balance;
@@ -54,6 +52,9 @@ namespace bingo {
         void setconfig(public_key signer_key);
 
         [[eosio::action]]
+        void creategame(uint64_t game_id, extended_asset ticket_price);
+
+        [[eosio::action]]
         void buytickets(name owner, uint64_t game_id, std::vector<std::vector<uint8_t>> matrices, std::vector<signature> signatures);
 
         [[eosio::action]]
@@ -61,8 +62,5 @@ namespace bingo {
 
         [[eosio::action]]
         void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask);
-
-    private:
-        config_state get_config();
     };
 }
