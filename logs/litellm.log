@@ -1,0 +1,75 @@
+INFO:     Started server process [90433]
+INFO:     Waiting for application startup.
+
+   ██╗     ██╗████████╗███████╗██╗     ██╗     ███╗   ███╗
+   ██║     ██║╚══██╔══╝██╔════╝██║     ██║     ████╗ ████║
+   ██║     ██║   ██║   █████╗  ██║     ██║     ██╔████╔██║
+   ██║     ██║   ██║   ██╔══╝  ██║     ██║     ██║╚██╔╝██║
+   ███████╗██║   ██║   ███████╗███████╗███████╗██║ ╚═╝ ██║
+   ╚══════╝╚═╝   ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝     ╚═╝
+
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:4000 (Press CTRL+C to quit)
+
+[1;37m#------------------------------------------------------------#[0m
+[1;37m#                                                            #[0m
+[1;37m#           'I get frustrated when the product...'            #[0m
+[1;37m#        https://github.com/BerriAI/litellm/issues/new        #[0m
+[1;37m#                                                            #[0m
+[1;37m#------------------------------------------------------------#[0m
+
+ Thank you for using LiteLLM! - Krrish & Ishaan
+
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+
+
+[32mLiteLLM: Proxy initialized with Config, Set models:[0m
+[32m    openai/qwen-fast[0m
+[32m    openai/deepseek[0m
+[32m    openai/deepseek-coder-v2:16b-lite-instruct-q4_K_M[0m
+[32m    openai/embeddings[0m
+[32m    openrouter-sonnet[0m
+INFO:     127.0.0.1:56525 - "GET /models HTTP/1.1" 200 OK
+INFO:     Started server process [95365]
+INFO:     Waiting for application startup.
+
+   ██╗     ██╗████████╗███████╗██╗     ██╗     ███╗   ███╗
+   ██║     ██║╚══██╔══╝██╔════╝██║     ██║     ████╗ ████║
+   ██║     ██║   ██║   █████╗  ██║     ██║     ██╔████╔██║
+   ██║     ██║   ██║   ██╔══╝  ██║     ██║     ██║╚██╔╝██║
+   ███████╗██║   ██║   ███████╗███████╗███████╗██║ ╚═╝ ██║
+   ╚══════╝╚═╝   ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝     ╚═╝
+
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:4000 (Press CTRL+C to quit)
+[92m23:15:25 - LiteLLM Proxy:ERROR[0m: common_request_processing.py:1730 - litellm.proxy.proxy_server._handle_llm_api_exception(): Exception occured - 400: {'error': '/chat/completions: Invalid model name passed in model=qwen-coder. Call `/v1/models` to view available models for your key.'}
+Traceback (most recent call last):
+  File "/home/iuri/.local/share/pipx/venvs/litellm/lib/python3.12/site-packages/litellm/proxy/proxy_server.py", line 8174, in chat_completion
+    result = await base_llm_response_processor.base_process_llm_request(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/iuri/.local/share/pipx/venvs/litellm/lib/python3.12/site-packages/litellm/proxy/common_request_processing.py", line 1179, in base_process_llm_request
+    llm_call = await route_request(
+               ^^^^^^^^^^^^^^^^^^^^
+  File "/home/iuri/.local/share/pipx/venvs/litellm/lib/python3.12/site-packages/litellm/proxy/route_llm_request.py", line 586, in route_request
+    raise ProxyModelNotFoundError(
+litellm.proxy.route_llm_request.ProxyModelNotFoundError: 400: {'error': '/chat/completions: Invalid model name passed in model=qwen-coder. Call `/v1/models` to view available models for your key.'}
+
+[1;37m#------------------------------------------------------------#[0m
+[1;37m#                                                            #[0m
+[1;37m#              'I don't like how this works...'               #[0m
+[1;37m#        https://github.com/BerriAI/litellm/issues/new        #[0m
+[1;37m#                                                            #[0m
+[1;37m#------------------------------------------------------------#[0m
+
+ Thank you for using LiteLLM! - Krrish & Ishaan
+
+
+
+[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new[0m
+
+
+[32mLiteLLM: Proxy initialized with Config, Set models:[0m
+[32m    openai/qwen-coder[0m
+INFO:     127.0.0.1:46090 - "POST /v1/chat/completions HTTP/1.1" 400 Bad Request

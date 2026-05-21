@@ -4,20 +4,17 @@
 #include <eosio/asset.hpp>
 #include <eosio/extended_asset.hpp>
 #include <eosio/singleton.hpp>
-#include <eosio/crypto.hpp> // Necessário para public_key e signature
+#include <eosio/crypto.hpp>
 
 namespace bingo {
     using namespace eosio;
 
-    // Tabela de Configuração Global (Singleton)
     struct [[eosio::table]] config_state {
-        public_key signer_key; // Chave pública do Backend (Microservice)
+        public_key signer_key;
     };
     typedef singleton<"config"_n, config_state> config_singleton;
-    // Dummy table para o singleton persistir na RAM corretamente
     typedef multi_index<"config"_n, config_state> config_singleton_abi;
 
-    // Tabela de Balanço: Cada conta possui N registros de tokens diferentes
     struct [[eosio::table]] balance_record {
         extended_asset balance;
         uint64_t primary_key() const { return balance.get_extended_symbol().get_symbol().raw(); }
@@ -26,7 +23,7 @@ namespace bingo {
 
     struct [[eosio::table]] game_state {
         uint64_t game_id;
-        name status; // 'created', 'funding', 'locked', 'drawing', 'archived', 'aborted'
+        name status; 
         extended_asset ticket_price;
         extended_asset prize_pool;
         std::vector<extended_asset> sponsor_pool;
@@ -39,7 +36,7 @@ namespace bingo {
         uint64_t ticket_id;
         name owner;
         std::vector<uint8_t> matrix;
-        uint32_t state; // Bitmask
+        uint32_t state; 
         uint64_t game_id;
 
         uint64_t primary_key() const { return ticket_id; }
@@ -53,19 +50,19 @@ namespace bingo {
     public:
         using contract::contract;
 
-        // Action de setup administrativo
         [[eosio::action]]
         void setconfig(public_key signer_key);
 
-        // Implementação conforme ADR-001: Assinatura Contextual
         [[eosio::action]]
         void buytickets(name owner, uint64_t game_id, std::vector<std::vector<uint8_t>> matrices, std::vector<signature> signatures);
 
         [[eosio::action]]
         void lockgame(uint64_t game_id);
 
+        [[eosio::action]]
+        void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask);
+
     private:
-        // Helper para inicializar e validar o singleton
         config_state get_config();
     };
 }
