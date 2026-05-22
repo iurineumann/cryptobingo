@@ -15,7 +15,6 @@ const bingoKey = PrivateKey.from(process.env.BINGO_GAME_KEY!);
 const alienKey = PrivateKey.from(process.env.ALIEN_WORLDS_KEY!);
 const eosioTokenKey = PrivateKey.from(process.env.EOSIO_TOKEN_KEY!);
 
-const rootSession = new Session({ actor: 'eosio', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioKey) });
 const eosioTokenSession = new Session({ actor: 'eosio.token', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioTokenKey) });
 const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
 const bingoOwnerSession = new Session({ actor: 'bingo.game', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
@@ -45,14 +44,7 @@ async function bootstrap() {
         await bingoSession.transact({
             actions: [{ account: 'bingo.game', name: 'setconfig', authorization: [{ actor: 'bingo.game', permission: 'active' }], data: { signer_key: bingoKey.toPublic().toString() } }]
         }, { broadcast: true });
-    } catch (e) {
-        console.error('❌ Erro nos tokens:', e);
-    }
-    
-    try {
 
-
-        // Concede permissão para o contrato disparar inline actions (Obrigatório para o withdraw!)
         await bingoOwnerSession.transact({
             actions: [{
                 account: 'eosio', name: 'updateauth', authorization: [{ actor: 'bingo.game', permission: 'owner' }],
@@ -67,7 +59,7 @@ async function bootstrap() {
         }, { broadcast: true });
     } catch (e) {
         console.error('❌ Erro no deploy:', e);
-        //return;
+        return;
     }
 
     try {
@@ -75,23 +67,19 @@ async function bootstrap() {
         await eosioTokenSession.transact({
             actions: [{ account: 'eosio.token', name: 'create', authorization: [{ actor: 'eosio.token', permission: 'active' }], data: { issuer: 'alien.worlds', maximum_supply: '5000000.0000 TLM' } }]
         }, { broadcast: true });
-    } catch (e) {
-        console.error('❌ Erro nos tokens:', e);
-    }
-
-    try {
 
         await alienSession.transact({
             actions: [
                 { account: 'eosio.token', name: 'issue', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { to: 'alien.worlds', quantity: '50000.0000 TLM', memo: 'Init' } },
                 { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'bingo.game', quantity: '1000.0000 TLM', memo: 'Sponsor Pool' } },
-                // NOVO: Dá 500 TLM ao jogador para ele ter como depositar!
                 { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'jogador1', quantity: '500.0000 TLM', memo: 'Airdrop Jogador 1' } }
             ]
         }, { broadcast: true });
         console.log('🎉 Bootstrapping 100% concluído com sucesso!');
-    } catch (e) {
-        console.error('❌ Erro nos tokens:', e);
+    } catch (e: any) {
+        if (!e.message.includes('token with symbol already exists')) {
+            console.error('❌ Erro nos tokens:', e);
+        }
     }
 }
 bootstrap();

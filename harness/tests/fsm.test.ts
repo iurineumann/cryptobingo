@@ -3,7 +3,6 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
 
@@ -22,7 +21,6 @@ const microserviceSession = new Session({ actor: 'microservice', permission: 'ac
 
 let currentGameId: UInt64;
 let currentGameIdStr: string;
-let currentTicketId: UInt64;
 
 describe("Bingo Autônomo (DeFi) FSM Tests", () => {
     
@@ -74,13 +72,8 @@ describe("Bingo Autônomo (DeFi) FSM Tests", () => {
         const ownerBytes = Serializer.encode({ type: 'name', object: owner }).array;
 
         const buffer = new Uint8Array([...matrixBytes, ...gameIdBytes, ...ownerBytes]);
-        
-        // CÁLCULO DETERMINÍSTICO (O mesmo do bingo.cpp)
-        const hash = crypto.createHash('sha256').update(buffer).digest();
-        const ticketIdBigInt = hash.readBigUInt64LE(0); // Lê os primeiros 8 bytes como Little Endian
-        currentTicketId = UInt64.from(ticketIdBigInt.toString());
-
-        const signatureObj = bingoKey.signDigest(Checksum256.hash(buffer));
+        const hash = Checksum256.hash(buffer);
+        const signatureObj = bingoKey.signDigest(hash);
 
         const result = await playerSession.transact({
             actions: [{ account: 'bingo.game', name: 'buytickets', authorization: [playerSession.permissionLevel], data: { owner: owner, game_id: currentGameId, matrices: [matrixBytesObj], signatures: [signatureObj] } }]
@@ -103,18 +96,33 @@ describe("Bingo Autônomo (DeFi) FSM Tests", () => {
     });
 
     test("Passo 6: Registrar vitória e pagar prêmio RTP (claimwin)", async () => {
-        // ID já calculado anteriormente no Passo 3!
+        let ticketId: UInt64;
+        // A API Nodeos agora lerá o ABI perfeito com json: true e extrairá o ticket_id correto!
+        try{
+            console.log('Buscando tickets para o jogo:', currentGameIdStr);
+            console.log('Parâmetros da consulta:', { code: 'bingo.game', scope: currentGameIdStr, table: 'tickets', json: true });
+            
+            const tableResult = await client.v1.chain.get_table_rows({ 
+                code: 'bingo.game', 
+                scope: currentGameIdStr, 
+                table: 'tickets', 
+                json: true 
+            });
+        
+            expect(tableResult.rows.length).toBeGreaterThan(0);
+            ticketId = UInt64.from(tableResult.rows[0].ticket_id);
+
+        } catch (e) {
+            console.error('Erro ao buscar tickets:', e);
+            throw e;
+        }
+
         const result = await microserviceSession.transact({
             actions: [{ 
                 account: 'bingo.game', 
                 name: 'claimwin', 
                 authorization: [microserviceSession.permissionLevel], 
-                data: { 
-                    game_id: currentGameId, 
-                    ticket_id: currentTicketId, // Usamos o valor que calculamos localmente
-                    ball_count: 45, 
-                    win_pattern_mask: UInt64.from(1) 
-                } 
+                data: { game_id: currentGameId, ticket_id: ticketId, ball_count: 45, win_pattern_mask: UInt64.from(1) } 
             }]
         }, { broadcast: true });
         expect(result.response).toBeDefined();

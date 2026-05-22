@@ -1,6 +1,5 @@
-project(talk)
+project(bingo)
 
-set(EOSIO_WASM_OLD_BEHAVIOR "Off")
 find_package(cdt)
 
 add_contract( bingo bingo bingo.cpp )
