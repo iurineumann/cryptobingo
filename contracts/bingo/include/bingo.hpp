@@ -34,16 +34,14 @@ namespace bingo {
     struct [[eosio::table("tickets")]] ticket_record {
         uint64_t ticket_id;
         name owner;
-        std::vector<char> matrix; // <-- Alterado para 'char' para o gerador ABI (bytes)
+        std::vector<char> matrix;
         uint32_t state; 
         uint64_t game_id;
 
         uint64_t primary_key() const { return ticket_id; }
-        uint64_t get_owner() const { return owner.value; }
     };
-    typedef multi_index<"tickets"_n, ticket_record, 
-        indexed_by<"owner"_n, const_mem_fun<ticket_record, uint64_t, &ticket_record::get_owner>>
-    > tickets_table;
+    // Tabela limpa, sem índices secundários complexos que travam o ABIGEN!
+    typedef multi_index<"tickets"_n, ticket_record> tickets_table;
 
     class [[eosio::contract("bingo")]] bingo_contract : public contract {
     public:
