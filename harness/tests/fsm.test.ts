@@ -3,6 +3,7 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
 
@@ -21,6 +22,7 @@ const microserviceSession = new Session({ actor: 'microservice', permission: 'ac
 
 let currentGameId: UInt64;
 let currentGameIdStr: string;
+let currentTicketId: UInt64;
 
 describe("Bingo Autônomo (DeFi) FSM Tests", () => {
     
@@ -72,8 +74,13 @@ describe("Bingo Autônomo (DeFi) FSM Tests", () => {
         const ownerBytes = Serializer.encode({ type: 'name', object: owner }).array;
 
         const buffer = new Uint8Array([...matrixBytes, ...gameIdBytes, ...ownerBytes]);
-        const hash = Checksum256.hash(buffer);
-        const signatureObj = bingoKey.signDigest(hash);
+        
+        // CÁLCULO DETERMINÍSTICO (O mesmo do bingo.cpp)
+        const hash = crypto.createHash('sha256').update(buffer).digest();
+        const ticketIdBigInt = hash.readBigUInt64LE(0); // Lê os primeiros 8 bytes como Little Endian
+        currentTicketId = UInt64.from(ticketIdBigInt.toString());
+
+        const signatureObj = bingoKey.signDigest(Checksum256.hash(buffer));
 
         const result = await playerSession.transact({
             actions: [{ account: 'bingo.game', name: 'buytickets', authorization: [playerSession.permissionLevel], data: { owner: owner, game_id: currentGameId, matrices: [matrixBytesObj], signatures: [signatureObj] } }]
@@ -96,33 +103,18 @@ describe("Bingo Autônomo (DeFi) FSM Tests", () => {
     });
 
     test("Passo 6: Registrar vitória e pagar prêmio RTP (claimwin)", async () => {
-        // O SEGREDO DEFINITIVO: json: false!
-        // Ignora completamente o ABI e extrai a RAM bruta da blockchain em Hexadecimal.
-        const tableResult = await client.v1.chain.get_table_rows({ 
-            code: 'bingo.game', 
-            scope: currentGameIdStr, 
-            table: 'tickets', 
-            json: false 
-        });
-        
-        expect(tableResult.rows.length).toBeGreaterThan(0);
-        
-        // A linha bruta (rowHex) é uma string. Os primeiros 8 bytes (16 caracteres) são o ticket_id em Little Endian.
-        const rowHex = tableResult.rows[0];
-        const ticketIdHexLE = rowHex.substring(0, 16);
-        
-        // Invertemos para Big Endian para o JavaScript conseguir converter para um número UInt64 exato.
-        const ticketIdHexBE = ticketIdHexLE.match(/../g)!.reverse().join('');
-        const ticketId = UInt64.from('0x' + ticketIdHexBE);
-
-        console.log(`🎟️ Ticket ID decodificado da RAM: ${ticketId.toString()}`);
-
+        // ID já calculado anteriormente no Passo 3!
         const result = await microserviceSession.transact({
             actions: [{ 
                 account: 'bingo.game', 
                 name: 'claimwin', 
                 authorization: [microserviceSession.permissionLevel], 
-                data: { game_id: currentGameId, ticket_id: ticketId, ball_count: 45, win_pattern_mask: UInt64.from(1) } 
+                data: { 
+                    game_id: currentGameId, 
+                    ticket_id: currentTicketId, // Usamos o valor que calculamos localmente
+                    ball_count: 45, 
+                    win_pattern_mask: UInt64.from(1) 
+                } 
             }]
         }, { broadcast: true });
         expect(result.response).toBeDefined();

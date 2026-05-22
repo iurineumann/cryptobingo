@@ -3782,3 +3782,4 @@ time=2026-05-21T01:36:41.245-03:00 level=INFO source=server.go:433 msg="starting
 time=2026-05-21T01:36:43.025-03:00 level=INFO source=server.go:433 msg="starting runner" cmd="/usr/local/bin/ollama runner --ollama-engine --port 44913"
 time=2026-05-21T03:40:12.370-03:00 level=INFO source=model_recommendations.go:177 msg="model recommendations cache sleep scheduled" wait=3h39m51.842708336s consecutive_failures=0
 time=2026-05-21T07:26:33.971-03:00 level=INFO source=model_recommendations.go:177 msg="model recommendations cache sleep scheduled" wait=3h45m24.863805859s consecutive_failures=0
+time=2026-05-21T11:20:37.034-03:00 level=INFO source=model_recommendations.go:177 msg="model recommendations cache sleep scheduled" wait=4h8m52.614164398s consecutive_failures=0
