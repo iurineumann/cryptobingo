@@ -19,6 +19,9 @@ const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', ch
 const playerSession = new Session({ actor: 'jogador1', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(playerKey) });
 const microserviceSession = new Session({ actor: 'microservice', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioKey) });
 
+const orngKey = PrivateKey.from(process.env.ORNG_WAX_KEY!);
+const orngSession = new Session({ actor: 'orng.wax', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(orngKey) });
+
 let currentGameId: UInt64;
 let currentGameIdStr: string;
 
@@ -92,6 +95,20 @@ describe("Bingo Autônomo (DeFi) FSM Tests", () => {
         const result = await microserviceSession.transact({
             actions: [{ account: 'bingo.game', name: 'startdraw', authorization: [microserviceSession.permissionLevel], data: { game_id: currentGameId } }]
         }, { broadcast: true });
+        expect(result.response).toBeDefined();
+    });
+
+    test("Passo 5.5: Oráculo cumpre a aleatoriedade (fulfillrand)", async () => {
+        // Simulamos o daemon do Oráculo da WAX detectando a requisição e injetando o número aleatório.
+        const result = await orngSession.transact({
+            actions: [{ 
+                account: 'orng.wax', 
+                name: 'fulfillrand', 
+                authorization: [orngSession.permissionLevel], 
+                data: { assoc_id: currentGameId } 
+            }]
+        }, { broadcast: true });
+        
         expect(result.response).toBeDefined();
     });
 

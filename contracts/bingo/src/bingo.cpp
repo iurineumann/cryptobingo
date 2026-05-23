@@ -93,6 +93,7 @@ namespace bingo {
         games.modify(game_itr, get_self(), [&](auto& g) { g.status = "locked"_n; });
     }
 
+    // 1. Atualize o startdraw para chamar o oráculo via inline action
     void bingo_contract::startdraw(uint64_t game_id) {
         require_auth("microservice"_n); 
         games_table games(get_self(), get_self().value);
@@ -101,6 +102,30 @@ namespace bingo {
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
 
         games.modify(game_itr, get_self(), [&](auto& g) { g.status = "drawing"_n; });
+
+        // Dispara o pedido de entropia para o Oráculo (orng.wax)
+        action(
+            permission_level{get_self(), "active"_n},
+            "orng.wax"_n,
+            "requestrand"_n,
+            std::make_tuple(game_id, (uint64_t)0, get_self()) // assoc_id = game_id, caller = get_self()
+        ).send();
+    }
+
+    // 2. Implemente o callback receiverand (apenas o oráculo tem permissão de chamar)
+    void bingo_contract::receiverand(uint64_t assoc_id, std::vector<char> random_bytes) {
+        require_auth("orng.wax"_n); 
+        
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.find(assoc_id); // o assoc_id que enviamos foi o game_id
+        
+        check(game_itr != games.end(), "Game not found for this Oracle response.");
+        check(game_itr->status == "drawing"_n, "Game is not in DRAWING status.");
+
+        games.modify(game_itr, get_self(), [&](auto& g) { 
+            g.drawn_balls = random_bytes; 
+            g.status = "drawn"_n; // Novo estado: Bolas sorteadas, pronto para liquidação!
+        });
     }
 
     void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask) {
@@ -108,7 +133,8 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.find(game_id);
         check(game_itr != games.end(), "Game not found.");
-        check(game_itr->status == "drawing"_n, "Game is not in DRAWING status.");
+        
+        check(game_itr->status == "drawn"_n, "Game is not in DRAWN status (Aguardando Oraculo).");
 
         tickets_table tickets(get_self(), game_id);
         auto ticket_itr = tickets.find(ticket_id);
