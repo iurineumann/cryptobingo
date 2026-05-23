@@ -1,27 +1,23 @@
-import { APIClient } from '@wharfkit/antelope';
+import { APIClient, Name, UInt64 } from '@wharfkit/antelope';
 import type { 
     BlockchainGameState, 
     BlockchainTicketRecord, 
     BlockchainBalance 
 } from '@cryptobingo/shared-types';
 
-// Otimização: Reutiliza a URL do ambiente ou cai para o nó local do desenvolvedor
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8888';
 const CONTRACT_ACCOUNT = 'bingo.game';
 
-// Instância Singleton do cliente Wharfkit
 export const rpcClient = new APIClient({ url: RPC_URL });
 
-/**
- * Busca o estado atual de um jogo específico
- */
 export async function fetchGame(gameId: string): Promise<BlockchainGameState | null> {
     const response = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT,
         scope: CONTRACT_ACCOUNT,
         table: 'games',
-        lower_bound: gameId,
-        upper_bound: gameId,
+        // CORREÇÃO: Convertendo string para UInt64 da rede Antelope
+        lower_bound: UInt64.from(gameId),
+        upper_bound: UInt64.from(gameId),
         limit: 1,
         json: true,
     });
@@ -30,34 +26,30 @@ export async function fetchGame(gameId: string): Promise<BlockchainGameState | n
     return response.rows[0] as BlockchainGameState;
 }
 
-/**
- * Busca todas as cartelas compradas por um jogador em um jogo específico
- */
 export async function fetchPlayerTickets(gameId: string, playerWallet: string): Promise<BlockchainTicketRecord[]> {
     const response = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT,
-        scope: gameId,              // O escopo da tabela tickets é o game_id
+        scope: gameId,
         table: 'tickets',
-        index_position: 'secondary', // Assumindo que criamos um índice secundário pelo comprador
+        index_position: 'secondary',
         key_type: 'i64',
-        lower_bound: playerWallet,
-        upper_bound: playerWallet,
+        // CORREÇÃO: Convertendo a carteira do jogador para o tipo Name
+        lower_bound: Name.from(playerWallet).value,
+        upper_bound: Name.from(playerWallet).value,
         json: true,
     });
 
     return response.rows as BlockchainTicketRecord[];
 }
 
-/**
- * Retorna o saldo em custódia no contrato de um jogador
- */
 export async function fetchPlayerBalance(playerWallet: string): Promise<BlockchainBalance | null> {
     const response = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT,
         scope: CONTRACT_ACCOUNT,
         table: 'balances',
-        lower_bound: playerWallet,
-        upper_bound: playerWallet,
+        // CORREÇÃO: Convertendo a carteira do jogador para o tipo Name
+        lower_bound: Name.from(playerWallet),
+        upper_bound: Name.from(playerWallet),
         limit: 1,
         json: true,
     });
