@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.dune.env') });
 
 const url = process.env.RPC_URL!;
 const chainId = process.env.CHAIN_ID!;
@@ -44,7 +44,7 @@ async function bootstrap() {
     try { 
 
         console.log('[+] Realizando Deploy em: orng.wax...');
-        await deployContractRaw('orng.wax', '../../contracts/orng_mock.wasm', '../../contracts/orng_mock.abi', orngSession);
+        await deployContractRaw('orng.wax', '../../../contracts/orng_mock.wasm', '../../../contracts/orng_mock.abi', orngSession);
 
         console.log('[+] Configurando permissão eosio.code para orng.wax...');
         await orngOwnerSession.transact({

@@ -1,0 +1,7 @@
+packages:
+  # Pasta para os microsserviços e frontend
+  - 'apps/*'
+  # Pasta para os pacotes compartilhados (ex: tipos do C++ exportados para TypeScript)
+  - 'packages/*'
+  # Opcional: ignorar a pasta de contratos se o pnpm tentar ler algo lá
+  - '!contracts/**'

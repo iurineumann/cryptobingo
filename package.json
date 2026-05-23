@@ -1,14 +1,23 @@
 {
-  "name": "cryptobingo",
+  "name": "cryptobingo-monorepo",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules"
   },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/iurineumann/cryptobingo.git"
@@ -20,19 +29,5 @@
   "bugs": {
     "url": "https://github.com/iurineumann/cryptobingo/issues"
   },
-  "homepage": "https://github.com/iurineumann/cryptobingo#readme",
-  "dependencies": {
-    "@wharfkit/session": "^1.6.1",
-    "@wharfkit/wallet-plugin-cleos": "^1.2.0",
-    "@wharfkit/wallet-plugin-privatekey": "^1.1.0",
-    "dotenv": "^17.4.2"
-  },
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/node": "^25.9.1",
-    "jest": "^30.4.2",
-    "ts-jest": "^29.4.10",
-    "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
-  }
+  "homepage": "https://github.com/iurineumann/cryptobingo#readme"
 }
