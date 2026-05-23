@@ -4,7 +4,7 @@ import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wh
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.dune.env') });
 
 const url = process.env.RPC_URL || 'http://127.0.0.1:8888';
 const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
