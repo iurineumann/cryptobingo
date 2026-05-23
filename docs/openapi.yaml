@@ -1,123 +1,265 @@
 openapi: 3.0.3
 info:
-  title: Bingo GameFi - REST API (Off-chain Engine)
+  title: CryptoBingo Gateway API
+  description: Specification for the off-chain microservices ecosystem governing lobbies, player profiles, gamification, multilingual configurations, and administrative tools for the CryptoBingo platform.
   version: 1.0.0
-  description: |
-    Interface HTTP estática do Microsserviço Node.js.
-    Responsável pela injeção segura de entropia inicial (RNG Cartel Generation) com assinatura criptográfica, 
-    prevenindo ataques de falsificação no Smart Contract C++. Provê também rotas de reconciliação de estado.
 servers:
-  - url: https://api.seubingo.com/v1
-    description: Cluster Kubernetes (Resolution Engine Pods)
-
-security:
-  - jwtAuth: []
+  - url: http://localhost:8080/api/v1
+    description: Local Development Gateway
 
 paths:
-  /games/{game_id}/tickets/generate:
-    get:
-      summary: Geração de Cartelas (Drafting & Re-roll)
-      description: |
-        Gera matrizes aleatorizadas usando Arranjos matemáticos. 
-        Garante unicidade no Redis e devolve a matriz envelopada com a assinatura privada da plataforma.
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: integer
-            minimum: 1
-        - name: count
-          in: query
-          required: true
-          description: Quantidade de cartelas para o lote (Otimização para o Carrinho).
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
+  # ==========================================
+  # AUTENTICAÇÃO E PERFIL
+  # ==========================================
+  /auth/login:
+    post:
+      summary: Autenticação via assinatura de carteira Antelope/WAX
+      description: Valida o desafio criptográfico assinado pela carteira do usuário (Anchor, WAX Cloud Wallet) para emissão do Token JWT off-chain.
+      requestBody:
+        required: true
+        content:
+          application:json:
+            schema:
+              type: object
+              required:
+                - wallet_address
+                - signature
+                - challenge
+              properties:
+                wallet_address:
+                  type: string
+                  example: "jogador1.wax"
+                signature:
+                  type: string
+                  example: "SIG_K1_K7p..."
+                challenge:
+                  type: string
+                  example: "auth_challenge_2026_05_23"
       responses:
         '200':
-          description: Lote de cartelas gerado e assinado com sucesso.
+          description: Autenticação bem-sucedida
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/TicketDraft'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: Jogo não encontrado ou já passou do estado FUNDING.
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "eyJhbGciOi..."
+        '401':
+          description: Assinatura inválida ou desafio expirado
 
-  /games/{game_id}/sync:
+  /profile:
     get:
-      summary: Recuperação de Estado (Packet Loss Fallback)
-      description: |
-        Endpoint de emergência acionado pelo Frontend quando o WebSocket detecta um salto 
-        no número de sequência (order) das bolas sorteadas.
-      parameters:
-        - name: game_id
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: last_order
-          in: query
-          required: true
-          description: O último índice recebido com sucesso pelo cliente.
-          schema:
-            type: integer
-            minimum: 0
+      summary: Retorna o perfil completo e dados de gamificação
+      security:
+        - BearerAuth: []
       responses:
         '200':
-          description: Retorna o array de dezenas sorteadas a partir do índice solicitado.
+          description: Perfil obtido com sucesso (Junção Postgres + Mongo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    put:
+      summary: Atualiza as preferências do usuário (incluindo Idioma/i18n)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  example: "CryptoBingoKing"
+                avatar_nft_asset_id:
+                  type: string
+                  example: "1099511627776"
+                locale:
+                  type: string
+                  enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP]
+                  example: "zh-CN"
+      responses:
+        '200':
+          description: Preferências salvas com sucesso
+
+  # ==========================================
+  # LOBBIES E JOGOS
+  # ==========================================
+  /lobbies:
+    get:
+      summary: Lista as salas de jogos (Lobbies) ativas e agendadas
+      description: Retorna a lista de salas alimentada pelo indexador da blockchain e cache do MongoDB.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [funding, locked, drawing, drawn, archived]
+      responses:
+        '200':
+          description: Lista de Lobbies ativos
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: integer
-                  minimum: 1
-                  maximum: 75
+                  $ref: '#/components/schemas/Lobby'
+
+  /lobbies/{lobbyId}/chat:
+    get:
+      summary: Recupera o histórico de mensagens do chat da sala
+      parameters:
+        - name: lobbyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Histórico de chat recuperado (MongoDB com TTL)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+
+  # ==========================================
+  # PLATAFORMA E COMPLIANCE
+  # ==========================================
+  /statistics/rtp:
+    get:
+      summary: Retorna relatórios de auditoria e métricas de prêmios (RTP)
+      description: Entrega dados agregados de transparência sobre o retorno ao jogador em conformidade com as diretrizes regulatórias.
+      responses:
+        '200':
+          description: Relatório de RTP e métricas de auditoria
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_distributed:
+                    type: number
+                    example: 850043.25
+                  rtp_percentage:
+                    type: number
+                    example: 85.0
+                  auditable_games_count:
+                    type: integer
+                    example: 1420
+
+  # ==========================================
+  # ADMINISTRAÇÃO E SPONSORS (RBAC)
+  # ==========================================
+  /admin/users:
+    get:
+      summary: Gerenciamento geral de usuários (Apenas para Sistema/Moderadores)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista administrativa de usuários
+        '403':
+          description: Acesso negado por falta de privilégios
+
+  /sponsors/campaigns:
+    post:
+      summary: Criação de salas e drops promocionais por Patrocinadores
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - campaign_name
+                - sponsor_pool_amount
+              properties:
+                campaign_name:
+                  type: string
+                  example: "Campanha Especial de Sexta"
+                sponsor_pool_amount:
+                  type: string
+                  example: "5000.0000 WAX"
+      responses:
+        '201':
+          description: Campanha registrada e aguardando transferência on-chain
 
 components:
   securitySchemes:
-    jwtAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Exige validação da sessão do WharfKit para prevenir exaustão de geração de RNG.
 
   schemas:
-    TicketDraft:
+    UserProfile:
       type: object
-      required:
-        - matrix
-        - signature
       properties:
-        matrix:
+        wallet_address:
+          type: string
+        nickname:
+          type: string
+        role:
+          type: string
+          enum: [player, moderator, sponsor, admin]
+        preferences:
+          type: object
+          properties:
+            locale:
+              type: string
+            currency_display:
+              type: string
+        progression:
+          type: object
+          properties:
+            xp:
+              type: integer
+            tier:
+              type: string
+            games_played:
+              type: integer
+
+    Lobby:
+      type: object
+      properties:
+        game_id:
+          type: integer
+        status:
+          type: string
+        ticket_price:
+          type: object
+          properties:
+            quantity:
+              type: string
+            contract:
+              type: string
+        prize_pool:
+          type: string
+        drawn_balls:
           type: array
-          description: Vetor plano de 24 posições (índices 0 a 24, pulando o centro 12).
           items:
             type: integer
-            minimum: 1
-            maximum: 75
-          minItems: 24
-          maxItems: 24
-        signature:
-          type: string
-          description: Assinatura ECDSA da matriz serializada usando a chave privada microservice@active.
-          example: "SIG_K1_K5GvG9y... (Base58 encoded)"
 
-  responses:
-    BadRequest:
-      description: Erro de validação de payload ou parâmetros.
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
+    ChatMessage:
+      type: object
+      properties:
+        lobby_id:
+          type: string
+        wallet_address:
+          type: string
+        message:
+          type: string
+        is_sponsor_drop:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time

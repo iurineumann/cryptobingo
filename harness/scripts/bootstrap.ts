@@ -20,6 +20,10 @@ const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', ch
 const bingoOwnerSession = new Session({ actor: 'bingo.game', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
 const alienSession = new Session({ actor: 'alien.worlds', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(alienKey) });
 
+const orngKey = PrivateKey.from(process.env.ORNG_WAX_KEY!); // A chave que está no .dune.env
+const orngSession = new Session({ actor: 'orng.wax', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(orngKey) });
+const orngOwnerSession = new Session({ actor: 'orng.wax', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(orngKey) });
+
 async function deployContractRaw(account: string, wasmPath: string, abiPath: string, session: Session) {
     console.log(`[+] Realizando Deploy em: ${account}...`);
     const wasmHex = fs.readFileSync(path.resolve(__dirname, wasmPath)).toString('hex');
@@ -38,6 +42,25 @@ async function deployContractRaw(account: string, wasmPath: string, abiPath: str
 async function bootstrap() {
     console.log('🚀 Iniciando Bootstrapping Definitivo...');
     try { 
+
+        console.log('[+] Realizando Deploy em: orng.wax...');
+        await deployContractRaw('orng.wax', '../../contracts/orng_mock.wasm', '../../contracts/orng_mock.abi', orngSession);
+
+        console.log('[+] Configurando permissão eosio.code para orng.wax...');
+        await orngOwnerSession.transact({
+            actions: [{
+                account: 'eosio', name: 'updateauth', authorization: [{ actor: 'orng.wax', permission: 'owner' }],
+                data: {
+                    account: 'orng.wax', permission: 'active', parent: 'owner',
+                    auth: {
+                        threshold: 1, keys: [{ key: orngKey.toPublic().toString(), weight: 1 }],
+                        accounts: [{ permission: { actor: 'orng.wax', permission: 'eosio.code' }, weight: 1 }], waits: []
+                    }
+                }
+            }]
+        }, { broadcast: true });
+
+        
         await deployContractRaw('bingo.game', '../../contracts/bingo/bingo.wasm', '../../contracts/bingo/bingo.abi', bingoSession);
 
         console.log('[+] Configurando chave e permissão eosio.code...');
