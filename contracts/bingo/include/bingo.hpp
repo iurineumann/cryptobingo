@@ -64,6 +64,9 @@ namespace bingo {
         void startdraw(uint64_t game_id);
 
         [[eosio::action]]
+        void receiverand(uint64_t assoc_id, std::vector<char> random_bytes);
+
+        [[eosio::action]]
         void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask);
 
         [[eosio::action]]
