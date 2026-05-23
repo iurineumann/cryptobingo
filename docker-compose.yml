@@ -1,0 +1,170 @@
+# Compose Specification
+# Totalmente atualizado: sem tag 'version', utilizando atributos modernos de Healthcheck e Naming.
+
+name: cryptobingo-infra
+
+services:
+  # ==========================================
+  # 1. POSTGRESQL (Core Ledger, Auditoria e LGPD)
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: bingo_postgres
+    restart: unless-stopped
+    env_file:
+      - .env.infra
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bingo_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: bingo_pgadmin
+    restart: unless-stopped
+    env_file:
+      - .env.infra
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
+  # ==========================================
+  # 2. MONGODB (Dynamic Edge, Gamificação, i18n, Chat)
+  # ==========================================
+  mongodb:
+    image: mongo:6.0
+    container_name: bingo_mongodb
+    restart: unless-stopped
+    env_file:
+      - .env.infra
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - bingo_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: bingo_mongo_express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
+  # ==========================================
+  # 3. RABBITMQ (Message Broker / Filas Assíncronas)
+  # ==========================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: bingo_rabbitmq
+    restart: unless-stopped
+    env_file:
+      - .env.infra
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bingo_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ==========================================
+  # 4. OBSERVABILIDADE (Métricas e Dashboards)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bingo_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - bingo_net
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bingo_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=bingo_grafana_2026
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - bingo_net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: bingo_cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - bingo_net
+
+# ==========================================
+# VOLUMES E REDES
+# ==========================================
+volumes:
+  postgres_data:
+  mongo_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  bingo_net:
+    driver: bridge

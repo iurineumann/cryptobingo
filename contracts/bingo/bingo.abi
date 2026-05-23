@@ -87,6 +87,14 @@
             ]
         },
         {
+            "name": "receiverand",
+            "base": "",
+            "fields": [
+                {"name": "assoc_id", "type": "uint64"},
+                {"name": "random_bytes", "type": "bytes"}
+            ]
+        },
+        {
             "name": "claimwin",
             "base": "",
             "fields": [
@@ -130,6 +138,11 @@
             "name": "startdraw",
             "type": "startdraw",
             "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Início da Fase de Sorteio\nsummary: 'Muda o estado do jogo #{{game_id}} para sorteio.'\n---\n\nO jogo {{game_id}} inicia oficialmente o processo de extração e registro de bolas. O contrato atesta o congelamento total dos parâmetros do jogo para liquidação."
+        },
+        {
+            "name": "receiverand", 
+            "type": "receiverand", 
+            "ricardian_contract": "Muda o estado do jogo #{{game_id}} para sorteado.'\n---\n\nO jogo {{game_id}} finaliza oficialmente o processo de extração e registro de bolas. O contrato atesta o congelamento total dos parâmetros do jogo para liquidação."
         },
         {
             "name": "claimwin",
