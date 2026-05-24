@@ -22,8 +22,51 @@ namespace bingo {
         });
     }
 
-    void bingo_contract::buytickets(name owner, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures) {
-        require_auth(owner);
+    void bingo_contract::setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until) {
+        require_auth(get_self());
+        check(discount_pct <= 100, "Desconto maximo e 100%");
+        nftconfigs_table _configs(get_self(), get_self().value);
+        auto itr = _configs.find(template_id);
+        if (itr == _configs.end()) {
+            _configs.emplace(get_self(), [&](auto& row) {
+                row.template_id = template_id; row.discount_pct = discount_pct;
+                row.is_vip = is_vip; row.valid_until = valid_until;
+            });
+        } else {
+            _configs.modify(itr, get_self(), [&](auto& row) {
+                row.discount_pct = discount_pct; row.is_vip = is_vip; row.valid_until = valid_until;
+            });
+        }
+    }
+
+    void bingo_contract::delnftconf(int32_t template_id) {
+        require_auth(get_self());
+        nftconfigs_table _configs(get_self(), get_self().value);
+        auto itr = _configs.require_find(template_id, "Template ID nao encontrado.");
+        _configs.erase(itr);
+    }
+
+    void bingo_contract::deposit(name from, name to, eosio::asset quantity, std::string memo) {
+        if (from == get_self() || to != get_self()) return;
+        
+        name token_contract = get_first_receiver(); 
+        // Em produção Mainnet, limitaremos a token_contract == "bingo.token"_n
+        check(quantity.amount > 0, "A quantidade deve ser maior que zero.");
+
+        extended_asset deposit_asset(quantity, token_contract);
+
+        balances_table balances(get_self(), from.value);
+        auto bal_itr = balances.find(deposit_asset.quantity.symbol.code().raw());
+        
+        if (bal_itr == balances.end()) {
+            balances.emplace(get_self(), [&](auto& b) { b.balance = deposit_asset; });
+        } else {
+            balances.modify(bal_itr, get_self(), [&](auto& b) { b.balance += deposit_asset; });
+        }
+    }
+
+    void bingo_contract::buytickets(name buyer, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures, uint64_t nft_id) {
+        require_auth(buyer);
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.find(game_id);
@@ -42,13 +85,30 @@ namespace bingo {
         total_cost.quantity.amount *= matrices.size();
 
         if (total_cost.quantity.amount > 0) {
-            balances_table balances(get_self(), owner.value);
-            auto bal_itr = balances.find(total_cost.quantity.symbol.code().raw());
-            
-            check(bal_itr != balances.end(), "Insufficient balance: Token not registered in wallet.");
-            check(bal_itr->balance >= total_cost, "Insufficient balance: Not enough funds.");
+            // Validação de Utilitário de NFT (Descontos Dinâmicos)
+            if (nft_id != 0) {
+                atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
+                auto nft_itr = buyer_nfts.require_find(nft_id, "O NFT informado nao pertence a sua carteira.");
+                check(nft_itr->collection_name == "cryptobingo"_n, "NFT nao pertence a colecao oficial.");
 
-            balances.modify(bal_itr, get_self(), [&](auto& b) {
+                nftconfigs_table _configs(get_self(), get_self().value);
+                auto conf_itr = _configs.find(nft_itr->template_id);
+                if (conf_itr != _configs.end()) {
+                    if (conf_itr->valid_until > 0) {
+                        check(current_time_point().sec_since_epoch() <= conf_itr->valid_until, "A utilidade deste NFT expirou.");
+                    }
+                    if (conf_itr->discount_pct > 0) {
+                        int64_t discount_amount = (total_cost.quantity.amount * conf_itr->discount_pct) / 100;
+                        total_cost.quantity.amount -= discount_amount;
+                    }
+                }
+            }
+
+            balances_table balances(get_self(), buyer.value);
+            auto bal_itr = balances.require_find(total_cost.quantity.symbol.code().raw(), "Saldo insuficiente: Token nao registrado na wallet.");
+            check(bal_itr->balance >= total_cost, "Saldo insuficiente: Deposite fundos.");
+
+            balances.modify(bal_itr, same_payer, [&](auto& b) {
                 b.balance -= total_cost;
             });
 
@@ -57,12 +117,13 @@ namespace bingo {
             });
         }
 
+        // Validação Criptográfica e Inserção
         for (size_t i = 0; i < matrices.size(); ++i) {
             size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
             std::vector<char> buffer(buffer_size);
             datastream<char*> ds(buffer.data(), buffer.size());
             
-            ds << matrices[i] << game_id << owner;
+            ds << matrices[i] << game_id << buyer;
             
             auto hash = eosio::sha256(buffer.data(), buffer.size());
             assert_recover_key(hash, signatures[i], config.signer_key);
@@ -73,9 +134,9 @@ namespace bingo {
 
             check(tickets.find(generated_ticket_id) == tickets.end(), "Ticket signature replay detected.");
 
-            tickets.emplace(get_self(), [&](auto& t) {
+            tickets.emplace(buyer, [&](auto& t) {
                 t.ticket_id = generated_ticket_id;
-                t.owner = owner;
+                t.owner = buyer;
                 t.matrix = matrices[i];
                 t.state = 0x00001000; 
                 t.game_id = game_id;
@@ -86,59 +147,48 @@ namespace bingo {
     void bingo_contract::lockgame(uint64_t game_id) {
         require_auth("microservice"_n); 
         games_table games(get_self(), get_self().value);
-        auto game_itr = games.find(game_id);
-        check(game_itr != games.end(), "Game not found.");
+        auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "funding"_n, "Game is not in FUNDING status.");
 
-        games.modify(game_itr, get_self(), [&](auto& g) { g.status = "locked"_n; });
+        games.modify(game_itr, same_payer, [&](auto& g) { g.status = "locked"_n; });
     }
 
-    // 1. Atualize o startdraw para chamar o oráculo via inline action
     void bingo_contract::startdraw(uint64_t game_id) {
         require_auth("microservice"_n); 
         games_table games(get_self(), get_self().value);
-        auto game_itr = games.find(game_id);
-        check(game_itr != games.end(), "Game not found.");
+        auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
 
-        games.modify(game_itr, get_self(), [&](auto& g) { g.status = "drawing"_n; });
+        games.modify(game_itr, same_payer, [&](auto& g) { g.status = "drawing"_n; });
 
-        // Dispara o pedido de entropia para o Oráculo (orng.wax)
         action(
             permission_level{get_self(), "active"_n},
             "orng.wax"_n,
             "requestrand"_n,
-            std::make_tuple(game_id, (uint64_t)0, get_self()) // assoc_id = game_id, caller = get_self()
+            std::make_tuple(game_id, (uint64_t)0, get_self())
         ).send();
     }
 
-    // 2. Implemente o callback receiverand (apenas o oráculo tem permissão de chamar)
     void bingo_contract::receiverand(uint64_t assoc_id, std::vector<char> random_bytes) {
         require_auth("orng.wax"_n); 
-        
         games_table games(get_self(), get_self().value);
-        auto game_itr = games.find(assoc_id); // o assoc_id que enviamos foi o game_id
-        
-        check(game_itr != games.end(), "Game not found for this Oracle response.");
+        auto game_itr = games.require_find(assoc_id, "Game not found for Oracle response.");
         check(game_itr->status == "drawing"_n, "Game is not in DRAWING status.");
 
-        games.modify(game_itr, get_self(), [&](auto& g) { 
+        games.modify(game_itr, same_payer, [&](auto& g) { 
             g.drawn_balls = random_bytes; 
-            g.status = "drawn"_n; // Novo estado: Bolas sorteadas, pronto para liquidação!
+            g.status = "drawn"_n; 
         });
     }
 
     void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask) {
         require_auth("microservice"_n); 
         games_table games(get_self(), get_self().value);
-        auto game_itr = games.find(game_id);
-        check(game_itr != games.end(), "Game not found.");
-        
-        check(game_itr->status == "drawn"_n, "Game is not in DRAWN status (Aguardando Oraculo).");
+        auto game_itr = games.require_find(game_id, "Game not found.");
+        check(game_itr->status == "drawn"_n, "Game is not in DRAWN status.");
 
         tickets_table tickets(get_self(), game_id);
-        auto ticket_itr = tickets.find(ticket_id);
-        check(ticket_itr != tickets.end(), "Ticket not found."); // O ERRO ACABA AQUI!
+        auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found."); 
 
         name winner = ticket_itr->owner;
         balances_table balances(get_self(), winner.value);
@@ -151,7 +201,7 @@ namespace bingo {
             if (bal_itr == balances.end()) {
                 balances.emplace(get_self(), [&](auto& b) { b.balance = rtp; });
             } else {
-                balances.modify(bal_itr, get_self(), [&](auto& b) { b.balance += rtp; });
+                balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += rtp; });
             }
         }
 
@@ -161,39 +211,21 @@ namespace bingo {
                 if (sponsor_bal_itr == balances.end()) {
                     balances.emplace(get_self(), [&](auto& b) { b.balance = sponsor_asset; });
                 } else {
-                    balances.modify(sponsor_bal_itr, get_self(), [&](auto& b) { b.balance += sponsor_asset; });
+                    balances.modify(sponsor_bal_itr, same_payer, [&](auto& b) { b.balance += sponsor_asset; });
                 }
             }
         }
 
-        games.modify(game_itr, get_self(), [&](auto& g) { g.status = "archived"_n; });
-    }
-
-    void bingo_contract::deposit(name from, name to, eosio::asset quantity, std::string memo) {
-        if (from == get_self() || to != get_self()) return;
-
-        name token_contract = get_first_receiver(); 
-        extended_asset deposit_asset(quantity, token_contract);
-
-        balances_table balances(get_self(), from.value);
-        auto bal_itr = balances.find(deposit_asset.quantity.symbol.code().raw());
-        
-        if (bal_itr == balances.end()) {
-            balances.emplace(get_self(), [&](auto& b) { b.balance = deposit_asset; });
-        } else {
-            balances.modify(bal_itr, get_self(), [&](auto& b) { b.balance += deposit_asset; });
-        }
+        games.modify(game_itr, same_payer, [&](auto& g) { g.status = "archived"_n; });
     }
 
     void bingo_contract::withdraw(name owner, extended_asset amount) {
         require_auth(owner); 
         balances_table balances(get_self(), owner.value);
-        auto bal_itr = balances.find(amount.quantity.symbol.code().raw());
-        
-        check(bal_itr != balances.end(), "Nenhum saldo encontrado para este token.");
+        auto bal_itr = balances.require_find(amount.quantity.symbol.code().raw(), "Nenhum saldo encontrado para este token.");
         check(bal_itr->balance >= amount, "Saldo insuficiente para saque.");
 
-        balances.modify(bal_itr, get_self(), [&](auto& b) { b.balance -= amount; });
+        balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance -= amount; });
 
         action(
             permission_level{get_self(), "active"_n},
