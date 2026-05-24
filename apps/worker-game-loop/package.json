@@ -11,6 +11,8 @@
   "dependencies": {
     "@cryptobingo/shared-types": "workspace:*",
     "@cryptobingo/blockchain-core": "workspace:*",
+    "@wharfkit/session": "^1.0.0",
+    "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
     "amqplib": "^0.10.3",
     "dotenv": "^16.0.0"
   },

@@ -12,6 +12,7 @@
     "@wharfkit/session": "^1.0.0"
   },
   "devDependencies": {
+    "@types/node": "^18.0.0",
     "typescript": "^5.0.0"
   }
 }

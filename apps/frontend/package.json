@@ -9,13 +9,16 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@cryptobingo/shared-types": "workspace:*",
     "@cryptobingo/blockchain-core": "workspace:*",
+    "@cryptobingo/shared-types": "workspace:*",
     "@wharfkit/session": "^1.0.0",
+    "@wharfkit/wallet-plugin-anchor": "^1.6.1",
+    "@wharfkit/wallet-plugin-cloudwallet": "^1.6.4",
+    "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
     "@wharfkit/web-renderer": "^1.0.0",
+    "i18next": "^22.4.15",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "i18next": "^22.4.15",
     "react-i18next": "^12.2.0"
   },
   "devDependencies": {
