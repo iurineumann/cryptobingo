@@ -11,6 +11,7 @@
   "dependencies": {
     "@cryptobingo/blockchain-core": "workspace:*",
     "@cryptobingo/shared-types": "workspace:*",
+    "@wharfkit/antelope": "^1.0.0",
     "@wharfkit/session": "^1.0.0",
     "@wharfkit/wallet-plugin-anchor": "^1.6.1",
     "@wharfkit/wallet-plugin-cloudwallet": "^1.6.4",
