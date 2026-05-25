@@ -7,3 +7,12 @@ export {
     fetchPlayerTickets, 
     fetchPlayerBalance 
 } from './client';
+
+// Re-exporta os tipos on-chain para conveniência dos consumers
+export type {
+    BlockchainGameState,
+    BlockchainTicketRecord,
+    BlockchainBalance,
+    ExtendedAsset,
+    GameStatus
+} from '@cryptobingo/shared-types';
