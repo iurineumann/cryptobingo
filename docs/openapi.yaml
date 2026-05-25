@@ -1,43 +1,113 @@
 openapi: 3.0.3
 info:
   title: CryptoBingo Gateway API
-  description: Specification for the off-chain microservices ecosystem governing lobbies, player profiles, gamification, multilingual configurations, and administrative tools for the CryptoBingo platform.
-  version: 1.0.0
+  description: |
+    Especificação das rotas REST do ecossistema off-chain CryptoBingo.
+    Cobre autenticação por assinatura de carteira (ADR-006), geração de cartelas (ADR-001),
+    perfis, lobbies, compliance e administração. Implementado via Express no `apps/api-gateway`.
+
+    Princípio Spec-Driven: toda rota deve existir aqui ANTES de ser implementada.
+  version: 1.2.0
+
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Local Development Gateway
+  - url: http://localhost:8083/api/v1
+    description: Desenvolvimento Local (api-gateway porta 8083)
 
 paths:
   # ==========================================
-  # AUTENTICAÇÃO E PERFIL
+  # HEALTH
   # ==========================================
-  /auth/login:
+  /health:
+    get:
+      summary: Verifica se o gateway está operacional
+      responses:
+        '200':
+          description: Gateway online
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Gateway Online"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # ==========================================
+  # AUTENTICAÇÃO — Challenge-Response (ADR-006)
+  # Fluxo: /auth/challenge → (assinar nonce) → /auth/verify → JWT
+  # ==========================================
+  /auth/challenge:
     post:
-      summary: Autenticação via assinatura de carteira Antelope/WAX
-      description: Valida o desafio criptográfico assinado pela carteira do usuário (Anchor, WAX Cloud Wallet) para emissão do Token JWT off-chain.
+      summary: Solicita nonce para assinatura — Passo 1 do login
+      description: |
+        Gera um nonce efêmero de 256 bits (`crypto.randomBytes(32)`) persistido no
+        PostgreSQL com TTL de 5 minutos e chave composta (wallet, nonce).
+        O cliente deve assinar `SHA256(nonce)` com a chave Antelope (permissão `active`)
+        e enviar a assinatura para `/auth/verify`. Ref: ADR-006.
       requestBody:
         required: true
         content:
-          application:json:
+          application/json:
             schema:
               type: object
               required:
-                - wallet_address
-                - signature
-                - challenge
+                - wallet
               properties:
-                wallet_address:
+                wallet:
                   type: string
-                  example: "jogador1.wax"
-                signature:
-                  type: string
-                  example: "SIG_K1_K7p..."
-                challenge:
-                  type: string
-                  example: "auth_challenge_2026_05_23"
+                  pattern: '^[a-z1-5.]{1,13}$'
+                  description: Account name Antelope (ex. "jogador1")
+                  example: "jogador1"
       responses:
         '200':
-          description: Autenticação bem-sucedida
+          description: Nonce gerado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+        '400':
+          description: Wallet ausente ou com formato inválido
+
+  /auth/verify:
+    post:
+      summary: Verifica assinatura do nonce e emite JWT — Passo 2 do login
+      description: |
+        Valida a assinatura Antelope usando `Signature.recoverDigest(SHA256(nonce))`.
+        Se a chave pública recuperada coincidir com a enviada: invalida o nonce (uso
+        único — previne replay attacks) e emite um JWT de 24h. Ref: ADR-006.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - wallet
+                - nonce
+                - signature
+                - public_key
+              properties:
+                wallet:
+                  type: string
+                  example: "jogador1"
+                nonce:
+                  type: string
+                  description: O mesmo nonce retornado por /auth/challenge
+                  example: "a3f9c2d1b4e8f27c..."
+                signature:
+                  type: string
+                  description: Assinatura Antelope de SHA256(nonce) com chave active
+                  example: "SIG_K1_K7pXn..."
+                public_key:
+                  type: string
+                  description: Chave pública correspondente à permissão active do wallet
+                  example: "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV"
+      responses:
+        '200':
+          description: Autenticação bem-sucedida — JWT emitido
           content:
             application/json:
               schema:
@@ -45,24 +115,40 @@ paths:
                 properties:
                   token:
                     type: string
-                    example: "eyJhbGciOi..."
+                    description: JWT de 24h a ser enviado no header Authorization Bearer
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Campos obrigatórios ausentes
         '401':
-          description: Assinatura inválida ou desafio expirado
+          description: Challenge inválido, expirado ou assinatura incorreta
 
+  # ==========================================
+  # PERFIL (protegido por JWT — ADR-006)
+  # ==========================================
   /profile:
     get:
-      summary: Retorna o perfil completo e dados de gamificação
+      summary: Retorna o perfil completo e dados de gamificação do usuário autenticado
+      description: |
+        Lê o wallet de `req.user.wallet` (injetado pelo middleware JWT).
+        Cria o perfil automaticamente se for o primeiro acesso (upsert implícito).
+        Fonte: MongoDB (`profiles` collection).
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Perfil obtido com sucesso (Junção Postgres + Mongo)
+          description: Perfil obtido com sucesso
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Token ausente ou inválido
+
     put:
-      summary: Atualiza as preferências do usuário (incluindo Idioma/i18n)
+      summary: Atualiza as preferências do usuário autenticado
+      description: |
+        Aceita apenas `nickname` e `locale`. O wallet_address não pode ser alterado
+        via body — é sempre lido do JWT (prevenção de privilege escalation).
       security:
         - BearerAuth: []
       requestBody:
@@ -75,9 +161,6 @@ paths:
                 nickname:
                   type: string
                   example: "CryptoBingoKing"
-                avatar_nft_asset_id:
-                  type: string
-                  example: "1099511627776"
                 locale:
                   type: string
                   enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP]
@@ -85,24 +168,96 @@ paths:
       responses:
         '200':
           description: Preferências salvas com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Nenhum campo válido para atualizar
+        '401':
+          description: Token ausente ou inválido
+        '404':
+          description: Perfil não encontrado
+
+  # ==========================================
+  # CARTELAS — Geração e Assinatura (ADR-001)
+  # ==========================================
+  /games/{gameId}/tickets/generate:
+    post:
+      summary: Gera N cartelas assinadas pelo microserviço para compra no contrato
+      description: |
+        Gera matrizes 5x5 via Fisher-Yates Shuffle por coluna BINGO (SPEC.md §3.1).
+        Valida unicidade de cada matriz por rodada via Redis SET NX (atômico, TTL 24h).
+        Assina cada cartela com SHA256(matrix + game_id + account_name) usando a
+        MICROSERVICE_PRIVATE_KEY (Antelope ECDSA K1). Ref: ADR-001.
+
+        O Frontend recebe o array `tickets` e envia diretamente para `buytickets()`
+        no Smart Contract via Wharfkit — sem persistir a assinatura no servidor.
+
+        Serialização do hash (determinística, equivalente ao eosio::datastream C++):
+          [ matrix(24 bytes uint8) ][ game_id(8 bytes uint64-LE) ][ account_name(utf-8) ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID do jogo (uint64 como string decimal)
+          example: "1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - count
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  description: Quantidade de cartelas a gerar (1–50 por requisição)
+                  example: 3
+      responses:
+        '200':
+          description: Cartelas geradas e assinadas com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateTicketsResponse'
+        '400':
+          description: Parâmetros inválidos (count fora do range, game_id malformado)
+        '401':
+          description: Token ausente ou inválido
+        '404':
+          description: Jogo não encontrado na blockchain
+        '409':
+          description: Jogo não está em estado "funding" — vendas encerradas
+        '503':
+          description: Nó blockchain indisponível temporariamente
 
   # ==========================================
   # LOBBIES E JOGOS
   # ==========================================
   /lobbies:
     get:
-      summary: Lista as salas de jogos (Lobbies) ativas e agendadas
-      description: Retorna a lista de salas alimentada pelo indexador da blockchain e cache do MongoDB.
+      summary: Lista as salas de jogos ativas e agendadas
+      description: |
+        Retorna a lista de lobbies alimentada pelo indexador da blockchain e cache MongoDB.
+        Futuro: substituir polling por WebSocket subscription (AsyncAPI).
       parameters:
         - name: status
           in: query
           required: false
           schema:
             type: string
-            enum: [funding, locked, drawing, drawn, archived]
+            enum: [funding, locked, drawing, drawn, archived, aborted]
       responses:
         '200':
-          description: Lista de Lobbies ativos
+          description: Lista de Lobbies
           content:
             application/json:
               schema:
@@ -121,7 +276,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Histórico de chat recuperado (MongoDB com TTL)
+          description: Histórico de chat (MongoDB com TTL de 7 dias)
           content:
             application/json:
               schema:
@@ -130,12 +285,14 @@ paths:
                   $ref: '#/components/schemas/ChatMessage'
 
   # ==========================================
-  # PLATAFORMA E COMPLIANCE
+  # COMPLIANCE E AUDITORIA
   # ==========================================
   /statistics/rtp:
     get:
-      summary: Retorna relatórios de auditoria e métricas de prêmios (RTP)
-      description: Entrega dados agregados de transparência sobre o retorno ao jogador em conformidade com as diretrizes regulatórias.
+      summary: Relatórios de auditoria e métricas de RTP
+      description: |
+        Dados agregados de transparência sobre o retorno ao jogador.
+        Conformidade com Lei 14.790/2023 (ADR-005).
       responses:
         '200':
           description: Relatório de RTP e métricas de auditoria
@@ -155,22 +312,77 @@ paths:
                     example: 1420
 
   # ==========================================
-  # ADMINISTRAÇÃO E SPONSORS (RBAC)
+  # ADMINISTRAÇÃO (RBAC — pendente de implementação)
   # ==========================================
   /admin/users:
     get:
-      summary: Gerenciamento geral de usuários (Apenas para Sistema/Moderadores)
+      summary: Gerenciamento de usuários (Moderadores/Admin)
       security:
         - BearerAuth: []
       responses:
         '200':
           description: Lista administrativa de usuários
+        '401':
+          description: Token inválido
         '403':
           description: Acesso negado por falta de privilégios
 
+  /admin/patterns:
+    get:
+      summary: Lista padrões de vitória configurados (ADR-004)
+      description: Pendente de implementação — aguarda tabela `patterns` on-chain (ADR-004 Fase 2).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de padrões de vitória
+        '401':
+          description: Token inválido
+
+    post:
+      summary: Cria novo padrão de vitória (ADR-004)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatternInput'
+      responses:
+        '201':
+          description: Padrão criado com sucesso
+        '401':
+          description: Token inválido
+
+  /admin/simulate-weights:
+    post:
+      summary: Motor de simulação Monte Carlo para validação de pesos (ADR-005)
+      description: Pendente de implementação — valida sustentabilidade econômica antes de ativar gametypes.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gametype_id:
+                  type: integer
+                simulations:
+                  type: integer
+                  default: 10000
+      responses:
+        '200':
+          description: Resultado da simulação Monte Carlo
+
+  # ==========================================
+  # SPONSORS (B2B)
+  # ==========================================
   /sponsors/campaigns:
     post:
-      summary: Criação de salas e drops promocionais por Patrocinadores
+      summary: Criação de campanhas de patrocínio B2B
       security:
         - BearerAuth: []
       requestBody:
@@ -192,6 +404,8 @@ paths:
       responses:
         '201':
           description: Campanha registrada e aguardando transferência on-chain
+        '401':
+          description: Token inválido
 
 components:
   securitySchemes:
@@ -199,25 +413,91 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT emitido pelo endpoint /auth/verify. Prazo de 24h. Payload contém { wallet }.
 
   schemas:
+    ChallengeResponse:
+      type: object
+      properties:
+        nonce:
+          type: string
+          description: 256 bits hex — assinar como SHA256(nonce)
+          example: "a3f9c2d1b4e8f27c9031ab45cd67ef89..."
+        expires_at:
+          type: string
+          format: date-time
+          description: TTL de 5 minutos a partir da geração
+        message:
+          type: string
+          example: "Assine este nonce com a permissão active da carteira jogador1."
+
+    GenerateTicketsResponse:
+      type: object
+      description: Resposta da geração de cartelas — array pronto para buytickets() on-chain
+      properties:
+        game_id:
+          type: string
+          example: "1"
+        account:
+          type: string
+          description: Wallet do comprador autenticado (lido do JWT — não do body)
+          example: "jogador1"
+        count:
+          type: integer
+          description: Quantidade efetivamente gerada
+          example: 3
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignedTicket'
+
+    SignedTicket:
+      type: object
+      description: Cartela gerada e assinada pelo microserviço — pronta para buytickets()
+      properties:
+        matrix:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 75
+          minItems: 24
+          maxItems: 24
+          description: |
+            24 números em ordem coluna-maior: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4].
+            A posição 12 (FREE SPACE do layout de bits) é omitida da serialização.
+            Ref: SPEC.md §1.3.
+          example: [7,3,14,1,11, 22,18,28,19,25, 35,40,42,43, 55,49,53,58,47, 63,70,66,71,74]
+        signature:
+          type: string
+          description: |
+            Assinatura Antelope ECDSA K1 de SHA256(matrix_bytes + game_id_uint64LE + account_utf8).
+            Formato: "SIG_K1_...". Passada diretamente para buytickets() no contrato.
+          example: "SIG_K1_KZmWHzh8..."
+
     UserProfile:
       type: object
       properties:
         wallet_address:
           type: string
+          example: "jogador1"
         nickname:
           type: string
-        role:
+          example: "CryptoKing"
+        avatar_nft_asset_id:
           type: string
-          enum: [player, moderator, sponsor, admin]
+          nullable: true
+          example: "1099511627776"
         preferences:
           type: object
           properties:
             locale:
               type: string
+              enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP]
             currency_display:
               type: string
+            sound_enabled:
+              type: boolean
         progression:
           type: object
           properties:
@@ -225,29 +505,48 @@ components:
               type: integer
             tier:
               type: string
+              enum: [Bronze, Silver, Gold, Diamond]
             games_played:
               type: integer
 
     Lobby:
       type: object
+      description: Espelho da tabela `games` on-chain (BlockchainGameState)
       properties:
         game_id:
-          type: integer
+          type: string
+          description: uint64 serializado como string para evitar perda de precisão no JS
+          example: "1"
         status:
           type: string
+          enum: [funding, locked, drawing, drawn, archived, aborted]
         ticket_price:
-          type: object
-          properties:
-            quantity:
-              type: string
-            contract:
-              type: string
+          $ref: '#/components/schemas/ExtendedAsset'
         prize_pool:
-          type: string
+          $ref: '#/components/schemas/ExtendedAsset'
+        sponsor_pool:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtendedAsset'
         drawn_balls:
           type: array
           items:
             type: integer
+          description: Vazio até o evento receiverand do oráculo; 75 posições após
+        campaign_id:
+          type: string
+          example: "0"
+
+    ExtendedAsset:
+      type: object
+      description: extended_asset serializado pelo nó Antelope
+      properties:
+        quantity:
+          type: string
+          example: "10.0000 WAX"
+        contract:
+          type: string
+          example: "eosio.token"
 
     ChatMessage:
       type: object
@@ -263,3 +562,25 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    PatternInput:
+      type: object
+      description: Padrão de vitória para tabela `patterns` on-chain (ADR-004)
+      required:
+        - name
+        - mask
+        - weight
+      properties:
+        name:
+          type: string
+          example: "full_house"
+        mask:
+          type: integer
+          description: Bitmask pré-calculado representando as posições do padrão
+          example: 33554431
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 255
+          description: Multiplicador de prêmio relativo (ADR-005)
+          example: 10

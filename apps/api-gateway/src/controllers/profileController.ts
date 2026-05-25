@@ -1,49 +1,85 @@
 import { Request, Response } from 'express';
 import UserProfile from '../models/UserProfile';
 
-export const getProfile = async (req: Request, res: Response) => {
-    try {
-        // Mock: Em produção, 'wallet_address' virá do Token JWT
-        const wallet_address = req.query.wallet || 'jogador1.wax'; 
+/**
+ * GET /api/v1/profile
+ *
+ * Retorna o perfil do usuário autenticado.
+ * Cria o perfil automaticamente se for o primeiro login (upsert implícito).
+ *
+ * O wallet é lido exclusivamente de `req.user.wallet`, injetado pelo
+ * middleware `requireAuth`. Não aceita wallet via query param — isso
+ * foi o vetor de vulnerabilidade que existia anteriormente.
+ */
+export const getProfile = async (req: Request, res: Response): Promise<void> => {
+    // req.user é garantido pelo middleware requireAuth — nunca será undefined aqui
+    const wallet_address = req.user!.wallet;
 
+    try {
         let profile = await UserProfile.findOne({ wallet_address });
-        
-        // Se o perfil não existir (primeiro login), criamos na hora
+
+        // Primeiro login: cria o perfil com valores padrão do schema
         if (!profile) {
             profile = await UserProfile.create({ wallet_address });
+            console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}`);
         }
 
         res.status(200).json(profile);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao buscar perfil' });
+        console.error(`[Profile] Erro ao buscar perfil de ${wallet_address}:`, error);
+        res.status(500).json({ error: 'Erro interno ao buscar perfil.' });
     }
 };
 
-export const updatePreferences = async (req: Request, res: Response) => {
-    try {
-        // Mock: Em produção, 'wallet_address' virá do Token JWT
-        const wallet_address = req.body.wallet_address || 'jogador1.wax'; 
-        const { nickname, locale } = req.body;
+/**
+ * PUT /api/v1/profile
+ *
+ * Atualiza preferências do usuário autenticado.
+ *
+ * O wallet é lido de `req.user.wallet` — o body NÃO pode sobrescrever
+ * o wallet_address (prevenção de privilege escalation).
+ *
+ * Body aceito: { nickname?: string, locale?: string }
+ */
+export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
+    const wallet_address = req.user!.wallet;
+    const { nickname, locale } = req.body;
 
+    // Validação mínima — expansível com zod/joi em iteração futura
+    if (nickname !== undefined && typeof nickname !== 'string') {
+        res.status(400).json({ error: 'Campo "nickname" deve ser uma string.' });
+        return;
+    }
+    if (locale !== undefined && typeof locale !== 'string') {
+        res.status(400).json({ error: 'Campo "locale" deve ser uma string.' });
+        return;
+    }
+
+    // Constrói o update dinamicamente — só atualiza os campos enviados
+    const updateFields: Record<string, unknown> = {};
+    if (nickname !== undefined) updateFields['nickname'] = nickname;
+    if (locale   !== undefined) updateFields['preferences.locale'] = locale;
+
+    if (Object.keys(updateFields).length === 0) {
+        res.status(400).json({ error: 'Nenhum campo válido para atualizar (nickname, locale).' });
+        return;
+    }
+
+    try {
         const updatedProfile = await UserProfile.findOneAndUpdate(
             { wallet_address },
-            { 
-                $set: { 
-                    nickname, 
-                    'preferences.locale': locale 
-                } 
-            },
-            { new: true } // Retorna o documento atualizado
+            { $set: updateFields },
+            { new: true, runValidators: true } // runValidators: aplica enum do schema
         );
 
         if (!updatedProfile) {
-            return res.status(404).json({ error: 'Perfil não encontrado' });
+            res.status(404).json({ error: 'Perfil não encontrado.' });
+            return;
         }
 
         res.status(200).json(updatedProfile);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erro ao atualizar preferências' });
+        console.error(`[Profile] Erro ao atualizar perfil de ${wallet_address}:`, error);
+        res.status(500).json({ error: 'Erro interno ao atualizar preferências.' });
     }
 };

@@ -103,7 +103,28 @@ services:
       start_period: 20s
 
   # ==========================================
-  # 4. OBSERVABILIDADE (Métricas e Dashboards)
+  # 4. REDIS (Dedupe de Matrizes e Pub/Sub — SPEC.md §3.1, §3.2)
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: bingo_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - bingo_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ==========================================
+  # 5. OBSERVABILIDADE (Métricas e Dashboards)
   # ==========================================
   prometheus:
     image: prom/prometheus:latest
@@ -161,6 +182,7 @@ volumes:
   postgres_data:
   mongo_data:
   rabbitmq_data:
+  redis_data:
   prometheus_data:
   grafana_data:
 
