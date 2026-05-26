@@ -1,25 +1,44 @@
-import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import { Signature, PublicKey, Checksum256 } from '@wharfkit/antelope';
-import { pgPool } from '../database';
+// apps/api-gateway/src/controllers/authController.ts
+// Autenticação JWT via assinatura de carteira Antelope.
+//
+// Hardening desta versão:
+//   - JWT emitido com `jti` (UUID v4) para suporte a blacklist de revogação
+//   - Verificação on-chain da public_key contra permissão `active` do wallet
+//     (controlada por feature flag VERIFY_KEY_ONCHAIN — padrão false em dev)
+//   - Endpoint POST /auth/logout que revoga o token via Redis
+//
+// DOIS MODOS de assinatura em verifyChallenge:
+//   [DEV]  transactionPayload ausente → SHA256(nonce) assinado com PrivateKey
+//   [PROD] transactionPayload presente → transaction eosio.null:nonce
+//
+// Ref: ADR-006
+
+import { Request, Response }                         from 'express';
+import jwt                                           from 'jsonwebtoken';
+import crypto                                        from 'crypto';
+import { v4 as uuidv4 }                             from 'uuid';
+import { Signature, Checksum256, Transaction }       from '@wharfkit/antelope';
+import { pgPool }                                    from '../database';
+import { rpcClient }                                 from '@cryptobingo/blockchain-core';
+import { revokeToken }                               from '../middleware/auth';
 
 // ==========================================
 // CONFIGURAÇÃO
 // ==========================================
 
-const JWT_SECRET      = process.env.JWT_SECRET!;
-const JWT_EXPIRES_IN  = '24h';
-const NONCE_TTL_MS    = 5 * 60 * 1000; // 5 minutos — janela de assinatura
+const JWT_SECRET          = process.env.JWT_SECRET!;
+const JWT_EXPIRES_IN      = '24h';
+const JWT_EXPIRES_SECONDS = 24 * 60 * 60; // 86400s — para cálculo do TTL de revogação
+const NONCE_TTL_MS        = 5 * 60 * 1000; // 5 minutos
+
+// Feature flag — ativa verificação on-chain da chave pública
+// Desabilitado em dev (nó local não tem contas WAX reais)
+const VERIFY_KEY_ONCHAIN = process.env.VERIFY_KEY_ONCHAIN === 'true';
 
 // ==========================================
-// HELPERS INTERNOS
+// HELPERS
 // ==========================================
 
-/**
- * Garante que a tabela de nonces existe no PostgreSQL.
- * Chamada uma vez na inicialização do servidor.
- */
 export async function ensureNonceTable(): Promise<void> {
     await pgPool.query(`
         CREATE TABLE IF NOT EXISTS auth_nonces (
@@ -32,28 +51,14 @@ export async function ensureNonceTable(): Promise<void> {
     `);
 }
 
-/**
- * Remove nonces expirados do banco. Chamada a cada nova requisição de challenge
- * para evitar acúmulo sem precisar de um job externo (auto-housekeeping).
- */
 async function purgeExpiredNonces(): Promise<void> {
     await pgPool.query(`DELETE FROM auth_nonces WHERE expires_at < NOW()`);
 }
 
 // ==========================================
-// CONTROLLERS
+// POST /api/v1/auth/challenge
 // ==========================================
 
-/**
- * POST /api/v1/auth/challenge
- *
- * Gera um nonce único para o wallet informado e persiste com TTL de 5 minutos.
- * O cliente deve assinar este nonce com sua chave Antelope (permissão `active`)
- * e enviar a assinatura para /auth/verify.
- *
- * Body: { wallet: string }
- * Response: { nonce: string, expires_at: string }
- */
 export async function requestChallenge(req: Request, res: Response): Promise<void> {
     const { wallet } = req.body;
 
@@ -62,7 +67,6 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
         return;
     }
 
-    // Sanitização básica: nome Antelope só tem letras minúsculas, números e pontos
     const sanitizedWallet = wallet.trim().toLowerCase();
     if (!/^[a-z1-5.]{1,13}$/.test(sanitizedWallet)) {
         res.status(400).json({ error: 'Formato de wallet inválido.' });
@@ -70,9 +74,9 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
     }
 
     try {
-        await purgeExpiredNonces(); // Housekeeping passivo
+        await purgeExpiredNonces();
 
-        const nonce     = crypto.randomBytes(32).toString('hex'); // 256 bits de entropia
+        const nonce     = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
 
         await pgPool.query(
@@ -91,29 +95,12 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
     }
 }
 
-/**
- * POST /api/v1/auth/verify
- *
- * Verifica a assinatura Antelope do nonce e emite um JWT de 24h.
- *
- * O fluxo de verificação:
- *   1. Recupera o nonce do PostgreSQL (verifica existência e validade)
- *   2. Reconstrói o hash que deveria ter sido assinado: SHA256(nonce)
- *   3. Usa recover_key para extrair a chave pública da assinatura
- *   4. Compara com a chave pública da permissão `active` do wallet na blockchain
- *   5. Se válido: emite JWT e invalida o nonce (uso único)
- *
- * Body: { wallet: string, nonce: string, signature: string, public_key: string }
- * Response: { token: string }
- *
- * NOTA ARQUITETURAL: Estamos recebendo a `public_key` do cliente e verificando
- * se a assinatura foi feita com ela. A validação completa exigiria consultar
- * a permissão `active` do wallet no nó RPC para confirmar que essa chave
- * está realmente autorizada. Implementado como comentário abaixo — ativar
- * em produção via ADR futuro.
- */
+// ==========================================
+// POST /api/v1/auth/verify
+// ==========================================
+
 export async function verifyChallenge(req: Request, res: Response): Promise<void> {
-    const { wallet, nonce, signature, public_key } = req.body;
+    const { wallet, nonce, signature, public_key, transactionPayload } = req.body;
 
     if (!wallet || !nonce || !signature || !public_key) {
         res.status(400).json({ error: 'Campos obrigatórios: wallet, nonce, signature, public_key.' });
@@ -121,58 +108,143 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
     }
 
     try {
-        // 1. Busca e valida o nonce no PostgreSQL
+        // ── 1. Valida o nonce no banco ────────────────────────────────────────
         const result = await pgPool.query(
-            `SELECT expires_at FROM auth_nonces
-             WHERE wallet = $1 AND nonce = $2 AND expires_at > NOW()`,
+            `SELECT expires_at FROM auth_nonces WHERE wallet = $1 AND nonce = $2`,
             [wallet, nonce]
         );
 
-        if (result.rows.length === 0) {
-            // Nonce não encontrado ou expirado — resposta genérica intencional
+        if (result.rowCount === 0) {
             res.status(401).json({ error: 'Challenge inválido ou expirado.' });
             return;
         }
 
-        // 2. Reconstrói o digest que o cliente deveria ter assinado
-        //    Convenção: SHA256(nonce) — o mesmo que o frontend deve usar
-        const digest = Checksum256.hash(Buffer.from(nonce, 'utf-8'));
-
-        // 3. Recupera a chave pública a partir da assinatura
-        const sig            = Signature.from(signature);
-        const recoveredKey   = sig.recoverDigest(digest);
-        const expectedKey    = PublicKey.from(public_key);
-
-        if (recoveredKey.toString() !== expectedKey.toString()) {
-            res.status(401).json({ error: 'Assinatura inválida.' });
+        const expiresAt = new Date(result.rows[0].expires_at);
+        if (expiresAt < new Date()) {
+            await pgPool.query(
+                `DELETE FROM auth_nonces WHERE wallet = $1 AND nonce = $2`,
+                [wallet, nonce]
+            );
+            res.status(401).json({ error: 'Challenge expirado. Solicite um novo.' });
             return;
         }
 
-        // PRODUÇÃO: Verificar se `public_key` está na permissão `active` do wallet na chain:
-        // const accountInfo = await rpcClient.v1.chain.get_account(wallet);
-        // const activeKeys  = accountInfo.permissions.find(p => p.perm_name === 'active')?.required_auth.keys ?? [];
-        // if (!activeKeys.some(k => k.key.toString() === public_key)) {
-        //     return res.status(401).json({ error: 'Chave pública não autorizada para esta conta.' });
-        // }
+        // ── 2. Verifica a assinatura (dois modos) ─────────────────────────────
+        const sig = Signature.from(signature);
+        let recoveredPubKey: string;
 
-        // 4. Nonce válido — invalida para uso único (previne replay attacks)
+        if (transactionPayload !== undefined && transactionPayload !== null) {
+            // ── MODO PRODUÇÃO: verifica via transaction.id ───────────────────
+            try {
+                const transaction = Transaction.from(transactionPayload);
+                const actionDataHex = transaction.actions[0]?.data?.toString() ?? '';
+                const actionDataStr = Buffer.from(actionDataHex, 'hex').toString('utf-8');
+
+                if (actionDataStr !== nonce) {
+                    res.status(401).json({ error: 'Nonce na transação não corresponde ao challenge.' });
+                    return;
+                }
+
+                recoveredPubKey = sig.recoverDigest(transaction.id).toString();
+            } catch (txErr) {
+                console.error('[Auth] Erro ao reconstruir transação:', txErr);
+                res.status(401).json({ error: 'transactionPayload inválido.' });
+                return;
+            }
+        } else {
+            // ── MODO DEV: verifica via SHA256(nonce) ─────────────────────────
+            const digest = Checksum256.hash(Buffer.from(nonce, 'utf-8'));
+            recoveredPubKey = sig.recoverDigest(digest).toString();
+        }
+
+        if (recoveredPubKey !== public_key) {
+            res.status(401).json({ error: 'Assinatura criptográfica inválida.' });
+            return;
+        }
+
+        // ── 3. Verificação on-chain da chave pública (feature flag) ───────────
+        // Confirma que a public_key está autorizada na permissão `active` do wallet.
+        // Habilitar em produção via VERIFY_KEY_ONCHAIN=true no .env.
+        if (VERIFY_KEY_ONCHAIN) {
+            try {
+                const accountInfo = await rpcClient.v1.chain.get_account(wallet);
+                const activeKeys  = accountInfo.permissions
+                    .find((p: any) => p.perm_name === 'active')
+                    ?.required_auth.keys ?? [];
+
+                const isAuthorized = activeKeys.some(
+                    (k: any) => k.key.toString() === public_key
+                );
+
+                if (!isAuthorized) {
+                    console.warn(`[Auth] Chave não autorizada on-chain: ${wallet} / ${public_key}`);
+                    res.status(401).json({ error: 'Chave pública não autorizada para esta conta.' });
+                    return;
+                }
+            } catch (rpcErr) {
+                // Falha no nó RPC — não bloqueia o login (fail-open com log)
+                // Em produção alta-segurança: mudar para fail-closed
+                console.error('[Auth] Erro ao verificar chave on-chain (fail-open):', rpcErr);
+            }
+        }
+
+        // ── 4. Invalida o nonce (uso único) ───────────────────────────────────
         await pgPool.query(
             `DELETE FROM auth_nonces WHERE wallet = $1 AND nonce = $2`,
             [wallet, nonce]
         );
 
-        // 5. Emite o JWT
+        // ── 5. Emite o JWT com jti ────────────────────────────────────────────
+        // jti = JWT ID único (UUID v4) — permite revogação individual no Redis
+        const jti   = uuidv4();
         const token = jwt.sign(
-            { wallet },
+            { wallet, jti },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
         );
 
-        console.log(`✅ [Auth] Login bem-sucedido: ${wallet}`);
+        console.log(
+            `✅ [Auth] Login: ${wallet} | ` +
+            `modo: ${transactionPayload ? 'produção' : 'dev'} | ` +
+            `onchain: ${VERIFY_KEY_ONCHAIN}`
+        );
+
         res.status(200).json({ token });
 
     } catch (error) {
         console.error('[Auth] Erro ao verificar challenge:', error);
         res.status(500).json({ error: 'Erro interno ao verificar assinatura.' });
     }
+}
+
+// ==========================================
+// POST /api/v1/auth/logout
+// Revoga o token atual adicionando seu jti ao Redis.
+// ==========================================
+
+export async function logout(req: Request, res: Response): Promise<void> {
+    const { jti } = req.user ?? {};
+
+    if (!jti) {
+        // Token sem jti (emitido por versão anterior) — logout sem revogação
+        res.status(200).json({ message: 'Sessão encerrada.' });
+        return;
+    }
+
+    // Extrai o campo exp do token para calcular o TTL da blacklist
+    const authHeader = req.headers.authorization ?? '';
+    const token      = authHeader.slice(7);
+
+    try {
+        const payload = jwt.decode(token) as { exp?: number } | null;
+        const exp     = payload?.exp ?? Math.floor(Date.now() / 1000) + JWT_EXPIRES_SECONDS;
+
+        await revokeToken(jti, exp);
+        console.log(`🔒 [Auth] Logout: ${req.user?.wallet} (jti: ${jti})`);
+    } catch (err) {
+        console.error('[Auth] Erro ao revogar token no logout:', err);
+        // Não bloqueia o logout mesmo se a revogação falhar
+    }
+
+    res.status(200).json({ message: 'Sessão encerrada com sucesso.' });
 }

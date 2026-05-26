@@ -1,7 +1,7 @@
 // apps/frontend/src/services/api.ts
 // Camada de comunicação com o api-gateway.
-// Todas as rotas protegidas enviam o JWT via header Authorization: Bearer <token>.
-// O token é armazenado em memória (sessionStorage) — nunca em localStorage.
+// Rotas protegidas enviam JWT via Authorization: Bearer <token>.
+// Token armazenado em sessionStorage — nunca em localStorage.
 // Ref: ADR-006 (JWT Auth), openapi.yaml v1.2.0
 
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
@@ -9,7 +9,7 @@ import type { MongoUserProfile } from '@cryptobingo/shared-types';
 const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
 
 // ==========================================
-// GESTÃO DE TOKEN JWT (in-memory + sessionStorage)
+// GESTÃO DE TOKEN JWT
 // ==========================================
 
 let _token: string | null = sessionStorage.getItem('cb_jwt');
@@ -28,23 +28,17 @@ export function getAuthToken(): string | null {
     return _token;
 }
 
-/** Headers base para rotas protegidas. Lança erro se não houver token. */
 function authHeaders(): HeadersInit {
     if (!_token) throw new Error('Usuário não autenticado. Faça login primeiro.');
     return {
-        'Content-Type': 'application/json',
+        'Content-Type':  'application/json',
         'Authorization': `Bearer ${_token}`,
     };
 }
 
-/** Headers para rotas públicas. */
 function publicHeaders(): HeadersInit {
     return { 'Content-Type': 'application/json' };
 }
-
-// ==========================================
-// HELPER DE RESPOSTA
-// ==========================================
 
 async function handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
@@ -59,41 +53,51 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ==========================================
 
 interface ChallengeResponse {
-    nonce: string;
+    nonce:      string;
     expires_at: string;
-    message: string;
+    message:    string;
 }
 
 interface VerifyResponse {
     token: string;
 }
 
-/**
- * Passo 1: Solicita o nonce ao servidor para o wallet informado.
- */
+/** Passo 1: Solicita nonce para o wallet informado. */
 export async function requestAuthChallenge(wallet: string): Promise<ChallengeResponse> {
     const res = await fetch(`${API_BASE}/auth/challenge`, {
-        method: 'POST',
+        method:  'POST',
         headers: publicHeaders(),
-        body: JSON.stringify({ wallet }),
+        body:    JSON.stringify({ wallet }),
     });
     return handleResponse<ChallengeResponse>(res);
 }
 
 /**
- * Passo 2: Envia a assinatura do nonce e obtém o JWT.
+ * Passo 2: Envia assinatura e obtém JWT.
  * Armazena o token automaticamente em memória + sessionStorage.
+ *
+ * @param transactionPayload - Opcional. Presente no modo produção (eosio.null:nonce).
+ *   Ausente no modo dev (digest puro com PrivateKey.signDigest).
+ *   O servidor distingue os dois modos pela presença deste campo.
  */
 export async function verifyAuthChallenge(
-    wallet: string,
-    nonce: string,
-    signature: string,
-    publicKey: string,
+    wallet:              string,
+    nonce:               string,
+    signature:           string,
+    publicKey:           string,
+    transactionPayload?: unknown,
 ): Promise<string> {
     const res = await fetch(`${API_BASE}/auth/verify`, {
-        method: 'POST',
+        method:  'POST',
         headers: publicHeaders(),
-        body: JSON.stringify({ wallet, nonce, signature, public_key: publicKey }),
+        body: JSON.stringify({
+            wallet,
+            nonce,
+            signature,
+            public_key: publicKey,
+            // Presente apenas no modo produção
+            ...(transactionPayload !== undefined && { transactionPayload }),
+        }),
     });
     const data = await handleResponse<VerifyResponse>(res);
     setAuthToken(data.token);
@@ -104,10 +108,7 @@ export async function verifyAuthChallenge(
 // PERFIL (protegido por JWT)
 // ==========================================
 
-/**
- * Busca o perfil do usuário autenticado.
- * Usa o JWT — o wallet é lido pelo servidor a partir do token.
- */
+/** Busca o perfil do usuário autenticado via JWT. */
 export async function fetchUserProfile(): Promise<MongoUserProfile> {
     const res = await fetch(`${API_BASE}/profile`, {
         headers: authHeaders(),
@@ -115,14 +116,12 @@ export async function fetchUserProfile(): Promise<MongoUserProfile> {
     return handleResponse<MongoUserProfile>(res);
 }
 
-/**
- * Atualiza o locale do usuário autenticado.
- */
+/** Atualiza o locale do usuário autenticado. */
 export async function updateUserLocale(locale: string): Promise<MongoUserProfile> {
     const res = await fetch(`${API_BASE}/profile`, {
-        method: 'PUT',
+        method:  'PUT',
         headers: authHeaders(),
-        body: JSON.stringify({ locale }),
+        body:    JSON.stringify({ locale }),
     });
     return handleResponse<MongoUserProfile>(res);
 }
@@ -132,30 +131,30 @@ export async function updateUserLocale(locale: string): Promise<MongoUserProfile
 // ==========================================
 
 export interface SignedTicket {
-    matrix: number[];    // 24 posições: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4]
-    signature: string;   // "SIG_K1_..."
+    matrix:    number[];  // 24 posições: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4]
+    signature: string;    // "SIG_K1_..."
 }
 
 export interface GenerateTicketsResponse {
     game_id: string;
     account: string;
-    count: number;
+    count:   number;
     tickets: SignedTicket[];
 }
 
 /**
- * Solicita ao backend a geração de N cartelas assinadas para um jogo.
- * Retorna o array pronto para ser submetido ao buytickets() on-chain.
- * Ref: ADR-001, SPEC.md §2.1, openapi.yaml /games/{gameId}/tickets/generate
+ * Solicita ao backend N cartelas assinadas para um jogo.
+ * Retorna array pronto para buytickets() on-chain.
+ * Ref: ADR-001, SPEC.md §2.1
  */
 export async function generateSignedTickets(
     gameId: string,
-    count: number,
+    count:  number,
 ): Promise<GenerateTicketsResponse> {
     const res = await fetch(`${API_BASE}/games/${gameId}/tickets/generate`, {
-        method: 'POST',
+        method:  'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ count }),
+        body:    JSON.stringify({ count }),
     });
     return handleResponse<GenerateTicketsResponse>(res);
 }

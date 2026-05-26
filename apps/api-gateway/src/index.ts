@@ -1,14 +1,35 @@
 // apps/api-gateway/src/index.ts
+// Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { connectMongo, connectPostgres } from './database';
-import { connectRedis } from './database/redis';
-import { requireAuth } from './middleware/auth';
-import { requestChallenge, verifyChallenge, ensureNonceTable } from './controllers/authController';
-import { getProfile, updatePreferences } from './controllers/profileController';
-import { generateTickets } from './controllers/ticketController';
+import express                                       from 'express';
+import cors, { CorsOptions }                         from 'cors';
+import helmet                                        from 'helmet';
+import dotenv                                        from 'dotenv';
+import { connectMongo, connectPostgres }             from './database';
+import { connectRedis }                              from './database/redis';
+import { requireAuth }                               from './middleware/auth';
+import { requireRole }                               from './middleware/rbac';
+import {
+    authLimiter,
+    playerLimiter,
+    ticketLimiter,
+    adminLimiter,
+    monteCarloLimiter,
+    initRateLimiters,
+} from './middleware/rateLimiter';
+import {
+    requestChallenge,
+    verifyChallenge,
+    ensureNonceTable,
+    logout,
+} from './controllers/authController';
+import { getProfile, updatePreferences }             from './controllers/profileController';
+import { generateTickets }                           from './controllers/ticketController';
+import {
+    listPatterns, upsertPattern, deletePattern,
+    listGametypes, upsertGametype, deleteGametype,
+} from './controllers/patternController';
+import { simulateWeights }                           from './controllers/monteCarloController';
 
 dotenv.config();
 
@@ -16,68 +37,168 @@ const app  = express();
 const PORT = process.env.PORT || 8080;
 
 // ==========================================
-// MIDDLEWARE BASE
+// CORS — Lista branca de origins
 // ==========================================
-app.use(cors());
-app.use(express.json());
+
+const ALLOWED_ORIGINS: string[] = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
+const corsOptions: CorsOptions = {
+    origin: (origin, callback) => {
+        // Permite requests sem origin (ex: curl, Postman, mobile apps)
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin não autorizada: ${origin}`));
+    },
+    methods:          ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders:   ['Content-Type', 'Authorization'],
+    exposedHeaders:   ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
+    credentials:      true,
+    maxAge:           86400, // Preflight cache por 24h
+};
 
 // ==========================================
-// INICIALIZAÇÃO ASSÍNCRONA
+// BOOTSTRAP
 // ==========================================
+
 async function bootstrap(): Promise<void> {
-    // 1. Conecta aos bancos de dados
     await connectMongo();
     await connectPostgres();
     await connectRedis();
-
-    // 2. Garante que a tabela de nonces existe no PostgreSQL (idempotente — CREATE IF NOT EXISTS)
     await ensureNonceTable();
     console.log('✅ [Bootstrap] Tabela auth_nonces verificada.');
 
-    // 3. Registra as rotas
+    // Inicializa rate limiters APÓS o Redis conectar
+    initRateLimiters();
+
+    registerMiddleware();
     registerRoutes();
 
-    // 4. Sobe o servidor
     app.listen(PORT, () => {
         console.log('=============================================');
         console.log(`🌐 CryptoBingo: API Gateway na porta ${PORT}`);
+        console.log(`   Origins permitidas: ${ALLOWED_ORIGINS.join(', ')}`);
+        console.log(`   Helmet: ativo`);
+        console.log(`   RBAC:   ativo`);
+        console.log(`   JWT Blacklist: ativo (Redis)`);
         console.log('=============================================');
+    });
+}
+
+// ==========================================
+// MIDDLEWARE GLOBAL
+// ==========================================
+
+function registerMiddleware(): void {
+    // Helmet — headers de segurança HTTP
+    // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
+    app.use(helmet({
+        crossOriginResourcePolicy:   { policy: 'cross-origin' },
+        contentSecurityPolicy:       false, // Gerenciado pelo frontend (Vite)
+        crossOriginEmbedderPolicy:   false, // Necessário para SharedArrayBuffer do Wharfkit
+    }));
+
+    // CORS restrito
+    app.use(cors(corsOptions));
+    app.options('*', cors(corsOptions)); // Preflight
+
+    // Body parser
+    app.use(express.json({ limit: '1mb' })); // Limite explícito — previne body too large attacks
+
+    // Header de segurança adicional (não coberto pelo Helmet)
+    app.use((_req, res, next) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        next();
     });
 }
 
 // ==========================================
 // ROTAS
 // ==========================================
+
 function registerRoutes(): void {
 
-    // --- Health Check (público) ---
+    // ── Health (sem rate limit — monitoramento) ───────────────────────────────
     app.get('/api/v1/health', (_req, res) => {
         res.status(200).json({ status: 'Gateway Online', timestamp: new Date() });
     });
 
-    // --- Autenticação (públicas) ---
-    // POST /api/v1/auth/challenge  — solicita nonce para assinar (ADR-006)
-    // POST /api/v1/auth/verify     — envia assinatura e recebe JWT (ADR-006)
-    app.post('/api/v1/auth/challenge', requestChallenge);
-    app.post('/api/v1/auth/verify',    verifyChallenge);
+    // ── Autenticação pública (rate limit restrito — anti brute-force) ─────────
+    app.post('/api/v1/auth/challenge', authLimiter, requestChallenge);
+    app.post('/api/v1/auth/verify',    authLimiter, verifyChallenge);
 
-    // --- Perfil (protegidas por JWT) ---
-    // GET /api/v1/profile          — retorna perfil MongoDB do usuário autenticado
-    // PUT /api/v1/profile          — atualiza nickname/locale
-    app.get('/api/v1/profile', requireAuth, getProfile);
-    app.put('/api/v1/profile', requireAuth, updatePreferences);
+    // ── Logout (JWT) — revoga o token atual na blacklist Redis ────────────────
+    app.post('/api/v1/auth/logout', requireAuth, logout);
 
-    // --- Geração de Cartelas (protegida por JWT) ---
-    // POST /api/v1/games/:gameId/tickets/generate
-    //   Body:    { count: number }  (1–50)
-    //   Returns: { game_id, account, count, tickets: [{ matrix, signature }] }
-    //   Ref:     ADR-001, SPEC.md §2.1, §3.1, openapi.yaml
-    app.post('/api/v1/games/:gameId/tickets/generate', requireAuth, generateTickets);
+    // ── Perfil (JWT + player rate limit) ─────────────────────────────────────
+    app.get('/api/v1/profile', playerLimiter, requireAuth, getProfile);
+    app.put('/api/v1/profile', playerLimiter, requireAuth, updatePreferences);
+
+    // ── Cartelas (JWT + ticket rate limit) ───────────────────────────────────
+    app.post(
+        '/api/v1/games/:gameId/tickets/generate',
+        ticketLimiter,
+        requireAuth,
+        generateTickets
+    );
+
+    // ── Admin: Patterns (JWT + RBAC admin + admin rate limit) ─────────────────
+    app.get(
+        '/api/v1/admin/patterns',
+        adminLimiter, requireAuth, requireRole('admin'), listPatterns
+    );
+    app.post(
+        '/api/v1/admin/patterns',
+        adminLimiter, requireAuth, requireRole('admin'), upsertPattern
+    );
+    app.delete(
+        '/api/v1/admin/patterns/:patternId',
+        adminLimiter, requireAuth, requireRole('admin'), deletePattern
+    );
+
+    // ── Admin: Gametypes (JWT + RBAC admin + admin rate limit) ────────────────
+    app.get(
+        '/api/v1/admin/gametypes',
+        adminLimiter, requireAuth, requireRole('admin'), listGametypes
+    );
+    app.post(
+        '/api/v1/admin/gametypes',
+        adminLimiter, requireAuth, requireRole('admin'), upsertGametype
+    );
+    app.delete(
+        '/api/v1/admin/gametypes/:gametypeId',
+        adminLimiter, requireAuth, requireRole('admin'), deleteGametype
+    );
+
+    // ── Admin: Monte Carlo (JWT + RBAC admin + limit agressivo — CPU-bound) ───
+    app.post(
+        '/api/v1/admin/simulate-weights',
+        monteCarloLimiter, requireAuth, requireRole('admin'), simulateWeights
+    );
+
+    // ── 404 catch-all ─────────────────────────────────────────────────────────
+    app.use((_req, res) => {
+        res.status(404).json({ error: 'Rota não encontrada.' });
+    });
+
+    // ── Error handler global ──────────────────────────────────────────────────
+    // Captura erros do CORS e demais middlewares sem vazar stack traces
+    app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+        if (err.message.startsWith('CORS:')) {
+            res.status(403).json({ error: err.message });
+            return;
+        }
+        console.error('[Gateway] Erro não tratado:', err);
+        res.status(500).json({ error: 'Erro interno do servidor.' });
+    });
 }
 
 // ==========================================
 // ENTRYPOINT
 // ==========================================
+
 bootstrap().catch((error) => {
     console.error('❌ [Bootstrap] Falha crítica na inicialização:', error);
     process.exit(1);

@@ -1,21 +1,41 @@
-import { connectRabbitMQ } from './services/rabbitmq';
-import dotenv from 'dotenv';
+// apps/worker-game-loop/src/index.ts
 
+import dotenv from 'dotenv';
 dotenv.config();
+
+import { connectRabbitMQ }    from './services/rabbitmq';
+import { startBroadcaster }   from './services/broadcaster';
+import { startMetricsServer } from './services/metrics';
 
 console.log('=============================================');
 console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
 console.log('=============================================');
 
-async function bootstrap() {
-    // 1. Verifica se as chaves da blockchain estão presentes
+async function bootstrap(): Promise<void> {
+    // ── Guarda de configuração crítica ────────────────────────────────────────
     if (!process.env.MICROSERVICE_PRIVATE_KEY) {
         console.error('❌ ERRO CRÍTICO: MICROSERVICE_PRIVATE_KEY não definida no .env');
         process.exit(1);
     }
 
-    // 2. Conecta ao RabbitMQ e começa a escutar a fila
+    if (!process.env.JWT_SECRET) {
+        console.warn('⚠️  JWT_SECRET não definida. Auth WebSocket desabilitada (apenas DEV).');
+    }
+
+    // ── 1. Servidor de métricas Prometheus (porta METRICS_PORT / 9091) ────────
+    // Iniciado primeiro para estar disponível desde o início do processo.
+    startMetricsServer();
+
+    // ── 2. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
+    // Iniciado antes do RabbitMQ para estar pronto para conexões de clientes
+    // quando o primeiro evento 'startdraw' chegar.
+    startBroadcaster();
+
+    // ── 3. Consumidor RabbitMQ ────────────────────────────────────────────────
     await connectRabbitMQ();
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+    console.error('❌ [Bootstrap] Falha crítica:', err);
+    process.exit(1);
+});

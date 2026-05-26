@@ -2,31 +2,36 @@
   "name": "@cryptobingo/frontend",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev":     "vite",
+    "build":   "tsc && vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean":   "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@cryptobingo/blockchain-core": "workspace:*",
-    "@cryptobingo/shared-types": "workspace:*",
-    "@wharfkit/antelope": "^1.0.0",
-    "@wharfkit/session": "^1.0.0",
-    "@wharfkit/wallet-plugin-anchor": "^1.6.1",
+    "@cryptobingo/blockchain-core":        "workspace:*",
+    "@cryptobingo/shared-types":           "workspace:*",
+    "@wharfkit/antelope":                  "^1.0.0",
+    "@wharfkit/session":                   "^1.0.0",
+    "@wharfkit/wallet-plugin-anchor":      "^1.6.1",
     "@wharfkit/wallet-plugin-cloudwallet": "^1.6.4",
-    "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
-    "@wharfkit/web-renderer": "^1.0.0",
-    "i18next": "^22.4.15",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-i18next": "^12.2.0"
+    "@wharfkit/wallet-plugin-privatekey":  "^1.0.0",
+    "@wharfkit/web-renderer":              "^1.0.0",
+    "i18next":                             "^22.4.15",
+    "react":                               "^18.2.0",
+    "react-dom":                           "^18.2.0",
+    "react-i18next":                       "^12.2.0",
+    "socket.io-client":                    "^4.7.5"
   },
   "devDependencies": {
-    "@types/react": "^18.0.37",
-    "@types/react-dom": "^18.0.11",
-    "@vitejs/plugin-react": "^4.0.0",
-    "typescript": "^5.0.0",
-    "vite": "^4.3.9"
+    "@tailwindcss/vite":   "^4.0.0",
+    "@types/react":        "^18.0.37",
+    "@types/react-dom":    "^18.0.11",
+    "@vitejs/plugin-react":"^4.0.0",
+    "tailwindcss":         "^4.0.0",
+    "typescript":          "^5.0.0",
+    "vite":                "^5.0.0",
+    "vite-plugin-node-polyfills": "^0.17.0"
   }
 }

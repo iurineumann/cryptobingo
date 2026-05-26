@@ -1,90 +1,104 @@
 // apps/frontend/src/components/BuyTicketModal.tsx
-// Modal de compra de cartelas. Orquestra a UX completa do fluxo:
-//
-//   1. Seleção de quantidade (1–10)
-//   2. Confirmação e submissão via useTicketPurchase
-//   3. Exibição das cartelas geradas em TicketGrid
-//   4. Link para a transação on-chain
-//
-// Ref: ADR-001, SPEC.md §2.1, useTicketPurchase.ts
+// Modal de compra de cartelas — migrado para Tailwind v4 + Design System cb-*.
+// Ref: ADR-001, SPEC.md §2.1
 
-import { useState } from 'react';
-import { Session } from '@wharfkit/session';
+import { useState }          from 'react';
+import { Session }           from '@wharfkit/session';
 import { useTicketPurchase } from '../hooks/useTicketPurchase';
-import TicketGrid from './TicketGrid';
+import TicketGrid            from './TicketGrid';
 import type { ExtendedAsset } from '@cryptobingo/shared-types';
 
 interface BuyTicketModalProps {
-    gameId: string;
+    gameId:      string;
     ticketPrice: ExtendedAsset;
-    session: Session;
-    onClose: () => void;
-    onSuccess: () => void; // Callback para atualizar o lobby após compra
+    session:     Session;
+    onClose:     () => void;
+    onSuccess:   () => void;
 }
 
 const EXPLORER_BASE = import.meta.env.VITE_EXPLORER_URL ?? 'https://wax.bloks.io';
+const MAX_TICKETS   = 10;
 
 export default function BuyTicketModal({
-    gameId,
-    ticketPrice,
-    session,
-    onClose,
-    onSuccess,
+    gameId, ticketPrice, session, onClose, onSuccess,
 }: BuyTicketModalProps) {
+
     const [count, setCount] = useState(1);
     const { isPurchasing, purchaseError, lastPurchase, purchaseTickets, clearError } = useTicketPurchase();
 
     const handleBuy = async () => {
         clearError();
         const result = await purchaseTickets(session, gameId, count);
-        if (result) {
-            onSuccess(); // Atualiza saldo/lobby no pai
-        }
+        if (result) onSuccess();
     };
 
-    // Cálculo do custo total para exibição (sem BigInt completo — apenas display)
+    const dec = () => setCount(c => Math.max(1, c - 1));
+    const inc = () => setCount(c => Math.min(MAX_TICKETS, c + 1));
+
     const [priceAmount, priceSymbol] = ticketPrice.quantity.split(' ');
     const totalDisplay = `${(parseFloat(priceAmount) * count).toFixed(4)} ${priceSymbol}`;
 
-    // ── Tela de sucesso — exibe as cartelas geradas ───────────────────────────
+    // ── Tela de sucesso ───────────────────────────────────────────────────────
     if (lastPurchase) {
         return (
-            <div style={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-                <div style={styles.modal}>
-                    <div style={styles.header}>
-                        <h2 style={{ margin: 0, color: '#059669' }}>🎉 Cartelas Compradas!</h2>
-                        <button style={styles.closeBtn} onClick={onClose}>✕</button>
+            <div
+                className="cb-overlay"
+                onClick={e => e.target === e.currentTarget && onClose()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-success-title"
+            >
+                <div className="cb-modal" style={{ maxWidth: '44rem' }}>
+
+                    {/* Header */}
+                    <div className="cb-modal-header">
+                        <h2 id="modal-success-title" className="cb-modal-title flex items-center gap-2">
+                            <span aria-hidden="true">🎉</span>
+                            Cartelas Adquiridas!
+                        </h2>
+                        <button className="cb-modal-close" onClick={onClose} aria-label="Fechar">✕</button>
                     </div>
 
-                    <p style={{ color: '#475569', marginBottom: '8px' }}>
-                        <strong>{lastPurchase.ticketCount}</strong> cartela(s) adquirida(s) no jogo <strong>#{gameId}</strong>.
-                    </p>
+                    {/* Confirmação */}
+                    <div className="cb-alert cb-alert-success mb-4">
+                        <span aria-hidden="true">✅</span>
+                        <span>
+                            <strong>{lastPurchase.ticketCount}</strong> cartela{lastPurchase.ticketCount > 1 ? 's' : ''} adquirida{lastPurchase.ticketCount > 1 ? 's' : ''} na sala <strong>#{gameId}</strong>.
+                        </span>
+                    </div>
 
+                    {/* Link da transação */}
                     {lastPurchase.transactionId !== 'pending' && (
                         <a
                             href={`${EXPLORER_BASE}/transaction/${lastPurchase.transactionId}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ fontSize: '13px', color: '#2563eb', wordBreak: 'break-all' }}
+                            className="inline-flex items-center gap-1 text-xs text-[--cb-brand] hover:underline font-mono break-all mb-4"
                         >
-                            Ver transação: {lastPurchase.transactionId.slice(0, 24)}...
+                            <span aria-hidden="true">🔗</span>
+                            TX: {lastPurchase.transactionId.slice(0, 24)}…
                         </a>
                     )}
 
-                    <h3 style={{ marginTop: '24px', marginBottom: '12px' }}>Suas Cartelas:</h3>
-
-                    <div style={styles.ticketsList}>
+                    {/* Cartelas */}
+                    <h3 className="text-sm font-semibold text-[--cb-text-secondary] uppercase tracking-wide mb-3">
+                        Suas Cartelas
+                    </h3>
+                    <div className="flex flex-wrap gap-5 justify-center max-h-96 overflow-y-auto py-2">
                         {lastPurchase.tickets.map((ticket, idx) => (
-                            <div key={idx} style={{ textAlign: 'center' }}>
-                                <p style={{ marginBottom: '6px', fontWeight: 'bold', color: '#64748b', fontSize: '13px' }}>
-                                    Cartela #{idx + 1}
-                                </p>
+                            <div key={idx} className="flex flex-col items-center gap-1">
+                                <span className="text-xs font-bold text-[--cb-text-tertiary]">
+                                    #{idx + 1}
+                                </span>
                                 <TicketGrid matrix={ticket.matrix} />
                             </div>
                         ))}
                     </div>
 
-                    <button style={{ ...styles.btnPrimary, marginTop: '20px', width: '100%' }} onClick={onClose}>
+                    <button
+                        className="cb-btn cb-btn-primary cb-btn-pill w-full mt-5"
+                        onClick={onClose}
+                    >
                         Fechar
                     </button>
                 </div>
@@ -94,196 +108,143 @@ export default function BuyTicketModal({
 
     // ── Tela de compra ────────────────────────────────────────────────────────
     return (
-        <div style={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-            <div style={{ ...styles.modal, maxWidth: '400px' }}>
-                <div style={styles.header}>
-                    <h2 style={{ margin: 0 }}>🎲 Comprar Cartelas</h2>
-                    <button style={styles.closeBtn} onClick={onClose} disabled={isPurchasing}>✕</button>
+        <div
+            className="cb-overlay"
+            onClick={e => e.target === e.currentTarget && onClose()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-buy-title"
+        >
+            <div className="cb-modal" style={{ maxWidth: '26rem' }}>
+
+                {/* Header */}
+                <div className="cb-modal-header">
+                    <h2 id="modal-buy-title" className="cb-modal-title flex items-center gap-2">
+                        <span aria-hidden="true">🎲</span>
+                        Comprar Cartelas
+                    </h2>
+                    <button
+                        className="cb-modal-close"
+                        onClick={onClose}
+                        disabled={isPurchasing}
+                        aria-label="Fechar"
+                    >
+                        ✕
+                    </button>
                 </div>
 
-                <p style={{ color: '#475569' }}>Jogo <strong>#{gameId}</strong></p>
+                {/* Identificação do jogo */}
+                <p className="text-sm text-[--cb-text-secondary] mb-5">
+                    Sala <span className="font-bold text-[--cb-text-primary]">#{gameId}</span>
+                    <span className="cb-badge cb-badge-success ml-2">🟢 Vendas Abertas</span>
+                </p>
 
                 {/* Seletor de quantidade */}
-                <div style={styles.formGroup}>
-                    <label style={styles.label}>Quantidade de cartelas</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                <fieldset className="mb-5">
+                    <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-3">
+                        Quantidade de cartelas
+                    </legend>
+                    <div className="flex items-center justify-center gap-4">
                         <button
-                            style={styles.counterBtn}
-                            onClick={() => setCount(c => Math.max(1, c - 1))}
+                            className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
+                            onClick={dec}
                             disabled={isPurchasing || count <= 1}
-                        >−</button>
-                        <span style={{ fontSize: '24px', fontWeight: 'bold', minWidth: '32px', textAlign: 'center' }}>
+                            aria-label="Diminuir quantidade"
+                        >
+                            −
+                        </button>
+                        <span
+                            className="text-3xl font-black text-[--cb-text-primary] min-w-[3rem] text-center tabular-nums"
+                            aria-live="polite"
+                            aria-label={`${count} cartela${count > 1 ? 's' : ''}`}
+                        >
                             {count}
                         </span>
                         <button
-                            style={styles.counterBtn}
-                            onClick={() => setCount(c => Math.min(10, c + 1))}
-                            disabled={isPurchasing || count >= 10}
-                        >+</button>
+                            className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
+                            onClick={inc}
+                            disabled={isPurchasing || count >= MAX_TICKETS}
+                            aria-label="Aumentar quantidade"
+                        >
+                            +
+                        </button>
                     </div>
-                </div>
+
+                    {/* Quick select */}
+                    <div className="flex justify-center gap-2 mt-3 flex-wrap">
+                        {[1, 3, 5, 10].map(n => (
+                            <button
+                                key={n}
+                                className={[
+                                    'cb-btn cb-btn-sm rounded-full tabular-nums',
+                                    count === n ? 'cb-btn-primary' : 'cb-btn-ghost',
+                                ].join(' ')}
+                                onClick={() => setCount(n)}
+                                disabled={isPurchasing}
+                                aria-pressed={count === n}
+                            >
+                                {n}×
+                            </button>
+                        ))}
+                    </div>
+                </fieldset>
 
                 {/* Resumo de custo */}
-                <div style={styles.costBox}>
-                    <div style={styles.costRow}>
-                        <span>Preço por cartela</span>
-                        <span>{ticketPrice.quantity}</span>
+                <div className="rounded-xl border border-[--cb-border-default] bg-[--cb-bg-sunken] p-4 mb-5 space-y-2">
+                    <div className="flex justify-between text-sm text-[--cb-text-secondary]">
+                        <span>Preço unitário</span>
+                        <span className="font-mono">{ticketPrice.quantity}</span>
                     </div>
-                    <div style={styles.costRow}>
+                    <div className="flex justify-between text-sm text-[--cb-text-secondary]">
                         <span>Quantidade</span>
                         <span>× {count}</span>
                     </div>
-                    <div style={{ ...styles.costRow, fontWeight: 'bold', borderTop: '1px solid #cbd5e1', paddingTop: '8px', marginTop: '4px' }}>
-                        <span>Total</span>
-                        <span style={{ color: '#2563eb' }}>{totalDisplay}</span>
+                    <div className="cb-divider !my-1.5" />
+                    <div className="flex justify-between font-bold">
+                        <span className="text-[--cb-text-primary]">Total</span>
+                        <span className="text-[--cb-brand] text-lg tabular-nums font-mono">
+                            {totalDisplay}
+                        </span>
                     </div>
                 </div>
 
                 {/* Erro */}
                 {purchaseError && (
-                    <div style={styles.errorBox}>
-                        ⚠️ {purchaseError}
+                    <div className="cb-alert cb-alert-error mb-4" role="alert">
+                        <span aria-hidden="true">⚠️</span>
+                        <span>{purchaseError}</span>
                     </div>
                 )}
 
                 {/* Botões */}
-                <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                <div className="flex gap-3">
                     <button
-                        style={{ ...styles.btnSecondary, flex: 1 }}
+                        className="cb-btn cb-btn-ghost flex-1"
                         onClick={onClose}
                         disabled={isPurchasing}
                     >
                         Cancelar
                     </button>
                     <button
-                        style={{ ...styles.btnPrimary, flex: 2, opacity: isPurchasing ? 0.7 : 1 }}
+                        className={[
+                            'cb-btn cb-btn-primary flex-[2]',
+                            isPurchasing ? 'cb-btn-loading' : '',
+                        ].join(' ')}
                         onClick={handleBuy}
                         disabled={isPurchasing}
+                        aria-busy={isPurchasing}
                     >
-                        {isPurchasing ? '⏳ Processando...' : `Comprar ${count} Cartela${count > 1 ? 's' : ''}`}
+                        {isPurchasing
+                            ? 'Processando…'
+                            : `Comprar ${count} Cartela${count > 1 ? 's' : ''}`}
                     </button>
                 </div>
 
-                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', textAlign: 'center' }}>
-                    O valor será debitado do saldo interno do contrato.
+                <p className="text-xs text-center text-[--cb-text-tertiary] mt-3">
+                    Debitado do saldo interno via{' '}
+                    <span className="font-mono">bingo.game</span>
                 </p>
             </div>
         </div>
     );
 }
-
-// ==========================================
-// ESTILOS
-// ==========================================
-
-const styles: Record<string, React.CSSProperties> = {
-    overlay: {
-        position:       'fixed',
-        inset:          0,
-        background:     'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(2px)',
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        zIndex:         1000,
-        padding:        '20px',
-    },
-    modal: {
-        background:   '#ffffff',
-        borderRadius: '16px',
-        padding:      '28px',
-        width:        '100%',
-        maxWidth:     '680px',
-        maxHeight:    '90vh',
-        overflowY:    'auto',
-        boxShadow:    '0 25px 50px -12px rgba(0,0,0,0.25)',
-    },
-    header: {
-        display:        'flex',
-        justifyContent: 'space-between',
-        alignItems:     'center',
-        marginBottom:   '16px',
-        paddingBottom:  '16px',
-        borderBottom:   '1px solid #e2e8f0',
-    },
-    closeBtn: {
-        background:   'none',
-        border:       'none',
-        fontSize:     '20px',
-        cursor:       'pointer',
-        color:        '#64748b',
-        padding:      '4px 8px',
-        borderRadius: '6px',
-    },
-    formGroup: {
-        marginTop:    '16px',
-    },
-    label: {
-        display:    'block',
-        fontWeight: 'bold',
-        color:      '#374151',
-        fontSize:   '14px',
-    },
-    counterBtn: {
-        width:        '40px',
-        height:       '40px',
-        borderRadius: '8px',
-        border:       '2px solid #cbd5e1',
-        background:   '#f8fafc',
-        fontSize:     '20px',
-        cursor:       'pointer',
-        fontWeight:   'bold',
-        color:        '#374151',
-    },
-    costBox: {
-        background:   '#f8fafc',
-        border:       '1px solid #e2e8f0',
-        borderRadius: '8px',
-        padding:      '16px',
-        marginTop:    '20px',
-    },
-    costRow: {
-        display:        'flex',
-        justifyContent: 'space-between',
-        marginBottom:   '6px',
-        fontSize:       '14px',
-        color:          '#374151',
-    },
-    errorBox: {
-        background:   '#fef2f2',
-        border:       '1px solid #fecaca',
-        borderRadius: '8px',
-        padding:      '12px',
-        marginTop:    '12px',
-        color:        '#dc2626',
-        fontSize:     '14px',
-    },
-    btnPrimary: {
-        background:   '#2563eb',
-        color:        '#ffffff',
-        border:       'none',
-        borderRadius: '8px',
-        padding:      '12px 20px',
-        fontSize:     '15px',
-        fontWeight:   'bold',
-        cursor:       'pointer',
-    },
-    btnSecondary: {
-        background:   '#f1f5f9',
-        color:        '#374151',
-        border:       '1px solid #cbd5e1',
-        borderRadius: '8px',
-        padding:      '12px 20px',
-        fontSize:     '15px',
-        cursor:       'pointer',
-    },
-    ticketsList: {
-        display:             'flex',
-        flexWrap:            'wrap',
-        gap:                 '20px',
-        justifyContent:      'center',
-        maxHeight:           '400px',
-        overflowY:           'auto',
-        padding:             '8px',
-    },
-};

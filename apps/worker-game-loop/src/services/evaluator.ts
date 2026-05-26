@@ -1,53 +1,63 @@
+// apps/worker-game-loop/src/services/evaluator.ts
+// Motor de avaliação de cartelas vencedoras.
+//
+// ADR-004 Fase 2: Quando o jogo tem gametype_id > 0, os padrões e pesos
+// são buscados on-chain da tabela `patterns`/`gametypes`. Caso contrário,
+// usa as 12 máscaras estáticas compiladas (modo legado).
+//
+// ADR-005 Fase 2: checkWinPatterns (plural) retorna TODOS os padrões
+// vencedores de uma cartela. O worker seleciona o de maior weight (max_weight)
+// antes de enviar claimwin — conforme ADR-005.
+
 import { fetchGame, fetchPlayerTickets, rpcClient } from '@cryptobingo/blockchain-core';
-import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern } from '@cryptobingo/shared-types';
 import { executeClaimWin } from './blockchain';
 
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+
 // ==========================================
-// CONSTANTES DE PADRÕES DE VITÓRIA (Bitmasking)
+// PADRÕES ESTÁTICOS — MODO LEGADO (gametype_id = 0)
 //
-// Cada máscara representa os índices de bit (0-24) que formam
-// um padrão de vitória na cartela 5x5.
-//
-// Layout da cartela (bit index):
+// Layout de bit da cartela 5x5 (coluna-maior):
 //   Col:  B    I    N    G    O
 //  Row0: [0]  [5]  [10] [15] [20]
 //  Row1: [1]  [6]  [11] [16] [21]
-//  Row2: [2]  [7] [12*] [17] [22]   (* FREE SPACE, sempre setado)
+//  Row2: [2]  [7] [12*] [17] [22]   (* FREE SPACE — sempre setado)
 //  Row3: [3]  [8]  [13] [18] [23]
 //  Row4: [4]  [9]  [14] [19] [24]
-//
-// Fórmula: M = SUM(2^p) para cada posição p no padrão.
-// Os valores são bigint para compatibilidade com uint64 do contrato Antelope.
 // ==========================================
 
 export const WIN_PATTERNS: Record<string, bigint> = {
-    // Linhas horizontais
-    ROW_0: BigInt((1<<0)|(1<<5)|(1<<10)|(1<<15)|(1<<20)),
-    ROW_1: BigInt((1<<1)|(1<<6)|(1<<11)|(1<<16)|(1<<21)),
-    ROW_2: BigInt((1<<2)|(1<<7)|(1<<12)|(1<<17)|(1<<22)), // Inclui FREE SPACE
-    ROW_3: BigInt((1<<3)|(1<<8)|(1<<13)|(1<<18)|(1<<23)),
-    ROW_4: BigInt((1<<4)|(1<<9)|(1<<14)|(1<<19)|(1<<24)),
-
-    // Colunas verticais
-    COL_B: BigInt((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)),
-    COL_I: BigInt((1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)),
-    COL_N: BigInt((1<<10)|(1<<11)|(1<<12)|(1<<13)|(1<<14)), // Inclui FREE SPACE
-    COL_G: BigInt((1<<15)|(1<<16)|(1<<17)|(1<<18)|(1<<19)),
-    COL_O: BigInt((1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)),
-
-    // Diagonais
-    DIAG_TL_BR: BigInt((1<<0)|(1<<6)|(1<<12)|(1<<18)|(1<<24)),  // Inclui FREE SPACE
-    DIAG_TR_BL: BigInt((1<<4)|(1<<8)|(1<<12)|(1<<16)|(1<<20)),  // Inclui FREE SPACE
+    ROW_0:      BigInt((1<<0)|(1<<5)|(1<<10)|(1<<15)|(1<<20)),
+    ROW_1:      BigInt((1<<1)|(1<<6)|(1<<11)|(1<<16)|(1<<21)),
+    ROW_2:      BigInt((1<<2)|(1<<7)|(1<<12)|(1<<17)|(1<<22)),
+    ROW_3:      BigInt((1<<3)|(1<<8)|(1<<13)|(1<<18)|(1<<23)),
+    ROW_4:      BigInt((1<<4)|(1<<9)|(1<<14)|(1<<19)|(1<<24)),
+    COL_B:      BigInt((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)),
+    COL_I:      BigInt((1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)),
+    COL_N:      BigInt((1<<10)|(1<<11)|(1<<12)|(1<<13)|(1<<14)),
+    COL_G:      BigInt((1<<15)|(1<<16)|(1<<17)|(1<<18)|(1<<19)),
+    COL_O:      BigInt((1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)),
+    DIAG_TL_BR: BigInt((1<<0)|(1<<6)|(1<<12)|(1<<18)|(1<<24)),
+    DIAG_TR_BL: BigInt((1<<4)|(1<<8)|(1<<12)|(1<<16)|(1<<20)),
 };
 
 // ==========================================
-// INTERFACE DE RESULTADO DE VITÓRIA
+// TIPOS
 // ==========================================
 
 export interface WinResult {
-    ticket: BlockchainTicketRecord;
+    ticket:      BlockchainTicketRecord;
     patternName: string;
     patternMask: bigint;
+    weight:      number; // 0 = modo legado (sem gametype)
+}
+
+/** Par de padrão + weight para avaliação dinâmica. */
+interface PatternEntry {
+    name:   string;
+    mask:   bigint;
+    weight: number;
 }
 
 // ==========================================
@@ -55,10 +65,38 @@ export interface WinResult {
 // ==========================================
 
 /**
- * Verifica se um bitmask de estado de cartela satisfaz algum padrão de vitória.
- *
- * @param state - O uint32 bitmask atual da cartela (lido diretamente do contrato).
- * @returns O resultado da vitória com nome e máscara, ou null se não houver vitória.
+ * Aplica as bolas sorteadas a uma cartela e retorna o novo estado bitmask.
+ * Mapeamento: bit_index < 12 → matrix[bit_index]; bit_index > 12 → matrix[bit_index - 1].
+ * O bit 12 (FREE SPACE) é sempre setado — pulado no loop.
+ */
+export function applyDrawnBalls(ticket: BlockchainTicketRecord, drawnBalls: number[]): number {
+    const drawnSet = new Set(drawnBalls);
+    let state = ticket.state; // Inicia em 0x00001000 (bit 12 setado)
+
+    for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
+        if (bitIndex === 12) continue; // FREE SPACE
+        const matrixIndex = bitIndex < 12 ? bitIndex : bitIndex - 1;
+        const ballNumber  = ticket.matrix[matrixIndex];
+        if (ballNumber !== undefined && drawnSet.has(ballNumber)) {
+            state |= (1 << bitIndex);
+        }
+    }
+    return state;
+}
+
+/**
+ * Verifica se um bitmask satisfaz algum padrão em uma lista de entries.
+ * Retorna TODOS os padrões vencedores (não apenas o primeiro).
+ * Ref: ADR-005 Fase 2 — max_weight payout.
+ */
+export function checkWinPatterns(state: number, patterns: PatternEntry[]): PatternEntry[] {
+    const stateBig = BigInt(state);
+    return patterns.filter(p => (stateBig & p.mask) === p.mask);
+}
+
+/**
+ * Versão legada — retorna o primeiro padrão vencedor encontrado (compatibilidade).
+ * Usado pelos testes unitários e pelo evaluator em modo legado.
  */
 export function checkWinPattern(state: number): { patternName: string; patternMask: bigint } | null {
     const stateBig = BigInt(state);
@@ -70,88 +108,138 @@ export function checkWinPattern(state: number): { patternName: string; patternMa
     return null;
 }
 
+// ==========================================
+// BUSCA DE PADRÕES ON-CHAIN (ADR-004 Fase 2)
+// ==========================================
+
 /**
- * Aplica as bolas sorteadas a uma cartela e retorna o novo estado bitmask.
- *
- * @param ticket     - A cartela com seu estado atual e matriz de números.
- * @param drawnBalls - Array de números sorteados (valores de 1 a 75).
- * @returns O novo state uint32 após aplicar as bolas sorteadas.
- *
- * ATENÇÃO: A `matrix` da cartela tem 24 posições (pula o índice 12 = FREE SPACE).
- * O mapeamento correto entre índice de bit e posição da matrix é:
- *   bit_index [0-11]  -> matrix[bit_index]
- *   bit_index [12]    -> FREE SPACE (sempre setado, não presente na matrix)
- *   bit_index [13-24] -> matrix[bit_index - 1]
+ * Busca os padrões de vitória do gametype on-chain.
+ * Retorna null se gametype_id = 0 (modo legado).
  */
-export function applyDrawnBalls(ticket: BlockchainTicketRecord, drawnBalls: number[]): number {
-    const drawnSet = new Set(drawnBalls);
-    let state = ticket.state; // Estado persistido no contrato (inicia em 0x00001000)
+async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[] | null> {
+    if (gametypeId === '0') return null;
 
-    for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
-        if (bitIndex === 12) continue; // FREE SPACE: já setado, pula
+    // 1. Busca o gametype
+    const gtRes = await rpcClient.v1.chain.get_table_rows({
+        code:        CONTRACT_ACCOUNT,
+        scope:       CONTRACT_ACCOUNT,
+        table:       'gametypes',
+        lower_bound: gametypeId,
+        upper_bound: gametypeId,
+        limit:       1,
+        json:        true,
+    });
 
-        const matrixIndex = bitIndex < 12 ? bitIndex : bitIndex - 1;
-        const ballNumber = ticket.matrix[matrixIndex];
+    if (!gtRes.rows.length) {
+        console.warn(`[Evaluator] gametype_id ${gametypeId} não encontrado on-chain. Usando modo legado.`);
+        return null;
+    }
 
-        if (ballNumber !== undefined && drawnSet.has(ballNumber)) {
-            state |= (1 << bitIndex);
+    const gametype = gtRes.rows[0] as BlockchainGametype;
+
+    // 2. Busca todos os patterns referenciados nas regras do gametype
+    const entries: PatternEntry[] = [];
+
+    for (const rule of gametype.rules) {
+        const patRes = await rpcClient.v1.chain.get_table_rows({
+            code:        CONTRACT_ACCOUNT,
+            scope:       CONTRACT_ACCOUNT,
+            table:       'patterns',
+            lower_bound: rule.pattern_id,
+            upper_bound: rule.pattern_id,
+            limit:       1,
+            json:        true,
+        });
+
+        if (patRes.rows.length) {
+            const pattern = patRes.rows[0] as BlockchainPattern;
+            entries.push({
+                name:   pattern.name,
+                mask:   BigInt(pattern.mask),
+                weight: rule.weight,
+            });
         }
     }
 
-    return state;
+    return entries.length > 0 ? entries : null;
 }
 
 // ==========================================
-// FUNÇÕES DE VARREDURA — CONSUMIDAS PELO RABBITMQ
+// VARREDURA DE VENCEDORES
 // ==========================================
 
 /**
  * Varre TODOS os tickets de um jogo e retorna os vencedores.
  *
- * Usa paginação via `get_table_rows` para suportar jogos com muitas cartelas
- * sem explodir o heap do processo Node.js.
+ * ADR-004 Fase 2: Se o jogo tem gametype_id > 0, usa os padrões on-chain.
+ * ADR-005 Fase 2: Seleciona o padrão de maior weight por cartela (max_weight rule).
  *
- * @param gameId     - ID do jogo a ser varrido.
- * @param drawnBalls - Array de bolas sorteadas (do campo `drawn_balls` do jogo).
- * @returns Lista de WinResult para todos os tickets vencedores encontrados.
+ * @param gameId       - ID do jogo
+ * @param drawnBalls   - Bolas sorteadas (drawn_balls do jogo)
+ * @param gametypeId   - '0' para modo legado; outro valor para modo dinâmico
  */
 export async function findAllWinners(
-    gameId: string,
-    drawnBalls: number[]
+    gameId:     string,
+    drawnBalls: number[],
+    gametypeId: string = '0',
 ): Promise<WinResult[]> {
-    const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
-    const winners: WinResult[] = [];
-    let lowerBound: string | undefined = undefined;
-    let hasMore = true;
+    // Tenta buscar padrões on-chain; cai para modo legado se não existirem
+    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+
+    const winners:    WinResult[] = [];
+    let lowerBound:   string | undefined = undefined;
+    let hasMore:      boolean = true;
     const PAGE_SIZE = 100;
 
-    // Paginação: itera todos os tickets do jogo em lotes de 100
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
-            code: CONTRACT_ACCOUNT,
-            scope: gameId,
-            table: 'tickets',
-            limit: PAGE_SIZE,
-            lower_bound: lowerBound,
-            json: true,
+            code:         CONTRACT_ACCOUNT,
+            scope:        gameId,
+            table:        'tickets',
+            limit:        PAGE_SIZE,
+            lower_bound:  lowerBound,
+            json:         true,
         });
 
         const tickets = response.rows as BlockchainTicketRecord[];
 
         for (const ticket of tickets) {
             const finalState = applyDrawnBalls(ticket, drawnBalls);
-            const winResult = checkWinPattern(finalState);
 
-            if (winResult) {
-                winners.push({ ticket, ...winResult });
+            if (dynamicPatterns) {
+                // ── MODO DINÂMICO: todos os padrões do gametype ───────────────
+                const winningPatterns = checkWinPatterns(finalState, dynamicPatterns);
+
+                if (winningPatterns.length > 0) {
+                    // ADR-005: seleciona o padrão de MAIOR weight (max_weight rule)
+                    const best = winningPatterns.reduce(
+                        (prev, curr) => curr.weight > prev.weight ? curr : prev
+                    );
+                    winners.push({
+                        ticket,
+                        patternName: best.name,
+                        patternMask: best.mask,
+                        weight:      best.weight,
+                    });
+                }
+            } else {
+                // ── MODO LEGADO: 12 padrões estáticos compilados ──────────────
+                const winResult = checkWinPattern(finalState);
+                if (winResult) {
+                    winners.push({
+                        ticket,
+                        patternName: winResult.patternName,
+                        patternMask: winResult.patternMask,
+                        weight:      0, // Legado: sem weight
+                    });
+                }
             }
         }
 
         hasMore = response.more === true && tickets.length === PAGE_SIZE;
         if (hasMore && tickets.length > 0) {
-            // Avança o cursor para o próximo ticket após o último lido
-            const lastTicketId = tickets[tickets.length - 1].ticket_id;
-            lowerBound = (BigInt(lastTicketId) + 1n).toString();
+            const lastId = tickets[tickets.length - 1].ticket_id;
+            lowerBound   = (BigInt(lastId) + 1n).toString();
         }
     }
 
@@ -160,111 +248,96 @@ export async function findAllWinners(
 
 /**
  * Motor de resolução completo: lê o jogo, varre todos os tickets,
- * e submete claimwin para cada vencedor encontrado.
+ * e submete claimwin para cada vencedor.
  *
- * Invocado pelo consumidor RabbitMQ ao receber a action 'claimwin'.
- *
- * @param gameId - O ID do jogo a ser resolvido.
+ * ADR-005 Fase 2: passa o win_pattern_mask do padrão de maior weight.
  */
 export async function processAllGameWinners(gameId: string): Promise<void> {
     console.log(`\n🧠 [Avaliador] Iniciando resolução do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
-
-    if (!game) {
-        throw new Error(`[Avaliador] Jogo ${gameId} não encontrado no contrato.`);
-    }
-
+    if (!game) throw new Error(`[Avaliador] Jogo ${gameId} não encontrado.`);
     if (game.status !== 'drawn') {
-        // Estado inválido: não deveria chegar aqui, mas protegemos contra race condition
-        throw new Error(
-            `[Avaliador] Jogo ${gameId} não está em estado 'drawn'. Status atual: ${game.status}`
-        );
+        throw new Error(`[Avaliador] Jogo ${gameId} não está em estado 'drawn'. Status: ${game.status}`);
     }
 
-    console.log(`🔍 [Avaliador] Varrendo todos os tickets do jogo ${gameId}...`);
-    const winners = await findAllWinners(gameId, game.drawn_balls);
+    const gametypeId = (game as any).gametype_id?.toString() ?? '0';
+
+    console.log(
+        `🔍 [Avaliador] Varrendo tickets do jogo ${gameId} ` +
+        `(gametype: ${gametypeId === '0' ? 'legado' : gametypeId})...`
+    );
+
+    const winners = await findAllWinners(gameId, game.drawn_balls, gametypeId);
 
     if (winners.length === 0) {
-        console.log(`😔 [Avaliador] Nenhum vencedor encontrado no jogo ${gameId}.`);
+        console.log(`😔 [Avaliador] Nenhum vencedor no jogo ${gameId}.`);
         return;
     }
 
-    console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) encontrado(s) no jogo ${gameId}!`);
+    console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
 
-    // Liquida cada vencedor sequencialmente para evitar conflitos de estado no contrato
-    // (o contrato muda o status para 'archived' no primeiro claimwin bem-sucedido)
-    for (const { ticket, patternName, patternMask } of winners) {
+    // Liquidação sequencial (o contrato muda status para 'archived' no 1º claimwin)
+    for (const { ticket, patternName, patternMask, weight } of winners) {
         console.log(
-            `🏆 [Avaliador] Liquidando cartela #${ticket.ticket_id} ` +
-            `(owner: ${ticket.owner}, padrão: ${patternName})...`
+            `🏆 [Avaliador] Liquidando #${ticket.ticket_id} ` +
+            `(${ticket.owner}, padrão: ${patternName}, weight: ${weight})...`
         );
-        await executeClaimWin(
-            gameId,
-            ticket.ticket_id,
-            game.drawn_balls.length,
-            patternMask
-        );
+        await executeClaimWin(gameId, ticket.ticket_id, game.drawn_balls.length, patternMask);
     }
 
     console.log(`✅ [Avaliador] Resolução do jogo ${gameId} concluída.`);
 }
 
 /**
- * Motor de varredura por jogador: mantido para uso pelo api-gateway
- * (ex: endpoint de consulta de histórico de um jogador específico).
- *
- * NÃO é chamado pelo worker de resolução automática.
- *
- * @param gameId       - O ID do jogo a ser avaliado.
- * @param playerWallet - A conta Antelope do jogador (ex: "jogador1").
+ * Varredura por jogador — para consultas do api-gateway.
  */
 export async function processGameWinners(gameId: string, playerWallet: string): Promise<void> {
     console.log(`\n🧠 [Avaliador] Auditoria do jogo ${gameId} para ${playerWallet}...`);
 
     const game = await fetchGame(gameId);
-
-    if (!game) {
-        throw new Error(`Jogo ${gameId} não encontrado no contrato.`);
-    }
-
+    if (!game) throw new Error(`Jogo ${gameId} não encontrado.`);
     if (game.status !== 'drawn') {
-        console.log(`⚠️ [Avaliador] Jogo ${gameId} não foi sorteado. Status: ${game.status}`);
+        console.log(`⚠️ [Avaliador] Jogo ${gameId} não sorteado. Status: ${game.status}`);
         return;
     }
 
-    const tickets = await fetchPlayerTickets(gameId, playerWallet);
-
-    if (tickets.length === 0) {
+    const gametypeId  = (game as any).gametype_id?.toString() ?? '0';
+    const tickets     = await fetchPlayerTickets(gameId, playerWallet);
+    if (!tickets.length) {
         console.log(`ℹ️ [Avaliador] ${playerWallet} não tem cartelas neste jogo.`);
         return;
     }
 
+    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
     const winningTickets: WinResult[] = [];
 
     for (const ticket of tickets) {
         const finalState = applyDrawnBalls(ticket, game.drawn_balls);
-        const winResult = checkWinPattern(finalState);
-        if (winResult) {
-            winningTickets.push({ ticket, ...winResult });
+
+        if (dynamicPatterns) {
+            const patterns = checkWinPatterns(finalState, dynamicPatterns);
+            if (patterns.length > 0) {
+                const best = patterns.reduce((a, b) => b.weight > a.weight ? b : a);
+                winningTickets.push({ ticket, patternName: best.name, patternMask: best.mask, weight: best.weight });
+            }
+        } else {
+            const winResult = checkWinPattern(finalState);
+            if (winResult) {
+                winningTickets.push({ ticket, ...winResult, weight: 0 });
+            }
         }
     }
 
-    if (winningTickets.length === 0) {
+    if (!winningTickets.length) {
         console.log(`😔 [Avaliador] Nenhuma cartela premiada para ${playerWallet}.`);
         return;
     }
 
-    console.log(`🎉 [Avaliador] BINGO! ${playerWallet} tem ${winningTickets.length} cartela(s) premiada(s)!`);
+    console.log(`🎉 [Avaliador] ${playerWallet} tem ${winningTickets.length} cartela(s) premiada(s)!`);
 
     for (const { ticket, patternName, patternMask } of winningTickets) {
-        console.log(`🏆 [Avaliador] Cartela #${ticket.ticket_id} venceu com padrão: ${patternName}`);
-        await executeClaimWin(
-            gameId,
-            ticket.ticket_id,
-            game.drawn_balls.length,
-            patternMask
-        );
-        console.log(`💸 [Avaliador] Pagamento liquidado para cartela #${ticket.ticket_id}`);
+        console.log(`🏆 [Avaliador] Cartela #${ticket.ticket_id} — padrão: ${patternName}`);
+        await executeClaimWin(gameId, ticket.ticket_id, game.drawn_balls.length, patternMask);
     }
 }

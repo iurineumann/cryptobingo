@@ -1,7 +1,7 @@
 # ADR 005: Economia de Fixed-Odds Relativas e Fundo Global (Treasury)
 
 ## Status
-Aceito (Revisão 2) — Fase 1 implementada (2026-05-25); Fase 2 (max_weight payout) pendente
+Aceito (Revisão 3) — Fases 1, 2 e 3 implementadas (2026-05-25)
 
 ## Contexto
 A plataforma CryptoBingo precisa de uma mecânica de pagamentos que seja atrativa para os jogadores (prêmios previsíveis e escaláveis) e segura para o Smart Contract (baixo consumo de CPU e proteção contra insolvência). O modelo inicial de *Pari-Mutuel* ou "Lock de Exposição Máxima" mostrou-se ineficiente para a escala almejada.
@@ -61,12 +61,39 @@ data: {
 }
 ```
 
-### Fase 2 — Pendente
-- Refatorar `claimwin` para fórmula `Prize = Ticket_Price * Multiplier * Pattern_Weight`
-- Implementar regra Max Weight Payout (paga apenas o padrão de maior weight)
-- Motor Monte Carlo: `POST /api/v1/admin/simulate-weights` (ADR-005 + Épico 2)
+### Fase 2 — max_weight payout no contrato (`bingo.cpp`)
 
-### Dívidas Técnicas Registradas
+Implementado em `claimwin()` para jogos com `gametype_id > 0`:
+```cpp
+// Fórmula: ticket_price * base_multiplier * win_weight
+payout.quantity.amount =
+    payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight;
+```
+- Modo legado (`gametype_id = 0`): RTP fixo 85% do prize_pool (retrocompatível)
+- `win_weight`: extraído da regra do gametype cujo `pattern.mask == win_pattern_mask`
+- Worker off-chain seleciona o max_weight entre todos os padrões vencedores da cartela
+
+### Fase 3 — Motor Monte Carlo (`monteCarloController.ts`)
+
+Endpoint: `POST /api/v1/admin/simulate-weights`
+
+Algoritmo (por rodada):
+1. Embaralha 75 bolas com Fisher-Yates criptográfico (`crypto.randomInt`)
+2. Gera N cartelas aleatórias com distribuição BINGO por coluna
+3. Aplica bolas progressivamente até encontrar padrão vencedor (stop na 1ª vitória)
+4. Aplica max_weight rule para selecionar o padrão de maior multiplicador
+5. Acumula payout = `ticket_price * base_multiplier * max_weight`
+
+Métricas retornadas:
+- `rtp / rtp_pct`: Return to Player real simulado
+- `ggr / ggr_pct`: Gross Gaming Revenue (margem da casa)
+- `pattern_stats`: hits, hit_rate, avg_balls_needed por padrão
+- `alerts`: RTP < 75% ou RTP > 98%
+- `is_viable`: boolean de aprovação
+
+Limites: máx 100.000 simulações; worker_threads para > 5.000 rodadas.
+
+### Dívidas Técnicas Atualizadas
 - `[DEBT]` Auto-sweep de GGR para tesouraria não implementado
-- `[DEBT]` Motor Monte Carlo pendente
-- `[DEBT]` Fórmula `max_weight` não implementada no contrato (Fase 2)
+- `[DONE]` Motor Monte Carlo implementado
+- `[DONE]` Fórmula max_weight implementada

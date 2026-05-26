@@ -7,7 +7,7 @@ info:
     perfis, lobbies, compliance e administração. Implementado via Express no `apps/api-gateway`.
 
     Princípio Spec-Driven: toda rota deve existir aqui ANTES de ser implementada.
-  version: 1.2.0
+  version: 1.3.0
 
 servers:
   - url: http://localhost:8083/api/v1
@@ -77,7 +77,8 @@ paths:
       description: |
         Valida a assinatura Antelope usando `Signature.recoverDigest(SHA256(nonce))`.
         Se a chave pública recuperada coincidir com a enviada: invalida o nonce (uso
-        único — previne replay attacks) e emite um JWT de 24h. Ref: ADR-006.
+        único — previne replay attacks) e emite um JWT de 24h com `jti` único.
+        Ref: ADR-006.
       requestBody:
         required: true
         content:
@@ -121,6 +122,29 @@ paths:
           description: Campos obrigatórios ausentes
         '401':
           description: Challenge inválido, expirado ou assinatura incorreta
+
+  /auth/logout:
+    post:
+      summary: Encerra a sessão e revoga o JWT na blacklist Redis (ADR-006)
+      description: |
+        Adiciona o `jti` do token atual ao Redis com TTL igual ao tempo restante
+        de expiração. Tokens sem `jti` (emitidos por versões anteriores) fazem
+        logout sem revogação efetiva.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sessão encerrada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Sessão encerrada com sucesso."
+        '401':
+          description: Token ausente ou inválido
 
   # ==========================================
   # PERFIL (protegido por JWT — ADR-006)
@@ -407,6 +431,69 @@ paths:
         '401':
           description: Token inválido
 
+  /admin/simulate-weights:
+    post:
+      summary: Executa simulação Monte Carlo para validar sustentabilidade econômica de um gametype
+      description: |
+        Roda N rodadas simuladas de bingo (Fisher-Yates shuffle + cartelas aleatórias por coluna BINGO).
+        Para cada rodada, avalia cada cartela contra os padrões do gametype e aplica a regra
+        max_weight (ADR-005): paga exclusivamente o padrão de maior multiplicador.
+
+        Métricas retornadas:
+          - RTP (Return to Player): proporção do total wagered devolvida em prêmios
+          - GGR (Gross Gaming Revenue): margem da casa (1 - RTP)
+          - Distribuição de hits por padrão: quantas cartelas venceram com cada padrão
+          - Média de bolas necessárias por padrão
+          - Alertas: RTP < 75% (risco de rejeição) ou RTP > 98% (risco de insol vência)
+
+        Execução: rodadas <= 5.000 rodam inline; acima disso, worker_threads.
+        Limite: máximo 100.000 simulações por request.
+        Ref: ADR-005 §3
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateWeightsRequest'
+            example:
+              gametype_name: "Standard Bingo"
+              base_multiplier: 1
+              patterns:
+                - pattern_id: 1
+                  name: "ROW_0"
+                  mask: 1082401
+                  weight: 5
+                - pattern_id: 2
+                  name: "COL_B"
+                  mask: 31
+                  weight: 5
+                - pattern_id: 11
+                  name: "DIAG_TL_BR"
+                  mask: 18809857
+                  weight: 10
+                - pattern_id: 12
+                  name: "FULL_HOUSE"
+                  mask: 33554431
+                  weight: 50
+              simulations: 10000
+              tickets_per_game: 100
+              ticket_price: 10
+      responses:
+        '200':
+          description: Simulação concluída com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationResult'
+        '400':
+          description: Parâmetros inválidos ou simulação muito longa
+        '401':
+          description: Token ausente ou inválido
+        '500':
+          description: Erro interno durante a simulação
+
 components:
   securitySchemes:
     BearerAuth:
@@ -584,3 +671,133 @@ components:
           maximum: 255
           description: Multiplicador de prêmio relativo (ADR-005)
           example: 10
+
+    # ==========================================
+    # MONTE CARLO
+    # ==========================================
+    SimulateWeightsRequest:
+      type: object
+      required:
+        - gametype_name
+        - base_multiplier
+        - patterns
+      properties:
+        gametype_name:
+          type: string
+          example: "Standard Bingo"
+        base_multiplier:
+          type: integer
+          minimum: 1
+          maximum: 255
+          description: Multiplicador base aplicado sobre o ticket_price
+          example: 1
+        patterns:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            type: object
+            required: [name, mask, weight]
+            properties:
+              pattern_id:
+                type: integer
+                example: 1
+              name:
+                type: string
+                example: "ROW_0"
+              mask:
+                type: integer
+                description: uint32 bitmask (máx 25 bits)
+                example: 1082401
+              weight:
+                type: integer
+                minimum: 1
+                maximum: 255
+                example: 5
+        simulations:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          default: 10000
+          description: Número de rodadas simuladas
+        tickets_per_game:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+          description: Tickets por rodada simulada
+        ticket_price:
+          type: number
+          default: 10
+          description: Preço do ticket em unidades abstratas (sem símbolo)
+
+    SimulationResult:
+      type: object
+      description: Resultado completo da simulação Monte Carlo
+      properties:
+        gametype_name:
+          type: string
+        simulations:
+          type: integer
+        tickets_per_game:
+          type: integer
+        ticket_price:
+          type: number
+        base_multiplier:
+          type: integer
+        rtp:
+          type: number
+          description: Return to Player (0.0 – 1.0)
+          example: 0.8532
+        rtp_pct:
+          type: string
+          example: "85.3200%"
+        ggr:
+          type: number
+          description: Gross Gaming Revenue (1 - rtp)
+          example: 0.1468
+        ggr_pct:
+          type: string
+          example: "14.6800%"
+        total_wagered:
+          type: number
+        total_paid_out:
+          type: number
+        avg_payout_per_game:
+          type: number
+        avg_winners_per_game:
+          type: number
+        pattern_stats:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              mask:
+                type: integer
+              weight:
+                type: integer
+              hit_count:
+                type: integer
+                description: Cartelas que venceram com este padrão como max_weight
+              hit_rate:
+                type: number
+                description: hit_count / total_tickets_simulados
+              avg_balls_needed:
+                type: number
+                description: Média de bolas necessárias para atingir o padrão
+        alerts:
+          type: array
+          items:
+            type: string
+          description: Alertas de sustentabilidade (RTP fora dos thresholds)
+        is_viable:
+          type: boolean
+          description: true se RTP está entre 75% e 98%
+        duration_ms:
+          type: integer
+          description: Tempo de execução da simulação em milissegundos
+        computed_at:
+          type: string
+          format: date-time

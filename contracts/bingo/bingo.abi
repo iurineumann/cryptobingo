@@ -1,160 +1,346 @@
 {
+    "____comment": "CryptoBingo Smart Contract ABI — v3.0 — Gerado manualmente. Sincronizado com bingo.hpp Sprint 2026-05-26 (FSM Completa, Campaigns B2B, GC). Ref: ADR-004, ADR-005, ADR-008.",
     "version": "eosio::abi/1.2",
+
     "types": [],
+
     "structs": [
+
         {
             "name": "extended_asset",
             "base": "",
             "fields": [
-                {"name": "quantity", "type": "asset"},
-                {"name": "contract", "type": "name"}
+                { "name": "quantity", "type": "asset" },
+                { "name": "contract", "type": "name"  }
             ]
         },
+
+        {
+            "name": "pattern_rule",
+            "base": "",
+            "fields": [
+                { "name": "pattern_id", "type": "uint64" },
+                { "name": "weight",     "type": "uint8"  }
+            ]
+        },
+
         {
             "name": "config_state",
             "base": "",
             "fields": [
-                {"name": "signer_key", "type": "public_key"}
+                { "name": "signer_key", "type": "public_key" }
             ]
         },
+
         {
             "name": "balance_record",
             "base": "",
             "fields": [
-                {"name": "balance", "type": "extended_asset"}
+                { "name": "balance", "type": "extended_asset" }
             ]
         },
+
         {
             "name": "game_state",
             "base": "",
             "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "status", "type": "name"},
-                {"name": "ticket_price", "type": "extended_asset"},
-                {"name": "prize_pool", "type": "extended_asset"},
-                {"name": "sponsor_pool", "type": "extended_asset[]"},
-                {"name": "drawn_balls", "type": "bytes"}
+                { "name": "game_id",     "type": "uint64"           },
+                { "name": "status",      "type": "name"             },
+                { "name": "ticket_price","type": "extended_asset"   },
+                { "name": "prize_pool",  "type": "extended_asset"   },
+                { "name": "sponsor_pool","type": "extended_asset[]" },
+                { "name": "drawn_balls", "type": "bytes"            },
+                { "name": "campaign_id", "type": "uint64"           },
+                { "name": "gametype_id", "type": "uint64"           },
+                { "name": "end_time",    "type": "uint32"           }
             ]
         },
+
         {
             "name": "ticket_record",
             "base": "",
             "fields": [
-                {"name": "ticket_id", "type": "uint64"},
-                {"name": "owner", "type": "name"},
-                {"name": "matrix", "type": "bytes"},
-                {"name": "state", "type": "uint32"},
-                {"name": "game_id", "type": "uint64"}
+                { "name": "ticket_id", "type": "uint64" },
+                { "name": "owner",     "type": "name"   },
+                { "name": "matrix",    "type": "bytes"  },
+                { "name": "state",     "type": "uint32" },
+                { "name": "game_id",   "type": "uint64" }
             ]
         },
+
+        {
+            "name": "nft_config",
+            "base": "",
+            "fields": [
+                { "name": "template_id",  "type": "int32"  },
+                { "name": "discount_pct", "type": "uint8"  },
+                { "name": "is_vip",       "type": "bool"   },
+                { "name": "valid_until",  "type": "uint32" }
+            ]
+        },
+
+        {
+            "name": "pattern_record",
+            "base": "",
+            "fields": [
+                { "name": "pattern_id", "type": "uint64" },
+                { "name": "name",       "type": "string" },
+                { "name": "mask",       "type": "uint32" }
+            ]
+        },
+
+        {
+            "name": "gametype_record",
+            "base": "",
+            "fields": [
+                { "name": "gametype_id",     "type": "uint64"        },
+                { "name": "name",            "type": "string"        },
+                { "name": "base_multiplier", "type": "uint8"         },
+                { "name": "rules",           "type": "pattern_rule[]"}
+            ]
+        },
+
+        {
+            "name": "campaign_record",
+            "base": "",
+            "fields": [
+                { "name": "campaign_id",       "type": "uint64"         },
+                { "name": "sponsor",           "type": "name"           },
+                { "name": "total_budget",      "type": "extended_asset" },
+                { "name": "payout_per_game",   "type": "extended_asset" },
+                { "name": "balance_remaining", "type": "extended_asset" },
+                { "name": "leftover_policy",   "type": "name"           },
+                { "name": "games_linked",      "type": "uint32"         }
+            ]
+        },
+
         {
             "name": "setconfig",
             "base": "",
             "fields": [
-                {"name": "signer_key", "type": "public_key"}
+                { "name": "signer_key", "type": "public_key" }
             ]
         },
+
         {
             "name": "creategame",
             "base": "",
             "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "ticket_price", "type": "extended_asset"}
+                { "name": "game_id",     "type": "uint64" },
+                { "name": "ticket_price","type": "extended_asset" },
+                { "name": "gametype_id", "type": "uint64" }
             ]
         },
+
         {
-            "name": "buytickets",
+            "name": "fundgame",
             "base": "",
             "fields": [
-                {"name": "owner", "type": "name"},
-                {"name": "game_id", "type": "uint64"},
-                {"name": "matrices", "type": "bytes[]"},
-                {"name": "signatures", "type": "signature[]"}
+                { "name": "game_id", "type": "uint64" }
             ]
         },
+
         {
             "name": "lockgame",
             "base": "",
             "fields": [
-                {"name": "game_id", "type": "uint64"}
+                { "name": "game_id", "type": "uint64" }
             ]
         },
+
         {
             "name": "startdraw",
             "base": "",
             "fields": [
-                {"name": "game_id", "type": "uint64"}
+                { "name": "game_id", "type": "uint64" }
             ]
         },
+
         {
             "name": "receiverand",
             "base": "",
             "fields": [
-                {"name": "assoc_id", "type": "uint64"},
-                {"name": "random_bytes", "type": "bytes"}
+                { "name": "assoc_id",    "type": "uint64" },
+                { "name": "random_bytes","type": "bytes"  }
             ]
         },
+
         {
             "name": "claimwin",
             "base": "",
             "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "ticket_id", "type": "uint64"},
-                {"name": "ball_count", "type": "uint8"},
-                {"name": "win_pattern_mask", "type": "uint64"}
+                { "name": "game_id",          "type": "uint64" },
+                { "name": "ticket_id",        "type": "uint64" },
+                { "name": "ball_count",       "type": "uint8"  },
+                { "name": "win_pattern_mask", "type": "uint64" }
             ]
         },
+
         {
-            "name": "withdraw",
+            "name": "abortgame",
             "base": "",
             "fields": [
-                {"name": "owner", "type": "name"},
-                {"name": "amount", "type": "extended_asset"}
+                { "name": "game_id", "type": "uint64" },
+                { "name": "reason",  "type": "string" }
             ]
-        }
-    ],
-    "actions": [
-        {
-            "name": "setconfig",
-            "type": "setconfig",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Configurar Autoridade do Oráculo\nsummary: 'Define a chave pública para validação de assinaturas no contrato.'\n---\n\nAo executar esta ação, a administração do protocolo CryptoBingo estabelece a chave pública {{signer_key}} como a autoridade criptográfica. Esta chave será estritamente utilizada para validar a autenticidade, segurança e imutabilidade das cartelas compradas pelos participantes."
         },
+
         {
-            "name": "creategame",
-            "type": "creategame",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Inicializar Novo Evento de Bingo\nsummary: 'Abre o jogo #{{game_id}} com preço de entrada fixado em {{ticket_price}}.'\n---\n\nO contrato inicializa um novo evento de bingo identificado pelo ID numérico {{game_id}}.\nO valor para a participação neste evento é fixado em {{ticket_price}}. A governança e a custódia do fundo de prêmios gerado pelas entradas serão mantidas de forma autônoma por este contrato, visando alinhamento aos parâmetros de conformidade, auditoria técnica e melhores práticas regulatórias aplicáveis a ecossistemas descentralizados."
+            "name": "refundticket",
+            "base": "",
+            "fields": [
+                { "name": "game_id",   "type": "uint64" },
+                { "name": "ticket_id", "type": "uint64" }
+            ]
         },
+
+        {
+            "name": "cleargame",
+            "base": "",
+            "fields": [
+                { "name": "game_id",  "type": "uint64" },
+                { "name": "max_rows", "type": "uint32" }
+            ]
+        },
+
+        {
+            "name": "setnftconf",
+            "base": "",
+            "fields": [
+                { "name": "template_id",  "type": "int32"  },
+                { "name": "discount_pct", "type": "uint8"  },
+                { "name": "is_vip",       "type": "bool"   },
+                { "name": "valid_until",  "type": "uint32" }
+            ]
+        },
+
+        {
+            "name": "delnftconf",
+            "base": "",
+            "fields": [
+                { "name": "template_id", "type": "int32" }
+            ]
+        },
+
+        {
+            "name": "addpattern",
+            "base": "",
+            "fields": [
+                { "name": "pattern_id", "type": "uint64" },
+                { "name": "name",       "type": "string" },
+                { "name": "mask",       "type": "uint32" }
+            ]
+        },
+
+        {
+            "name": "delpattern",
+            "base": "",
+            "fields": [
+                { "name": "pattern_id", "type": "uint64" }
+            ]
+        },
+
+        {
+            "name": "addgametype",
+            "base": "",
+            "fields": [
+                { "name": "gametype_id",     "type": "uint64"         },
+                { "name": "name",            "type": "string"         },
+                { "name": "base_multiplier", "type": "uint8"          },
+                { "name": "rules",           "type": "pattern_rule[]" }
+            ]
+        },
+
+        {
+            "name": "delgametype",
+            "base": "",
+            "fields": [
+                { "name": "gametype_id", "type": "uint64" }
+            ]
+        },
+
         {
             "name": "buytickets",
-            "type": "buytickets",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Aquisição de Cartelas\nsummary: 'O participante {{owner}} adquire cartelas para o jogo #{{game_id}}.'\n---\n\nO participante identificado pela conta {{owner}} formaliza a compra de cartelas para o jogo {{game_id}}.\nAo assinar esta transação, o participante autoriza o protocolo a deduzir o valor exato correspondente ao número de cartelas diretamente de seu saldo interno sob custódia. O participante declara ciência de que os dados das matrizes tornam-se inalteráveis na blockchain após esta execução."
+            "base": "",
+            "fields": [
+                { "name": "buyer",      "type": "name"        },
+                { "name": "game_id",    "type": "uint64"      },
+                { "name": "matrices",   "type": "bytes[]"     },
+                { "name": "signatures", "type": "signature[]" },
+                { "name": "nft_id",     "type": "uint64"      }
+            ]
         },
+
         {
-            "name": "lockgame",
-            "type": "lockgame",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Bloqueio de Entrada do Jogo\nsummary: 'Trava permanentemente a adesão de novos participantes no jogo #{{game_id}}.'\n---\n\nO sistema autorizado invoca o bloqueio do jogo {{game_id}}. A partir deste marco de transição de estado, nenhuma nova cartela poderá ser comercializada. Esta ação assegura a estabilidade e o selamento financeiro do prize pool imediatamente antes da fase de extração das bolas."
+            "name": "linkcampaign",
+            "base": "",
+            "fields": [
+                { "name": "game_id",     "type": "uint64" },
+                { "name": "campaign_id", "type": "uint64" }
+            ]
         },
+
         {
-            "name": "startdraw",
-            "type": "startdraw",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Início da Fase de Sorteio\nsummary: 'Muda o estado do jogo #{{game_id}} para sorteio.'\n---\n\nO jogo {{game_id}} inicia oficialmente o processo de extração e registro de bolas. O contrato atesta o congelamento total dos parâmetros do jogo para liquidação."
+            "name": "closecampaign",
+            "base": "",
+            "fields": [
+                { "name": "campaign_id", "type": "uint64" }
+            ]
         },
-        {
-            "name": "receiverand", 
-            "type": "receiverand", 
-            "ricardian_contract": "Muda o estado do jogo #{{game_id}} para sorteado.'\n---\n\nO jogo {{game_id}} finaliza oficialmente o processo de extração e registro de bolas. O contrato atesta o congelamento total dos parâmetros do jogo para liquidação."
-        },
-        {
-            "name": "claimwin",
-            "type": "claimwin",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Liquidação de Prêmio (RTP)\nsummary: 'Distribui os ganhos da cartela #{{ticket_id}} no jogo #{{game_id}}.'\n---\n\nO sistema descentralizado audita e confirma que a cartela com o ID {{ticket_id}} cumpriu o padrão de vitória estipulado pela máscara {{win_pattern_mask}} em um total de {{ball_count}} bolas sorteadas.\nO contrato executará a liquidação exata dos fundos: 85% do fundo de prêmios retido será transferido ao dono da cartela vencedora (Retorno ao Jogador), enquanto o saldo operacional remanescente será provisionado nos pools de patrocínio ou reservas do protocolo."
-        },
+
         {
             "name": "withdraw",
-            "type": "withdraw",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Saque de Fundos da Custódia\nsummary: '{{owner}} solicita o saque de {{amount}} da carteira interna.'\n---\n\nO titular da conta {{owner}} comanda a retirada voluntária do montante de {{amount}} disponível em seu saldo interno. Em resposta imediata, a máquina de estados deste contrato executará, de forma autônoma, uma transação eletrônica devolvendo o valor especificado para a carteira de origem na blockchain, sem a necessidade de intermediários humanos."
+            "base": "",
+            "fields": [
+                { "name": "owner",  "type": "name"           },
+                { "name": "amount", "type": "extended_asset" }
+            ]
         }
+
     ],
+
+    "actions": [
+        { "name": "setconfig",     "type": "setconfig",     "ricardian_contract": "<h1 class=\"contract\">setconfig</h1>\n### Intent\nThe purpose of `setconfig` is to initialize or update the cryptographic signing authority of the off-chain microservice.\n\n### Terms\nI, the contract administrator, declare that by submitting the public key {{signer_key}}, I formally authorize the corresponding microservice to cryptographically sign ticket matrices generated off-chain. This key shall be the sole authority accepted by `assert_recover_key` within the `buytickets` action." },
+
+        { "name": "creategame",    "type": "creategame",    "ricardian_contract": "<h1 class=\"contract\">creategame</h1>\n### Intent\nThe purpose of `creategame` is to schedule a new autonomous bingo round in the `created` state.\n\n### Terms\nI, the contract administrator, declare that by instantiating game {{game_id}} with ticket price {{ticket_price}} under gametype {{gametype_id}}, the contract allocates a new state entry with initial status `created`. The game will not accept ticket purchases until `fundgame` is invoked by the microservice. I declare that the treasury holds sufficient liquidity to cover potential payouts for this round based on the Law of Large Numbers." },
+
+        { "name": "fundgame",      "type": "fundgame",      "ricardian_contract": "<h1 class=\"contract\">fundgame</h1>\n### Intent\nThe purpose of `fundgame` is to open ticket sales for a scheduled game, transitioning it from `created` to `funding`.\n\n### Terms\nThis action, authorized by the microservice account, transitions game {{game_id}} from `created` to `funding`. From this moment, players may purchase tickets. The microservice assumes responsibility for invoking `lockgame` within the scheduled time window." },
+
+        { "name": "lockgame",      "type": "lockgame",      "ricardian_contract": "<h1 class=\"contract\">lockgame</h1>\n### Intent\nThe purpose of `lockgame` is to freeze ticket sales for an active game, transitioning it from `funding` to `locked`.\n\n### Terms\nThis action, authorized by the microservice account, transitions game {{game_id}} from `funding` to `locked`. No new tickets will be accepted from this moment forward, protecting the mathematical consensus of the imminent draw." },
+
+        { "name": "startdraw",     "type": "startdraw",     "ricardian_contract": "<h1 class=\"contract\">startdraw</h1>\n### Intent\nThe purpose of `startdraw` is to formally request provably fair randomness from the WAX network oracle.\n\n### Terms\nThis action transitions game {{game_id}} to `drawing` status and dispatches an inline asynchronous request to the `orng.wax` system contract, using the game ID as the association seed. The draw result is exclusively determined by the oracle's entropy and cannot be influenced by the operator." },
+
+        { "name": "receiverand",   "type": "receiverand",   "ricardian_contract": "<h1 class=\"contract\">receiverand</h1>\n### Intent\nThe purpose of this action is to receive and permanently record the official entropy vector generated by the external oracle.\n\n### Terms\nThis action exclusively accepts requests originating from the `orng.wax` system contract. The injected bytes are recorded immutably as the official draw result for game {{assoc_id}}, transitioning its status to `drawn`. The 75-ball sequence derived from this entropy is the sole basis for win evaluation." },
+
+        { "name": "claimwin",      "type": "claimwin",      "ricardian_contract": "<h1 class=\"contract\">claimwin</h1>\n### Intent\nThe purpose of `claimwin` is to audit a winning ticket via Boolean algebra (bitmasking O(1)) and credit the fixed-odds prize to the corresponding player.\n\n### Terms\nThis action, invoked under microservice authorization, validates that ticket {{ticket_id}} in game {{game_id}} has satisfied the win pattern mask {{win_pattern_mask}} given {{ball_count}} officially drawn balls. The contract applies the applicable gametype multipliers and credits the net prize amount instantly to the winner's internal balance. The game status transitions to `archived` and `end_time` is recorded to initiate the 24-hour quarantine period." },
+
+        { "name": "abortgame",     "type": "abortgame",     "ricardian_contract": "<h1 class=\"contract\">abortgame</h1>\n### Intent\nThe purpose of `abortgame` is to activate the fail-safe mechanism when the oracle does not respond within the allowed window or when an administrative halt is required.\n\n### Terms\nThis action transitions game {{game_id}} to `aborted` status with reason {{reason}} and records `end_time`. From this moment, `refundticket` becomes available to all participants. The operator declares that no player funds will be retained under an aborted game and that full refunds shall be processed." },
+
+        { "name": "refundticket",  "type": "refundticket",  "ricardian_contract": "<h1 class=\"contract\">refundticket</h1>\n### Intent\nThe purpose of `refundticket` is to provide an O(1) self-service refund mechanism for players when a game is aborted, without requiring platform intervention.\n\n### Terms\nThis action may be invoked by any account. It verifies that game {{game_id}} is in `aborted` status, credits the `ticket_price` of ticket {{ticket_id}} to the owner's internal balance, and permanently erases the ticket row from the contract's RAM. Players retain full autonomy to claim their refund even if the platform is offline." },
+
+        { "name": "cleargame",     "type": "cleargame",     "ricardian_contract": "<h1 class=\"contract\">cleargame</h1>\n### Intent\nThe purpose of `cleargame` is to release contract RAM by erasing ticket rows after the mandatory 24-hour quarantine period (for archived games) or immediately (for aborted games).\n\n### Terms\nThis action erases up to {{max_rows}} ticket rows from game {{game_id}} in a single call to respect the WAX block CPU budget (~30ms). It must be called repeatedly until no rows remain. For `archived` games, the 24-hour quarantine after `end_time` must have elapsed. Upon full erasure, the game entry itself is also removed, returning all allocated RAM to the treasury." },
+
+        { "name": "setnftconf",    "type": "setnftconf",    "ricardian_contract": "<h1 class=\"contract\">setnftconf</h1>\n### Intent\nThe purpose of `setnftconf` is to dynamically map utility rights of an AtomicAssets NFT template to in-game benefits.\n\n### Terms\nI associate template {{template_id}} with a {{discount_pct}}% discount on ticket purchases. This benefit is valid until timestamp {{valid_until}} (where 0 represents a perpetual benefit), and VIP status is set to {{is_vip}}." },
+
+        { "name": "delnftconf",    "type": "delnftconf",    "ricardian_contract": "<h1 class=\"contract\">delnftconf</h1>\n### Intent\nThe purpose of `delnftconf` is to revoke the on-chain utility of a specific NFT template.\n\n### Terms\nI, the contract administrator, permanently remove the promotional rights of template {{template_id}}. From this consensus block forward, ownership of this NFT shall not grant discounts on new ticket purchases." },
+
+        { "name": "addpattern",    "type": "addpattern",    "ricardian_contract": "<h1 class=\"contract\">addpattern</h1>\n### Intent\nThe purpose of `addpattern` is to register or update a bitmask corresponding to a geometric win pattern for the bingo game.\n\n### Terms\nBy submitting identifier {{pattern_id}} with descriptive name {{name}} and bitmask {{mask}}, I establish a geometric validation invariant in the contract for O(1) payout calculation. The mask must not exceed 25 bits, corresponding to the 5x5 bingo card layout." },
+
+        { "name": "delpattern",    "type": "delpattern",    "ricardian_contract": "<h1 class=\"contract\">delpattern</h1>\n### Intent\nThe purpose of `delpattern` is to revoke a registered geometric win pattern.\n\n### Terms\nI, the contract administrator, permanently remove pattern {{pattern_id}} from the global game state. New rounds will not compute payouts against this bitmask." },
+
+        { "name": "addgametype",   "type": "addgametype",   "ricardian_contract": "<h1 class=\"contract\">addgametype</h1>\n### Intent\nThe purpose of `addgametype` is to register or update a game mode that consolidates economic rules, base multipliers and win pattern weights.\n\n### Terms\nBy registering gametype {{gametype_id}} under the name {{name}} with base multiplier {{base_multiplier}}, I authorize the treasury to be exposed financially according to the indexed rules and weights. The payout formula is: ticket_price × base_multiplier × max_pattern_weight (max-weight rule, ADR-005)." },
+
+        { "name": "delgametype",   "type": "delgametype",   "ricardian_contract": "<h1 class=\"contract\">delgametype</h1>\n### Intent\nThe purpose of `delgametype` is to remove a game mode from active configurations.\n\n### Terms\nI remove gametype {{gametype_id}} from the contract's active configurations. Existing games linked to this type are not affected, but no new games may be created under it." },
+
+        { "name": "buytickets",    "type": "buytickets",    "ricardian_contract": "<h1 class=\"contract\">buytickets</h1>\n### Intent\nThe purpose of `buytickets` is to allow a player to acquire legitimate bingo tickets by debiting their custodied internal balance.\n\n### Terms\nI, {{buyer}}, authorize the deduction of the total ticket cost for game {{game_id}} from my internal balance table in this contract. If I provided NFT {{nft_id}}, I acknowledge that the applicable dynamic discount rules will be enforced by the contract. I accept that the integrity of my ticket matrices depends on the cryptographic signature validation of the backend's authorized key registered via `setconfig`." },
+
+        { "name": "linkcampaign",  "type": "linkcampaign",  "ricardian_contract": "<h1 class=\"contract\">linkcampaign</h1>\n### Intent\nThe purpose of `linkcampaign` is to inject a sponsor's per-game payout allocation into a game's sponsor pool, establishing a trustless B2B sponsorship.\n\n### Terms\nBy linking campaign {{campaign_id}} to game {{game_id}}, the `payout_per_game` amount is transferred from the campaign's remaining balance into the game's `sponsor_pool`. This action requires the game to be in `created` or `funding` status. The sponsor's funds are committed and will be distributed to the winning ticket holder upon `claimwin`, or returned according to `leftover_policy` upon `closecampaign`." },
+
+        { "name": "closecampaign", "type": "closecampaign", "ricardian_contract": "<h1 class=\"contract\">closecampaign</h1>\n### Intent\nThe purpose of `closecampaign` is to settle the residual balance of a B2B sponsorship campaign according to its pre-defined leftover policy.\n\n### Terms\nBy closing campaign {{campaign_id}}, the remaining balance is liquidated as follows: if `leftover_policy` is `refund`, the remaining tokens are transferred back to the sponsor account; if `leftover_policy` is `house`, the remaining tokens remain in the contract treasury. The campaign record is then permanently erased." },
+
+        { "name": "withdraw",      "type": "withdraw",      "ricardian_contract": "<h1 class=\"contract\">withdraw</h1>\n### Intent\nThe purpose of `withdraw` is to liquidate and transfer funds from the contract's internal ledger to the user's native WAX network account.\n\n### Terms\nI, {{owner}}, instruct the contract to deduct exactly {{amount}} from my internal balance and dispatch an inline transfer transaction of the corresponding token to my external account." }
+    ],
+
     "tables": [
         {
             "name": "config",
@@ -167,38 +353,64 @@
             "name": "balances",
             "type": "balance_record",
             "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+            "key_names": ["primary_key"],
+            "key_types": ["uint64"]
         },
         {
             "name": "games",
             "type": "game_state",
             "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+            "key_names": ["game_id"],
+            "key_types": ["uint64"]
         },
         {
             "name": "tickets",
             "type": "ticket_record",
             "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+            "key_names":  ["ticket_id", "owner"],
+            "key_types":  ["uint64",    "uint64"]
+        },
+        {
+            "name": "nftconfigs",
+            "type": "nft_config",
+            "index_type": "i64",
+            "key_names": ["template_id"],
+            "key_types": ["uint64"]
+        },
+        {
+            "name": "patterns",
+            "type": "pattern_record",
+            "index_type": "i64",
+            "key_names": ["pattern_id"],
+            "key_types": ["uint64"]
+        },
+        {
+            "name": "gametypes",
+            "type": "gametype_record",
+            "index_type": "i64",
+            "key_names": ["gametype_id"],
+            "key_types": ["uint64"]
+        },
+        {
+            "name": "campaigns",
+            "type": "campaign_record",
+            "index_type": "i64",
+            "key_names":  ["campaign_id", "sponsor"],
+            "key_types":  ["uint64",       "uint64"]
         }
     ],
+
     "ricardian_clauses": [
         {
-            "id": "Auditoria e Transparência",
-            "body": "Todas as transações, incluindo depósitos, compras de cartelas, sorteios e saques, são públicas, imutáveis e auditáveis na blockchain pública, garantindo total transparência da operação."
+            "id": "terms-of-service",
+            "body": "### CryptoBingo — Terms of Service\n\nBy interacting with this contract, all parties agree to the following:\n\n1. **Provably Fair Randomness:** All draw outcomes are exclusively determined by the WAX RNG Oracle (`orng.wax`). The contract operator has no ability to influence, delay or manipulate draw results after `startdraw` is invoked.\n\n2. **Financial Segregation:** Player funds held in the `balances` table are cryptographically segregated. The contract's administrative key cannot execute withdrawals on behalf of players.\n\n3. **Return to Player (RTP):** The contractual RTP is either 85% of the prize pool (legacy mode) or `ticket_price × base_multiplier × max_pattern_weight` (dynamic gametype mode), as set by the gametype configuration. This formula is hardcoded and immutable per round.\n\n4. **Fail-Safe Protection:** In the event of oracle unavailability or an administrative halt, `abortgame` transitions the game to the `ABORTED` state. All participants retain the autonomous right to invoke `refundticket` for a full refund, independent of platform availability.\n\n5. **Compliance:** This contract operates under the framework of Brazilian Law 14.790/2023 (Fixed-Odds Betting). Financial transaction records are immutably stored in the WAX blockchain action logs and are available for regulatory audit in perpetuity.\n\n6. **RAM Governance:** Contract RAM is managed through the `cleargame` Garbage Collection mechanism. After a mandatory 24-hour quarantine following game resolution, RAM is released and returned to the treasury. This ensures long-term operational sustainability."
         },
         {
-            "id": "Custódia Algorítmica",
-            "body": "Os fundos depositados no contrato bingo.game são geridos inteiramente por lógica algorítmica autônoma (Smart Contract) e não podem ser acessados, movidos ou congelados por intervenção de terceiros ou administradores."
-        },
-        {
-            "id": "Limitação de Responsabilidade DeFi",
-            "body": "O usuário declara estar ciente dos riscos técnicos inerentes a protocolos de Finanças Descentralizadas (DeFi). A operação e o processamento de saldos são regidos estritamente pelos limites operacionais deste código-fonte auditado."
+            "id": "dispute-resolution",
+            "body": "### Dispute Resolution\n\nAll disputes regarding game outcomes must be submitted within 72 hours of the `claimwin` or `abortgame` action timestamp. Evidence must be based exclusively on on-chain action logs verifiable on the WAX blockchain explorer. The SHA-256 hash of the oracle's `random_bytes` payload serves as the definitive proof of draw integrity."
         }
     ],
+
     "variants": [],
     "action_results": []
 }

@@ -137,6 +137,8 @@ services:
       - prometheus_data:/prometheus
     networks:
       - bingo_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Alcança o worker (porta 9091) rodando no host
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -152,12 +154,18 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=bingo_grafana_2026
+      # Permite que o Grafana acesse o host (worker rodando fora do Docker em dev)
+      - GF_SERVER_ROOT_URL=http://localhost:3001
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
     networks:
       - bingo_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Resolve host no Linux
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.0
