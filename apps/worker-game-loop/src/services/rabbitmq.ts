@@ -20,6 +20,7 @@ import {
     executeClearGame,
 }                          from './blockchain';
 import { processAllGameWinners, findAllWinners } from './evaluator';
+import { buildInvertedIndex, deleteIndex }        from './invertedIndex';
 import {
     startSlowReveal,
     notifyGameLocked,
@@ -219,6 +220,11 @@ function consumeMessages(): void {
                 case 'lockgame': {
                     await executeLockGame(gameId);
                     notifyGameLocked(gameId);
+                    // Constrói o Índice Invertido Redis (SPEC.md §3.2)
+                    // Executa após o lock — os tickets estão finalizados
+                    buildInvertedIndex(gameId).catch(err =>
+                        console.error(`[RabbitMQ] Erro ao construir índice para jogo ${gameId}:`, err)
+                    );
                     break;
                 }
 

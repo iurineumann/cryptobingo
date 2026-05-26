@@ -30,6 +30,13 @@ import {
     listGametypes, upsertGametype, deleteGametype,
 } from './controllers/patternController';
 import { simulateWeights }                           from './controllers/monteCarloController';
+import { getRtpStatistics, getGamesHistory, syncGameToLedger } from './controllers/statisticsController';
+import { ensureLedgerTables }                         from './database/ledger';
+import {
+    listCampaigns, getCampaign,
+    linkCampaignToGame, closeCampaign,
+}                                                    from './controllers/sponsorController';
+import { getMyNfts }                                 from './controllers/nftController';
 
 dotenv.config();
 
@@ -72,6 +79,9 @@ async function bootstrap(): Promise<void> {
 
     // Inicializa rate limiters APÓS o Redis conectar
     initRateLimiters();
+
+    // Garante tabelas de compliance no PostgreSQL
+    await ensureLedgerTables();
 
     registerMiddleware();
     registerRoutes();
@@ -172,11 +182,27 @@ function registerRoutes(): void {
         adminLimiter, requireAuth, requireRole('admin'), deleteGametype
     );
 
-    // ── Admin: Monte Carlo (JWT + RBAC admin + limit agressivo — CPU-bound) ───
+    // ── Admin: Monte Carlo ─────────────────────────────────────────────────
     app.post(
         '/api/v1/admin/simulate-weights',
         monteCarloLimiter, requireAuth, requireRole('admin'), simulateWeights
     );
+
+    // ── Statistics / Compliance (públicas) — Lei 14.790/2023 ─────────────────
+    app.get('/api/v1/statistics/rtp',   getRtpStatistics);
+    app.get('/api/v1/statistics/games', getGamesHistory);
+
+    // ── Admin: Ledger sync (JWT + admin) ──────────────────────────────────────
+    app.post('/api/v1/admin/ledger/sync', adminLimiter, requireAuth, requireRole('admin'), syncGameToLedger);
+
+    // ── Sponsors B2B (SPEC.md §1.4, brief.md §1) ─────────────────────────────
+    app.get ('/api/v1/sponsors/campaigns',                         playerLimiter, listCampaigns);
+    app.get ('/api/v1/sponsors/campaigns/:campaignId',             playerLimiter, getCampaign);
+    app.post('/api/v1/sponsors/campaigns/:campaignId/link',  adminLimiter, requireAuth, requireRole('admin'), linkCampaignToGame);
+    app.post('/api/v1/sponsors/campaigns/:campaignId/close', adminLimiter, requireAuth, requireRole('admin'), closeCampaign);
+
+    // ── NFTs (JWT) ───────────────────────────────────────────────────────
+    app.get('/api/v1/nfts/my-assets', playerLimiter, requireAuth, getMyNfts);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {
