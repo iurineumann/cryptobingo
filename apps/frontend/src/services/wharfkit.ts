@@ -10,9 +10,15 @@ import { WebRenderer } from '@wharfkit/web-renderer';
 import { WalletPluginAnchor } from '@wharfkit/wallet-plugin-anchor';
 import { WalletPluginCloudWallet } from '@wharfkit/wallet-plugin-cloudwallet';
 
+const rpcUrl = import.meta.env.DEV  || import.meta.env.VITE_DEV_SESSION
+    ? window.location.origin 
+    : import.meta.env.VITE_RPC_URL;
+
+    console.log(`[Wharfkit] RPC URL configurada para: ${rpcUrl}`);
+
 const chainConfig = {
     id: import.meta.env.VITE_CHAIN_ID,
-    url: import.meta.env.VITE_RPC_URL,
+    url: rpcUrl,
 };
 
 const ui = new WebRenderer();

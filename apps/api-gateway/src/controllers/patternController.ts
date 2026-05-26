@@ -1,0 +1,241 @@
+// apps/api-gateway/src/controllers/patternController.ts
+// CRUD de padrões e gametypes via transações on-chain.
+//
+// Todas as rotas exigem requireAuth. Em produção, adicionar verificação
+// de role 'admin' via middleware RBAC (pendente ADR futuro).
+//
+// Ref: ADR-004 Fase 2, openapi.yaml v1.3.0
+
+import { Request, Response } from 'express';
+import { Session }           from '@wharfkit/session';
+import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
+import { rpcClient }         from '@cryptobingo/blockchain-core';
+import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
+
+const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
+const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
+const CHAIN_ID              = process.env.CHAIN_ID!;
+const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+
+// Sessão do microserviço para enviar transações admin ao contrato
+function getAdminSession(): Session {
+    return new Session({
+        actor:        CONTRACT_ACCOUNT,
+        permission:   'active',
+        chain:        { id: CHAIN_ID, url: RPC_URL },
+        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
+    });
+}
+
+// ==========================================
+// PATTERNS
+// ==========================================
+
+/**
+ * GET /api/v1/admin/patterns
+ * Lista todos os padrões de vitória registrados on-chain.
+ */
+export async function listPatterns(_req: Request, res: Response): Promise<void> {
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'patterns',
+            limit: 50,
+            json:  true,
+        });
+        res.status(200).json({ patterns: response.rows as BlockchainPattern[] });
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao listar patterns:', err);
+        res.status(503).json({ error: 'Nó blockchain indisponível.' });
+    }
+}
+
+/**
+ * POST /api/v1/admin/patterns
+ * Cria ou atualiza um padrão de vitória on-chain.
+ *
+ * Body: { pattern_id: number, name: string, mask: number }
+ * mask: uint32 bitmask (máx 25 bits — cartela 5x5)
+ */
+export async function upsertPattern(req: Request, res: Response): Promise<void> {
+    const { pattern_id, name, mask } = req.body;
+
+    if (!pattern_id || !name || mask === undefined) {
+        res.status(400).json({ error: 'Campos obrigatórios: pattern_id, name, mask.' });
+        return;
+    }
+    if (typeof mask !== 'number' || mask <= 0 || mask >= (1 << 25)) {
+        res.status(400).json({ error: 'mask deve ser um uint32 entre 1 e 33554431 (25 bits).' });
+        return;
+    }
+    if (typeof name !== 'string' || name.length > 64) {
+        res.status(400).json({ error: 'name deve ser uma string de até 64 caracteres.' });
+        return;
+    }
+
+    try {
+        const session = getAdminSession();
+        const result  = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'addpattern',
+                authorization: [session.permissionLevel],
+                data:          { pattern_id, name, mask },
+            }],
+        }, { broadcast: true });
+
+        console.log(`✅ [PatternCtrl] Padrão ${pattern_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        `Padrão "${name}" registrado com sucesso.`,
+            pattern_id,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao upsert pattern:', err);
+        res.status(500).json({ error: `Erro ao registrar padrão: ${msg}` });
+    }
+}
+
+/**
+ * DELETE /api/v1/admin/patterns/:patternId
+ * Remove um padrão de vitória on-chain.
+ */
+export async function deletePattern(req: Request, res: Response): Promise<void> {
+    const { patternId } = req.params;
+
+    try {
+        const session = getAdminSession();
+        const result  = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'delpattern',
+                authorization: [session.permissionLevel],
+                data:          { pattern_id: patternId },
+            }],
+        }, { broadcast: true });
+
+        console.log(`✅ [PatternCtrl] Padrão ${patternId} removido. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        `Padrão ${patternId} removido com sucesso.`,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao deletar pattern:', err);
+        res.status(500).json({ error: `Erro ao remover padrão: ${msg}` });
+    }
+}
+
+// ==========================================
+// GAMETYPES
+// ==========================================
+
+/**
+ * GET /api/v1/admin/gametypes
+ * Lista todos os gametypes registrados on-chain.
+ */
+export async function listGametypes(_req: Request, res: Response): Promise<void> {
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'gametypes',
+            limit: 50,
+            json:  true,
+        });
+        res.status(200).json({ gametypes: response.rows as BlockchainGametype[] });
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao listar gametypes:', err);
+        res.status(503).json({ error: 'Nó blockchain indisponível.' });
+    }
+}
+
+/**
+ * POST /api/v1/admin/gametypes
+ * Cria ou atualiza um gametype on-chain.
+ *
+ * Body: {
+ *   gametype_id: number,
+ *   name: string,
+ *   base_multiplier: number,        // uint8 (1-255)
+ *   rules: [{ pattern_id, weight }] // máx 12 regras
+ * }
+ */
+export async function upsertGametype(req: Request, res: Response): Promise<void> {
+    const { gametype_id, name, base_multiplier, rules } = req.body;
+
+    if (!gametype_id || !name || !base_multiplier || !rules) {
+        res.status(400).json({ error: 'Campos obrigatórios: gametype_id, name, base_multiplier, rules.' });
+        return;
+    }
+    if (!Array.isArray(rules) || rules.length === 0 || rules.length > 12) {
+        res.status(400).json({ error: 'rules deve ser um array de 1 a 12 elementos.' });
+        return;
+    }
+    if (typeof base_multiplier !== 'number' || base_multiplier < 1 || base_multiplier > 255) {
+        res.status(400).json({ error: 'base_multiplier deve ser um inteiro entre 1 e 255.' });
+        return;
+    }
+
+    for (const rule of rules) {
+        if (!rule.pattern_id || !rule.weight || rule.weight < 1 || rule.weight > 255) {
+            res.status(400).json({ error: 'Cada rule deve ter pattern_id e weight (1-255).' });
+            return;
+        }
+    }
+
+    try {
+        const session = getAdminSession();
+        const result  = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'addgametype',
+                authorization: [session.permissionLevel],
+                data:          { gametype_id, name, base_multiplier, rules },
+            }],
+        }, { broadcast: true });
+
+        console.log(`✅ [PatternCtrl] Gametype ${gametype_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        `Gametype "${name}" registrado com sucesso.`,
+            gametype_id,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao upsert gametype:', err);
+        res.status(500).json({ error: `Erro ao registrar gametype: ${msg}` });
+    }
+}
+
+/**
+ * DELETE /api/v1/admin/gametypes/:gametypeId
+ * Remove um gametype on-chain.
+ */
+export async function deleteGametype(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+
+    try {
+        const session = getAdminSession();
+        const result  = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'delgametype',
+                authorization: [session.permissionLevel],
+                data:          { gametype_id: gametypeId },
+            }],
+        }, { broadcast: true });
+
+        console.log(`✅ [PatternCtrl] Gametype ${gametypeId} removido. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        `Gametype ${gametypeId} removido com sucesso.`,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao deletar gametype:', err);
+        res.status(500).json({ error: `Erro ao remover gametype: ${msg}` });
+    }
+}

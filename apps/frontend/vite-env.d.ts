@@ -5,12 +5,14 @@ interface ImportMetaEnv {
     readonly VITE_CHAIN_ID:          string;
     readonly VITE_RPC_URL:           string;
     readonly VITE_CONTRACT_ACCOUNT:  string;
-
-    // URL do block explorer para links de transação (ex: wax.bloks.io em produção)
     readonly VITE_EXPLORER_URL:      string;
 
-    // DEV-ONLY: presentes apenas no .env local, nunca em produção.
-    // Opcionais (string | undefined) — tree-shaken pelo Vite em produção.
+    // WebSocket Broadcaster (ADR-007)
+    // Vazio em dev (proxy Vite) — URL completa em produção (wss://...)
+    readonly VITE_WS_URL:            string;
+    readonly VITE_WS_URL_INTERNAL:   string;
+
+    // DEV-ONLY: tree-shaken pelo Vite em produção
     readonly VITE_DEV_ACTOR:         string | undefined;
     readonly VITE_DEV_PRIVATE_KEY:   string | undefined;
 }

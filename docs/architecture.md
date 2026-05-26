@@ -54,46 +54,49 @@ graph TD
 
 ## 2. Máquina de Estados Finita (FSM) do Smart Contract
 
-A FSM do contrato C++ é estritamente linear e bloqueante. Validações de estado (`eosio::check` ou `assert`) impedem que ações sejam chamadas fora de ordem temporal, protegendo a economia do DApp.
+A FSM do contrato C++ é estritamente linear e bloqueante. Validações de estado (`eosio::check`) impedem que ações sejam chamadas fora de ordem temporal, protegendo a economia do DApp.
 
 ```mermaid
 stateDiagram-v2
     [*] --> CREATED: creategame()\n[Admin]
-    
-    CREATED --> FUNDING: Transition Trigger\n[Backend / Cron]
+    note right of CREATED
+        Jogo agendado.
+        Aguarda fundgame() do worker.
+    end note
+
+    CREATED --> FUNDING: fundgame()\n[microservice]
     note right of FUNDING
-        buytickets() liberado.
-        Cartelas são alocadas na RAM em lote.
+        buytickets() liberado.\n        linkcampaign() disponível.\n        Cartelas alocadas em lote na RAM.
     end note
 
-    FUNDING --> LOCKED: lockgame()\n[Backend]
+    FUNDING --> LOCKED: lockgame()\n[microservice]
     note left of LOCKED
-        Vendas encerradas.
-        Backend monta Índice Invertido no Redis.
+        Vendas encerradas.\n        Worker indexa Redis (Índice Invertido).
     end note
 
-    LOCKED --> DRAWING: receiverand()\n[orng.wax Oracle]
+    LOCKED --> DRAWING: startdraw()\n[microservice → orng.wax]
     note right of DRAWING
-        Entropia recebida determinística.
-        Array de 75 dezenas preenchido.
+        Requisição de entropia enviada.\n        Aguardando receiverand().
     end note
 
-    DRAWING --> ARCHIVED: claimwin()\n[Backend]
+    DRAWING --> DRAWN: receiverand()\n[orng.wax Oracle]
+    note right of DRAWN
+        75 dezenas recebidas.\n        Worker inicia Slow Reveal.
+    end note
+
+    DRAWN --> ARCHIVED: claimwin()\n[microservice]
     note right of ARCHIVED
-        Payout Multidrop executado O(1).
-        Início da Quarentena (24h).
+        Payout Multidrop O(1) executado.\n        end_time registrado.\n        Quarentena de 24h iniciada.
     end note
 
-    LOCKED --> ABORTED: abortgame() / Oráculo Timeout
-    DRAWING --> ABORTED: abortgame() / Erro de Quórum
+    LOCKED --> ABORTED: abortgame()\n[microservice / Admin]
+    DRAWING --> ABORTED: abortgame()\n[timeout orng.wax]
     note left of ABORTED
-        Fail-Safe ativado.
-        refundticket() liberado O(1) para saques estornados.
+        Fail-Safe ativado.\n        end_time registrado.\n        refundticket() liberado O(1).
     end note
 
-    ARCHIVED --> [*]: cleargame() / Erase RAM
-    ABORTED --> [*]: cleargame() / Erase RAM
-
+    ARCHIVED --> [*]: cleargame()\n[após 24h — libera RAM]
+    ABORTED --> [*]: cleargame()\n[imediato — após refundall]
 ```
 
 ---

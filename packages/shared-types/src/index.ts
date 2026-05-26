@@ -1,3 +1,8 @@
+// packages/shared-types/src/index.ts
+// Fonte única de verdade para tipagem cross-package do CryptoBingo.
+// REGRA: qualquer alteração no bingo.hpp deve ser espelhada aqui na mesma sprint.
+// Ref: PROJECT-DETAILS.md §9 (Sincronia de Tipagem)
+
 // ==========================================
 // 1. TIPOS GLOBAIS E INTERNACIONALIZAÇÃO (i18n)
 // ==========================================
@@ -6,124 +11,190 @@ export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin';
 
 // ==========================================
 // 2. ESTRUTURAS ON-CHAIN (Espelho fiel do bingo.hpp / bingo.abi)
-//
-// REGRA: Estes tipos devem refletir EXATAMENTE os campos serializados
-// pelo CDT (EOSIO Contract Development Toolkit). Qualquer alteração no
-// .hpp deve ser imediatamente espelhada aqui.
 // ==========================================
 
 /**
- * Espelha o enum de status da FSM do bingo.cpp.
- * Estados possíveis em ordem de progressão:
- *   funding → locked → drawing → drawn → archived
- *                    ↘ aborted (fail-safe)
+ * FSM do contrato bingo.cpp.
+ * Progressão: created → funding → locked → drawing → drawn → archived
+ *                                         ↘ aborted (fail-safe)
+ * Ref: SPEC.md §1.2, architecture.md FSM
  */
 export type GameStatus =
+    | 'created'   // Jogo agendado, aguardando fundgame() — NOVO
     | 'funding'   // Vendas abertas (buytickets habilitado)
-    | 'locked'    // Vendas encerradas, índice Redis sendo construído
+    | 'locked'    // Vendas encerradas
     | 'drawing'   // Requisição de entropia enviada ao orng.wax
     | 'drawn'     // Entropia recebida, drawn_balls preenchido
-    | 'archived'  // Prêmio pago, em quarentena de 24h para auditoria
-    | 'aborted';  // Fail-safe ativado (timeout de oráculo ou erro de quórum)
+    | 'archived'  // Prêmio pago, em quarentena de 24h
+    | 'aborted';  // Fail-safe ativado (timeout de oráculo ou admin halt)
 
 /**
  * Espelha a tabela `games` do bingo.hpp.
- * Scope: _self (bingo.game). Primary Key: game_id.
- *
- * Nota sobre sponsor_pool: o campo é serializado como array de extended_asset.
- * Na leitura via get_table_rows com json:true, cada item aparece como
- * objeto { quantity: "N.NNNN SYM", contract: "account" }.
+ * Scope: _self. Primary Key: game_id.
  */
 export interface BlockchainGameState {
-    game_id: string;                    // uint64 — lido como string para evitar perda de precisão no JS
-    status: GameStatus;
-    ticket_price: ExtendedAsset;        // extended_asset: { quantity, contract }
-    prize_pool: ExtendedAsset;          // extended_asset: { quantity, contract }
-    sponsor_pool: ExtendedAsset[];      // vector<extended_asset>
-    drawn_balls: number[];              // vector<char> com 75 posições após receiverand()
-    campaign_id: string;                // uint64 — '0' se não patrocinado
+    game_id:     string;            // uint64 como string
+    status:      GameStatus;
+    ticket_price: ExtendedAsset;
+    prize_pool:   ExtendedAsset;
+    sponsor_pool: ExtendedAsset[];  // vector<extended_asset>
+    drawn_balls:  number[];         // 75 posições após receiverand()
+    campaign_id:  string;           // uint64 — '0' se não patrocinado
+    gametype_id:  string;           // uint64 — '0' se modo legado
+    end_time:     number;           // time_point_sec (unix timestamp) — 0 até claimwin/abortgame
 }
 
 /**
- * Representa um extended_asset serializado pelo nó Antelope.
- * O campo `quantity` segue o formato "AMOUNT SYMBOL" (ex: "10.0000 WAX").
+ * extended_asset serializado pelo nó Antelope.
  */
 export interface ExtendedAsset {
-    quantity: string;   // ex: "10.0000 WAX"
-    contract: string;   // ex: "eosio.token"
+    quantity: string;   // "10.0000 WAX"
+    contract: string;   // "eosio.token"
 }
 
 /**
  * Espelha a tabela `tickets` do bingo.hpp.
  * Scope: game_id. Primary Key: ticket_id.
- * Secondary Index: owner (uint64 cast de name) — usado para varredura de reembolso.
- *
- * ATENÇÃO: O campo `state` é um bitmask uint32 usado pelo motor de Bitmasking.
- * Bit 12 inicia setado (FREE SPACE). Não confundir com status de vitória.
  */
 export interface BlockchainTicketRecord {
-    ticket_id: string;      // uint64
-    owner: string;          // name (ex: "jogador1")
-    matrix: number[];       // vector<char> com exatas 24 posições [1-75], sem a posição 12 (FREE SPACE)
-    state: number;          // uint32 — bitmask de progresso; inicia em 0x00001000 (bit 12 setado)
-    game_id: string;        // uint64 — desnormalizado para facilitar queries off-chain
+    ticket_id: string;    // uint64
+    owner:     string;    // name
+    matrix:    number[];  // 24 posições coluna-maior [B0-B4,I0-I4,N0,N1,N3,N4,G0-G4,O0-O4]
+    state:     number;    // uint32 bitmask; inicia em 0x00001000 (bit 12 = FREE SPACE)
+    game_id:   string;    // uint64
 }
 
 /**
  * Espelha a tabela `balances` do bingo.hpp.
- * Scope: account_name (por usuário). Primary Key: symbol_code.raw().
- *
- * A leitura via get_table_rows retorna um registro por token depositado.
- * Não há campo `owner` na linha — o owner é o scope da query.
+ * Scope: account_name. Primary Key: symbol_code.raw().
  */
 export interface BlockchainBalance {
-    balance: ExtendedAsset; // extended_asset: { quantity, contract }
+    balance: ExtendedAsset;
+}
+
+/**
+ * Espelha a tabela `campaigns` do bingo.hpp (SPEC.md §1.4).
+ * Scope: _self. Primary Key: campaign_id.
+ *
+ * leftover_policy: "refund" → devolve ao sponsor; "house" → tesouraria
+ */
+export interface BlockchainCampaign {
+    campaign_id:        string;        // uint64
+    sponsor:            string;        // name da conta patrocinadora
+    total_budget:       ExtendedAsset; // Budget total depositado
+    payout_per_game:    ExtendedAsset; // Fração injetada por linkgame()
+    balance_remaining:  ExtendedAsset; // Saldo ainda disponível
+    leftover_policy:    'refund' | 'house';
+    games_linked:       number;        // Contador de jogos vinculados
+}
+
+/**
+ * Espelha a tabela `patterns` do bingo.hpp (ADR-004 Fase 2).
+ * Scope: _self. Primary Key: pattern_id.
+ */
+export interface BlockchainPattern {
+    pattern_id: string;
+    name:       string;
+    mask:       number; // uint32 bitmask (max 25 bits)
+}
+
+/**
+ * Regra de padrão dentro de um gametype.
+ */
+export interface PatternRule {
+    pattern_id: string;
+    weight:     number; // uint8
+}
+
+/**
+ * Espelha a tabela `gametypes` do bingo.hpp (ADR-004 Fase 2).
+ * Scope: _self. Primary Key: gametype_id.
+ */
+export interface BlockchainGametype {
+    gametype_id:     string;
+    name:            string;
+    base_multiplier: number; // uint8
+    rules:           PatternRule[];
 }
 
 // ==========================================
-// 3. POSTGRESQL MODELS (Ledger & Compliance - Lei 14.790/2023)
+// 3. POSTGRESQL MODELS (Ledger & Compliance — Lei 14.790/2023)
+// Ref: architecture.md §6.1, COMPLIANCE.md §2
 // ==========================================
+
 export interface PostgresUser {
-    id: string;               // UUID
+    id:             string; // UUID
     wallet_address: string;
-    role: UserRole;
-    kyc_status: 'none' | 'pending' | 'verified';
-    created_at: Date;
+    role:           UserRole;
+    kyc_status:     'none' | 'pending' | 'verified';
+    created_at:     Date;
+}
+
+export interface PostgresKycVault {
+    id:                     string; // UUID
+    user_id:                string; // FK → PostgresUser.id
+    encrypted_real_name:    string; // AES-256 at rest
+    encrypted_document:     string; // AES-256 at rest
+    country_code:           string;
+}
+
+export interface PostgresGamesHistory {
+    game_id:          string;   // Sincronizado com on-chain
+    status:           GameStatus;
+    drawn_balls:      number[];
+    total_prize_pool: number;
+    gametype_id:      string;
+    campaign_id:      string;
+    resolved_at:      Date | null;
+    created_at:       Date;
 }
 
 export interface PostgresTransactionLedger {
-    tx_id: string;            // Hash da blockchain
-    user_id: string;          // UUID ref PostgresUser
-    game_id: string;          // ref BlockchainGameState
-    action_type: 'deposit' | 'withdraw' | 'buy_ticket' | 'claim_win';
-    amount: number;           // Valor decimal puro para somatórios contábeis
-    currency: string;         // 'WAX' ou 'BINGO'
-    timestamp: Date;
+    tx_id:       string; // Hash da transação on-chain
+    user_id:     string; // FK → PostgresUser.id
+    game_id:     string; // FK → PostgresGamesHistory.game_id
+    action_type: 'deposit' | 'withdraw' | 'buy_ticket' | 'claim_win' | 'refund';
+    amount:      number; // Decimal para somatórios contábeis
+    currency:    string; // 'WAX', 'BINGO', 'TLM', etc.
+    timestamp:   Date;
 }
 
 // ==========================================
 // 4. MONGODB MODELS (Dynamic Edge, Gamification & Chat)
+// Ref: architecture.md §6.2
 // ==========================================
+
 export interface MongoUserProfile {
-    wallet_address: string;   // Chave de ligação
-    nickname: string;
+    wallet_address:     string;
+    nickname:           string;
     avatar_nft_asset_id: string | null;
     preferences: {
-        locale: SupportedLocale;
+        locale:           SupportedLocale;
         currency_display: string;
-        sound_enabled: boolean;
+        sound_enabled:    boolean;
     };
     progression: {
-        xp: number;
-        tier: 'Bronze' | 'Silver' | 'Gold' | 'Diamond';
+        xp:           number;
+        tier:         'Bronze' | 'Silver' | 'Gold' | 'Diamond';
         games_played: number;
     };
 }
 
 export interface MongoChatMessage {
-    lobby_id: string;
+    lobby_id:       string;
     wallet_address: string;
-    message: string;
+    message:        string;
     is_sponsor_drop: boolean;
-    timestamp: Date;
+    timestamp:      Date;
+}
+
+export interface MongoNftCache {
+    wallet_address: string;
+    assets: Array<{
+        asset_id:     string;
+        schema_name:  string;
+        name:         string;
+        backed_tokens: string; // "10000.0000 BINGO"
+    }>;
+    last_synced: Date;
 }
