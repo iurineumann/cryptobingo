@@ -11,7 +11,8 @@
 
 import { fetchGame, fetchPlayerTickets, rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern } from '@cryptobingo/shared-types';
-import { executeClaimWin } from './blockchain';
+import { executeClaimWin }                                                    from './blockchain';
+import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 
@@ -178,7 +179,6 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
  * @param drawnBalls   - Bolas sorteadas (drawn_balls do jogo)
  * @param gametypeId   - '0' para modo legado; outro valor para modo dinâmico
  */
-export async function findAllWinners(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string = '0',
@@ -247,8 +247,96 @@ export async function findAllWinners(
 }
 
 /**
+ * Avaliação O(1) usando o Índice Invertido Redis (SPEC.md §3.2).
+ *
+ * Em vez de varrer todos os tickets via RPC, usa o índice para obter
+ * diretamente quais tickets têm cada bola sorteada, aplicando OR/AND bit a bit.
+ *
+ * Complexidade: O(drawn_balls × tickets_que_têm_a_bola) vs O(total_tickets × 24)
+ */
+async function findAllWinnersWithIndex(
+    gameId:     string,
+    drawnBalls: number[],
+    gametypeId: string = '0',
+): Promise<WinResult[]> {
+    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+
+    // Mapa: ticket_id → estado bitmask acumulado
+    const stateMap = new Map<string, number>();
+
+    // Para cada bola sorteada, atualiza o estado dos tickets afetados via índice
+    for (const ball of drawnBalls) {
+        const entries = await getTicketsForBall(gameId, ball);
+        for (const { ticket_id, bit_index } of entries) {
+            const current = stateMap.get(ticket_id) ?? 0x00001000; // bit 12 = FREE SPACE
+            stateMap.set(ticket_id, current | (1 << bit_index));
+        }
+    }
+
+    // Avalia cada ticket com estado completo
+    const winners: WinResult[] = [];
+
+    for (const [ticketId, finalState] of stateMap) {
+        if (dynamicPatterns) {
+            const winningPatterns = checkWinPatterns(finalState, dynamicPatterns);
+            if (winningPatterns.length > 0) {
+                const best = winningPatterns.reduce((a, b) => b.weight > a.weight ? b : a);
+                // Busca os dados completos do ticket (owner) para o payload
+                const ticketData = await fetchTicketById(gameId, ticketId);
+                if (ticketData) {
+                    winners.push({
+                        ticket:      ticketData,
+                        patternName: best.name,
+                        patternMask: best.mask,
+                        weight:      best.weight,
+                    });
+                }
+            }
+        } else {
+            const winResult = checkWinPattern(finalState);
+            if (winResult) {
+                const ticketData = await fetchTicketById(gameId, ticketId);
+                if (ticketData) {
+                    winners.push({ ticket: ticketData, ...winResult, weight: 0 });
+                }
+            }
+        }
+    }
+
+    return winners;
+}
+
+/**
+ * Busca os dados completos de um ticket por ID (para montar o WinResult).
+ * Chamado apenas para tickets vencedores — não para todos.
+ */
+async function fetchTicketById(
+    gameId:   string,
+    ticketId: string,
+): Promise<BlockchainTicketRecord | null> {
+    try {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:        'bingo.game',
+            scope:       gameId,
+            table:       'tickets',
+            lower_bound: ticketId,
+            upper_bound: ticketId,
+            limit:       1,
+            json:        true,
+        });
+        return res.rows[0] as BlockchainTicketRecord ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Motor de resolução completo: lê o jogo, varre todos os tickets,
  * e submete claimwin para cada vencedor.
+ *
+ * Estratégia:
+ *   1. Se o índice invertido Redis existe → usa O(1) por bola (SPEC.md §3.2)
+ *   2. Se não existe (ex: lockgame sem Redis) → fallback para varredura RPC
  *
  * ADR-005 Fase 2: passa o win_pattern_mask do padrão de maior weight.
  */
@@ -262,13 +350,20 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
     }
 
     const gametypeId = (game as any).gametype_id?.toString() ?? '0';
+    const hasIndex   = await indexExists(gameId);
 
     console.log(
-        `🔍 [Avaliador] Varrendo tickets do jogo ${gameId} ` +
-        `(gametype: ${gametypeId === '0' ? 'legado' : gametypeId})...`
+        `🔍 [Avaliador] Estratégia: ${hasIndex ? 'Índice Invertido O(1)' : 'Varredura RPC O(n)'} ` +
+        `(gametype: ${gametypeId === '0' ? 'legado' : gametypeId})`
     );
 
-    const winners = await findAllWinners(gameId, game.drawn_balls, gametypeId);
+    let winners: WinResult[];
+
+    if (hasIndex) {
+        winners = await findAllWinnersWithIndex(gameId, game.drawn_balls, gametypeId);
+    } else {
+        winners = await findAllWinners(gameId, game.drawn_balls, gametypeId);
+    }
 
     if (winners.length === 0) {
         console.log(`😔 [Avaliador] Nenhum vencedor no jogo ${gameId}.`);
@@ -277,13 +372,17 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
 
     console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
 
-    // Liquidação sequencial (o contrato muda status para 'archived' no 1º claimwin)
     for (const { ticket, patternName, patternMask, weight } of winners) {
         console.log(
             `🏆 [Avaliador] Liquidando #${ticket.ticket_id} ` +
             `(${ticket.owner}, padrão: ${patternName}, weight: ${weight})...`
         );
         await executeClaimWin(gameId, ticket.ticket_id, game.drawn_balls.length, patternMask);
+    }
+
+    // Limpa o índice após a resolução (o TTL garante a expiração, mas limpamos explicitamente)
+    if (hasIndex) {
+        await deleteIndex(gameId);
     }
 
     console.log(`✅ [Avaliador] Resolução do jogo ${gameId} concluída.`);

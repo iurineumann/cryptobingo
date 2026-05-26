@@ -16,6 +16,32 @@ const JWT_SECRET         = process.env.JWT_SECRET               ?? '';
 const REVEAL_INTERVAL_MS = parseInt(process.env.REVEAL_INTERVAL ?? '3000', 10);
 
 // ==========================================
+// PER-IP CONNECTION RATE LIMITER (DDoS)
+// ==========================================
+const MAX_CONNECTIONS_PER_IP = parseInt(process.env.WS_MAX_CONNECTIONS_PER_IP ?? '10', 10);
+const ipConnectionMap = new Map<string, number>();
+
+function incrementIp(ip: string): boolean {
+    const count = (ipConnectionMap.get(ip) ?? 0) + 1;
+    if (count > MAX_CONNECTIONS_PER_IP) return false;
+    ipConnectionMap.set(ip, count);
+    return true;
+}
+
+function decrementIp(ip: string): void {
+    const count = (ipConnectionMap.get(ip) ?? 1) - 1;
+    if (count <= 0) ipConnectionMap.delete(ip);
+    else ipConnectionMap.set(ip, count);
+}
+
+// Limpeza periódica do mapa de IPs (prevenção de memory leak)
+setInterval(() => {
+    if (ipConnectionMap.size > 0) {
+        console.log(`[WS] IP connection map: ${ipConnectionMap.size} entries active`);
+    }
+}, 60_000);
+
+// ==========================================
 // TIPOS
 // ==========================================
 
@@ -55,6 +81,21 @@ export const io = new Server(httpServer, {
     pingTimeout:  30_000,
     pingInterval: 10_000,
     transports:   ['websocket', 'polling'],
+});
+
+// ==========================================
+// MIDDLEWARE DE RATE LIMIT POR IP (DDoS)
+// Rejeita conexões além do limite por IP.
+// Executa antes da auth JWT para não gastar CPU em handshakes maliciosos.
+// ==========================================
+
+io.use((socket: Socket, next) => {
+    const ip = socket.handshake.address;
+    if (!incrementIp(ip)) {
+        console.warn(`🚫 [WS] Rate limit excedido para IP ${ip} — conexão rejeitada.`);
+        return next(new Error('RATE_LIMITED: Muitas conexões simultâneas deste IP.'));
+    }
+    next();
 });
 
 // ==========================================
@@ -157,6 +198,7 @@ io.on('connection', (socket: Socket) => {
 
     socket.on('disconnect', (reason) => {
         wsConnectionsActive.dec();
+        decrementIp(socket.handshake.address);
         console.log(`🔌 [WS] Desconectado: ${socket.id} (${wallet}) — ${reason}`);
     });
 });
