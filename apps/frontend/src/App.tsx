@@ -28,20 +28,39 @@ import WalletPage        from './components/WalletPage';
 import AdminLayout       from './components/admin/AdminLayout';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
-let createDevSession: (() => Promise<Session>) | null = null;
+interface DevAccount {
+    actor: string;
+    key:   string;
+    label: string;
+}
+
+let   createDevSession: (() => Promise<Session>) | null = null;
+let   createCustomSession: ((actor: string, key: string) => Promise<Session>) | null = null;
+const devAccounts: DevAccount[] = [];
 
 if (import.meta.env.DEV) {
     const { WalletPluginPrivateKey } = await import('@wharfkit/wallet-plugin-privatekey');
-    const devActor   = import.meta.env.VITE_DEV_ACTOR;
-    const devKey     = import.meta.env.VITE_DEV_PRIVATE_KEY;
     const devChainId = import.meta.env.VITE_CHAIN_ID;
     const devRpcUrl  = import.meta.env.VITE_RPC_URL;
+    const devActor   = import.meta.env.VITE_DEV_ACTOR;
+    const devKey     = import.meta.env.VITE_DEV_PRIVATE_KEY;
     if (devActor && devKey && devChainId && devRpcUrl) {
-        createDevSession = async () => new Session({
-            actor:        devActor,
-            permission:   'active',
-            chain:        { id: devChainId, url: devRpcUrl },
-            walletPlugin: new WalletPluginPrivateKey(devKey),
+        devAccounts.push({ actor: devActor, key: devKey, label: 'Admin' });
+    }
+    if (devChainId && devRpcUrl) {
+        createDevSession = async () => {
+            const a = devAccounts[0];
+            if (!a) throw new Error('No dev account configured');
+            return new Session({
+                actor: a.actor, permission: 'active',
+                chain: { id: devChainId, url: devRpcUrl },
+                walletPlugin: new WalletPluginPrivateKey(a.key),
+            });
+        };
+        createCustomSession = async (actor: string, key: string) => new Session({
+            actor, permission: 'active',
+            chain: { id: devChainId, url: devRpcUrl },
+            walletPlugin: new WalletPluginPrivateKey(key),
         });
     }
 }
@@ -145,6 +164,10 @@ export default function App() {
                 theme={theme}
                 onToggleTheme={toggleTheme}
                 onConnect={login}
+                devAccounts={import.meta.env.DEV ? devAccounts : null}
+                onDevLogin={import.meta.env.DEV ? ((actor, key) => {
+                    if (createCustomSession) handleLogin(createCustomSession(actor, key));
+                }) : null}
             />
         );
     }
@@ -321,7 +344,7 @@ export default function App() {
                     )}
 
                     {route.page === 'wallet' && (
-                        <WalletPage session={session} profile={profile} />
+                        <WalletPage session={session} />
                     )}
                 </main>
             </div>
