@@ -37,20 +37,35 @@ interface DevAccount {
 let   createDevSession: (() => Promise<Session>) | null = null;
 let   createCustomSession: ((actor: string, key: string) => Promise<Session>) | null = null;
 const devAccounts: DevAccount[] = [];
+const devAdminActors = new Set<string>();
 
 if (import.meta.env.DEV) {
     const { WalletPluginPrivateKey } = await import('@wharfkit/wallet-plugin-privatekey');
     const devChainId = import.meta.env.VITE_CHAIN_ID;
     const devRpcUrl  = import.meta.env.VITE_RPC_URL;
-    const devActor   = import.meta.env.VITE_DEV_ACTOR;
-    const devKey     = import.meta.env.VITE_DEV_PRIVATE_KEY;
-    if (devActor && devKey && devChainId && devRpcUrl) {
-        devAccounts.push({ actor: devActor, key: devKey, label: 'Admin' });
+
+    const DEV_ENTRIES: [string, string, string][] = [
+        ['VITE_DEV_ACTOR',                 'VITE_DEV_PRIVATE_KEY',          'Jogador 1'],
+        ['VITE_DEV_ACTOR_JOGADOR2',        'VITE_DEV_KEY_JOGADOR2',        'Jogador 2'],
+        ['VITE_DEV_ACTOR_GAME_ADMIN',      'VITE_DEV_KEY_GAME_ADMIN',      'Game Admin'],
+        ['VITE_DEV_ACTOR_CONTRACT_ADMIN',  'VITE_DEV_KEY_CONTRACT_ADMIN',  'Contract Admin'],
+        ['VITE_DEV_ACTOR_SPONSOR',         'VITE_DEV_KEY_SPONSOR',         'Sponsor'],
+    ];
+
+    for (const [actorKey, privKey, label] of DEV_ENTRIES) {
+        const actor = import.meta.env[actorKey] as string | undefined;
+        const key   = import.meta.env[privKey] as string | undefined;
+        if (actor && key) {
+            devAccounts.push({ actor, key, label });
+            if (label === 'Admin' || label === 'Game Admin' || label === 'Contract Admin') {
+                devAdminActors.add(actor);
+            }
+        }
     }
-    if (devChainId && devRpcUrl) {
+
+    if (devChainId && devRpcUrl && devAccounts.length > 0) {
         createDevSession = async () => {
             const a = devAccounts[0];
-            if (!a) throw new Error('No dev account configured');
             return new Session({
                 actor: a.actor, permission: 'active',
                 chain: { id: devChainId, url: devRpcUrl },
@@ -215,12 +230,14 @@ export default function App() {
                 section={route.section ?? 'dashboard'}
                 onNavigate={(section) => setRoute({ page: 'admin', section })}
                 onLogout={logout}
+                onBackToLobby={() => setRoute({ page: 'lobby' })}
             />
         );
     }
 
     // ── Shell do Jogador (lobby / wallet) ──────────────────────────────────────
-    const isAdmin  = profile.role === 'admin' || profile.role === 'contract_admin';
+    const isAdmin  = profile.role === 'admin' || profile.role === 'contract_admin'
+        || (import.meta.env.DEV && devAdminActors.has(session.actor.toString()));
     const activeTab = route.page === 'wallet' ? 'wallet' : 'lobby';
 
     const NAV_TABS = [

@@ -83,3 +83,39 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
         res.status(500).json({ error: 'Erro interno ao atualizar preferências.' });
     }
 };
+
+/**
+ * GET /api/v1/admin/users
+ *
+ * Lista todos os usuários da plataforma (acesso restrito a admin).
+ * Suporta paginação via query params: ?page=1&limit=50
+ */
+export const listUsers = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const page  = Math.max(1, parseInt(req.query.page as string) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+        const skip  = (page - 1) * limit;
+
+        const [users, total] = await Promise.all([
+            UserProfile.find({}, {
+                wallet_address: 1, nickname: 1, role: 1,
+                'progression.games_played': 1, createdAt: 1,
+            }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            UserProfile.countDocuments(),
+        ]);
+
+        res.status(200).json({
+            users: users.map(u => ({
+                wallet_address: u.wallet_address,
+                username:       u.nickname,
+                role:           u.role,
+                total_games:    (u.progression as any)?.games_played ?? 0,
+                total_wagered:  null,
+            })),
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+        });
+    } catch (error) {
+        console.error('[Profile] Erro ao listar usuários:', error);
+        res.status(500).json({ error: 'Erro interno ao listar usuários.' });
+    }
+};

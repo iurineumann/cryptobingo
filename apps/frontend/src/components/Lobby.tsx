@@ -3,6 +3,7 @@
 // Ref: ADR-007, SPEC.md §1.1, §1.2, §4
 
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation }                   from 'react-i18next';
 import { Name, Session }                    from '@wharfkit/session';
 import type {
     BlockchainGameState,
@@ -32,18 +33,20 @@ const STATUS_CLASS: Record<string, string> = {
     aborted:  'cb-status-aborted',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-    created:  '🕐 Agendado',
-    funding:  '🟢 Vendas Abertas',
-    locked:   '🔒 Encerrado',
-    drawing:  '🎲 Sorteando',
-    drawn:    '✅ Sorteado',
-    archived: '📁 Arquivado',
-    aborted:  '❌ Cancelado',
+const STATUS_EMOJI: Record<string, string> = {
+    created: '🕐', funding: '🟢', locked: '🔒',
+    drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌',
+};
+
+const STATUS_LABEL_KEY: Record<string, string> = {
+    created: 'lobby.scheduled', funding: 'lobby.sales_open',
+    locked: 'lobby.locked', drawing: 'lobby.drawing',
+    drawn: 'lobby.drawn', archived: 'lobby.archived', aborted: 'lobby.aborted',
 };
 
 export default function Lobby({ session, onEnterRoom }: LobbyProps) {
 
+    const { t } = useTranslation();
     const [balances,      setBalances]      = useState<BlockchainBalance[]>([]);
     const [games,         setGames]         = useState<BlockchainGameState[]>([]);
     const [playerTickets, setPlayerTickets] = useState<BlockchainTicketRecord[]>([]);
@@ -124,7 +127,7 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
 
     const renderBalances = () => {
         if (!balances.length) {
-            return <span className="text-[--cb-text-tertiary]">0.0000 BINGO</span>;
+            return <span className="text-[--cb-text-tertiary]">{t('lobby.no_balance')}</span>;
         }
         return (
             <>
@@ -145,14 +148,14 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
             {/* ── Header do Lobby ── */}
             <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <h2 className="text-xl font-bold text-[--cb-text-primary] flex items-center gap-2">
-                    <span aria-hidden="true">🎮</span> Lobby de Jogos
+                    <span aria-hidden="true">🎮</span> {t('lobby.title')}
                 </h2>
                 <div className="flex items-center gap-3 flex-wrap">
 
                     {/* Saldo */}
                     <div
                         className="flex items-center gap-2 px-4 py-2 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] font-mono text-sm font-semibold text-[--cb-text-primary]"
-                        aria-label="Seu saldo"
+                        aria-label={t('lobby.balance_aria')}
                     >
                         <span className="text-[--cb-accent]" aria-hidden="true">💰</span>
                         {renderBalances()}
@@ -166,8 +169,8 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                         ].join(' ')}
                         onClick={loadBlockchainData}
                         disabled={loadingData}
-                        aria-label="Atualizar dados"
-                        title="Atualizar"
+                        aria-label={t('lobby.refresh_aria')}
+                        title={t('common.refresh')}
                     >
                         <span className={loadingData ? 'cb-spinner w-4 h-4' : ''} aria-hidden="true">
                             {!loadingData && '🔄'}
@@ -182,15 +185,15 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                     {loadingData ? (
                         <>
                             <span className="cb-spinner w-10 h-10" style={{ width: '2.5rem', height: '2.5rem', borderWidth: '3px' }} />
-                            <p className="text-sm">Carregando salas…</p>
+                            <p className="text-sm">{t('lobby.loading_rooms')}</p>
                         </>
                     ) : (
                         <>
                             <span className="text-5xl" aria-hidden="true">🎱</span>
-                            <p className="text-base font-medium">Nenhuma sala ativa</p>
-                            <p className="text-sm">Verifique novamente em instantes.</p>
+                            <p className="text-base font-medium">{t('lobby.no_active_rooms')}</p>
+                            <p className="text-sm">{t('lobby.check_back')}</p>
                             <button className="cb-btn cb-btn-outline cb-btn-sm mt-2" onClick={loadBlockchainData}>
-                                🔄 Atualizar
+                                🔄 {t('lobby.refresh')}
                             </button>
                         </>
                     )}
@@ -202,7 +205,7 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                         const canWatch  = ['drawing', 'drawn', 'locked'].includes(game.status);
                         const isWatched = watchGameId === game.game_id;
                         const statusCls = STATUS_CLASS[game.status] ?? 'cb-badge cb-badge-neutral';
-                        const statusLbl = STATUS_LABEL[game.status] ?? game.status;
+                        const statusLbl = `${STATUS_EMOJI[game.status] ?? ''}${t(STATUS_LABEL_KEY[game.status] ?? game.status)}`;
 
                         return (
                             <article
@@ -213,12 +216,12 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                                         ? 'border-[--cb-brand] shadow-[var(--shadow-glow-brand)]'
                                         : 'hover:border-[--cb-border-strong]',
                                 ].join(' ')}
-                                aria-label={`Sala ${game.game_id}, status: ${statusLbl}`}
+                                aria-label={t('lobby.room_aria', { id: game.game_id, status: statusLbl })}
                             >
                                 {/* Cabeçalho do card */}
                                 <header className="flex items-start justify-between gap-2">
                                     <h3 className="font-bold text-[--cb-text-primary] font-display">
-                                        Sala <span className="font-mono">#{game.game_id}</span>
+                                        {t('lobby.room_label')} <span className="font-mono">#{game.game_id}</span>
                                     </h3>
                                     <span className={statusCls}>{statusLbl}</span>
                                 </header>
@@ -226,20 +229,20 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                                 {/* Informações financeiras */}
                                 <dl className="space-y-1.5 text-sm">
                                     <div className="flex justify-between">
-                                        <dt className="text-[--cb-text-tertiary]">Preço</dt>
+                                        <dt className="text-[--cb-text-tertiary]">{t('lobby.price')}</dt>
                                         <dd className="font-mono font-medium text-[--cb-text-primary]">
                                             {game.ticket_price.quantity}
                                         </dd>
                                     </div>
                                     <div className="flex justify-between">
-                                        <dt className="text-[--cb-text-tertiary]">Prêmio</dt>
+                                        <dt className="text-[--cb-text-tertiary]">{t('lobby.prize')}</dt>
                                         <dd className="font-mono font-bold text-[--cb-success]">
                                             {game.prize_pool.quantity}
                                         </dd>
                                     </div>
                                     {game.sponsor_pool.length > 0 && (
                                         <div className="flex justify-between">
-                                            <dt className="text-[--cb-text-tertiary]">Patrocínio</dt>
+                                            <dt className="text-[--cb-text-tertiary]">{t('lobby.sponsorship')}</dt>
                                             <dd className="font-mono font-medium text-[--cb-brand]">
                                                 {game.sponsor_pool.map(s => s.quantity).join(' + ')}
                                             </dd>
@@ -254,9 +257,9 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                                             <button
                                                 className="cb-btn cb-btn-primary flex-1"
                                                 onClick={() => setSelectedGame(game)}
-                                                aria-label={`Comprar cartelas para a sala ${game.game_id}`}
+                                                aria-label={t('lobby.buy_aria', { id: game.game_id })}
                                             >
-                                                🎲 Comprar
+                                                🎲 {t('lobby.buy')}
                                             </button>
                                         )}
                                         {canWatch && (
@@ -267,9 +270,9 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                                                 ].join(' ')}
                                                 onClick={() => setWatchGameId(isWatched ? null : game.game_id)}
                                                 aria-pressed={isWatched}
-                                                aria-label={isWatched ? 'Parar de assistir' : `Assistir sala ${game.game_id}`}
+                                                aria-label={isWatched ? t('lobby.stop_watching') : t('lobby.watch_aria', { id: game.game_id })}
                                             >
-                                                {isWatched ? '👁 Assistindo' : '👁 Assistir'}
+                                                {isWatched ? `👁 ${t('lobby.watching')}` : `👁 ${t('lobby.watch')}`}
                                             </button>
                                         )}
                                     </div>
@@ -299,7 +302,7 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                         <div>
                             <h3 className="text-sm font-semibold text-[--cb-text-secondary] uppercase tracking-wide mb-3 flex items-center gap-2">
                                 <span aria-hidden="true">🎴</span>
-                                Minhas Cartelas — Sala #{watchGameId}
+                                {t('game_room.my_tickets')} — {t('game_room.breadcrumb_room')} #{watchGameId}
                                 <span className="cb-badge cb-badge-neutral">{playerTickets.length}</span>
                             </h3>
                             <div className="flex flex-wrap gap-5">
@@ -323,7 +326,7 @@ export default function Lobby({ session, onEnterRoom }: LobbyProps) {
                     {playerTickets.length === 0 && watchedGame?.status !== 'funding' && (
                         <p className="text-sm text-[--cb-text-tertiary] flex items-center gap-2">
                             <span aria-hidden="true">ℹ️</span>
-                            Você não possui cartelas nesta sala.
+                            {t('lobby.no_tickets_room')}
                         </p>
                     )}
                 </div>

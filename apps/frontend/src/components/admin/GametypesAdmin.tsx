@@ -312,7 +312,7 @@ export default function GametypesAdmin() {
                                         key={p.pattern_id}
                                         className={`cb-chip flex flex-col gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
                                             sel
-                                                ? 'border-[--cb-brand] bg-[--cb-brand] bg-opacity-5'
+                                                ? 'border-[--cb-brand] bg-[--cb-brand]/5'
                                                 : 'border-[--cb-border-default] text-[--cb-text-secondary]'
                                         }`}
                                     >

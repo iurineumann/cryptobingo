@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getAuthToken } from '../../services/api';
 
 interface UserRow {
     wallet_address: string;
@@ -19,7 +20,12 @@ export default function UsersAdmin() {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/admin/users', { headers: { 'Content-Type': 'application/json' } });
+            const res = await fetch('/api/v1/admin/users', {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`,
+                },
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             setUsers(data.users ?? []);
