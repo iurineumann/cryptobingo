@@ -14,7 +14,10 @@ import BallDisplay     from './BallDisplay';
 import TicketGrid      from './TicketGrid';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 
-interface LobbyProps { session: Session }
+interface LobbyProps {
+    session:       Session;
+    onEnterRoom?:  (roomId: string, gameId: string) => void;
+}
 
 const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
 
@@ -39,7 +42,7 @@ const STATUS_LABEL: Record<string, string> = {
     aborted:  '❌ Cancelado',
 };
 
-export default function Lobby({ session }: LobbyProps) {
+export default function Lobby({ session, onEnterRoom }: LobbyProps) {
 
     const [balances,      setBalances]      = useState<BlockchainBalance[]>([]);
     const [games,         setGames]         = useState<BlockchainGameState[]>([]);

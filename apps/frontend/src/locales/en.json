@@ -1,4 +1,102 @@
 {
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Try again",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Remove",
+    "close": "Close",
+    "back": "Back",
+    "language": "Language",
+    "search": "Search",
+    "filter": "Filter",
+    "refresh": "Refresh"
+  },
+  "nav": {
+    "lobby": "Lobbies",
+    "wallet": "Wallet",
+    "admin": "Administration",
+    "profile": "Profile",
+    "logout": "Disconnect"
+  },
+  "auth": {
+    "connect_wallet": "Connect Wallet",
+    "connecting": "Connecting...",
+    "dev_login": "Quick Login (Dev)",
+    "auth_failed": "Authentication failed. Please try again.",
+    "wallet_connected": "Wallet Connected"
+  },
+  "game": {
+    "status": {
+      "created": "Scheduled",
+      "funding": "Open",
+      "locked": "Locked",
+      "drawing": "Drawing",
+      "drawn": "Resolved",
+      "archived": "Archived",
+      "aborted": "Aborted"
+    },
+    "ticket_price": "Ticket Price",
+    "prize_pool": "Prize Pool",
+    "buy_tickets": "Buy Tickets",
+    "tickets_sold": "Tickets Sold",
+    "balls_drawn": "Balls Drawn",
+    "winner": "Winner!",
+    "no_winner": "No winners",
+    "watch": "Watch",
+    "watching": "Watching",
+    "next_game": "Next game in",
+    "waiting": "Waiting for next game"
+  },
+  "room": {
+    "enter": "Enter Room",
+    "players_online": "players online",
+    "sponsor_room": "Sponsored Room",
+    "system_room": "System Room",
+    "status": {
+      "inactive": "Inactive",
+      "active": "Active",
+      "paused": "Paused",
+      "closed": "Closed"
+    }
+  },
+  "game_room": {
+    "last_ball": "Last Ball",
+    "progress": "Progress",
+    "my_tickets": "My Tickets",
+    "patterns": "Patterns",
+    "buy_more": "+ Buy Tickets",
+    "tickets_loading": "Loading tickets...",
+    "tickets_empty_funding": "You don't have tickets in this room yet.",
+    "tickets_empty_default": "No tickets this round.",
+    "chat": "Room Chat",
+    "drops": "Drops"
+  },
+  "wallet_page": {
+    "balance": "Available Balance",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "my_tickets": "My Tickets",
+    "transaction_history": "History"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "patterns": "Patterns",
+    "gametypes": "Game Types",
+    "campaigns": "B2B Campaigns",
+    "compliance": "Compliance",
+    "users": "Users",
+    "my_panel": "My Panel",
+    "rooms": "Rooms"
+  },
+  "errors": {
+    "network": "Connection error. Check your internet.",
+    "unauthorized": "Session expired. Please log in again.",
+    "blockchain": "Blockchain node unavailable.",
+    "generic": "Something went wrong. Please try again."
+  },
   "welcome": "Welcome to CryptoBingo",
   "loading": "Loading profile...",
   "language": "Language",

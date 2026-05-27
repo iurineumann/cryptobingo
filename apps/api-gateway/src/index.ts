@@ -28,6 +28,7 @@ import { generateTickets }                           from './controllers/ticketC
 import {
     listPatterns, upsertPattern, deletePattern,
     listGametypes, upsertGametype, deleteGametype,
+    getGametypeMetadata, upsertGametypeMetadata,
 } from './controllers/patternController';
 import { simulateWeights }                           from './controllers/monteCarloController';
 import { getRtpStatistics, getGamesHistory, syncGameToLedger } from './controllers/statisticsController';
@@ -37,6 +38,11 @@ import {
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
 import { getMyNfts }                                 from './controllers/nftController';
+import {
+    listRooms, getRoom, upsertRoomMetadata,
+    activateRoom, pauseRoom, closeRoom,
+    listSponsorRooms,
+}                                                    from './controllers/roomController';
 
 dotenv.config();
 
@@ -181,6 +187,23 @@ function registerRoutes(): void {
         '/api/v1/admin/gametypes/:gametypeId',
         adminLimiter, requireAuth, requireRole('admin'), deleteGametype
     );
+    app.get(
+        '/api/v1/admin/gametypes/:gametypeId/metadata',
+        adminLimiter, requireAuth, requireRole('admin'), getGametypeMetadata
+    );
+    app.put(
+        '/api/v1/admin/gametypes/:gametypeId/metadata',
+        adminLimiter, requireAuth, requireRole('admin'), upsertGametypeMetadata
+    );
+
+    // ── Rooms (ADR-010) ──────────────────────────────────────────────
+    app.get('/api/v1/rooms',                               playerLimiter, listRooms);
+    app.get('/api/v1/rooms/:roomId',                       playerLimiter, getRoom);
+    app.put('/api/v1/rooms/:roomId/metadata',        adminLimiter, requireAuth, requireRole('admin'), upsertRoomMetadata);
+    app.post('/api/v1/rooms/:roomId/activate',       adminLimiter, requireAuth, requireRole('admin'), activateRoom);
+    app.post('/api/v1/rooms/:roomId/pause',          adminLimiter, requireAuth, requireRole('admin'), pauseRoom);
+    app.post('/api/v1/rooms/:roomId/close',          adminLimiter, requireAuth, requireRole('admin'), closeRoom);
+    app.get('/api/v1/sponsor/rooms',                       playerLimiter, requireAuth, requireRole('sponsor'), listSponsorRooms);
 
     // ── Admin: Monte Carlo ─────────────────────────────────────────────────
     app.post(

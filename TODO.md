@@ -17,33 +17,64 @@
 [DONE] Referências à legislação brasileira (Lei 14.790/2023) nos contratos relevantes.
 
 ### Frontend — Tailwind CSS v4
-[DONE] package.json — tailwindcss@^4.0.0, @tailwindcss/vite@^4.0.0, vite@^5.0.0 adicionados.
-[DONE] vite.config.ts — plugin tailwindcss() integrado (deve vir antes do react plugin).
-[DONE] src/styles/globals.css — Design System completo com @theme (CSS-first, sem tailwind.config.js):
-       - 9 escalas de cores customizadas (brand, accent, surface, bingo columns, semantic)
-       - Tokens de tipografia: Inter + Space Grotesk + JetBrains Mono
-       - Fluid type scale com clamp() (6 tamanhos)
-       - Sombras customizadas com glow effects para UI de gaming
-       - Transições e animações: spin, pulse, fade-in, slide-up, ball-drop, winner-glow
-       - @layer components: cb-btn, cb-card, cb-badge, cb-input, cb-modal, cb-bingo-grid, cb-ball, etc.
+[DONE] package.json — "type": "module" + tailwindcss@^4.0.0 + @tailwindcss/vite@^4.0.0 + vite@^5.0.0.
+[DONE] vite.config.ts — plugin tailwindcss() antes do react plugin.
+[DONE] globals.css — Design System completo com @theme CSS-first + @import globals.design.css.
+[DONE] globals.design.css — extensão com classes gr-*, site-*, lobby-*, admin-* (Claude Design).
 [DONE] Modo escuro (padrão) + modo claro via [data-theme="light"] na <html>.
-[DONE] src/hooks/useTheme.ts — hook com persistência em localStorage + syncing do data-theme.
-[DONE] src/main.tsx — importa globals.css, inicializa tema sem flash (anti-FOUC).
-[DONE] index.html — fontes Google (Inter, Space Grotesk, JetBrains Mono), anti-FOUC script inline, meta theme-color.
-[DONE] App.tsx — migrado completamente para classes Tailwind, barra de XP, navbar responsiva, theme toggle.
+[DONE] useTheme.ts — hook com persistência localStorage + sync data-theme.
+[DONE] main.tsx — importa globals.css, inicializa tema anti-FOUC.
+[DONE] index.html — fontes Google, anti-FOUC script inline, meta theme-color.
+[DONE] App.tsx — roteamento state-based completo: landing/lobby/game/wallet/admin + roomId (ADR-010).
 
-## [DONE] Migração completa de componentes para Tailwind v4 (2026-05-26)
-[DONE] Lobby.tsx — inline styles removidos. Grid responsivo com auto-fill. Cards com glow na borda quando assistindo. Status chips com cb-status-*. dl/dt/dd semântico para dados financeiros. Acima da dobra: saldo + refresh. Promise.all para carregar dados em paralelo.
-[DONE] BuyTicketModal.tsx — cb-overlay + cb-modal + cb-slide-up. Quick-select 1×/3×/5×/10×. cb-btn-loading spinner nativo. aria-modal, aria-live, aria-busy. Resumo de custo em bg-sunken glassmorphism.
-[DONE] TicketGrid.tsx — cb-bingo-grid + cb-bingo-cell. COL_VAR mapeado para --color-bingo-*. Animação cb-ball-drop na célula recém marcada via prop lastDrawn. role="grid" + aria-selected para acessibilidade.
-[DONE] BallDisplay.tsx — cb-ball cb-ball-lg com animação cb-ball-drop a cada nova bola. Gloss effect radial-gradient. cb-winner-glow pulsante no banner de vitória. cb-status-dot-live pulsante. Bolas pequenas com color-mix() para opacidade dinâmica.
+## [DONE] Migração completa de componentes para Tailwind v4 + Claude Design (2026-05-26/27)
+[DONE] Lobby.tsx — classes lobby-*, prop onEnterRoom(roomId, gameId) para ADR-010.
+[DONE] BuyTicketModal.tsx — cb-overlay + cb-modal + cb-slide-up + quick-select + aria.
+[DONE] TicketGrid.tsx — cb-bingo-grid + cb-bingo-cell + animação cb-ball-drop.
+[DONE] BallDisplay.tsx — cb-ball + cb-ball-lg + cb-winner-glow + cb-status-dot-live.
+[DONE] GameRoom.tsx — classes gr-*, bola hero animada, sequência, cartelas, painel padrões + ChatPanel.
+[DONE] LandingPage.tsx — landing pública com bola animada, stats, B2B, footer compliance.
+[DONE] AdminLayout.tsx — site-shell mode-admin, sidebar com grupos + seção Rooms (ADR-010).
+[DONE] RoomsAdmin.tsx — admin de salas (ADR-010).
+[DONE] ChatPanel.tsx — chat por sala via Socket.io (ADR-010).
+[DONE] Locales pt/en/zh — chaves aninhadas: common, nav, auth, game, room, game_room, wallet_page, admin, errors.
+
+## [DONE] Sprint — Admin Screens + Multi-Role Dev Login + B2B + Compliance (2026-05-26)
+[DONE] AdminDashboard, PatternsAdmin, GametypesAdmin, SponsorDashboard, ComplianceAdmin, UsersAdmin, PlayerDashboard.
+[DONE] rateLimiter.ts — lazy init com passthrough (Redis closed bug resolvido).
+[DONE] api-gateway/index.ts — rotas: /admin/gametypes/:id/metadata, /rooms/*, /sponsor/rooms.
+[DONE] statisticsController.ts — getRtpStatistics, getGamesHistory, syncGameToLedger.
+[DONE] sponsorController.ts — listCampaigns, getCampaign, linkCampaignToGame, closeCampaign.
+[DONE] nftController.ts — getMyNfts com cache MongoDB TTL 5min.
+[DONE] database/ledger.ts — tabelas games_history + transactions_ledger + RTP report real.
+[DONE] init_dev_env.sh — 3 contas administrativas + .dev.env + 5 botões dev login.
+[DONE] ADR-009 — Admin Panel Architecture.
+
+## [DONE] Sprint — ADR-010 Rooms + ADR-011 Drop Vault (2026-05-27)
+[DONE] ADR-010-rooms-salas.md — salas persistentes, auto-scheduling, chat, drops, weight por sala.
+[DONE] ADR-011-drop-vault.md — rastreamento on-chain de ativos para drops.
+[DONE] contracts/bingo — tabela rooms + campo room_id em game_state (bingo.hpp).
+[DONE] shared-types — BlockchainRoom, RoomMetadata, DropDeposit, DropAllocation, DropState.
+[DONE] api-gateway/models/RoomMetadata.ts — modelo MongoDB.
+[DONE] api-gateway/controllers/roomController.ts — CRUD rooms + sponsor endpoint.
+[DONE] worker/services/roomManager.ts — onGameResolved + auto-criação de partidas.
+[DONE] rabbitmq.ts — hooks onGameResolved em claimwin e abortgame.
+[DONE] invertedIndex.ts — buildInvertedIndex O(1) + integração no evaluator e rabbitmq.
+[DONE] CLAUDE_DESIGN.md — documento Design System (20 seções + 3 apêndices).
 
 ## [DEBT] Dívidas Técnicas Residuais
 [DEBT] ADR-005: auto-sweep de GGR para tesouraria não implementado.
-[DEBT] broadcaster.ts: sem limite de conexões por IP.
-[DEBT] fsm.test.ts: fundgame() não adicionado — vai falhar com o novo estado CREATED.
+[DEBT] contracts/bingo: actions de rooms (createroom, activateroom, etc.) — apenas shared-types e API implementados. Contrato C++ ainda não compilado com tabela rooms.
+[DEBT] dropWorker.ts — processamento de drops on-chain (ADR-011) pendente.
+[DEBT] useChat.ts — hook WebSocket separado para chat (atualmente inline no ChatPanel).
+[DEBT] SponsorRooms.tsx — painel do sponsor para gerenciar suas salas.
+[DEBT] fsm.test.ts — testes atualizados para CREATED/FUNDING/abort.
 
-## [NEXT] Sprint 2 do Roadmap — Sponsors B2B
-[ ] sponsorController.ts — CRUD de campanhas no api-gateway.
-[ ] Frontend admin — painel de campanhas com saldo e jogos vinculados.
-[ ] openapi.yaml — endpoints de campaigns documentados.
+## [NEXT] Próximos Passos
+[ ] GametypesAdmin — Suggest Combinations helper (Monte Carlo + análise de dificuldade).
+[ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta).
+[ ] dropWorker.ts — executar drops ao final de cada partida (ADR-011).
+[ ] PWA (Lighthouse > 90).
+[ ] Testes unitários adicionais (authController, monteCarloController, hooks React).
+[ ] Auto-sweep GGR (ADR-005): action sweepggr no contrato C++.
+[ ] openapi.yaml e asyncapi.yaml — documentar endpoints de rooms e eventos de chat.

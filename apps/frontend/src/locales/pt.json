@@ -1,4 +1,102 @@
 {
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "retry": "Tentar novamente",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Remover",
+    "close": "Fechar",
+    "back": "Voltar",
+    "language": "Idioma",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "refresh": "Atualizar"
+  },
+  "nav": {
+    "lobby": "Salas",
+    "wallet": "Carteira",
+    "admin": "Administração",
+    "profile": "Perfil",
+    "logout": "Desconectar"
+  },
+  "auth": {
+    "connect_wallet": "Conectar Carteira",
+    "connecting": "Conectando...",
+    "dev_login": "Login Rápido (Dev)",
+    "auth_failed": "Falha na autenticação. Tente novamente.",
+    "wallet_connected": "Carteira Conectada"
+  },
+  "game": {
+    "status": {
+      "created": "Agendado",
+      "funding": "Aberto",
+      "locked": "Travado",
+      "drawing": "Sorteando",
+      "drawn": "Resolvido",
+      "archived": "Arquivado",
+      "aborted": "Abortado"
+    },
+    "ticket_price": "Preço por Cartela",
+    "prize_pool": "Prêmio Total",
+    "buy_tickets": "Comprar Cartelas",
+    "tickets_sold": "Cartelas Vendidas",
+    "balls_drawn": "Bolas Sorteadas",
+    "winner": "Vencedor!",
+    "no_winner": "Sem vencedores",
+    "watch": "Assistir",
+    "watching": "Assistindo",
+    "next_game": "Próxima partida em",
+    "waiting": "Aguardando próxima partida"
+  },
+  "room": {
+    "enter": "Entrar na Sala",
+    "players_online": "jogadores online",
+    "sponsor_room": "Sala Patrocinada",
+    "system_room": "Sala do Sistema",
+    "status": {
+      "inactive": "Inativa",
+      "active": "Ativa",
+      "paused": "Pausada",
+      "closed": "Fechada"
+    }
+  },
+  "game_room": {
+    "last_ball": "Última Bola",
+    "progress": "Progresso",
+    "my_tickets": "Minhas Cartelas",
+    "patterns": "Padrões",
+    "buy_more": "+ Comprar Cartelas",
+    "tickets_loading": "Carregando cartelas...",
+    "tickets_empty_funding": "Você ainda não tem cartelas nesta sala.",
+    "tickets_empty_default": "Sem cartelas nesta rodada.",
+    "chat": "Chat da Sala",
+    "drops": "Drops"
+  },
+  "wallet_page": {
+    "balance": "Saldo Disponível",
+    "deposit": "Depositar",
+    "withdraw": "Sacar",
+    "my_tickets": "Minhas Cartelas",
+    "transaction_history": "Histórico"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "patterns": "Padrões",
+    "gametypes": "Game Types",
+    "campaigns": "Campanhas B2B",
+    "compliance": "Compliance",
+    "users": "Usuários",
+    "my_panel": "Meu Painel",
+    "rooms": "Salas"
+  },
+  "errors": {
+    "network": "Erro de conexão. Verifique sua internet.",
+    "unauthorized": "Sessão expirada. Faça login novamente.",
+    "blockchain": "Nó blockchain indisponível.",
+    "generic": "Algo deu errado. Tente novamente."
+  },
   "welcome": "Bem-vindo ao CryptoBingo",
   "loading": "Carregando perfil...",
   "language": "Idioma",

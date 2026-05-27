@@ -21,6 +21,7 @@ import {
 }                          from './blockchain';
 import { processAllGameWinners, findAllWinners } from './evaluator';
 import { buildInvertedIndex, deleteIndex }        from './invertedIndex';
+import { onGameResolved }                            from './roomManager';
 import {
     startSlowReveal,
     notifyGameLocked,
@@ -256,6 +257,10 @@ function consumeMessages(): void {
                     if (winners.length > 0) {
                         notifyWinners(gameId, winners);
                     }
+                    // Hook ADR-010: notifica RoomManager para auto-criar próxima partida
+                    onGameResolved(gameId).catch(err =>
+                        console.error(`[RabbitMQ] onGameResolved error (jogo ${gameId}):`, err)
+                    );
                     break;
                 }
 
@@ -265,6 +270,10 @@ function consumeMessages(): void {
                     const reason = (payload as any).reason ?? 'ADMIN_HALT';
                     await executeAbortGame(gameId, reason);
                     notifyGameAborted(gameId, reason as any);
+                    // Hook ADR-010: notifica RoomManager mesmo em abort
+                    onGameResolved(gameId).catch(err =>
+                        console.error(`[RabbitMQ] onGameResolved error (abort, jogo ${gameId}):`, err)
+                    );
                     break;
                 }
 
