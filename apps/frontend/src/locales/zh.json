@@ -1,7 +1,105 @@
 {
-  "welcome": "欢迎来到 CryptoBingo",
-  "loading": "正在加载个人资料...",
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "retry": "重试",
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "close": "关闭",
+    "back": "返回",
+    "language": "语言",
+    "search": "搜索",
+    "filter": "筛选",
+    "refresh": "刷新"
+  },
+  "nav": {
+    "lobby": "游戏大厅",
+    "wallet": "钱包",
+    "admin": "管理",
+    "profile": "个人资料",
+    "logout": "断开连接"
+  },
+  "auth": {
+    "connect_wallet": "连接钱包",
+    "connecting": "连接中...",
+    "dev_login": "快速登录（开发）",
+    "auth_failed": "认证失败。请重试。",
+    "wallet_connected": "钱包已连接"
+  },
+  "game": {
+    "status": {
+      "created": "已安排",
+      "funding": "开放",
+      "locked": "已锁定",
+      "drawing": "抽奖中",
+      "drawn": "已解决",
+      "archived": "已归档",
+      "aborted": "已中止"
+    },
+    "ticket_price": "票价",
+    "prize_pool": "奖池",
+    "buy_tickets": "购买票",
+    "tickets_sold": "已售票",
+    "balls_drawn": "已抽球",
+    "winner": "获胜者！",
+    "no_winner": "无获胜者",
+    "watch": "观看",
+    "watching": "正在观看",
+    "next_game": "下一场游戏于",
+    "waiting": "等待下一场游戏"
+  },
+  "room": {
+    "enter": "进入房间",
+    "players_online": "玩家在线",
+    "sponsor_room": "赞助商房间",
+    "system_room": "系统房间",
+    "status": {
+      "inactive": "不活跃",
+      "active": "活跃",
+      "paused": "暂停",
+      "closed": "已关闭"
+    }
+  },
+  "game_room": {
+    "last_ball": "最新球",
+    "progress": "进度",
+    "my_tickets": "我的票",
+    "patterns": "模式",
+    "buy_more": "+ 购买票",
+    "tickets_loading": "加载票中...",
+    "tickets_empty_funding": "您还没有这个房间的票。",
+    "tickets_empty_default": "这轮没有票。",
+    "chat": "房间聊天",
+    "drops": "掉落物"
+  },
+  "wallet_page": {
+    "balance": "可用余额",
+    "deposit": "充值",
+    "withdraw": "提款",
+    "my_tickets": "我的票",
+    "transaction_history": "历史记录"
+  },
+  "admin": {
+    "dashboard": "仪表盘",
+    "patterns": "模式",
+    "gametypes": "游戏类型",
+    "campaigns": "B2B活动",
+    "compliance": "合规",
+    "users": "用户",
+    "my_panel": "我的面板",
+    "rooms": "房间"
+  },
+  "errors": {
+    "network": "连接错误。请检查您的网络。",
+    "unauthorized": "会话已过期。请重新登录。",
+    "blockchain": "区块链节点不可用。",
+    "generic": "出了点问题。请重试。"
+  },
+  "welcome": "欢迎来到CryptoBingo",
+  "loading": "加载个人资料...",
   "language": "语言",
   "lobby": "游戏大厅",
-  "wallet_connected": "已连接钱包:"
+  "wallet_connected": "钱包已连接："
 }

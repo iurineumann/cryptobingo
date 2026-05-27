@@ -1,15 +1,31 @@
 // apps/frontend/src/App.tsx
-// Ref: ADR-006, Hardening-5
+// Componente raiz — roteamento state-based, sessão Web3, autenticação JWT.
+//
+// Rotas:
+//   landing  → LandingPage (visitantes não autenticados)
+//   lobby    → Lobby (listagem de salas — ADR-010)
+//   game     → GameRoom (sala ao vivo, identificada por roomId + gameId)
+//   wallet   → WalletPage
+//   admin    → AdminLayout (painel administrativo — ADR-009)
+//
+// Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms)
 
-import { useEffect, useState }                                 from 'react';
-import { useTranslation }                                      from 'react-i18next';
-import { fetchUserProfile, updateUserLocale, clearAuthToken, getAuthToken } from './services/api';
-import { sessionKit }                                          from './services/wharfkit';
-import { Session }                                             from '@wharfkit/session';
-import type { MongoUserProfile }                               from '@cryptobingo/shared-types';
-import { useAuth }                                             from './hooks/useAuth';
-import { useTheme }                                            from './hooks/useTheme';
-import Lobby                                                   from './components/Lobby';
+import { useEffect, useState, useCallback } from 'react';
+import { useTranslation }                   from 'react-i18next';
+import { Session }                          from '@wharfkit/session';
+import {
+    fetchUserProfile, updateUserLocale,
+    clearAuthToken, getAuthToken,
+} from './services/api';
+import { sessionKit }    from './services/wharfkit';
+import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import { useAuth }       from './hooks/useAuth';
+import { useTheme }      from './hooks/useTheme';
+import LandingPage       from './components/LandingPage';
+import Lobby             from './components/Lobby';
+import GameRoom          from './components/GameRoom';
+import WalletPage        from './components/WalletPage';
+import AdminLayout       from './components/admin/AdminLayout';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 let createDevSession: (() => Promise<Session>) | null = null;
@@ -20,7 +36,6 @@ if (import.meta.env.DEV) {
     const devKey     = import.meta.env.VITE_DEV_PRIVATE_KEY;
     const devChainId = import.meta.env.VITE_CHAIN_ID;
     const devRpcUrl  = import.meta.env.VITE_RPC_URL;
-
     if (devActor && devKey && devChainId && devRpcUrl) {
         createDevSession = async () => new Session({
             actor:        devActor,
@@ -31,289 +46,285 @@ if (import.meta.env.DEV) {
     }
 }
 
-// ── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
+// ── TIPOS DE ROTA ─────────────────────────────────────────────────────────────
+type Route =
+    | { page: 'landing' }
+    | { page: 'lobby' }
+    | { page: 'game';   roomId: string; gameId: string }
+    | { page: 'wallet' }
+    | { page: 'admin';  section?: string };
 
+// ── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────────
 export default function App() {
     const { t, i18n }                                          = useTranslation();
     const { isAuthenticating, authError, authenticateSession } = useAuth();
-    const { theme, toggleTheme, isDark }                       = useTheme();
+    const { theme, toggleTheme }                               = useTheme();
 
-    const [session, setSession] = useState<Session | null>(null);
-    const [profile, setProfile] = useState<MongoUserProfile | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error,   setError]   = useState<string | null>(null);
+    const [session,  setSession]  = useState<Session | null>(null);
+    const [profile,  setProfile]  = useState<MongoUserProfile | null>(null);
+    const [route,    setRoute]    = useState<Route>({ page: 'landing' });
+    const [loading,  setLoading]  = useState(false);
+    const [error,    setError]    = useState<string | null>(null);
 
-    // Restaura sessão ao recarregar
+    // Restaura sessão ao recarregar página
     useEffect(() => {
-        sessionKit.restore().then(async (restoredSession) => {
-            if (restoredSession && getAuthToken()) {
-                setSession(restoredSession);
-                await loadUserProfile();
+        sessionKit.restore().then(async (restored) => {
+            if (restored && getAuthToken()) {
+                setSession(restored);
+                await loadProfile();
+                setRoute({ page: 'lobby' });
             }
         });
     }, []);
 
-    const loadUserProfile = async () => {
+    const loadProfile = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const data = await fetchUserProfile();
             setProfile(data);
-            if (data.preferences.locale && data.preferences.locale !== i18n.language) {
+            if (data.preferences?.locale && data.preferences.locale !== i18n.language) {
                 i18n.changeLanguage(data.preferences.locale);
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Falha ao carregar perfil.');
+            setError(err instanceof Error ? err.message : t('errors.generic') ?? 'Erro');
         } finally {
             setLoading(false);
         }
-    };
+    }, [i18n, t]);
 
-    const handleLogin = async (sessionPromise: Promise<Session>) => {
+    const handleLogin = useCallback(async (sessionPromise: Promise<Session>) => {
         setLoading(true);
         setError(null);
         try {
-            const newSession      = await sessionPromise;
-            const authenticated   = await authenticateSession(newSession);
-            if (!authenticated) throw new Error('Falha na autenticação JWT. Tente novamente.');
+            const newSession    = await sessionPromise;
+            const authenticated = await authenticateSession(newSession);
+            if (!authenticated) throw new Error(t('auth.auth_failed') ?? 'Falha na autenticação');
             setSession(newSession);
-            await loadUserProfile();
+            await loadProfile();
+            setRoute({ page: 'lobby' });
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Falha no login.');
+            setError(err instanceof Error ? err.message : t('errors.generic') ?? 'Erro');
             clearAuthToken();
         } finally {
             setLoading(false);
         }
-    };
+    }, [authenticateSession, loadProfile, t]);
 
-    const login    = () => handleLogin(sessionKit.login().then(({ session: s }) => s));
-    const loginDev = () => createDevSession && handleLogin(createDevSession());
+    const login = useCallback(
+        () => handleLogin(sessionKit.login().then(({ session: s }) => s)),
+        [handleLogin],
+    );
 
-    const logout = async () => {
+    const loginDev = useCallback(() => {
+        if (createDevSession) handleLogin(createDevSession());
+    }, [handleLogin]);
+
+    const logout = useCallback(async () => {
         await sessionKit.logout();
         clearAuthToken();
         setSession(null);
         setProfile(null);
         setError(null);
-    };
+        setRoute({ page: 'landing' });
+    }, []);
 
-    const handleLanguageChange = async (locale: string) => {
+    const handleLanguageChange = useCallback(async (locale: string) => {
         i18n.changeLanguage(locale);
         if (session) {
-            try { await updateUserLocale(locale); } catch {}
+            try { await updateUserLocale(locale); } catch { /* silencioso */ }
         }
-    };
+    }, [i18n, session]);
 
     const isLoading = loading || isAuthenticating;
 
-    // ── Tela de Login ─────────────────────────────────────────────────────────
+    // ── Landing (não autenticado) ──────────────────────────────────────────────
     if (!session) {
         return (
-            <div className="cb-page min-h-dvh flex items-center justify-center p-4">
-
-                {/* Background decorativo */}
-                <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-                    <div className="absolute -top-1/3 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full
-                                    bg-radial-gradient opacity-[0.08]"
-                         style={{ background: 'radial-gradient(circle, var(--color-brand-600), transparent 70%)' }} />
-                    <div className="absolute top-1/2 -right-32 w-[500px] h-[500px] rounded-full opacity-[0.05]"
-                         style={{ background: 'radial-gradient(circle, var(--color-accent-400), transparent 70%)' }} />
-                </div>
-
-                <div className="w-full max-w-md">
-                    {/* Card de login */}
-                    <div className="cb-card text-center px-8 py-12">
-
-                        {/* Logo */}
-                        <div className="mb-2 flex justify-center">
-                            <span className="text-6xl" role="img" aria-label="Bingo">🎲</span>
-                        </div>
-                        <h1 className="cb-logo text-4xl mb-2">
-                            Crypto<span>Bingo</span>
-                        </h1>
-                        <p className="text-[--cb-text-secondary] text-sm mb-8 leading-relaxed">
-                            Bingo on-chain, provably fair.<br/>Conecte sua carteira WAX para jogar.
-                        </p>
-
-                        {/* Loading */}
-                        {isLoading && (
-                            <div className="flex items-center justify-center gap-2 mb-6 text-[--cb-text-secondary] text-sm">
-                                <span className="cb-spinner" aria-hidden="true" />
-                                <span>Autenticando...</span>
-                            </div>
-                        )}
-
-                        {/* Erro */}
-                        {(error || authError) && (
-                            <div className="cb-alert cb-alert-error mb-6" role="alert">
-                                <span aria-hidden="true">⚠️</span>
-                                <span>{error ?? authError}</span>
-                            </div>
-                        )}
-
-                        {/* Botões */}
-                        <div className="flex flex-col gap-3">
-                            <button
-                                className="cb-btn cb-btn-primary cb-btn-lg cb-btn-pill w-full"
-                                onClick={login}
-                                disabled={isLoading}
-                                aria-busy={isLoading}
-                            >
-                                <span aria-hidden="true">🔗</span>
-                                Conectar Carteira Web3
-                            </button>
-
-                            {import.meta.env.DEV && createDevSession && (
-                                <button
-                                    className="cb-btn cb-btn-outline cb-btn-pill w-full"
-                                    onClick={loginDev}
-                                    disabled={isLoading}
-                                >
-                                    <span aria-hidden="true">🧪</span>
-                                    Login Rápido (Dev)
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Rodapé */}
-                        <p className="mt-8 text-xs text-[--cb-text-tertiary] leading-relaxed">
-                            Ao conectar, você concorda com os{' '}
-                            <a href="#" className="text-[--cb-brand] hover:underline">Termos de Uso</a>.
-                            <br/>Sorteio verificável via oráculo{' '}
-                            <span className="font-mono">orng.wax</span>.
-                        </p>
-                    </div>
-
-                    {/* Theme toggle */}
-                    <div className="mt-4 flex justify-center">
-                        <button
-                            className="cb-theme-toggle"
-                            onClick={toggleTheme}
-                            aria-label={`Alternar para tema ${isDark ? 'claro' : 'escuro'}`}
-                            title={`Tema ${isDark ? 'Claro' : 'Escuro'}`}
-                        >
-                            {isDark ? '☀️' : '🌙'}
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <LandingPage
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                onConnect={login}
+            />
         );
     }
 
-    // ── Tela de Loading ───────────────────────────────────────────────────────
+    // ── Carregando perfil ──────────────────────────────────────────────────────
     if (isLoading || !profile) {
         return (
-            <div className="cb-page min-h-dvh flex items-center justify-center">
-                <div className="text-center">
-                    <div className="cb-spinner w-12 h-12 mx-auto mb-4"
-                         style={{ width: '3rem', height: '3rem', borderWidth: '3px' }} />
-                    <p className="text-[--cb-text-secondary] text-sm">{t('loading')}</p>
-                    {error && (
-                        <p className="mt-2 text-[--cb-danger] text-sm">{error}</p>
+            <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+                    <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+                    <p style={{ color: 'var(--cb-text-secondary)', fontSize: '0.875rem' }}>
+                        {t('common.loading') ?? 'Carregando...'}
+                    </p>
+                    {(error ?? authError) && (
+                        <p style={{ color: 'var(--cb-danger)', fontSize: '0.875rem' }}>
+                            {error ?? authError}
+                        </p>
                     )}
                 </div>
             </div>
         );
     }
 
-    // ── Dashboard Principal ───────────────────────────────────────────────────
+    // ── Game Room (tela cheia) ─────────────────────────────────────────────────
+    if (route.page === 'game') {
+        return (
+            <GameRoom
+                roomId={route.roomId}
+                gameId={route.gameId}
+                session={session}
+                profile={profile}
+                onLeave={() => setRoute({ page: 'lobby' })}
+            />
+        );
+    }
+
+    // ── Admin Panel ────────────────────────────────────────────────────────────
+    if (route.page === 'admin') {
+        return (
+            <AdminLayout
+                profile={profile}
+                session={session}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                section={route.section ?? 'dashboard'}
+                onNavigate={(section) => setRoute({ page: 'admin', section })}
+                onLogout={logout}
+            />
+        );
+    }
+
+    // ── Shell do Jogador (lobby / wallet) ──────────────────────────────────────
+    const isAdmin  = profile.role === 'admin' || profile.role === 'contract_admin';
+    const activeTab = route.page === 'wallet' ? 'wallet' : 'lobby';
+
+    const NAV_TABS = [
+        { id: 'lobby',  label: t('nav.lobby')  ?? 'Salas'    },
+        { id: 'wallet', label: t('nav.wallet') ?? 'Carteira' },
+    ];
+
     return (
-        <div className="cb-page">
+        <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
 
             {/* ── Navbar ── */}
-            <header className="cb-navbar" role="banner">
-                <div className="cb-container cb-navbar-inner">
-
-                    {/* Logo */}
-                    <a href="/" className="cb-logo" aria-label="CryptoBingo — Início">
-                        <span aria-hidden="true">🎲 </span>Crypto<span>Bingo</span>
+            <header className="site-nav">
+                <div className="site-nav-left">
+                    <a
+                        href="#"
+                        className="cb-logo"
+                        onClick={(e) => { e.preventDefault(); setRoute({ page: 'lobby' }); }}
+                    >
+                        Crypto<span>Bingo</span>
                     </a>
 
-                    {/* Right side */}
-                    <div className="flex items-center gap-2 sm:gap-3">
+                    <nav className="site-tabs" aria-label={t('nav.lobby') ?? 'Salas de Jogo'}>
+                        {NAV_TABS.map(tab => (
+                            <a
+                                key={tab.id}
+                                href={`#${tab.id}`}
+                                className={`site-tab${activeTab === tab.id ? ' is-active' : ''}`}
+                                aria-current={activeTab === tab.id ? 'page' : undefined}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    setRoute({ page: tab.id as 'lobby' | 'wallet' });
+                                }}
+                            >
+                                {tab.label}
+                            </a>
+                        ))}
+                    </nav>
+                </div>
 
-                        {/* Seletor de idioma */}
-                        <select
-                            className="cb-input cb-select hidden sm:block w-auto text-sm py-1.5"
-                            value={i18n.language}
-                            onChange={e => handleLanguageChange(e.target.value)}
-                            aria-label="Selecionar idioma"
-                        >
-                            <option value="pt-BR">🇧🇷 PT</option>
-                            <option value="en-US">🇺🇸 EN</option>
-                            <option value="zh-CN">🇨🇳 ZH</option>
-                        </select>
+                <div className="site-nav-right">
+                    {/* Wallet chip */}
+                    <span className="cb-wallet-chip">
+                        <span style={{ color: 'var(--cb-brand)' }} aria-hidden="true">◆</span>
+                        <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.75rem' }}>
+                            {profile.wallet_address}
+                        </span>
+                    </span>
 
-                        {/* Wallet badge */}
-                        <div className="cb-wallet-chip hidden md:inline-flex" aria-label="Carteira conectada">
-                            <span className="text-[--cb-brand]" aria-hidden="true">●</span>
-                            <span>{profile.wallet_address}</span>
-                            {/* Tier badge */}
-                            <span className={`cb-badge cb-tier-${profile.progression.tier.toLowerCase()} ml-1`}>
-                                {profile.progression.tier}
-                            </span>
-                        </div>
+                    {/* Tier badge */}
+                    <span className={`cb-tier-${profile.progression.tier.toLowerCase() as 'bronze' | 'silver' | 'gold' | 'diamond'}`}>
+                        {profile.progression.tier}
+                    </span>
 
-                        {/* Theme toggle */}
+                    {/* Acesso admin */}
+                    {isAdmin && (
                         <button
-                            className="cb-theme-toggle"
-                            onClick={toggleTheme}
-                            aria-label={`Alternar para tema ${isDark ? 'claro' : 'escuro'}`}
+                            className="cb-btn cb-btn-outline cb-btn-sm"
+                            onClick={() => setRoute({ page: 'admin' })}
                         >
-                            {isDark ? '☀️' : '🌙'}
+                            Admin
                         </button>
+                    )}
 
-                        {/* Logout */}
-                        <button
-                            className="cb-btn cb-btn-danger cb-btn-sm"
-                            onClick={logout}
-                            aria-label="Desconectar carteira"
-                        >
-                            <span className="hidden sm:inline">Sair</span>
-                            <span className="sm:hidden" aria-hidden="true">↪</span>
-                        </button>
-                    </div>
+                    {/* Seletor de idioma */}
+                    <select
+                        value={i18n.language}
+                        onChange={(e) => handleLanguageChange(e.target.value)}
+                        className="cb-input cb-select"
+                        style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.75rem', height: '2.25rem', width: 'auto' }}
+                        aria-label={t('common.language') ?? 'Idioma'}
+                    >
+                        <option value="pt-BR">PT</option>
+                        <option value="en-US">EN</option>
+                        <option value="zh-CN">中</option>
+                    </select>
+
+                    {/* Theme toggle */}
+                    <button
+                        className="cb-theme-toggle"
+                        onClick={toggleTheme}
+                        aria-label="Alternar tema"
+                        title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+                    >
+                        {theme === 'dark' ? '☾' : '☀'}
+                    </button>
+
+                    {/* Logout */}
+                    <button
+                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                        onClick={logout}
+                    >
+                        {t('nav.logout') ?? 'Desconectar'}
+                    </button>
                 </div>
             </header>
 
-            {/* ── Main Content ── */}
-            <main className="cb-container py-6 sm:py-8" role="main">
-
-                {/* XP Progress bar */}
-                <div className="mb-6 p-4 cb-card flex items-center gap-4">
-                    <div className="flex-shrink-0">
-                        <span className={`cb-badge cb-tier-${profile.progression.tier.toLowerCase()} text-sm px-3 py-1`}>
-                            {profile.progression.tier}
-                        </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between text-xs text-[--cb-text-tertiary] mb-1">
-                            <span>{profile.nickname || profile.wallet_address}</span>
-                            <span>{profile.progression.xp.toLocaleString()} XP</span>
+            {/* ── Conteúdo ── */}
+            <div className="site-content">
+                <main className="site-main">
+                    {error && (
+                        <div className="cb-alert cb-alert-error" style={{ margin: '1rem 1.5rem 0' }}>
+                            {error}
                         </div>
-                        <div className="cb-progress-track">
-                            <div
-                                className="cb-progress-fill"
-                                style={{ width: `${Math.min((profile.progression.xp % 1000) / 10, 100)}%` }}
-                                role="progressbar"
-                                aria-valuenow={profile.progression.xp % 1000}
-                                aria-valuemin={0}
-                                aria-valuemax={1000}
-                                aria-label="Progresso de XP"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex-shrink-0 text-right hidden sm:block">
-                        <p className="text-xs text-[--cb-text-tertiary]">Partidas</p>
-                        <p className="text-sm font-semibold text-[--cb-text-primary]">
-                            {profile.progression.games_played}
-                        </p>
-                    </div>
-                </div>
+                    )}
 
-                {/* Lobby */}
-                <Lobby session={session} />
-            </main>
+                    {/* DEV: login rápido */}
+                    {import.meta.env.DEV && createDevSession && route.page === 'lobby' && (
+                        <div style={{ padding: '0.5rem 1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid var(--cb-border-subtle)', background: 'var(--cb-bg-sunken)', fontSize: '0.7rem' }}>
+                            <span style={{ color: 'var(--cb-text-tertiary)', alignSelf: 'center' }}>DEV:</span>
+                            <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={loginDev}>
+                                🧪 Dev Login
+                            </button>
+                        </div>
+                    )}
+
+                    {route.page === 'lobby' && (
+                        <Lobby
+                            session={session}
+                            onEnterRoom={(roomId, gameId) => setRoute({ page: 'game', roomId, gameId })}
+                        />
+                    )}
+
+                    {route.page === 'wallet' && (
+                        <WalletPage session={session} profile={profile} />
+                    )}
+                </main>
+            </div>
         </div>
     );
 }
