@@ -483,7 +483,10 @@ export default function GametypesAdmin() {
                 </div>
 
                 <button type="button" className="cb-btn cb-btn-outline self-start" onClick={handleSuggest} disabled={suggesting}>
-                    {suggesting ? t('admin.gametypes_suggest') : t('admin.gametypes_suggest')}
+                    {suggesting
+                        ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('common.loading')}</>
+                        : `✨ ${t('admin.gametypes_suggest')}`
+                    }
                 </button>
 
                 <button type="submit" className="cb-btn cb-btn-primary self-start" disabled={saving}>

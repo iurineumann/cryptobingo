@@ -71,10 +71,16 @@
 [DEBT] fsm.test.ts — testes atualizados para CREATED/FUNDING/abort.
 
 ## [NEXT] Próximos Passos
-[ ] GametypesAdmin — Suggest Combinations helper (Monte Carlo + análise de dificuldade).
-[ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta).
-[ ] dropWorker.ts — executar drops ao final de cada partida (ADR-011).
+[DONE] GametypesAdmin — Suggest Combinations helper (Monte Carlo + 3 estratégias: n-of-type, pares por hit rate, especial+simples).
+[DONE] ADR-011 v2 — Drop Vault revisado com algoritmo completo (dupla dificuldade, pool ponderado, pré-check global, tokens independentes).
+[ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta) + campo room_drop_chance_bps.
+[ ] contracts/bingo — implementar actions de drop vault: deposittoken/depositnft (on_notify), allocatedrop, deallocatedrop, reclaimasset, execdrop + tabelas drop_deposits, drop_allocations, dropstate.
+[ ] dropWorker.ts — Fases 0 + 1A + 1B + 2 conforme ADR-011 §7.
+[ ] dropController.ts — endpoints de vault (listar depósitos, alocar, desalocar, sacar).
+[ ] SponsorVault.tsx — painel vault completo (grid NFTs, grid tokens, histórico de drops).
+[ ] RoomsAdmin.tsx — seção Drops na edição de sala (NFTs disponíveis, NFTs vinculadas, tokens).
+[ ] Lobby.tsx — badges "🎁 NFT Drop" e "💰 Token Drop" em salas com drops ativos.
 [ ] PWA (Lighthouse > 90).
 [ ] Testes unitários adicionais (authController, monteCarloController, hooks React).
 [ ] Auto-sweep GGR (ADR-005): action sweepggr no contrato C++.
-[ ] openapi.yaml e asyncapi.yaml — documentar endpoints de rooms e eventos de chat.
+[ ] openapi.yaml e asyncapi.yaml — documentar endpoints de rooms e drop vault.

@@ -1,33 +1,22 @@
 # ADR-011: Drop Vault — Rastreamento On-Chain de Ativos para Drops
 
 **Data:** 2026-05-27
-**Status:** Aceito
+**Revisado:** 2026-05-28
+**Status:** Aceito (v2 — substituição completa da v1)
 **Autores:** Célula de Engenharia CryptoBingo
 
 ---
 
 ## Contexto
 
-O ADR-010 definiu o conceito de drops por sala como um mecanismo complementar às
-campanhas B2B, onde sponsors distribuem tokens e NFTs aleatoriamente a jogadores
-ao final de cada partida. No entanto, a versão inicial do ADR-010 tratava os drops
-como configuração puramente off-chain (MongoDB), sem rastrear a **origem** e o
-**saldo disponível** de cada ativo na blockchain.
+O ADR-010 definiu o conceito de **drops por sala** como mecanismo B2B onde sponsors
+distribuem NFTs e tokens fungíveis aleatoriamente a jogadores ao final de cada
+partida. A v1 deste ADR tratava os drops com rastreamento on-chain básico, sem
+cobrir o fluxo completo de UI/UX do sponsor, o algoritmo de sorteio e regras de
+concorrência entre sessões abertas.
 
-Isso cria os seguintes problemas:
-
-1. **Trust:** Sem registro on-chain, não há garantia de que o sponsor realmente
-   enviou os ativos que configurou no MongoDB.
-2. **Reivindicação:** Um sponsor que depositou ativos não utilizados não tem como
-   provar ou executar a devolução sem um registro on-chain.
-3. **Alocação Mútua:** Um ativo alocado a uma sala poderia ser acidentalmente
-   configurado para outra sala, causando dupla-promessa.
-4. **Auditabilidade:** Não há trilha de auditoria de quem depositou o quê, quando,
-   e para qual sala.
-
-Este ADR resolve esses problemas introduzindo um **Drop Vault** on-chain —
-um conjunto de tabelas e actions que rastreiam depósitos, alocações e distribuições
-de ativos para drops.
+Este documento (v2) é a especificação canônica e definitiva do Drop Vault, incorporando
+todas as decisões de design tomadas em sessão de alinhamento com o product owner.
 
 ---
 
@@ -35,304 +24,513 @@ de ativos para drops.
 
 ### 1. Conta Custodiante
 
-Todos os ativos destinados a drops residem em **uma única conta custodiante**.
+Todos os ativos destinados a drops residem na conta do contrato (`bingo.game`),
+capturados via `on_notify` de `eosio.token` (tokens fungíveis) e `atomicassets`
+(NFTs). O sponsor não precisa especificar memo de roteamento: qualquer ativo
+enviado ao contrato sem memo de jogo é automaticamente registrado como depósito
+de vault.
 
-**Decisão:** A própria conta do contrato (`bingo.game`) atua como custodiante
-para v1. Os depósitos são capturados via `on_notify` de `eosio.token`
-e `atomicassets`.
+> **Proteção contra envio acidental:** qualquer conta que transfira ativos ao
+> contrato (inclusive jogadores comuns por engano) terá esses ativos registrados
+> em `drop_deposits` com `status = available` sob sua autoria, podendo reaver via
+> `reclaimasset` a qualquer momento enquanto não alocados. Não há perda de ativo.
 
-> Se no futuro houver necessidade de segregação (ex: risco de auditoria,
-> limite de RAM on-chain), uma conta separada `bingo.vault` pode ser criada.
-> A migração é compatível: basta transferir os saldos e atualizar as permissões.
+**Segregação futura (post-v1):** conta separada `bingo.vault` pode ser criada
+conforme crescimento. A migração é retrocompatível.
 
-### 2. Nova Tabela: `drop_deposits`
+---
 
-Registra cada depósito de ativo feito por um sponsor/admin.
+### 2. Tabela: `drop_deposits`
+
+Registra cada depósito de ativo feito por qualquer conta.
 
 **Scope:** `_self` (global).
-**Primary Key:** `deposit_id` (uint64, auto-incremento via `next_deposit_id`).
-**Secondary Index:** `by_owner` — para consultar depósitos por sponsor.
+**Primary Key:** `deposit_id` (uint64, auto-incremento via `dropstate.next_deposit_id`).
+**Secondary Indexes:**
+- `by_owner` — consulta depósitos por dono
+- `by_status` — filtra disponíveis vs esgotados
 
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `deposit_id` | `uint64` | ID único do depósito |
-| `owner` | `name` | Quem depositou (sponsor ou admin) |
+| `owner` | `name` | Quem depositou |
 | `asset_type` | `name` | `"token"_n` ou `"nft"_n` |
-| `token_contract` | `name` | Contrato do token (ex: `eosio.token`) |
-| `token_symbol` | `symbol` | Símbolo (ex: `4,BINGO`) |
-| `quantity_original` | `asset` | Quantidade original depositada (token) |
-| `quantity_remaining` | `asset` | Quantidade ainda não alocada (token) |
-| `nft_asset_id` | `int32` | Asset ID do NFT (0 = token) |
+| `token_contract` | `name` | Contrato do token (`eosio.token`) |
+| `token_symbol` | `symbol` | Símbolo do token |
+| `quantity_original` | `asset` | Quantidade original depositada |
+| `quantity_remaining` | `asset` | Saldo ainda não alocado |
+| `nft_asset_id` | `uint64` | Asset ID do NFT (0 se token) |
 | `nft_template_id` | `int32` | Template ID do NFT |
-| `nft_collection` | `name` | Nome da coleção do NFT |
-| `status` | `name` | `"available"_n`, `"depleted"_n` |
+| `nft_collection` | `name` | Coleção do NFT |
+| `status` | `name` | `"available"_n` \| `"allocated"_n` \| `"depleted"_n` |
 | `deposited_at` | `time_point_sec` | Timestamp do depósito |
 
-**Regras:**
-- `status == available` → ativo pode ser alocado a salas ou reivindicado pelo owner
-- `status == depleted` → todo saldo foi alocado ou distribuído
-- `quantity_remaining` decrementa conforme alocações são criadas
+**Status:**
+- `available` → ativo pode ser alocado a salas ou resgatado pelo owner
+- `allocated` → ativo está vinculado a pelo menos uma sala ativa
+- `depleted` → todo saldo foi distribuído ou reivindicado
 
-### 3. Nova Tabela: `drop_allocations`
+---
 
-Registra a alocação de um ativo de `drop_deposits` a uma sala específica.
+### 3. Tabela: `drop_allocations`
+
+Vincula um ativo de `drop_deposits` a uma sala com configuração de drop.
 
 **Scope:** `_self` (global).
-**Primary Key:** `alloc_id` (uint64, auto-incremento via `next_alloc_id`).
-**Secondary Index:** `by_room` — filtra alocações por sala.
+**Primary Key:** `alloc_id` (uint64, auto-incremento via `dropstate.next_alloc_id`).
+**Secondary Indexes:**
+- `by_room` — filtra alocações por sala
+- `by_deposit` — filtra alocações por depósito de origem
+- `by_owner` — filtra alocações pelo owner do depósito
 
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `alloc_id` | `uint64` | ID único da alocação |
 | `deposit_id` | `uint64` | FK → `drop_deposits.deposit_id` |
+| `owner` | `name` | Owner do depósito (desnormalizado para consultas) |
 | `room_id` | `uint64` | Sala destino |
-| `quantity_allocated` | `asset` | Quantidade alocada (token) |
-| `quantity_distributed` | `asset` | Quantidade já distribuída (token) |
-| `nft_asset_id` | `int32` | Asset ID do NFT alocado (0 = token) |
-| `nft_template_id` | `int32` | Template ID do NFT |
-| `drop_chance_pct` | `uint8` | Probabilidade por partida (0-100) |
-| `max_drops_per_game` | `uint32` | Máximo de drops distribuídos por partida |
-| `drops_executed` | `uint32` | Total de drops já executados |
-| `status` | `name` | `"active"_n`, `"exhausted"_n` |
+| `asset_type` | `name` | `"token"_n` ou `"nft"_n` (desnormalizado) |
+| `token_contract` | `name` | Contrato do token |
+| `token_symbol` | `symbol` | Símbolo do token |
+| `quantity_per_drop` | `asset` | Valor fixo por drop (tokens) |
+| `quantity_distributed` | `asset` | Total já distribuído |
+| `nft_asset_id` | `uint64` | Asset ID do NFT alocado |
+| `nft_template_id` | `int32` | Template ID (para display) |
+| `nft_collection` | `name` | Coleção (para display) |
+| `drop_chance_bps` | `uint16` | Probabilidade em basis points (0–10000, onde 10000 = 100%) |
+| `drops_executed` | `uint32` | Total de drops realizados |
+| `status` | `name` | `"active"_n` \| `"exhausted"_n` \| `"deallocated"_n` |
+| `allocated_at` | `time_point_sec` | Timestamp da alocação |
 
-**Regras:**
-- `status == active` → alocação vigente, drops podem ser executados
-- `status == exhausted` → todo saldo foi distribuído ou `max_drops_per_game` exaurido
-- Um mesmo `deposit_id` pode ter múltiplas alocações em salas diferentes
-- `quantity_allocated` não pode exceder `drop_deposits.quantity_remaining` no
-  momento da alocação
-- `quantity_distributed` é incrementado a cada drop executado
+> **Por que basis points em vez de percentual?** Permite precisão de 0,01%
+> (ex: 1 bps = 0,01%, 100 bps = 1%, 10000 bps = 100%). O sponsor configura no
+> frontend como percentual com 2 casas decimais; o contrato armazena em bps.
 
-### 4. Nova Action: `deposittoken`
+**Status:**
+- `active` → alocação vigente, drops podem ser executados
+- `exhausted` → ativo esgotado (tokens: saldo < `quantity_per_drop`; NFT: já dropada)
+- `deallocated` → sponsor removeu a vinculação antes do esgotamento
 
-Registra um depósito de token fungível e opcionalmente já o aloca a uma sala.
+---
 
-**Prototype:**
-```cpp
-ACTION deposittoken(
-    name owner,
-    name token_contract,
-    symbol token_symbol,
-    asset quantity,
-    optional<uint64_t> room_id,       // se presente, já aloca à sala
-    optional<uint8_t> drop_chance_pct,
-    optional<uint32_t> max_drops_per_game
-)
+### 4. Singleton: `dropstate`
+
+Armazena contadores globais e configurações do sistema.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `next_deposit_id` | `uint64` | Próximo ID de depósito |
+| `next_alloc_id` | `uint64` | Próximo ID de alocação |
+| `room_drop_base_chance_bps` | `uint16` | Pré-check global padrão (default 10000 = 100%) |
+| `player_base_chance_bps` | `uint16` | Chance base por jogador na fila (default 5000 = 50%) |
+
+---
+
+### 5. Configuração de Drop por Sala (MongoDB — `RoomDropConfig`)
+
+Cada sala armazena configurações de drop no MongoDB (complementar ao on-chain):
+
+```ts
+interface RoomDropConfig {
+  room_id:               string;
+  room_drop_chance_bps:  number;  // pré-check global desta sala (0–10000)
+  drop_symbols:          string[]; // símbolos visuais para o lobby ("🎁", "💎", etc.)
+}
 ```
 
-**Fluxo:**
-1. Verifica se `quantity` foi transferida para o contrato (chamado via `on_notify`)
-2. Cria registro em `drop_deposits` com `status = available`
-3. Se `room_id` presente:
-   a. Verifica que a sala existe e está `active`
-   b. Cria registro em `drop_allocations`
-   c. Atualiza `drop_deposits.quantity_remaining`
-4. Emite evento `drop_deposited`
+O campo `room_drop_chance_bps` permite ao sponsor (ou admin) configurar um gate
+global por sala — ex: 3000 bps = 30% de chance de a sala sequer entrar no fluxo
+de drop a cada partida.
 
-### 5. Nova Action: `depositnft`
+---
 
-Registra um depósito de NFT (AtomicAssets) e opcionalmente já o aloca a uma sala.
+### 6. Actions do Contrato
 
-**Prototype:**
+#### 6.1 `deposittoken` — capturado via `on_notify("eosio.token", "transfer")`
+
 ```cpp
-ACTION depositnft(
-    name owner,
-    name collection,
-    int32_t template_id,
-    int32_t asset_id,
-    optional<uint64_t> room_id,
-    optional<uint8_t> drop_chance_pct,
-    optional<uint32_t> max_drops_per_game
-)
+// Chamado automaticamente quando qualquer token é transferido ao contrato.
+// Cria registro em drop_deposits.
+// Memo vazio ou não-jogo → vault deposit.
+// Memo "game:" → fluxo normal de depósito de jogo (existente).
 ```
 
-**Fluxo:** Análogo ao `deposittoken`, mas para NFTs.
-- Verifica via AtomicAssets que o NFT foi transferido para o contrato
-- Registra em `drop_deposits` com `asset_type = "nft"_n`
-- Se `room_id` presente, aloca via `drop_allocations`
+#### 6.2 `depositnft` — capturado via `on_notify("atomicassets", "transfer")`
 
-### 6. Nova Action: `allocatedrop`
+```cpp
+// Análogo ao deposittoken, para NFTs.
+// Cria 1 registro por NFT na lista de assets transferidos.
+```
 
-Aloca um ativo já depositado a uma sala.
+#### 6.3 `allocatedrop` — chamado pelo backend ao salvar sala
 
-**Prototype:**
 ```cpp
 ACTION allocatedrop(
-    uint64_t deposit_id,
-    uint64_t room_id,
-    optional<asset> quantity,          // para tokens: quanto alocar
-    optional<int32_t> nft_asset_id,    // para NFTs: qual asset alocar
-    uint8_t drop_chance_pct,
-    uint32_t max_drops_per_game
+    name          caller,        // deve ser owner do deposit ou admin
+    uint64_t      deposit_id,
+    uint64_t      room_id,
+    asset         quantity_per_drop,  // para tokens
+    uint64_t      nft_asset_id,       // para NFTs (0 se token)
+    uint16_t      drop_chance_bps     // 0–10000
 )
 ```
 
-**Validações:**
-- `deposit_id` existe e tem `status == available`
-- Sala existe e está `active` (ou `paused`, depende da política)
-- Para tokens: `quantity <= drop_deposits.quantity_remaining`
-- Para NFTs: `nft_asset_id` não está alocado em outra sala ativa
+**Validações on-chain:**
+- `caller` == `deposit.owner` ou tem permissão de admin
+- `deposit.status == "available"_n`
+- Sala existe e `status != "closed"_n`
+- Para tokens: `deposit.quantity_remaining >= quantity_per_drop`
+- Para NFTs: nenhuma `drop_allocation` ativa com o mesmo `nft_asset_id`
+  (previne dupla-alocação mesmo com múltiplas abas abertas — validação atômica
+  garantida pelo consenso da blockchain)
+- Atualiza `deposit.status = "allocated"_n`
 
-### 7. Nova Action: `reclaimasset`
+#### 6.4 `deallocatedrop` — chamado pelo backend ao desalocar
 
-Permite ao owner original retirar ativos **não alocados** do vault.
+```cpp
+ACTION deallocatedrop(name caller, uint64_t alloc_id)
+```
 
-**Prototype:**
+**Efeitos:**
+1. `alloc.status = "deallocated"_n`
+2. Para tokens: se `deposit.quantity_remaining` volta a ficar > 0 → `deposit.status = "available"_n`
+3. Para NFTs: `deposit.status = "available"_n`
+
+#### 6.5 `reclaimasset` — sponsor saca ativo não alocado
+
 ```cpp
 ACTION reclaimasset(name owner, uint64_t deposit_id, optional<asset> quantity)
 ```
 
 **Regras:**
 - Apenas o `owner` original pode chamar
-- Só pode reivindicar ativos com `status == available`
-- Para tokens: pode reivindicar parcialmente (menor que `quantity_remaining`)
-- Para NFTs: reivindicação é total (asset_id inteiro)
-- Após reivindicação:
-  - Se todo saldo foi retirado: `deposit.status = depleted`
-  - Se parcial (token): `quantity_remaining` é decrementado
-- O contrato transfere o ativo de volta ao owner
+- `deposit.status == "available"_n` (não alocado a nenhuma sala ativa)
+- Para tokens: reivindicação parcial permitida
+- Para NFTs: reivindicação total obrigatória
+- Contrato transfere o ativo de volta ao `owner`
+- Se saldo zera: `deposit.status = "depleted"_n`
 
-> **Por que não permitir reivindicação de ativos alocados?**
-> Se um sponsor aloca um ativo à sala, a sala tem a expectativa de que aquele
-> drop estará disponível. Permitir reivindicação de ativos alocados quebraria
-> essa promessa. O sponsor deve primeiro desalocar (`dealocatedrop`).
+#### 6.6 `execdrop` — executado pelo worker após cada partida
 
-### 8. Nova Action: `dealocatedrop`
-
-Remove uma alocação, devolvendo o saldo não distribuído ao pool disponível.
-
-**Prototype:**
-```cpp
-ACTION dealocatedrop(uint64_t alloc_id)
-```
-
-**Quem pode chamar:** Admin ou sponsor owner do `deposit_id` original.
-
-**Efeitos:**
-1. `drop_allocations.status = exhausted`
-2. `drop_deposits.quantity_remaining += (alloc.quantity_allocated - alloc.quantity_distributed)`
-3. Se o deposit voltar a ter saldo > 0: `deposit.status = available`
-
-### 9. Nova Action: `execdrop`
-
-Executa um drop atômico — chamado pelo worker de drops (off-chain) com
-autorização do microservice.
-
-**Prototype:**
 ```cpp
 ACTION execdrop(
     uint64_t alloc_id,
-    name winner,
-    optional<asset> quantity,
-    optional<int32_t> nft_asset_id
+    name     winner,
+    asset    quantity    // para tokens; zero para NFTs
 )
 ```
 
 **Validações:**
-- `alloc_id` existe e `status == active`
-- Worker tem permissão (microservice authority)
+- Requer autorização do microservice
+- `alloc.status == "active"_n`
+- Para tokens: `deposit.quantity_remaining >= alloc.quantity_per_drop`
+- Para NFTs: `alloc.drops_executed == 0` (máximo 1 drop por NFT)
 
 **Efeitos:**
-1. Transfere token/NFT para `winner`
-2. Incrementa `drops_executed++`
-3. Incrementa `quantity_distributed`
-4. Se `quantity_distributed >= quantity_allocated` (token) ou `drops_executed >= 1` (NFT):
-   `status = exhausted`
-5. Se `deposit.quantity_remaining == 0`: `deposit.status = depleted`
+1. Transfere ativo ao `winner`
+2. `alloc.drops_executed++`
+3. `alloc.quantity_distributed += quantity`
+4. Para NFTs ou tokens esgotados: `alloc.status = "exhausted"_n`
+5. Atualiza `deposit.quantity_remaining`
 
-### 10. Nova Singleton: `dropstate`
+---
 
-Armazena contadores globais para IDs sequenciais.
+### 7. Algoritmo de Drop (Worker — `dropWorker.ts`)
 
-**Scope:** `_self` (global).
+Executado ao final de cada partida (após `claimwin` completado), para cada sala
+com `drop_allocations` ativas.
 
-| Campo | Tipo | Descrição |
-|---|---|---|
-| `next_deposit_id` | `uint64` | Próximo ID para `drop_deposits` |
-| `next_alloc_id` | `uint64` | Próximo ID para `drop_allocations` |
+#### Fase 0 — Pré-check global da sala
 
-### 11. Fluxo de Depósito via `on_notify`
-
-O contrato intercepta transferências recebidas com prefixo `"drop:"` no memo.
-
-**Formato do memo (token):**
 ```
-drop:{room_id}:{chance_pct}:{max_per_game}
+room_drop_chance_bps = RoomDropConfig.room_drop_chance_bps ?? 10000
+sorteio = random(0, 9999)
+if sorteio >= room_drop_chance_bps → ABORT (sem drops nesta partida)
 ```
 
-**Exemplos:**
-- `drop:` → depósito simples, sem alocação (disponível para alocar depois)
-- `drop:1:10:5` → deposita e aloca à sala 1, 10% de chance, max 5 drops/partida
-- `drop:3:25:` → deposita e aloca à sala 3, 25% de chance, sem limite por partida
+> Se o pré-check falhar, nenhum ativo é testado. Isso protege o vault em salas
+> de alta frequência onde o sponsor quer que drops sejam raros.
 
-**Formato do memo (NFT):**
+#### Fase 1A — Eleição de NFT (máximo 1 por partida)
+
 ```
-drop:{room_id}:{chance_pct}:{max_per_game}
+nfts_ativas = drop_allocations
+    .filter(status == "active" AND asset_type == "nft")
+    .sortBy(drop_chance_bps, DESC)  // maior chance primeiro
+
+nft_eleita = null
+
+para cada nft em nfts_ativas:
+    sorteio = random(0, 9999)
+    if sorteio < nft.drop_chance_bps / 10:
+        // ex: 2500 bps = 25% → threshold = 250 em 1000
+        // mais preciso: sorteio < (nft.drop_chance_bps / 10000) * 10000
+        nft_eleita = nft
+        BREAK  // apenas 1 NFT por partida
+
+if nft_eleita != null:
+    → Fase 2 com nft_eleita
 ```
 
-Para NFTs, o `on_notify` do contrato AtomicAssets segue o mesmo padrão de memo.
+> A ordenação decrescente por probabilidade garante que NFTs mais prováveis
+> sejam testadas primeiro, maximizando a chance de haver um drop quando o sponsor
+> configurou ativos com probabilidades altas.
 
-### 12. Worker de Drops
+#### Fase 1B — Eleição de Tokens (independente, 1 por tipo por partida)
 
-O worker `dropWorker.ts` (a ser implementado) orquestra a execução:
+```
+tokens_ativos = drop_allocations
+    .filter(status == "active" AND asset_type == "token")
+    .groupBy(token_symbol)
+    // para cada símbolo, testa somente o mais antigo (FIFO por allocated_at)
 
-1. Escuta evento `game_resolved` (partida → `ARCHIVED`)
-2. Para cada sala que possui drops configurados:
-   a. Busca `drop_allocations` on-chain com `by_room` e `status == active`
-   b. Para cada alocação, sorteia execução baseado em `drop_chance_pct`
-   c. Se sorteado, seleciona aleatoriamente um jogador que comprou cartelas
-   d. Chama `execdrop()` com autorização do microservice
-   e. Emite evento WebSocket `chat:sponsor_drop`
+tokens_eleitos = []
 
-### 13. Segregação Futura (post-v1)
+para cada token em tokens_ativos:
+    if deposit.quantity_remaining < token.quantity_per_drop:
+        SKIP  // saldo insuficiente
+    sorteio = random(0, 9999)
+    if sorteio < token.drop_chance_bps / 10:
+        tokens_eleitos.push(token)
 
-Se a conta `bingo.game` acumular muitos ativos, a segregação para `bingo.vault`
-pode ser feita:
+// tokens_eleitos pode ter múltiplos elementos (um por símbolo distinto)
+```
 
-- Transferir todos os saldos de `drop_deposits` para `bingo.vault`
-- A action `execdrop` passa a enviar de `bingo.vault` em vez de `bingo.game`
-- Adicionar campo `vault_contract` em `drop_deposits` para indicar onde o ativo reside
-- Atualizar permissões: `bingo.game@eosio.code` tem autorização em `bingo.vault`
+> NFTs e tokens são **independentes**: uma partida pode resultar em 1 drop de
+> NFT + N drops de token (um por símbolo configurado), todos para jogadores
+> possivelmente diferentes.
+
+#### Fase 2 — Seleção do Jogador
+
+Executada uma vez para cada ativo eleito (NFT ou token), com listas de jogadores
+independentes para cada sorteio.
+
+```
+jogadores_premiados = fetchWinnersForGame(game_id)
+// lista de { wallet, winning_tickets_count }
+
+// Constrói pool ponderado: cada jogador aparece N vezes = winning_tickets_count
+pool = []
+para cada jogador em jogadores_premiados:
+    para i in range(jogador.winning_tickets_count):
+        pool.push(jogador.wallet)
+
+// Fisher-Yates shuffle
+pool = fisherYatesShuffle(pool)
+
+// Teste sequencial com base de chance por jogador
+PLAYER_BASE_CHANCE_BPS = dropstate.player_base_chance_bps  // default 5000
+
+vencedor = null
+para cada wallet em pool:
+    sorteio = random(0, 9999)
+    if sorteio < PLAYER_BASE_CHANCE_BPS / 10:
+        vencedor = wallet
+        BREAK
+
+if vencedor != null:
+    await execdrop(alloc_id, vencedor, quantity)
+    emit WS event "chat:sponsor_drop" → sala
+    // evento visível no chat da sala com animação
+```
+
+> **Por que PLAYER_BASE_CHANCE_BPS = 5000 (50%)?**
+> Na média, a lista é percorrida por 2 posições antes de encontrar um ganhador.
+> Jogadores com mais cartelas premiadas têm mais entradas no pool → mais tentativas
+> → probabilidade maior proporcional ao seu desempenho. O valor é configurável
+> via `dropstate` sem deploy de contrato.
+
+---
+
+### 8. Validação de Concorrência (Backend + Contrato)
+
+#### 8.1 Validação Backend (otimista — ao salvar a sala)
+
+Antes de chamar `allocatedrop` on-chain, o backend valida:
+
+```ts
+// Para cada NFT a ser alocada:
+const existingAlloc = await rpcClient.get_table_rows({
+  table: 'drop_allocations',
+  index: 'by_deposit',
+  lower_bound: deposit_id,
+  upper_bound: deposit_id,
+});
+if (existingAlloc.rows.some(a => a.status === 'active')) {
+  throw new ConflictError('NFT já alocada em outra sala');
+}
+```
+
+#### 8.2 Validação On-Chain (atômica — no contrato)
+
+A action `allocatedrop` verifica on-chain o mesmo critério. Como a blockchain é
+sequencial por transação, a segunda chamada concorrente falha com `eosio_assert`
+mesmo que o backend tenha passado na validação otimista.
+
+O frontend exibe o erro retornado pelo contrato com mensagem amigável:
+> "Esta NFT já foi vinculada a outra sala enquanto você editava. Atualize a página."
+
+---
+
+### 9. Painel Vault do Sponsor (`SponsorVault.tsx`)
+
+Nova tela acessível via painel admin → "Meu Vault".
+
+#### 9.1 Grid de NFTs
+
+- Exibe todas as NFTs em `drop_deposits` com `owner == sponsor.wallet`
+  e `status != "depleted"`
+- Colunas: miniatura, nome do template, collection, status (chip visual), sala vinculada,
+  probabilidade, data de depósito
+- **Distinção visual:**
+  - `available` (não vinculada): chip `cb-badge-neutral` "Disponível"
+  - `allocated` (vinculada): chip `cb-badge-brand` com nome da sala + probabilidade
+- **Ações por linha:**
+  - Se `available`: botão "Vincular a sala"
+  - Se `allocated`: botão "Desvincular" + botão "Alterar Probabilidade"
+- **Ordenação:** nome, template, sala, probabilidade, data
+- **Filtro:** todas / vinculadas / disponíveis
+- Botão "Sacar NFT" (apenas para `available`)
+
+#### 9.2 Grid de Tokens
+
+- Exibe saldos de tokens em `drop_deposits` com `owner == sponsor.wallet`
+- Colunas: símbolo, saldo original, saldo restante, alocado (soma), status
+- Ações: vincular saldo a sala, desvincular, sacar saldo disponível
+
+#### 9.3 Histórico de Drops
+
+- Lista de `execdrop` executados relativos ao sponsor
+- Colunas: data, ativo, sala, partida, vencedor, valor/NFT
+- Filtros por sala, por ativo, por período
+
+---
+
+### 10. Fluxo de Vinculação no Painel de Salas (`RoomsAdmin.tsx`)
+
+Ao editar uma sala, a seção "Drops" exibe:
+
+#### Painel "NFTs Disponíveis para Vincular"
+- Busca `drop_deposits` do sponsor com `status == "available"` e `asset_type == "nft"`
+- Exibe como grid selecionável (checkbox por NFT)
+- Botão "Vincular Selecionadas a esta Sala"
+
+#### Painel "NFTs Vinculadas a esta Sala"
+- Lista `drop_allocations` com `room_id == sala_atual` e `asset_type == "nft"`
+- Para cada NFT vinculada:
+  - Miniatura + nome do template
+  - **Indicador visual de "não salvo"** (borda tracejada + badge "Pendente")
+    para vinculações adicionadas na sessão atual antes de salvar
+  - Input de probabilidade (0–100%, com 2 casas decimais)
+  - Botão "Desvincular" → move a NFT de volta para o painel de disponíveis
+    e remove do painel de vinculadas (apenas UI até salvar)
+- **Botão "Salvar Alterações"** → executa todas as `allocatedrop` e `deallocatedrop`
+  de uma vez, seguido de validação e feedback de erros por NFT
+
+#### Painel "Tokens Configurados para esta Sala"
+- Mesmo padrão, para tokens fungíveis
+- Input adicional: "Valor por Drop" (quantity_per_drop)
+
+---
+
+### 11. Indicadores Visuais no Lobby (`Lobby.tsx`)
+
+Salas com drops ativos exibem badges no card do lobby:
+
+```tsx
+// Se sala tem NFT drop ativa:
+<span className="cb-badge-brand">🎁 NFT Drop</span>
+
+// Se sala tem token drop ativo:
+<span className="cb-badge-accent">💰 Token Drop</span>
+
+// Se vault esgotado (sem drops disponíveis):
+// Nenhum badge exibido — sala fica sem destaque
+```
+
+> A presença/ausência do badge incentiva tanto jogadores (entrar em salas com
+> drops) quanto sponsors (manter vault saudável para manter visibilidade).
+
+---
+
+### 12. Evento WebSocket de Drop (`chat:sponsor_drop`)
+
+Ao executar um drop com sucesso, o worker emite para o canal da sala:
+
+```ts
+socket.to(`room:${room_id}`).emit('chat:sponsor_drop', {
+  type:        'nft' | 'token',
+  asset_name:  string,   // nome do template ou símbolo
+  winner:      string,   // wallet do ganhador (truncada)
+  room_id:     string,
+  game_id:     string,
+  quantity?:   string,   // para tokens
+  alloc_id:    number,
+});
+```
+
+Exibido no chat da sala com animação de destaque (confetti ou glow dourado).
+
+---
+
+### 13. Atualizações Necessárias no ADR-010
+
+- Adicionar campo `room_drop_chance_bps` (uint16) na tabela `rooms` on-chain
+- Adicionar campo `has_active_drops` (bool, computed off-chain, MongoDB) no `RoomMetadata`
+  para filtros do lobby sem consultar `drop_allocations` a cada render
 
 ---
 
 ## Consequências
 
 **Positivas:**
-- Trustless: jogadores e sponsors podem verificar saldos on-chain
-- Sponsor pode recuperar ativos não utilizados
-- Alocação exclusiva por sala evita dupla-promessa
-- Trilha de auditoria completa (depósito → alocação → distribuição)
-- Compatível com o modelo off-chain de metadados (MongoDB mantém configs visuais)
+- Trustless end-to-end: sponsor prova depósito on-chain; jogador verifica drop on-chain
+- Proteção contra envio acidental: qualquer ativo enviado ao contrato é recuperável
+- Concorrência resolvida em dois níveis (optimistic UI + atômica no contrato)
+- "Dupla dificuldade" equilibra raridade do drop com fairness para jogadores
+- Pool ponderado por cartelas premiadas incentiva comprar mais cartelas
+- Vault saudável = badge no lobby = mais jogadores = incentivo orgânico ao sponsor
+- Auditoria completa para sponsor (histórico de drops rastreável)
 
 **Negativas:**
-- Aumento do consumo de RAM on-chain (3 novas tabelas + 1 singleton)
-- Complexidade adicional no contrato (5 novas actions)
-- Worker de drops precisa de permissão para chamar `execdrop`
-- Sponsor precisa pagar RAM para depósitos e alocações
-- `on_notify` com parsing de memo adiciona lógica no contrato
+- Aumento de RAM on-chain (3 tabelas + 1 singleton por depósito/alocação)
+- Worker precisa de permissão `eosio.code` para `execdrop`
+- Sponsor paga RAM para cada depósito e alocação
 
 ---
 
-## Arquivos Afetados
+## Arquivos a Criar/Modificar
 
-- `contracts/bingo/include/bingo.hpp` — novas tabelas `drop_deposits`,
-  `drop_allocations`, `dropstate`; novas actions `deposittoken`, `depositnft`,
-  `allocatedrop`, `reclaimasset`, `dealocatedrop`, `execdrop`
-- `contracts/bingo/src/bingo.cpp` — implementação das novas actions + handlers
-  `on_notify` para `eosio.token` e `atomicassets`
-- `packages/shared-types/src/index.ts` — tipos `DropDeposit`, `DropAllocation`,
-  `DropState`
-- `apps/worker-game-loop/src/services/dropWorker.ts` — worker de drops
+### Contrato C++
+- `contracts/bingo/include/bingo.hpp` — tabelas `drop_deposits`, `drop_allocations`,
+  `dropstate`; campo `room_drop_chance_bps` em `rooms`; actions `allocatedrop`,
+  `deallocatedrop`, `reclaimasset`, `execdrop`; handlers `on_notify` para
+  `eosio.token` e `atomicassets`
+- `contracts/bingo/src/bingo.cpp` — implementação de todas as actions acima
+
+### Shared Types
+- `packages/shared-types/src/index.ts` — `DropDeposit`, `DropAllocation`,
+  `DropState`, atualização de `BlockchainRoom`
+
+### Worker
+- `apps/worker-game-loop/src/services/dropWorker.ts` — Fases 0, 1A, 1B, 2
 - `apps/worker-game-loop/src/index.ts` — inicialização do dropWorker
-- `apps/api-gateway/src/controllers/roomController.ts` — novos endpoints para
-  gerenciar depósitos e alocações
+
+### API Gateway
+- `apps/api-gateway/src/controllers/dropController.ts` — endpoints de vault
 - `apps/api-gateway/src/index.ts` — novas rotas de drop vault
-- `apps/frontend/src/services/api.ts` — funções de depósito/alocação
-- `apps/frontend/src/components/sponsor/SponsorDrops.tsx` — UI de gestão de drops
-- `docs/adr/ADR-010-rooms-salas.md` — referência ao ADR-011
-- `docs/openapi.yaml` — novos endpoints de drop vault
-- `docs/COMPLIANCE.md` — rastreabilidade de ativos
+
+### Frontend
+- `apps/frontend/src/components/admin/SponsorVault.tsx` — painel vault completo
+- `apps/frontend/src/components/admin/RoomsAdmin.tsx` — seção Drops na edição de sala
+- `apps/frontend/src/components/Lobby.tsx` — badges de drops
+- `apps/frontend/src/services/api.ts` — funções de drop vault
+
+### Documentação
+- `docs/adr/ADR-011-drop-vault.md` — este documento (v2)
+- `docs/adr/ADR-010-rooms-salas.md` — adicionar referência a `room_drop_chance_bps`
+- `docs/openapi.yaml` — endpoints de drop vault
+- `docs/COMPLIANCE.md` — rastreabilidade de ativos de sponsors
 
 ---
 

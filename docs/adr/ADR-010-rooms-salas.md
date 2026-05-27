@@ -36,17 +36,20 @@ nunca foi implementado e deve ser associado às salas.
 - `current_game_id` (uint64) — partida ativa no momento
 - `nft_template_allowlist` (vector<int32_t>) — templates de NFT que permitem acesso à sala
 - `sponsor_room` (bool) — se `true`, a sala é gerida por sponsor
+- `room_drop_chance_bps` (uint16) — pré-check global de drop por partida (0–10000, default 10000 = sempre testa drops). Ver ADR-011 §7 Fase 0.
 - `status` (name) — `inactive`, `active`, `paused`, `closed`
 - `created_at` / `paused_at` (time_point_sec)
 
 **Off-chain** (MongoDB — coleção `rooms_metadata`):
 - `room_id` (referência à tabela on-chain)
 - `name` / `description` — metadados visuais
-- `drops` — array de configs de drops:
+- `drops` — array de configs de drops (mantido por compatibilidade; fonte de verdade é on-chain via `drop_allocations`):
   - `token_contract` + `symbol` + `amount` (para tokens fungíveis)
   - `template_id` + `collection_name` (para NFTs AtomicAssets)
   - `drop_chance_pct` (probabilidade por partida)
   - `max_drops_per_game` — máximo de drops distribuídos por partida
+- `has_active_drops` (bool, computed) — `true` se há pelo menos 1 `drop_allocation` ativa para esta sala; atualizado pelo dropWorker após cada execução. Usado pelo Lobby para exibir badges sem consultar `drop_allocations` a cada render.
+- `room_drop_chance_bps` (uint16, cópia do on-chain) — configurável pelo sponsor no painel; sincronizado ao salvar a sala.
 - `chat_enabled` (bool)
 - `auto_start_delay_sec` (uint32, default 30) — delay entre fim de uma partida e início da próxima
 - `cover_image_url` (string)
