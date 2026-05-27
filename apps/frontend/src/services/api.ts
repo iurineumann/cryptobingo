@@ -455,7 +455,7 @@ export async function createAdminRoom(data: {
     auto_start_delay_sec?: number;
     drops?: RoomDropConfig[];
 }): Promise<{ transaction_id: string }> {
-    const res = await fetch(`${API_BASE}/admin/rooms`, {
+    const res = await fetch(`${API_BASE}/rooms`, {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify(data),
     });
@@ -463,7 +463,7 @@ export async function createAdminRoom(data: {
 }
 
 export async function updateRoomMetadata(roomId: string, data: Partial<RoomMetadata>): Promise<RoomMetadata> {
-    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/metadata`, {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/metadata`, {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify(data),
     });
@@ -481,7 +481,7 @@ export async function updateRoomSettings(roomId: string, data: {
     max_tickets_per_player?: number;
     nft_template_allowlist?: number[];
 }): Promise<{ transaction_id: string }> {
-    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/settings`, {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/settings`, {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify(data),
     });
@@ -489,21 +489,21 @@ export async function updateRoomSettings(roomId: string, data: {
 }
 
 export async function activateRoom(roomId: string): Promise<{ transaction_id: string }> {
-    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/activate`, {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/activate`, {
         method: 'POST', headers: authHeaders(),
     });
     return handleResponse(res);
 }
 
 export async function pauseRoom(roomId: string): Promise<{ transaction_id: string }> {
-    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/pause`, {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/pause`, {
         method: 'POST', headers: authHeaders(),
     });
     return handleResponse(res);
 }
 
 export async function closeRoom(roomId: string): Promise<{ transaction_id: string }> {
-    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/close`, {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/close`, {
         method: 'POST', headers: authHeaders(),
     });
     return handleResponse(res);

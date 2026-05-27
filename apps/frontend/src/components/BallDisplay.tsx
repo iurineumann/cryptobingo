@@ -3,6 +3,7 @@
 // Ref: ADR-007, asyncapi.yaml v1.1.0
 
 import { useEffect, useRef } from 'react';
+import { useTranslation }   from 'react-i18next';
 import type { DrawnBall }    from '../hooks/useSlowReveal';
 import type { WinnerPayload } from '../types/events';
 
@@ -37,11 +38,18 @@ const COL_BG_VAR: Record<string, string> = {
     O: 'var(--color-bingo-o)',
 };
 
-const WS_STATUS: Record<string, { dotClass: string; label: string }> = {
-    connecting:   { dotClass: 'cb-status-dot cb-status-dot-pending', label: 'Conectando...' },
-    connected:    { dotClass: 'cb-status-dot cb-status-dot-live',    label: 'Ao Vivo'        },
-    disconnected: { dotClass: 'cb-status-dot cb-status-dot-offline', label: 'Desconectado'   },
-    error:        { dotClass: 'cb-status-dot cb-status-dot-error',   label: 'Erro de conexão' },
+const WS_DOT: Record<string, string> = {
+    connecting:   'cb-status-dot cb-status-dot-pending',
+    connected:    'cb-status-dot cb-status-dot-live',
+    disconnected: 'cb-status-dot cb-status-dot-offline',
+    error:        'cb-status-dot cb-status-dot-error',
+};
+
+const WS_LABEL_KEY: Record<string, string> = {
+    connecting:   'game_room.ws_connecting',
+    connected:    'game_room.ws_connected',
+    disconnected: 'game_room.ws_disconnected',
+    error:        'game_room.ws_error',
 };
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -60,6 +68,7 @@ export default function BallDisplay({
     winners, isAborted, abortReason, wsStatus,
 }: BallDisplayProps) {
 
+    const { t }             = useTranslation();
     const ballsEndRef    = useRef<HTMLDivElement>(null);
     const lastBallRef    = useRef<HTMLDivElement>(null);
     const prevLastOrder  = useRef<number | null>(null);
@@ -80,7 +89,8 @@ export default function BallDisplay({
         }
     }, [lastBall?.order]);
 
-    const ws = WS_STATUS[wsStatus];
+    const wsDot  = WS_DOT[wsStatus];
+    const wsLabel = t(WS_LABEL_KEY[wsStatus]);
 
     // ── Estado vazio ─────────────────────────────────────────────────────────
     if (!isDrawing && drawnBalls.length === 0 && winners.length === 0 && !isAborted) {
@@ -88,16 +98,16 @@ export default function BallDisplay({
             <div className="cb-card mt-4">
                 <div className="flex items-center justify-between flex-wrap gap-2 pb-3 mb-3 border-b border-[--cb-border-default]">
                     <span className="font-bold text-[--cb-text-primary]">
-                        🎱 Sorteio em Tempo Real
+                        🎱 {t('game_room.real_time_drawing')}
                     </span>
                     <span className="flex items-center gap-1.5 text-xs text-[--cb-text-secondary]">
-                        <span className={ws.dotClass} aria-hidden="true" />
-                        {ws.label}
+                        <span className={wsDot} aria-hidden="true" />
+                        {wsLabel}
                     </span>
                 </div>
                 <div className="flex flex-col items-center justify-center py-10 gap-2 text-[--cb-text-tertiary]">
                     <span className="text-4xl" aria-hidden="true">⏳</span>
-                    <p className="text-sm">Aguardando início do sorteio...</p>
+                    <p className="text-sm">{t('game_room.waiting_start')}</p>
                 </div>
             </div>
         );
@@ -109,15 +119,15 @@ export default function BallDisplay({
             {/* ── Header ── */}
             <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-[--cb-border-default]">
                 <span className="flex items-center gap-2 font-bold text-[--cb-text-primary]">
-                    🎱 Sorteio — Sala #{gameId}
+                    🎱 {t('game_room.real_time_drawing')} — {t('game_room.breadcrumb_room')} #{gameId}
                     {isDrawing && (
                         <span className="cb-status-dot cb-status-dot-live text-xs font-bold text-[--cb-danger] uppercase tracking-wide"
-                              aria-label="Ao vivo" />
+                              aria-label={t('game_room.badge_live')} />
                     )}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-[--cb-text-secondary]">
-                    <span className={ws.dotClass} aria-hidden="true" />
-                    {ws.label}
+                    <span className={wsDot} aria-hidden="true" />
+                    {wsLabel}
                 </span>
             </div>
 
@@ -126,9 +136,9 @@ export default function BallDisplay({
                 <div className="cb-alert cb-alert-error" role="alert" aria-live="assertive">
                     <span className="text-lg" aria-hidden="true">❌</span>
                     <div>
-                        <p className="font-bold">Sorteio Cancelado</p>
+                        <p className="font-bold">{t('game_room.draw_cancelled')}</p>
                         <p className="text-sm mt-0.5 opacity-90">
-                            Motivo: {abortReason ?? 'Desconhecido'}. Seu saldo será estornado automaticamente.
+                            {t('game_room.abort_reason', { reason: abortReason ?? t('common.unknown') })}
                         </p>
                     </div>
                 </div>
@@ -148,7 +158,7 @@ export default function BallDisplay({
                 >
                     <p className="text-3xl mb-2" aria-hidden="true">🏆</p>
                     <p className="text-xl font-black text-[--color-accent-300] tracking-wide mb-3">
-                        BINGO!
+                        {t('game_room.bingo')}
                     </p>
                     <div className="space-y-2">
                         {winners.map((w, i) => (
@@ -175,7 +185,7 @@ export default function BallDisplay({
             {lastBall && (
                 <div className="flex flex-col items-center gap-2" aria-live="polite" aria-atomic="true">
                     <p className="text-xs text-[--cb-text-tertiary] uppercase tracking-widest">
-                        Última bola
+                        {t('game_room.last_ball_heading')}
                     </p>
                     <div
                         ref={lastBallRef}
@@ -204,7 +214,7 @@ export default function BallDisplay({
             {drawnBalls.length > 0 && (
                 <div>
                     <div className="flex justify-between text-xs text-[--cb-text-tertiary] mb-1.5">
-                        <span>Bolas reveladas</span>
+                        <span>{t('game_room.progress_label')}</span>
                         <span className="font-bold text-[--cb-text-primary]">
                             {drawnBalls.length}<span className="font-normal">/75</span>
                         </span>
@@ -229,7 +239,7 @@ export default function BallDisplay({
             {drawnBalls.length > 0 && (
                 <div>
                     <p className="text-xs text-[--cb-text-tertiary] mb-2 uppercase tracking-wide">
-                        Sequência
+                        {t('game_room.ball_order')}
                     </p>
                     <div
                         className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1"

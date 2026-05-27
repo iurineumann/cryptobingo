@@ -3,6 +3,7 @@
 // Ref: ADR-001, SPEC.md §2.1
 
 import { useState }          from 'react';
+import { useTranslation }    from 'react-i18next';
 import { Session }           from '@wharfkit/session';
 import { useTicketPurchase } from '../hooks/useTicketPurchase';
 import TicketGrid            from './TicketGrid';
@@ -24,6 +25,7 @@ export default function BuyTicketModal({
 }: BuyTicketModalProps) {
 
     const [count, setCount] = useState(1);
+    const { t } = useTranslation();
     const { isPurchasing, purchaseError, lastPurchase, purchaseTickets, clearError } = useTicketPurchase();
 
     const handleBuy = async () => {
@@ -54,16 +56,16 @@ export default function BuyTicketModal({
                     <div className="cb-modal-header">
                         <h2 id="modal-success-title" className="cb-modal-title flex items-center gap-2">
                             <span aria-hidden="true">🎉</span>
-                            Cartelas Adquiridas!
+                            {t('buy_ticket.success_title')}
                         </h2>
-                        <button className="cb-modal-close" onClick={onClose} aria-label="Fechar">✕</button>
+                        <button className="cb-modal-close" onClick={onClose} aria-label={t('common.close')}>✕</button>
                     </div>
 
                     {/* Confirmação */}
                     <div className="cb-alert cb-alert-success mb-4">
                         <span aria-hidden="true">✅</span>
                         <span>
-                            <strong>{lastPurchase.ticketCount}</strong> cartela{lastPurchase.ticketCount > 1 ? 's' : ''} adquirida{lastPurchase.ticketCount > 1 ? 's' : ''} na sala <strong>#{gameId}</strong>.
+                            <strong>{lastPurchase.ticketCount}</strong> {t('buy_ticket.success_msg', { count: lastPurchase.ticketCount, gameId })}
                         </span>
                     </div>
 
@@ -82,7 +84,7 @@ export default function BuyTicketModal({
 
                     {/* Cartelas */}
                     <h3 className="text-sm font-semibold text-[--cb-text-secondary] uppercase tracking-wide mb-3">
-                        Suas Cartelas
+                        {t('buy_ticket.your_tickets')}
                     </h3>
                     <div className="flex flex-wrap gap-5 justify-center max-h-96 overflow-y-auto py-2">
                         {lastPurchase.tickets.map((ticket, idx) => (
@@ -99,7 +101,7 @@ export default function BuyTicketModal({
                         className="cb-btn cb-btn-primary cb-btn-pill w-full mt-5"
                         onClick={onClose}
                     >
-                        Fechar
+                        {t('buy_ticket.close')}
                     </button>
                 </div>
             </div>
@@ -121,13 +123,13 @@ export default function BuyTicketModal({
                 <div className="cb-modal-header">
                     <h2 id="modal-buy-title" className="cb-modal-title flex items-center gap-2">
                         <span aria-hidden="true">🎲</span>
-                        Comprar Cartelas
+                        {t('buy_ticket.title')}
                     </h2>
                     <button
                         className="cb-modal-close"
                         onClick={onClose}
                         disabled={isPurchasing}
-                        aria-label="Fechar"
+                        aria-label={t('common.close')}
                     >
                         ✕
                     </button>
@@ -135,21 +137,21 @@ export default function BuyTicketModal({
 
                 {/* Identificação do jogo */}
                 <p className="text-sm text-[--cb-text-secondary] mb-5">
-                    Sala <span className="font-bold text-[--cb-text-primary]">#{gameId}</span>
-                    <span className="cb-badge cb-badge-success ml-2">🟢 Vendas Abertas</span>
+                    {t('game_room.breadcrumb_room')} <span className="font-bold text-[--cb-text-primary]">#{gameId}</span>
+                    <span className="cb-badge cb-badge-success ml-2">🟢 {t('lobby.sales_open')}</span>
                 </p>
 
                 {/* Seletor de quantidade */}
                 <fieldset className="mb-5">
                     <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-3">
-                        Quantidade de cartelas
+                        {t('buy_ticket.quantity_label')}
                     </legend>
                     <div className="flex items-center justify-center gap-4">
                         <button
                             className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
                             onClick={dec}
                             disabled={isPurchasing || count <= 1}
-                            aria-label="Diminuir quantidade"
+                            aria-label={t('buy_ticket.decrease_aria')}
                         >
                             −
                         </button>
@@ -164,7 +166,7 @@ export default function BuyTicketModal({
                             className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
                             onClick={inc}
                             disabled={isPurchasing || count >= MAX_TICKETS}
-                            aria-label="Aumentar quantidade"
+                            aria-label={t('buy_ticket.increase_aria')}
                         >
                             +
                         </button>
@@ -192,16 +194,16 @@ export default function BuyTicketModal({
                 {/* Resumo de custo */}
                 <div className="rounded-xl border border-[--cb-border-default] bg-[--cb-bg-sunken] p-4 mb-5 space-y-2">
                     <div className="flex justify-between text-sm text-[--cb-text-secondary]">
-                        <span>Preço unitário</span>
+                        <span>{t('buy_ticket.price_unit')}</span>
                         <span className="font-mono">{ticketPrice.quantity}</span>
                     </div>
                     <div className="flex justify-between text-sm text-[--cb-text-secondary]">
-                        <span>Quantidade</span>
+                        <span>{t('buy_ticket.quantity')}</span>
                         <span>× {count}</span>
                     </div>
                     <div className="cb-divider !my-1.5" />
                     <div className="flex justify-between font-bold">
-                        <span className="text-[--cb-text-primary]">Total</span>
+                        <span className="text-[--cb-text-primary]">{t('buy_ticket.total')}</span>
                         <span className="text-[--cb-brand] text-lg tabular-nums font-mono">
                             {totalDisplay}
                         </span>
@@ -223,7 +225,7 @@ export default function BuyTicketModal({
                         onClick={onClose}
                         disabled={isPurchasing}
                     >
-                        Cancelar
+                        {t('common.cancel')}
                     </button>
                     <button
                         className={[
@@ -235,13 +237,13 @@ export default function BuyTicketModal({
                         aria-busy={isPurchasing}
                     >
                         {isPurchasing
-                            ? 'Processando…'
-                            : `Comprar ${count} Cartela${count > 1 ? 's' : ''}`}
+                            ? t('buy_ticket.processing')
+                            : t('buy_ticket.buy', { count })}
                     </button>
                 </div>
 
                 <p className="text-xs text-center text-[--cb-text-tertiary] mt-3">
-                    Debitado do saldo interno via{' '}
+                    {t('buy_ticket.debited_from')}{' '}
                     <span className="font-mono">bingo.game</span>
                 </p>
             </div>

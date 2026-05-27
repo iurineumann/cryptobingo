@@ -63,7 +63,7 @@ export default function RoomsAdmin() {
             const res = await fetchRooms();
             setRooms(res.rooms);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao carregar salas');
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_load'));
         } finally {
             setLoading(false);
         }
@@ -80,7 +80,7 @@ export default function RoomsAdmin() {
     }, [error]);
 
     const handleCreate = async () => {
-        if (form.room_id === 0) { setError('room_id é obrigatório'); return; }
+        if (form.room_id === 0) { setError(t('admin.rooms_required_room_id')); return; }
         setSubmitting(true);
         setError(null);
         try {
@@ -104,12 +104,12 @@ export default function RoomsAdmin() {
                 chat_enabled: form.chat_enabled,
                 drops: form.drops.length > 0 ? form.drops as RoomDropConfig[] : undefined,
             });
-            setSuccess(`Sala ${form.room_id} criada!`);
+            setSuccess(t('admin.rooms_success_create', { id: form.room_id }));
             setShowCreate(false);
             setForm(defaultForm);
             await loadRooms();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao criar sala');
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_create'));
         } finally {
             setSubmitting(false);
         }
@@ -118,30 +118,30 @@ export default function RoomsAdmin() {
     const handleActivate = async (roomId: string) => {
         try {
             await activateRoom(roomId);
-            setSuccess(`Sala ${roomId} ativada`);
+            setSuccess(t('admin.rooms_success_activate', { id: roomId }));
             await loadRooms();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao ativar sala');
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_activate'));
         }
     };
 
     const handlePause = async (roomId: string) => {
         try {
             await pauseRoom(roomId);
-            setSuccess(`Sala ${roomId} pausada`);
+            setSuccess(t('admin.rooms_success_pause', { id: roomId }));
             await loadRooms();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao pausar sala');
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_pause'));
         }
     };
 
     const handleClose = async (roomId: string) => {
         try {
             await closeRoom(roomId);
-            setSuccess(`Sala ${roomId} fechada`);
+            setSuccess(t('admin.rooms_success_close', { id: roomId }));
             await loadRooms();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao fechar sala');
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_close'));
         }
     };
 
@@ -150,9 +150,9 @@ export default function RoomsAdmin() {
     return (
         <section>
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-[--cb-text-primary]">Gerenciar Salas</h2>
+                <h2 className="text-lg font-bold text-[--cb-text-primary]">{t('admin.rooms_title')}</h2>
                 <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={() => setShowCreate(s => !s)}>
-                    {showCreate ? 'Cancelar' : 'Nova Sala'}
+                    {showCreate ? t('admin.rooms_cancel') : t('admin.rooms_new')}
                 </button>
             </div>
 
@@ -162,81 +162,81 @@ export default function RoomsAdmin() {
             {/* ── Create Form ── */}
             {showCreate && (
                 <div className="cb-card mb-4 p-4 space-y-3">
-                    <h3 className="font-bold text-sm">Nova Sala</h3>
+                    <h3 className="font-bold text-sm">{t('admin.rooms_new')}</h3>
                     <div className="grid grid-cols-2 gap-3">
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Room ID *
+                            {t('admin.rooms_form_room_id')}
                             <input className="cb-input w-full mt-1" type="number" value={form.room_id || ''}
                                 onChange={e => setForm(f => ({ ...f, room_id: parseInt(e.target.value) || 0 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Sponsor (vazio = sistema)
+                            {t('admin.rooms_form_sponsor')}
                             <input className="cb-input w-full mt-1" value={form.sponsor}
                                 onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            GameType ID
+                            {t('admin.rooms_form_gametype')}
                             <input className="cb-input w-full mt-1" type="number" value={form.gametype_id || ''}
                                 onChange={e => setForm(f => ({ ...f, gametype_id: parseInt(e.target.value) || 0 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Moeda (ex: 0.0000 BINGO)
+                            {t('admin.rooms_form_currency')}
                             <input className="cb-input w-full mt-1" value={form.currency_quantity}
                                 onChange={e => setForm(f => ({ ...f, currency_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Contrato Moeda
+                            {t('admin.rooms_form_currency_contract')}
                             <input className="cb-input w-full mt-1" value={form.currency_contract}
                                 onChange={e => setForm(f => ({ ...f, currency_contract: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Preço Mínimo
+                            {t('admin.rooms_form_price_min')}
                             <input className="cb-input w-full mt-1" value={form.ticket_price_min_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_min_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Preço Máximo
+                            {t('admin.rooms_form_price_max')}
                             <input className="cb-input w-full mt-1" value={form.ticket_price_max_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_max_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Preço Padrão
+                            {t('admin.rooms_form_price_default')}
                             <input className="cb-input w-full mt-1" value={form.ticket_price_default_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_default_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Weight (100 = 1.00x)
+                            {t('admin.rooms_form_weight')}
                             <input className="cb-input w-full mt-1" type="number" value={form.weight}
                                 onChange={e => setForm(f => ({ ...f, weight: parseInt(e.target.value) || 100 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Max Tickets/Jogador (0 = sem limite)
+                            {t('admin.rooms_form_max_tickets')}
                             <input className="cb-input w-full mt-1" type="number" value={form.max_tickets_per_player}
                                 onChange={e => setForm(f => ({ ...f, max_tickets_per_player: parseInt(e.target.value) || 0 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Nome da Sala
+                            {t('admin.rooms_meta_name')}
                             <input className="cb-input w-full mt-1" value={form.name}
                                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Descrição
+                            {t('admin.rooms_meta_description')}
                             <input className="cb-input w-full mt-1" value={form.description}
                                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
-                            Delay Auto-Start (s)
+                            {t('admin.rooms_form_auto_start')}
                             <input className="cb-input w-full mt-1" type="number" value={form.auto_start_delay_sec}
                                 onChange={e => setForm(f => ({ ...f, auto_start_delay_sec: parseInt(e.target.value) || 30 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary] flex items-center gap-2 mt-4">
                             <input type="checkbox" checked={form.chat_enabled}
                                 onChange={e => setForm(f => ({ ...f, chat_enabled: e.target.checked }))} />
-                            Chat Habilitado
+                            {t('admin.rooms_form_chat')}
                         </label>
                     </div>
                     <button className="cb-btn cb-btn-primary mt-2" onClick={handleCreate} disabled={submitting}>
-                        {submitting ? 'Criando...' : 'Criar Sala'}
+                        {submitting ? t('admin.rooms_creating') : t('admin.rooms_create')}
                     </button>
                 </div>
             )}
@@ -245,7 +245,7 @@ export default function RoomsAdmin() {
             {loading ? (
                 <div className="flex justify-center py-8"><span className="cb-spinner w-8 h-8" /></div>
             ) : rooms.length === 0 ? (
-                <p className="text-sm text-[--cb-text-tertiary] py-8 text-center">Nenhuma sala encontrada.</p>
+                <p className="text-sm text-[--cb-text-tertiary] py-8 text-center">{t('admin.rooms_empty')}</p>
             ) : (
                 <div className="space-y-3">
                     {rooms.map(room => (
@@ -253,11 +253,11 @@ export default function RoomsAdmin() {
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h3 className="font-bold text-[--cb-text-primary]">
-                                        {room.metadata?.name ?? `Sala #${room.room_id}`}
+                                        {room.metadata?.name ?? `${t('game_room.breadcrumb_room')} #${room.room_id}`}
                                     </h3>
                                     <p className="text-xs text-[--cb-text-tertiary] mt-1">
                                         Room ID: {room.room_id} | Sponsor: {room.sponsor}
-                                        {room.sponsor_room ? ' (Patrocinada)' : ''}
+                                        {room.sponsor_room ? ` (${t('admin.rooms_sponsored')})` : ''}
                                         {' | '}Status: {room.status}
                                         {room.current_game_id !== '0' && ` | Game: #${room.current_game_id}`}
                                     </p>
@@ -265,17 +265,17 @@ export default function RoomsAdmin() {
                                 <div className="flex gap-2">
                                     {room.status === 'inactive' && (
                                         <button className="cb-btn cb-btn-primary cb-btn-xs" onClick={() => handleActivate(room.room_id)}>
-                                            Ativar
+                                            {t('admin.rooms_activate')}
                                         </button>
                                     )}
                                     {room.status === 'active' && (
                                         <button className="cb-btn cb-btn-outline cb-btn-xs" onClick={() => handlePause(room.room_id)}>
-                                            Pausar
+                                            {t('admin.rooms_pause')}
                                         </button>
                                     )}
                                     {(room.status === 'active' || room.status === 'paused') && (
                                         <button className="cb-btn cb-btn-ghost cb-btn-xs text-[--cb-danger]" onClick={() => handleClose(room.room_id)}>
-                                            Fechar
+                                            {t('admin.rooms_close')}
                                         </button>
                                     )}
                                 </div>

@@ -169,7 +169,7 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
 // PUT /api/v1/admin/rooms/:roomId/metadata — Atualiza metadados off-chain
 // Auth: JWT admin ou sponsor
 // ==========================================
-export async function updateRoomMetadata(req: Request, res: Response): Promise<void> {
+export async function upsertRoomMetadata(req: Request, res: Response): Promise<void> {
     const { roomId } = req.params;
     const {
         name, description, cover_image_url, rules_summary,

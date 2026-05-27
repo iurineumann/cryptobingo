@@ -23,7 +23,7 @@ import {
     ensureNonceTable,
     logout,
 } from './controllers/authController';
-import { getProfile, updatePreferences }             from './controllers/profileController';
+import { getProfile, updatePreferences, listUsers }   from './controllers/profileController';
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
@@ -39,8 +39,8 @@ import {
 }                                                    from './controllers/sponsorController';
 import { getMyNfts }                                 from './controllers/nftController';
 import {
-    listRooms, getRoom, upsertRoomMetadata,
-    activateRoom, pauseRoom, closeRoom,
+    listRooms, getRoom, createRoom, upsertRoomMetadata,
+    updateRoomSettings, activateRoom, pauseRoom, closeRoom,
     listSponsorRooms,
 }                                                    from './controllers/roomController';
 
@@ -199,7 +199,9 @@ function registerRoutes(): void {
     // ── Rooms (ADR-010) ──────────────────────────────────────────────
     app.get('/api/v1/rooms',                               playerLimiter, listRooms);
     app.get('/api/v1/rooms/:roomId',                       playerLimiter, getRoom);
+    app.post('/api/v1/rooms',                        adminLimiter, requireAuth, requireRole('admin'), createRoom);
     app.put('/api/v1/rooms/:roomId/metadata',        adminLimiter, requireAuth, requireRole('admin'), upsertRoomMetadata);
+    app.put('/api/v1/rooms/:roomId/settings',        adminLimiter, requireAuth, requireRole('admin'), updateRoomSettings);
     app.post('/api/v1/rooms/:roomId/activate',       adminLimiter, requireAuth, requireRole('admin'), activateRoom);
     app.post('/api/v1/rooms/:roomId/pause',          adminLimiter, requireAuth, requireRole('admin'), pauseRoom);
     app.post('/api/v1/rooms/:roomId/close',          adminLimiter, requireAuth, requireRole('admin'), closeRoom);
@@ -217,6 +219,9 @@ function registerRoutes(): void {
 
     // ── Admin: Ledger sync (JWT + admin) ──────────────────────────────────────
     app.post('/api/v1/admin/ledger/sync', adminLimiter, requireAuth, requireRole('admin'), syncGameToLedger);
+
+    // ── Admin: Users (JWT + admin) ────────────────────────────────────────────
+    app.get('/api/v1/admin/users', adminLimiter, requireAuth, requireRole('admin'), listUsers);
 
     // ── Sponsors B2B (SPEC.md §1.4, brief.md §1) ─────────────────────────────
     app.get ('/api/v1/sponsors/campaigns',                         playerLimiter, listCampaigns);

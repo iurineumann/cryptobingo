@@ -8,6 +8,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
+import { updateUserLocale } from '../../services/api';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import AdminDashboard  from './AdminDashboard';
 import PatternsAdmin   from './PatternsAdmin';
@@ -30,6 +31,7 @@ interface AdminLayoutProps {
   section:        string;
   onNavigate:     (section: string) => void;
   onLogout:       () => void;
+  onBackToLobby?: () => void;
 }
 
 // Itens da sidebar — mapeados da especificação do layout.jsx do Claude Design
@@ -40,12 +42,19 @@ interface AdminLayoutProps {
 // ==========================================
 
 export default function AdminLayout({
-  profile, session, theme, onToggleTheme, section, onNavigate, onLogout,
+  profile, session, theme, onToggleTheme, section, onNavigate, onLogout, onBackToLobby,
 }: AdminLayoutProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const handleAdminLangChange = async (locale: string) => {
+    i18n.changeLanguage(locale);
+    if (session) {
+      try { await updateUserLocale(locale); } catch { }
+    }
+  };
+
   const ADMIN_NAV = [
     { id: 'dashboard',  label: t('admin.dashboard'),  icon: '◆', group: 'operation' },
-    { id: 'rooms',      label: 'Salas',                icon: '🏠', group: 'operation' },
+    { id: 'rooms',      label: t('admin.rooms'),      icon: '🏠', group: 'operation' },
     { id: 'patterns',   label: t('admin.patterns'),   icon: '▦', group: 'operation' },
     { id: 'gametypes',  label: t('admin.gametypes'),  icon: '◇', group: 'operation' },
     { id: 'campaigns',  label: t('admin.campaigns'),  icon: '▲', group: 'operation' },
@@ -98,12 +107,31 @@ export default function AdminLayout({
             </span>
           </span>
 
+          <select
+            value={i18n.language}
+            onChange={(e) => handleAdminLangChange(e.target.value)}
+            className="cb-input cb-select"
+            style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.75rem', height: '2.25rem', width: 'auto' }}
+            aria-label={t('common.language') ?? 'Idioma'}
+          >
+            <option value="pt-BR">PT</option>
+            <option value="en-US">EN</option>
+            <option value="zh-CN">中</option>
+          </select>
+
           <button
             className="cb-theme-toggle"
             onClick={onToggleTheme}
             aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
           >
             {theme === 'dark' ? '☾' : '☀'}
+          </button>
+
+          <button
+            className="cb-btn cb-btn-ghost cb-btn-sm"
+            onClick={() => onBackToLobby?.()}
+          >
+            {t('game_room.back_to_lobby')}
           </button>
 
           <button
@@ -193,7 +221,7 @@ export default function AdminLayout({
             </div>
           </div>
 
-          <main className="site-main">
+          <main className="site-main" style={{ padding: '1.5rem' }}>
             {renderContent()}
           </main>
         </div>
