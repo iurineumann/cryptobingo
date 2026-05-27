@@ -147,8 +147,8 @@ async function signWithTransaction(
     }
 
     const signature          = result.signatures[0].toString();
-    const publicKey          = session.publicKey?.toString();
-    const transactionPayload = result.transaction?.toJSON();
+    const publicKey          = (session as any).publicKey?.toString();
+    const transactionPayload = (result.transaction as any)?.toJSON();
 
     if (!publicKey) {
         setAuthError('Chave pública não disponível na sessão Wharfkit.');

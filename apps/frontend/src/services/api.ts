@@ -1,16 +1,6 @@
-// apps/frontend/src/services/api.ts
-// Camada de comunicação com o api-gateway.
-// Rotas protegidas enviam JWT via Authorization: Bearer <token>.
-// Token armazenado em sessionStorage — nunca em localStorage.
-// Ref: ADR-006 (JWT Auth), openapi.yaml v1.2.0
-
-import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import type { MongoUserProfile, PatternType } from '@cryptobingo/shared-types';
 
 const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
-
-// ==========================================
-// GESTÃO DE TOKEN JWT
-// ==========================================
 
 let _token: string | null = sessionStorage.getItem('cb_jwt');
 
@@ -62,7 +52,6 @@ interface VerifyResponse {
     token: string;
 }
 
-/** Passo 1: Solicita nonce para o wallet informado. */
 export async function requestAuthChallenge(wallet: string): Promise<ChallengeResponse> {
     const res = await fetch(`${API_BASE}/auth/challenge`, {
         method:  'POST',
@@ -72,14 +61,6 @@ export async function requestAuthChallenge(wallet: string): Promise<ChallengeRes
     return handleResponse<ChallengeResponse>(res);
 }
 
-/**
- * Passo 2: Envia assinatura e obtém JWT.
- * Armazena o token automaticamente em memória + sessionStorage.
- *
- * @param transactionPayload - Opcional. Presente no modo produção (eosio.null:nonce).
- *   Ausente no modo dev (digest puro com PrivateKey.signDigest).
- *   O servidor distingue os dois modos pela presença deste campo.
- */
 export async function verifyAuthChallenge(
     wallet:              string,
     nonce:               string,
@@ -95,7 +76,6 @@ export async function verifyAuthChallenge(
             nonce,
             signature,
             public_key: publicKey,
-            // Presente apenas no modo produção
             ...(transactionPayload !== undefined && { transactionPayload }),
         }),
     });
@@ -108,7 +88,6 @@ export async function verifyAuthChallenge(
 // PERFIL (protegido por JWT)
 // ==========================================
 
-/** Busca o perfil do usuário autenticado via JWT. */
 export async function fetchUserProfile(): Promise<MongoUserProfile> {
     const res = await fetch(`${API_BASE}/profile`, {
         headers: authHeaders(),
@@ -116,7 +95,6 @@ export async function fetchUserProfile(): Promise<MongoUserProfile> {
     return handleResponse<MongoUserProfile>(res);
 }
 
-/** Atualiza o locale do usuário autenticado. */
 export async function updateUserLocale(locale: string): Promise<MongoUserProfile> {
     const res = await fetch(`${API_BASE}/profile`, {
         method:  'PUT',
@@ -131,8 +109,8 @@ export async function updateUserLocale(locale: string): Promise<MongoUserProfile
 // ==========================================
 
 export interface SignedTicket {
-    matrix:    number[];  // 24 posições: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4]
-    signature: string;    // "SIG_K1_..."
+    matrix:    number[];
+    signature: string;
 }
 
 export interface GenerateTicketsResponse {
@@ -142,11 +120,6 @@ export interface GenerateTicketsResponse {
     tickets: SignedTicket[];
 }
 
-/**
- * Solicita ao backend N cartelas assinadas para um jogo.
- * Retorna array pronto para buytickets() on-chain.
- * Ref: ADR-001, SPEC.md §2.1
- */
 export async function generateSignedTickets(
     gameId: string,
     count:  number,
@@ -157,4 +130,386 @@ export async function generateSignedTickets(
         body:    JSON.stringify({ count }),
     });
     return handleResponse<GenerateTicketsResponse>(res);
+}
+
+// ==========================================
+// ADMIN — GAMETYPES (RBAC: admin)
+// ==========================================
+
+export interface BlockchainPattern {
+    pattern_id: string;
+    name: string;
+    mask: number;
+}
+
+export interface BlockchainGametype {
+    gametype_id: string;
+    name: string;
+    base_multiplier: number;
+    rules: Array<{ pattern_id: string; weight: number }>;
+}
+
+export async function fetchAdminPatterns(): Promise<{ patterns: BlockchainPattern[] }> {
+    const res = await fetch(`${API_BASE}/admin/patterns`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function createAdminPattern(data: { pattern_id: number; name: string; mask: number }): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/patterns`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function deleteAdminPattern(patternId: string): Promise<void> {
+    await fetch(`${API_BASE}/admin/patterns/${patternId}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+}
+
+export async function fetchAdminGametypes(): Promise<{ gametypes: BlockchainGametype[] }> {
+    const res = await fetch(`${API_BASE}/admin/gametypes`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export interface ExtendedRule {
+    pattern_id: string;
+    weight:     number;
+    type:       PatternType;
+}
+
+export interface CombinationClauseInput {
+    type: 'all_of' | 'any_of' | 'n_of_type';
+    pattern_ids?:  string[];
+    pattern_type?: PatternType;
+    count?:        number;
+}
+
+export interface CombinationRuleInput {
+    name:     string;
+    weight:   number;
+    clauses:  CombinationClauseInput[];
+}
+
+export async function createAdminGametype(data: {
+    gametype_id: number; name: string; base_multiplier: number;
+    rules: Array<{ pattern_id: string; weight: number }>;
+    rules_extended?: ExtendedRule[];
+    combinations?: CombinationRuleInput[];
+}): Promise<{ gametype_id: number; transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/gametypes`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function deleteAdminGametype(gametypeId: string): Promise<void> {
+    await fetch(`${API_BASE}/admin/gametypes/${gametypeId}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+}
+
+export async function fetchGametypeMetadata(gametypeId: string): Promise<{
+    gametype_id:  string;
+    rules:        ExtendedRule[];
+    combinations: CombinationRuleInput[];
+}> {
+    const res = await fetch(`${API_BASE}/admin/gametypes/${gametypeId}/metadata`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function upsertGametypeMetadata(gametypeId: string, data: {
+    rules:        ExtendedRule[];
+    combinations: CombinationRuleInput[];
+}): Promise<void> {
+    await fetch(`${API_BASE}/admin/gametypes/${gametypeId}/metadata`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+}
+
+// ==========================================
+// ADMIN — MONTE CARLO SIMULATION
+// ==========================================
+
+export interface McPatternInput {
+    pattern_id: number;
+    name:       string;
+    mask:       number;
+    weight:     number;
+}
+
+export interface McPatternStats {
+    name:             string;
+    mask:             number;
+    weight:           number;
+    hit_count:        number;
+    hit_rate:         number;
+    avg_balls_needed: number;
+}
+
+export interface McResult {
+    gametype_name:         string;
+    simulations:           number;
+    tickets_per_game:      number;
+    ticket_price:          number;
+    base_multiplier:       number;
+    rtp:                   number;
+    rtp_pct:               string;
+    ggr:                   number;
+    ggr_pct:               string;
+    total_wagered:         number;
+    total_paid_out:        number;
+    avg_payout_per_game:   number;
+    avg_winners_per_game:  number;
+    pattern_stats:         McPatternStats[];
+    alerts:                string[];
+    is_viable:             boolean;
+    duration_ms:           number;
+    computed_at:           string;
+}
+
+export async function simulateWeights(data: {
+    gametype_name:   string;
+    base_multiplier: number;
+    patterns:        McPatternInput[];
+    simulations?:    number;
+}): Promise<McResult> {
+    const res = await fetch(`${API_BASE}/admin/simulate-weights`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ ...data, simulations: data.simulations ?? 5_000 }),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
+// ADMIN — STATISTICS / COMPLIANCE
+// ==========================================
+
+export interface RtpReport {
+    period: string;
+    total_games: number;
+    total_wagered: number;
+    total_paid_out: number;
+    total_ggr: number;
+    avg_rtp_display: string;
+    avg_ggr_display: string;
+    currency: string;
+    generated_at: string;
+}
+
+export async function fetchRtpReport(periodDays = 30): Promise<RtpReport> {
+    const res = await fetch(`${API_BASE}/statistics/rtp?periodDays=${periodDays}`);
+    return handleResponse<RtpReport>(res);
+}
+
+export interface GameHistoryEntry {
+    game_id: string;
+    status: string;
+    total_wagered: number;
+    total_paid_out: number;
+    rtp_pct: number;
+    resolved_at: string | null;
+}
+
+export async function fetchGamesHistory(limit = 50): Promise<{ games: GameHistoryEntry[] }> {
+    const res = await fetch(`${API_BASE}/statistics/games?limit=${limit}`);
+    return handleResponse(res);
+}
+
+// ==========================================
+// SPONSORS / CAMPAIGNS (B2B)
+// ==========================================
+
+export interface BlockchainCampaign {
+    campaign_id: string;
+    sponsor: string;
+    budget: { quantity: string; contract: string };
+    remaining: { quantity: string; contract: string };
+    payout_per_game: { quantity: string; contract: string };
+    status: string;
+    leftover_policy: string;
+}
+
+export async function fetchCampaigns(): Promise<{ campaigns: BlockchainCampaign[] }> {
+    const res = await fetch(`${API_BASE}/sponsors/campaigns`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function fetchCampaign(campaignId: string): Promise<BlockchainCampaign> {
+    const res = await fetch(`${API_BASE}/sponsors/campaigns/${campaignId}`, { headers: authHeaders() });
+    return handleResponse<BlockchainCampaign>(res);
+}
+
+export async function linkCampaignToGame(campaignId: string, gameId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/sponsors/campaigns/${campaignId}/link`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ game_id: gameId }),
+    });
+    return handleResponse(res);
+}
+
+export async function closeCampaign(campaignId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/sponsors/campaigns/${campaignId}/close`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
+// NFTS
+// ==========================================
+
+export interface NftAsset {
+    asset_id: string;
+    collection_name: string;
+    schema_name: string;
+    template_id: string;
+    name: string;
+    img_url: string;
+}
+
+export async function fetchMyNfts(): Promise<{ nfts: NftAsset[] }> {
+    const res = await fetch(`${API_BASE}/nfts/my-assets`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+// ==========================================
+// ROOMS (ADR-010)
+// ==========================================
+
+export interface RoomDropConfig {
+    token_contract?:    string;
+    symbol?:            string;
+    amount?:            string;
+    template_id?:       number;
+    collection_name?:   string;
+    drop_chance_pct:    number;
+    max_drops_per_game: number;
+}
+
+export interface RoomMetadata {
+    room_id:             string;
+    name:                string;
+    description:         string;
+    cover_image_url:     string;
+    rules_summary:       string;
+    chat_enabled:        boolean;
+    auto_start_delay_sec: number;
+    drops:               RoomDropConfig[];
+}
+
+export interface BlockchainRoom {
+    room_id:                string;
+    sponsor:                string;
+    gametype_id:            string;
+    currency:               { quantity: string; contract: string };
+    ticket_price_min:       { quantity: string; contract: string };
+    ticket_price_max:       { quantity: string; contract: string };
+    ticket_price_default:   { quantity: string; contract: string };
+    weight:                 string;
+    max_tickets_per_player: number;
+    current_game_id:        string;
+    nft_template_allowlist: number[];
+    sponsor_room:           boolean;
+    status:                 string;
+    created_at:             number;
+}
+
+export interface EnrichedRoom extends BlockchainRoom {
+    metadata: RoomMetadata | null;
+}
+
+export async function fetchRooms(): Promise<{ rooms: EnrichedRoom[] }> {
+    const res = await fetch(`${API_BASE}/rooms`);
+    return handleResponse(res);
+}
+
+export async function fetchRoom(roomId: string): Promise<EnrichedRoom> {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}`);
+    return handleResponse(res);
+}
+
+export async function createAdminRoom(data: {
+    room_id: number;
+    sponsor?: string;
+    gametype_id?: number;
+    currency_quantity: string;
+    currency_contract: string;
+    ticket_price_min_quantity?: string;
+    ticket_price_min_contract?: string;
+    ticket_price_max_quantity?: string;
+    ticket_price_max_contract?: string;
+    ticket_price_default_quantity?: string;
+    ticket_price_default_contract?: string;
+    weight?: number;
+    max_tickets_per_player?: number;
+    nft_template_allowlist?: number[];
+    name?: string;
+    description?: string;
+    cover_image_url?: string;
+    rules_summary?: string;
+    chat_enabled?: boolean;
+    auto_start_delay_sec?: number;
+    drops?: RoomDropConfig[];
+}): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function updateRoomMetadata(roomId: string, data: Partial<RoomMetadata>): Promise<RoomMetadata> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/metadata`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function updateRoomSettings(roomId: string, data: {
+    ticket_price_min_quantity: string;
+    ticket_price_min_contract: string;
+    ticket_price_max_quantity: string;
+    ticket_price_max_contract: string;
+    ticket_price_default_quantity: string;
+    ticket_price_default_contract: string;
+    weight: number;
+    max_tickets_per_player?: number;
+    nft_template_allowlist?: number[];
+}): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/settings`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function activateRoom(roomId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/activate`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function pauseRoom(roomId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/pause`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function closeRoom(roomId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/close`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function fetchSponsorRooms(): Promise<{ rooms: EnrichedRoom[] }> {
+    const res = await fetch(`${API_BASE}/sponsor/rooms`, { headers: authHeaders() });
+    return handleResponse(res);
 }

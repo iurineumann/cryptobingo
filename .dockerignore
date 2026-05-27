@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+dist
+tsconfig.tsbuildinfo
+*.md
+.env
+.env.*
+!.env.example
+coverage
+.turbo

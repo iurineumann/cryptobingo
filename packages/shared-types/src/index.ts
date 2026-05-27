@@ -7,7 +7,8 @@
 // 1. TIPOS GLOBAIS E INTERNACIONALIZAÇÃO (i18n)
 // ==========================================
 export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 'zh-CN' | 'ja-JP';
-export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin';
+export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
+export type PatternType = 'regular' | 'combination';
 
 // ==========================================
 // 2. ESTRUTURAS ON-CHAIN (Espelho fiel do bingo.hpp / bingo.abi)
@@ -42,6 +43,7 @@ export interface BlockchainGameState {
     campaign_id:  string;           // uint64 — '0' se não patrocinado
     gametype_id:  string;           // uint64 — '0' se modo legado
     end_time:     number;           // time_point_sec (unix timestamp) — 0 até claimwin/abortgame
+    room_id:      string;           // uint64 — '0' se jogo avulso
 }
 
 /**
@@ -117,6 +119,28 @@ export interface BlockchainGametype {
     rules:           PatternRule[];
 }
 
+/**
+ * Espelha a tabela `rooms` do bingo.hpp (ADR-010).
+ * Scope: _self. Primary Key: room_id.
+ */
+export interface BlockchainRoom {
+    room_id:                string;
+    sponsor:                string;
+    gametype_id:            string;
+    currency:               { quantity: string; contract: string };
+    ticket_price_min:       { quantity: string; contract: string };
+    ticket_price_max:       { quantity: string; contract: string };
+    ticket_price_default:   { quantity: string; contract: string };
+    weight:                 string;
+    max_tickets_per_player: number;
+    current_game_id:        string;
+    nft_template_allowlist: number[];
+    sponsor_room:           boolean;
+    status:                 string;
+    created_at:             number;
+    paused_at:              number;
+}
+
 // ==========================================
 // 3. POSTGRESQL MODELS (Ledger & Compliance — Lei 14.790/2023)
 // Ref: architecture.md §6.1, COMPLIANCE.md §2
@@ -167,6 +191,7 @@ export interface PostgresTransactionLedger {
 export interface MongoUserProfile {
     wallet_address:     string;
     nickname:           string;
+    role:               UserRole;
     avatar_nft_asset_id: string | null;
     preferences: {
         locale:           SupportedLocale;
