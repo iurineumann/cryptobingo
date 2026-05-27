@@ -18,7 +18,7 @@
 //
 // Ref: SPEC.md §3.2
 
-import { redisClient }      from '../../../apps/api-gateway/src/database/redis';
+import { redisClient }      from './redis';
 import { rpcClient }        from '@cryptobingo/blockchain-core';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
 
@@ -101,7 +101,7 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
             scope:       gameId,
             table:       'tickets',
             limit:       100,
-            lower_bound: lowerBound,
+            lower_bound: lowerBound as any,
             json:        true,
         });
 
@@ -159,7 +159,7 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
 export async function getTicketsForBall(gameId: string, ball: number): Promise<BallEntry[]> {
     try {
         const raw = await redisClient.lRange(ballKey(gameId, ball), 0, -1);
-        return raw.map(s => JSON.parse(s) as BallEntry);
+        return raw.map((s: string) => JSON.parse(s) as BallEntry);
     } catch (err) {
         console.warn(`[InvertedIndex] Fallback RPC para bola ${ball} (jogo ${gameId}):`, err);
         return []; // Caller deve fazer fallback para varredura RPC

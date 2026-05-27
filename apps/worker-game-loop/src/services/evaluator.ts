@@ -125,8 +125,8 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
         code:        CONTRACT_ACCOUNT,
         scope:       CONTRACT_ACCOUNT,
         table:       'gametypes',
-        lower_bound: gametypeId,
-        upper_bound: gametypeId,
+        lower_bound: gametypeId as any,
+        upper_bound: gametypeId as any,
         limit:       1,
         json:        true,
     });
@@ -146,8 +146,8 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
             code:        CONTRACT_ACCOUNT,
             scope:       CONTRACT_ACCOUNT,
             table:       'patterns',
-            lower_bound: rule.pattern_id,
-            upper_bound: rule.pattern_id,
+            lower_bound: rule.pattern_id as any,
+            upper_bound: rule.pattern_id as any,
             limit:       1,
             json:        true,
         });
@@ -179,6 +179,7 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
  * @param drawnBalls   - Bolas sorteadas (drawn_balls do jogo)
  * @param gametypeId   - '0' para modo legado; outro valor para modo dinâmico
  */
+export async function findAllWinners(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string = '0',
@@ -197,7 +198,7 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
             scope:        gameId,
             table:        'tickets',
             limit:        PAGE_SIZE,
-            lower_bound:  lowerBound,
+            lower_bound:  lowerBound as any,
             json:         true,
         });
 
@@ -319,8 +320,8 @@ async function fetchTicketById(
             code:        'bingo.game',
             scope:       gameId,
             table:       'tickets',
-            lower_bound: ticketId,
-            upper_bound: ticketId,
+            lower_bound: ticketId as any,
+            upper_bound: ticketId as any,
             limit:       1,
             json:        true,
         });

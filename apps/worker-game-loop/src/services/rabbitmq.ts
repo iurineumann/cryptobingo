@@ -345,7 +345,7 @@ async function processRefundAll(gameId: string): Promise<void> {
             scope:       gameId,
             table:       'tickets',
             limit:       GC_BATCH_SIZE,
-            lower_bound: lowerBound,
+            lower_bound: lowerBound as any,
             json:        true,
         });
 
