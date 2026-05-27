@@ -73,6 +73,11 @@
     --font-family-display: 'Space Grotesk', 'Inter', sans-serif;
     --font-family-mono:    'JetBrains Mono', 'Fira Code', monospace;
 
+    /* Tailwind v4 font utility aliases */
+    --font-sans:    var(--font-family-sans);
+    --font-display: var(--font-family-display);
+    --font-mono:    var(--font-family-mono);
+
     /* Fluid type scale */
     --font-size-xs:   clamp(0.70rem,  0.65rem + 0.25vw, 0.75rem);
     --font-size-sm:   clamp(0.825rem, 0.80rem + 0.25vw, 0.875rem);
