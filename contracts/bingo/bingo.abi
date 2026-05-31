@@ -5,7 +5,7 @@
   "structs": [
     { "name": "pattern_rule", "base": "", "fields": [
         { "name": "pattern_id", "type": "uint64" },
-        { "name": "weight",     "type": "uint8"  }
+        { "name": "weight",     "type": "uint16"  }
     ]},
     { "name": "config_state", "base": "", "fields": [
         { "name": "signer_key", "type": "public_key" }

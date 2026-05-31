@@ -179,7 +179,7 @@ export async function listGametypes(_req: Request, res: Response): Promise<void>
  *   gametype_id: number,
  *   name: string,
  *   base_multiplier: number,        // uint8 (1-255)
- *   rules: [{ pattern_id, weight }] // máx 12 regras
+ *   rules: [{ pattern_id, weight }]
  * }
  */
 export async function upsertGametype(req: Request, res: Response): Promise<void> {
@@ -189,8 +189,8 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
         res.status(400).json({ error: 'Campos obrigatórios: gametype_id, name, base_multiplier, rules.' });
         return;
     }
-    if (!Array.isArray(rules) || rules.length === 0 || rules.length > 12) {
-        res.status(400).json({ error: 'rules deve ser um array de 1 a 12 elementos.' });
+    if (!Array.isArray(rules) || rules.length === 0) {
+        res.status(400).json({ error: 'rules deve ser um array com pelo menos 1 elemento.' });
         return;
     }
     if (typeof base_multiplier !== 'number' || base_multiplier < 1 || base_multiplier > 255) {
@@ -199,8 +199,8 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
     }
 
     for (const rule of rules) {
-        if (!rule.pattern_id || !rule.weight || rule.weight < 1 || rule.weight > 255) {
-            res.status(400).json({ error: 'Cada rule deve ter pattern_id e weight (1-255).' });
+        if (!rule.pattern_id || !rule.weight || rule.weight < 100 || rule.weight > 25500) {
+            res.status(400).json({ error: 'Cada rule deve ter pattern_id e weight (1.00-255.00).' });
             return;
         }
     }
@@ -287,23 +287,27 @@ export async function getGametypeMetadata(req: Request, res: Response): Promise<
  * PUT /api/v1/admin/gametypes/:gametypeId/metadata
  * Cria ou atualiza metadados off-chain de um gametype.
  *
- * Body: { description, cover_image_url, rules_summary, sort_order }
+ * Body: { description, cover_image_url, rules_summary, sort_order, rules, combinations }
+ *   rules:        ExtendedRule[]   — pattern_id + weight (hundredths) + type
+ *   combinations: CombinationRuleInput[] — combinações com weight (hundredths)
  */
 export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> {
     const { gametypeId } = req.params;
-    const { description, cover_image_url, rules_summary, sort_order } = req.body;
+    const { description, cover_image_url, rules_summary, sort_order, rules, combinations } = req.body;
 
     try {
+        const $set: Record<string, unknown> = {
+            description:     description ?? '',
+            cover_image_url: cover_image_url ?? '',
+            rules_summary:   rules_summary ?? '',
+            sort_order:      sort_order ?? 0,
+        };
+        if (rules)        $set.rules        = rules;
+        if (combinations) $set.combinations  = combinations;
+
         const metadata = await GametypeMetadataModel.findOneAndUpdate(
             { gametype_id: gametypeId },
-            {
-                $set: {
-                    description:     description ?? '',
-                    cover_image_url: cover_image_url ?? '',
-                    rules_summary:   rules_summary ?? '',
-                    sort_order:      sort_order ?? 0,
-                },
-            },
+            { $set },
             { upsert: true, new: true },
         ).lean();
 

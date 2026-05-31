@@ -11,6 +11,7 @@
 // Ref: ADR-001, SPEC.md §2.1, openapi.yaml /games/{gameId}/tickets/generate
 
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { generateSignedTickets, type SignedTicket } from '../services/api';
 
@@ -31,6 +32,7 @@ export interface UseTicketPurchaseReturn {
 }
 
 export function useTicketPurchase(): UseTicketPurchaseReturn {
+    const { t } = useTranslation();
     const [isPurchasing,  setIsPurchasing]  = useState(false);
     const [purchaseError, setPurchaseError] = useState<string | null>(null);
     const [lastPurchase,  setLastPurchase]  = useState<PurchaseResult | null>(null);
@@ -48,14 +50,12 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
 
         try {
             // ── Fase 1: Solicita cartelas assinadas ao backend ────────────────
-            // O backend valida o JWT, consulta o status do jogo on-chain,
-            // gera as matrizes com Fisher-Yates e assina com MICROSERVICE_PRIVATE_KEY.
             console.log(`🎲 [Purchase] Gerando ${count} cartela(s) para o jogo ${gameId}...`);
             const { tickets } = await generateSignedTickets(gameId, count);
 
             // ── Fase 2: Monta a ação buytickets() para o contrato ─────────────
             // A ABI do contrato espera:
-            //   buytickets(name user, uint64_t game_id, vector<vector<uint8_t>> matrices, vector<signature> signatures)
+            //   buytickets(name buyer, uint64 game_id, bytes[] matrices, signature[] signatures, uint64 nft_id)
             // Ref: SPEC.md §2.1
 
             const matrices   = tickets.map(t => t.matrix);      // vector<vector<uint8_t>>
@@ -70,10 +70,11 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
                         name:          'buytickets',
                         authorization: [session.permissionLevel],
                         data: {
-                            user:       String(session.actor),
+                            buyer:      String(session.actor),
                             game_id:    gameId,
                             matrices,
                             signatures,
+                            nft_id:     0,
                         },
                     }],
                 },
@@ -94,15 +95,14 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
             return purchaseResult;
 
         } catch (err) {
-            const raw     = err instanceof Error ? err.message : String(err);
-            // Mensagens comuns do contrato Antelope → mensagens amigáveis
+            const raw = err instanceof Error ? err.message : String(err);
             const message = raw.includes('overdrawn balance')
-                ? 'Saldo insuficiente para comprar as cartelas.'
+                ? t('buy_ticket.error_overdrawn')
                 : raw.includes('funding')
-                ? 'As vendas desta rodada foram encerradas.'
+                ? t('buy_ticket.error_funding_ended')
                 : raw.includes('assertion failure')
-                ? 'Assinatura inválida. Tente novamente.'
-                : `Erro ao comprar cartelas: ${raw}`;
+                ? t('buy_ticket.error_invalid_signature')
+                : t('buy_ticket.error_generic', { raw });
 
             console.error('[Purchase] Falha:', err);
             setPurchaseError(message);

@@ -122,7 +122,7 @@ export interface GenerateTicketsResponse {
 
 export async function generateSignedTickets(
     gameId: string,
-    count:  number,
+    count: number,
 ): Promise<GenerateTicketsResponse> {
     const res = await fetch(`${API_BASE}/games/${gameId}/tickets/generate`, {
         method:  'POST',
@@ -235,10 +235,24 @@ export async function upsertGametypeMetadata(gametypeId: string, data: {
 // ==========================================
 
 export interface McPatternInput {
-    pattern_id: number;
-    name:       string;
-    mask:       number;
-    weight:     number;
+    pattern_id:   number;
+    name:         string;
+    mask:         number;
+    weight:       number;
+    pattern_type?: string;  // 'simple' | 'special' | 'master' — usado por combos n_of_type
+}
+
+export interface McCombinationClauseInput {
+    type:          'all_of' | 'any_of' | 'n_of_type';
+    pattern_ids?:  string[];
+    pattern_type?: string;
+    count?:        number;
+}
+
+export interface McCombinationInput {
+    name:    string;
+    weight:  number;
+    clauses: McCombinationClauseInput[];
 }
 
 export interface McPatternStats {
@@ -275,6 +289,7 @@ export async function simulateWeights(data: {
     gametype_name:   string;
     base_multiplier: number;
     patterns:        McPatternInput[];
+    combinations?:   McCombinationInput[];
     simulations?:    number;
 }): Promise<McResult> {
     const res = await fetch(`${API_BASE}/admin/simulate-weights`, {
@@ -471,15 +486,8 @@ export async function updateRoomMetadata(roomId: string, data: Partial<RoomMetad
 }
 
 export async function updateRoomSettings(roomId: string, data: {
-    ticket_price_min_quantity: string;
-    ticket_price_min_contract: string;
-    ticket_price_max_quantity: string;
-    ticket_price_max_contract: string;
-    ticket_price_default_quantity: string;
-    ticket_price_default_contract: string;
-    weight: number;
+    room_drop_chance_bps?: number;
     max_tickets_per_player?: number;
-    nft_template_allowlist?: number[];
 }): Promise<{ transaction_id: string }> {
     const res = await fetch(`${API_BASE}/rooms/${roomId}/settings`, {
         method: 'PUT', headers: authHeaders(),

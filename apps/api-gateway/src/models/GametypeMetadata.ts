@@ -25,7 +25,7 @@ export interface GametypeMetadataDocument extends Document {
 
 const RuleExtendedSchema = new Schema({
     pattern_id: { type: String, required: true },
-    weight:     { type: Number, required: true, min: 1, max: 255 },
+    weight:     { type: Number, required: true, min: 100, max: 25500 },
     type:       { type: String, enum: ['simple', 'special', 'master'], required: true },
 }, { _id: false });
 
@@ -38,7 +38,7 @@ const ClauseSubSchema = new Schema({
 
 const CombinationSchema = new Schema({
     name:    { type: String, required: true },
-    weight:  { type: Number, required: true, min: 1 },
+    weight:  { type: Number, required: true, min: 100 },
     clauses: { type: [ClauseSubSchema], required: true },
 }, { _id: false });
 

@@ -137,13 +137,14 @@ namespace bingo {
     void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules) {
         require_auth(get_self());
         check(base_multiplier > 0, "base_multiplier deve ser maior que zero.");
-        check(rules.size() > 0 && rules.size() <= 12, "rules: 1 a 12 elementos.");
+        check(rules.size() > 0, "rules deve ter pelo menos 1 elemento.");
         check(name.size() <= 64, "name muito longo (max 64 chars).");
         patterns_table patterns(get_self(), get_self().value);
         for (const auto& rule : rules) {
             check(patterns.find(rule.pattern_id) != patterns.end(),
                 "pattern_id " + std::to_string(rule.pattern_id) + " nao encontrado.");
             check(rule.weight > 0, "weight deve ser maior que zero.");
+            check(rule.weight <= 25500, "weight max 255.00 (hundredths).");
         }
         gametypes_table gametypes(get_self(), get_self().value);
         auto itr = gametypes.find(gametype_id);
@@ -424,7 +425,7 @@ namespace bingo {
         } else {
             gametypes_table gametypes(get_self(), get_self().value);
             auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
-            uint8_t win_weight = 0;
+            uint16_t win_weight = 0;
             for (const auto& rule : gt_itr->rules) {
                 patterns_table patterns(get_self(), get_self().value);
                 auto pat_itr = patterns.find(rule.pattern_id);
@@ -436,7 +437,7 @@ namespace bingo {
             check(win_weight > 0, "win_pattern_mask nao corresponde a nenhum padrao do gametype.");
             payout = game_itr->ticket_price;
             payout.quantity.amount =
-                payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight;
+                payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
         }
 
         if (payout.quantity.amount > 0) {

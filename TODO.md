@@ -73,6 +73,14 @@
 ## [NEXT] Próximos Passos
 [DONE] GametypesAdmin — Suggest Combinations helper (Monte Carlo + 3 estratégias: n-of-type, pares por hit rate, especial+simples).
 [DONE] ADR-011 v2 — Drop Vault revisado com algoritmo completo (dupla dificuldade, pool ponderado, pré-check global, tokens independentes).
+[DONE] init_dev_env.sh — Adicionado setconfig com BINGO_GAME_PUB (seção 8b). `docs/SPEC.md §2.1` atualizado com assinatura correta do buytickets e menção ao setconfig.
+[DONE] i18n BuyTicketModal — Chaves `buy_ticket.*` adicionadas nos 3 locales. Erros do hook migrados de strings hardcoded PT para `t()`.
+[DONE] BugFix buytickets — Campo `user` renomeado para `buyer` e `nft_id: 0` adicionado em `useTicketPurchase.ts`.
+[DONE] Remove 12-pattern limit — Restrição removida do frontend (GametypesAdmin.tsx), backend (monteCarloController.ts, patternController.ts) e chaves `gametypes_error_too_many_patterns` dos 3 locales.
+[DONE] Remove 12-rule limit do contrato — `rules.size() <= 12` removido de `addgametype` em `bingo.cpp:140`.
+[DONE] Weight decimal (2 casas) — `pattern_rule.weight` uint8_t→uint16_t (hundredths). Payout claimwin divide por 100. Frontend step=0.01 + conversão parseFloat×100. Backend validations 100-25500. ABI atualizado.
+[DONE] Metadata upsert — Corrigido patternController.ts para persistir `rules` e `combinations` (antes ignorados).
+[DONE] Suggest com calibração RTP — 3 fases: (1) sugere pesos individuais inversos ao hit_rate, (2) gera combinações, (3) calibra pesos via re-simulação até RTP ≈ 85%. Backend MC engine suporta combinações (findBestWinner + evaluateCombinations).
 [ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta) + campo room_drop_chance_bps.
 [ ] contracts/bingo — implementar actions de drop vault: deposittoken/depositnft (on_notify), allocatedrop, deallocatedrop, reclaimasset, execdrop + tabelas drop_deposits, drop_allocations, dropstate.
 [ ] dropWorker.ts — Fases 0 + 1A + 1B + 2 conforme ADR-011 §7.

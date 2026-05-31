@@ -345,7 +345,7 @@
                 },
                 {
                     "name": "weight",
-                    "type": "uint8"
+                    "type": "uint16"
                 }
             ]
         },

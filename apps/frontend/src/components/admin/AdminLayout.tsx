@@ -209,7 +209,7 @@ export default function AdminLayout({
         </aside>
 
         {/* ── Conteúdo ── */}
-        <div className="site-content">
+        <div className="site-admin-content">
           {/* Page header */}
           <div className="site-page-header">
             <div className="site-page-header-left">
@@ -220,7 +220,7 @@ export default function AdminLayout({
             </div>
           </div>
 
-          <main className="site-main" style={{ padding: '1.5rem' }}>
+          <main className="site-main" style={{ overflowY: 'auto', padding: '0 1.5rem 1.5rem' }}>
             {renderContent()}
           </main>
         </div>

@@ -113,10 +113,6 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
                     room_id:                UInt64.from(room_id),
                     sponsor:                sponsor || CONTRACT_ACCOUNT,
                     gametype_id:            UInt64.from(gametype_id ?? 0),
-                    currency: {
-                        quantity: currency_quantity,
-                        contract: currency_contract,
-                    },
                     ticket_price_min: {
                         quantity: ticket_price_min_quantity || currency_quantity,
                         contract: ticket_price_min_contract || currency_contract,
@@ -129,9 +125,8 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
                         quantity: ticket_price_default_quantity || currency_quantity,
                         contract: ticket_price_default_contract || currency_contract,
                     },
-                    weight:                 UInt64.from(weight ?? 100),
                     max_tickets_per_player: max_tickets_per_player ?? 0,
-                    nft_template_allowlist: nft_template_allowlist ?? [],
+                    sponsor_room:           !!sponsor,
                 },
             }],
         }, { broadcast: true });
@@ -283,10 +278,7 @@ export async function closeRoom(req: Request, res: Response): Promise<void> {
 export async function updateRoomSettings(req: Request, res: Response): Promise<void> {
     const { roomId } = req.params;
     const {
-        ticket_price_min_quantity, ticket_price_min_contract,
-        ticket_price_max_quantity, ticket_price_max_contract,
-        ticket_price_default_quantity, ticket_price_default_contract,
-        weight, max_tickets_per_player, nft_template_allowlist,
+        room_drop_chance_bps, max_tickets_per_player,
     } = req.body;
 
     try {
@@ -298,21 +290,8 @@ export async function updateRoomSettings(req: Request, res: Response): Promise<v
                 authorization: [session.permissionLevel],
                 data: {
                     room_id:                UInt64.from(roomId),
-                    ticket_price_min: {
-                        quantity: ticket_price_min_quantity,
-                        contract: ticket_price_min_contract,
-                    },
-                    ticket_price_max: {
-                        quantity: ticket_price_max_quantity,
-                        contract: ticket_price_max_contract,
-                    },
-                    ticket_price_default: {
-                        quantity: ticket_price_default_quantity,
-                        contract: ticket_price_default_contract,
-                    },
-                    weight:                 UInt64.from(weight),
-                    max_tickets_per_player: max_tickets_per_player ?? 0,
-                    nft_template_allowlist: nft_template_allowlist ?? [],
+                    room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
+                    max_tickets_per_player: max_tickets_per_player ?? 10,
                 },
             }],
         }, { broadcast: true });

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, simulateWeights, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats } from '../../services/api';
+import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, simulateWeights, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats, type McResult } from '../../services/api';
 
 const TYPE_COLORS: Record<string, string> = {
     simple:  'bg-blue-500/10 text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700',
@@ -62,7 +62,7 @@ export default function GametypesAdmin() {
                 const { [patternId]: _, ...rest } = prev;
                 return rest;
             }
-            return { ...prev, [patternId]: { weight: '1', type: 'simple' } };
+            return { ...prev, [patternId]: { weight: '1.00', type: 'simple' } };
         });
     };
 
@@ -76,8 +76,9 @@ export default function GametypesAdmin() {
 
     // Combinações
     const [comboName, setComboName] = useState('');
-    const [comboWeight, setComboWeight] = useState('1');
+    const [comboWeight, setComboWeight] = useState('1.00');
     const [comboClauses, setComboClauses] = useState<CombinationClauseInput[]>([{ type: 'all_of', pattern_ids: [] }]);
+    const [editingComboIdx, setEditingComboIdx] = useState<number | null>(null);
 
     const updateClause = (idx: number, partial: Partial<CombinationClauseInput>) => {
         setComboClauses(prev => prev.map((c, i) => i === idx ? { ...c, ...partial } : c));
@@ -107,10 +108,19 @@ export default function GametypesAdmin() {
             ((c.type === 'all_of' || c.type === 'any_of') && (c.pattern_ids?.length ?? 0) >= 1)
         );
         if (!valid) return;
-        setCombinations(prev => [...prev, { name: comboName, weight: parseInt(comboWeight), clauses: comboClauses.map(c => ({ ...c })) }]);
+        const entry: CombinationRuleInput = { name: comboName, weight: Math.round(parseFloat(comboWeight) * 100), clauses: comboClauses.map(c => ({ ...c })) };
+        setCombinations(prev => {
+            if (editingComboIdx !== null) {
+                const next = [...prev];
+                next[editingComboIdx] = entry;
+                return next;
+            }
+            return [...prev, entry];
+        });
         setComboName('');
         setComboWeight('1');
         setComboClauses([{ type: 'all_of', pattern_ids: [] }]);
+        setEditingComboIdx(null);
     };
 
     const removeCombination = (idx: number) => {
@@ -120,14 +130,15 @@ export default function GametypesAdmin() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name) return;
+        const toHundredths = (v: string) => Math.round(parseFloat(v) * 100);
         const rules = Object.entries(selectedRules)
-            .filter(([_, v]) => v.weight && parseInt(v.weight) > 0)
-            .map(([pattern_id, v]) => ({ pattern_id, weight: parseInt(v.weight) }));
+            .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0)
+            .map(([pattern_id, v]) => ({ pattern_id, weight: toHundredths(v.weight) }));
         if (rules.length === 0) { setError(t('admin.gametypes_error_no_rules')); return; }
 
         const rules_extended: ExtendedRule[] = Object.entries(selectedRules)
-            .filter(([_, v]) => v.weight && parseInt(v.weight) > 0)
-            .map(([pattern_id, v]) => ({ pattern_id, weight: parseInt(v.weight), type: v.type as ExtendedRule['type'] }));
+            .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0)
+            .map(([pattern_id, v]) => ({ pattern_id, weight: toHundredths(v.weight), type: v.type as ExtendedRule['type'] }));
 
         setSaving(true);
         setError(null);
@@ -162,108 +173,231 @@ export default function GametypesAdmin() {
     };
 
     const handleSuggest = async () => {
+        const toHundredths = (v: string) => Math.round(parseFloat(v) * 100);
         const rules = Object.entries(selectedRules)
-            .filter(([_, v]) => v.weight && parseInt(v.weight) > 0);
+            .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0);
         if (rules.length < 2) { setError(t('admin.gametypes_error_no_patterns_suggest')); return; }
         setSuggesting(true);
         setError(null);
         try {
-            const rules_extended: ExtendedRule[] = rules
-                .map(([pattern_id, v]) => ({ pattern_id, weight: parseInt(v.weight), type: v.type as ExtendedRule['type'] }));
+            const baseMul = parseFloat(baseMultiplier) || 10;
+            const rulesExtended: ExtendedRule[] = rules
+                .map(([pattern_id, v]) => ({ pattern_id, weight: toHundredths(v.weight), type: v.type as ExtendedRule['type'] }));
 
-            const mcPatterns = rules_extended.map(r => {
+            const mcPatterns = rulesExtended.map(r => {
                 const p = patterns.find(p => String(p.pattern_id) === r.pattern_id);
-                return { pattern_id: parseInt(r.pattern_id), name: p?.name ?? `#${r.pattern_id}`, mask: p ? Number(p.mask) : 0, weight: r.weight };
+                return { pattern_id: parseInt(r.pattern_id), name: p?.name ?? `#${r.pattern_id}`, mask: p ? Number(p.mask) : 0, weight: r.weight, pattern_type: r.type };
             }).filter(p => p.mask > 0);
 
             if (mcPatterns.length === 0) { setError(t('admin.gametypes_error_no_patterns_simulate')); setSuggesting(false); return; }
-            if (mcPatterns.length > 12) { setError(t('admin.gametypes_error_too_many_patterns')); setSuggesting(false); return; }
 
-            const mcResult = await simulateWeights({
+            // ── Phase 1: Simulate → suggest individual weights (inverse to hit_rate) ──
+            const phase1 = await simulateWeights({
                 gametype_name: name || 'Gametype',
-                base_multiplier: parseFloat(baseMultiplier) || 10,
+                base_multiplier: baseMul,
                 patterns: mcPatterns,
                 simulations: 3_000,
             });
 
-            const statsMap: Record<string, McPatternStats> = {};
-            for (const s of mcResult.pattern_stats) statsMap[s.name] = s;
-
-            const suggested: CombinationRuleInput[] = [];
-            const byType: Record<string, ExtendedRule[]> = { simple: [], special: [], master: [] };
-            for (const r of rules_extended) {
-                if (byType[r.type]) byType[r.type].push(r);
-            }
-
-            // 1. N-of-type para cada tipo (2, 3, ...)
-            for (const [type, label] of Object.entries({ simple: t('admin.type_simple'), special: t('admin.type_special'), master: t('admin.type_master') })) {
-                const list = byType[type] ?? [];
-                for (let n = 2; n <= Math.min(list.length, 5); n++) {
-                    const avgWeight = list.reduce((s, r) => s + r.weight, 0) / list.length;
-                    const suggestedWeight = Math.max(1, Math.round(avgWeight * n * 0.75));
-                    suggested.push({
-                        name: `${n}× ${label}`,
-                        weight: suggestedWeight,
-                        clauses: [{ type: 'n_of_type' as const, pattern_type: type as ExtendedRule['type'], count: n }],
-                    });
-                }
-            }
-
-            // 2. Pares dos padrões mais frequentes (top 5 por hit rate)
-            const sortedByHitRate = mcResult.pattern_stats.filter(s => s.hit_count > 0).sort((a, b) => b.hit_rate - a.hit_rate);
-            const topPatterns = sortedByHitRate.slice(0, 5);
-            const findPatternId = (name: string): string =>
-                rules_extended.find(r => patterns.find(p => String(p.pattern_id) === r.pattern_id)?.name === name)?.pattern_id ?? '';
-            for (let i = 0; i < topPatterns.length - 1; i++) {
-                for (let j = i + 1; j < topPatterns.length; j++) {
-                    const combinedWeight = Math.max(1, Math.round((topPatterns[i].weight + topPatterns[j].weight) * 0.85));
-                    const pidA = findPatternId(topPatterns[i].name);
-                    const pidB = findPatternId(topPatterns[j].name);
-                    if (!pidA || !pidB) continue;
-                    suggested.push({
-                        name: `${topPatterns[i].name}+${topPatterns[j].name}`,
-                        weight: combinedWeight,
-                        clauses: [{ type: 'all_of' as const, pattern_ids: [pidA, pidB] }],
-                    });
-                }
-            }
-
-            // 3. Especial + qualquer simples (se houver especiais)
-            const findMcStats = (patternId: string) =>
-                statsMap[patterns.find(p => String(p.pattern_id) === patternId)?.name ?? ''];
-            if (byType.special.length > 0 && byType.simple.length > 0) {
-                for (const spec of byType.special) {
-                    const specStats = findMcStats(spec.pattern_id);
-                    if (!specStats || specStats.hit_count === 0) continue;
-                    for (const simple of byType.simple.slice(0, 3)) {
-                        const simpleStats = findMcStats(simple.pattern_id);
-                        if (!simpleStats || simpleStats.hit_count === 0) continue;
-                        const combinedWeight = Math.max(1, Math.round((spec.weight + simple.weight) * 0.9));
-                        const specName = patterns.find(p => String(p.pattern_id) === spec.pattern_id)?.name ?? `#${spec.pattern_id}`;
-                        const simpleName = patterns.find(p => String(p.pattern_id) === simple.pattern_id)?.name ?? `#${simple.pattern_id}`;
-                        suggested.push({
-                            name: `${specName}+${simpleName}`,
-                            weight: combinedWeight,
-                            clauses: [
-                                { type: 'all_of' as const, pattern_ids: [spec.pattern_id] },
-                                { type: 'any_of' as const, pattern_ids: [simple.pattern_id] },
-                            ],
-                        });
+            // Build updated pattern entries locally (avoid React stale-state trap)
+            let activePatterns = mcPatterns;
+            let activeRulesExt = rulesExtended;
+            const patternWeightUpdates: Record<string, string> = {};
+            const hits = phase1.pattern_stats.filter(s => s.hit_count > 0);
+            if (hits.length > 0) {
+                const minHit = Math.min(...hits.map(s => s.hit_rate));
+                const maxHit = Math.max(...hits.map(s => s.hit_rate));
+                for (const stat of hits) {
+                    const p = patterns.find(pp => pp.name === stat.name);
+                    if (!p) continue;
+                    let sw: number;
+                    if (maxHit === minHit) {
+                        sw = 100;
+                    } else {
+                        const normalized = 1 - (stat.hit_rate - minHit) / (maxHit - minHit);
+                        sw = Math.round(100 + normalized * 400);
                     }
+                    patternWeightUpdates[p.pattern_id] = (sw / 100).toFixed(2);
                 }
-            }
+                if (Object.keys(patternWeightUpdates).length > 0) {
+                    // Build working copies with updated weights
+                    const wMap = patternWeightUpdates;
+                    activeRulesExt = rulesExtended.map(r => ({
+                        ...r,
+                        weight: wMap[r.pattern_id] ? toHundredths(wMap[r.pattern_id]) : r.weight,
+                    }));
+                    activePatterns = activeRulesExt.map(r => {
+                        const p = patterns.find(pp => String(pp.pattern_id) === r.pattern_id);
+                        return { pattern_id: parseInt(r.pattern_id), name: p?.name ?? `#${r.pattern_id}`, mask: p ? Number(p.mask) : 0, weight: r.weight, pattern_type: r.type };
+                    }).filter(p => p.mask > 0);
 
-            setCombinations(prev => {
-                const existing = new Set(prev.map(c => c.name));
-                const newOnes = suggested.filter(c => !existing.has(c.name));
-                return [...prev, ...newOnes];
-            });
+                    // Re-simulate with suggested weights for accurate combo generation
+                    const phase1b = await simulateWeights({
+                        gametype_name: name || 'Gametype',
+                        base_multiplier: baseMul,
+                        patterns: activePatterns,
+                        simulations: 3_000,
+                    });
+
+                    // Build combos from re-simulated data
+                    const byType = buildByType(activeRulesExt);
+                    const combos = buildCombos(activePatterns, byType, phase1b);
+                    // Calibrate with full config (patterns + combos)
+                    const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
+
+                    // Apply: individual pattern weights
+                    setSelectedRules(prev => {
+                        const next = { ...prev };
+                        for (const [pid, w] of Object.entries(patternWeightUpdates)) {
+                            if (next[pid]) next[pid] = { ...next[pid], weight: w };
+                        }
+                        return next;
+                    });
+                    // Apply: combinations
+                    applyCombos(combos, cal);
+                }
+            } else {
+                // Fallback: no hits — generate combos from raw weights
+                const byType = buildByType(activeRulesExt);
+                const combos = buildCombos(activePatterns, byType, phase1);
+                const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
+                applyCombos(combos, cal);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : t('admin.gametypes_error_suggest'));
         } finally {
             setSuggesting(false);
         }
     };
+
+    // ── Pure helpers (no React state) ──────────────────────────────────────────
+
+    const buildByType = (rules: ExtendedRule[]): Record<string, ExtendedRule[]> => {
+        const byType: Record<string, ExtendedRule[]> = { simple: [], special: [], master: [] };
+        for (const r of rules) { if (byType[r.type]) byType[r.type].push(r); }
+        return byType;
+    }
+
+    const buildCombos = (
+        mcPatterns: { name: string; weight: number; pattern_id: number; pattern_type?: string }[],
+        byType: Record<string, ExtendedRule[]>,
+        mcResult: McResult,
+    ): CombinationRuleInput[] => {
+        const suggested: CombinationRuleInput[] = [];
+        const statsMap: Record<string, McPatternStats> = {};
+        for (const s of mcResult.pattern_stats) statsMap[s.name] = s;
+
+        // 1. N-of-type (2×, 3× … 5×)
+        for (const [type, label] of Object.entries({ simple: t('admin.type_simple'), special: t('admin.type_special'), master: t('admin.type_master') })) {
+            const list = byType[type] ?? [];
+            for (let n = 2; n <= Math.min(list.length, 5); n++) {
+                const avgWeight = list.reduce((s, r) => s + r.weight, 0) / list.length;
+                suggested.push({
+                    name: `${n}× ${label}`,
+                    weight: Math.max(100, Math.round(avgWeight * n * 0.75)),
+                    clauses: [{ type: 'n_of_type' as const, pattern_type: type as ExtendedRule['type'], count: n }],
+                });
+            }
+        }
+
+        // 2. Pairs of most frequent patterns (top 5 by hit rate)
+        const top: McPatternStats[] = mcResult.pattern_stats.filter((s: McPatternStats) => s.hit_count > 0).sort((a: McPatternStats, b: McPatternStats) => b.hit_rate - a.hit_rate).slice(0, 5);
+        const findPid = (name: string): string =>
+            mcPatterns.find(p => p.name === name)?.pattern_id.toString() ?? '';
+        for (let i = 0; i < top.length - 1; i++) {
+            for (let j = i + 1; j < top.length; j++) {
+                const pidA = findPid(top[i].name);
+                const pidB = findPid(top[j].name);
+                if (!pidA || !pidB) continue;
+                suggested.push({
+                    name: `${top[i].name}+${top[j].name}`,
+                    weight: Math.max(100, Math.round((top[i].weight + top[j].weight) * 0.85)),
+                    clauses: [{ type: 'all_of' as const, pattern_ids: [pidA, pidB] }],
+                });
+            }
+        }
+
+        // 3. Special + Simple pairs
+        const findStats = (pid: string): McPatternStats | undefined => {
+            const p = patterns.find(pp => pp.pattern_id === pid);
+            return p ? statsMap[p.name] : undefined;
+        };
+        if (byType.special.length > 0 && byType.simple.length > 0) {
+            for (const spec of byType.special) {
+                const spStats = findStats(spec.pattern_id);
+                if (!spStats || spStats.hit_count === 0) continue;
+                for (const simple of byType.simple.slice(0, 3)) {
+                    const siStats = findStats(simple.pattern_id);
+                    if (!siStats || siStats.hit_count === 0) continue;
+                    const sName = patterns.find(p => p.pattern_id === spec.pattern_id)?.name ?? `#${spec.pattern_id}`;
+                    const siName = patterns.find(p => p.pattern_id === simple.pattern_id)?.name ?? `#${simple.pattern_id}`;
+                    suggested.push({
+                        name: `${sName}+${siName}`,
+                        weight: Math.max(100, Math.round((spec.weight + simple.weight) * 0.9)),
+                        clauses: [
+                            { type: 'all_of' as const, pattern_ids: [spec.pattern_id] },
+                            { type: 'any_of' as const, pattern_ids: [simple.pattern_id] },
+                        ],
+                    });
+                }
+            }
+        }
+
+        return suggested;
+    };
+
+    const calibrateRtp = async (
+        patterns: { name: string; weight: number; mask: number; pattern_id: number; pattern_type?: string }[],
+        combos: CombinationRuleInput[],
+        baseMul: number,
+        gtName: string,
+    ): Promise<{ pattern_weights: Record<string, number>; combo_weights: Record<string, number> } | null> => {
+        const TARGET = 0.85;
+        const TOL = 0.03;
+        const MAX_ITER = 10;
+
+        const patW: Record<string, number> = {};
+        for (const p of patterns) patW[p.name] = p.weight;
+        const comW: Record<string, number> = {};
+        for (const c of combos) comW[c.name] = c.weight;
+
+        for (let iter = 0; iter < MAX_ITER; iter++) {
+            const result = await simulateWeights({
+                gametype_name: gtName,
+                base_multiplier: baseMul,
+                patterns: patterns.map(p => ({ ...p, weight: patW[p.name] })),
+                combinations: combos.map(c => ({ ...c, weight: comW[c.name] })),
+                simulations: 3_000,
+            });
+
+            const rtp = result.rtp;
+            if (rtp >= TARGET - TOL && rtp <= TARGET + TOL) break;
+            if (result.total_paid_out <= 0) break;
+
+            const scale = Math.max(0.5, Math.min(2.0, TARGET / rtp));
+            for (const name of Object.keys(patW)) patW[name] = clamp(Math.round(patW[name] * scale), 100, 25500);
+            for (const name of Object.keys(comW)) comW[name] = clamp(Math.round(comW[name] * scale), 100, 25500);
+        }
+
+        return { pattern_weights: patW, combo_weights: comW };
+    };
+
+    const clamp = (v: number, lo: number, hi: number): number =>
+        Math.max(lo, Math.min(hi, v));
+
+    const applyCombos = (
+        combos: CombinationRuleInput[],
+        cal: { pattern_weights: Record<string, number>; combo_weights: Record<string, number> } | null,
+    ): void => {
+        const finalCombos = cal
+            ? combos.map(c => ({ ...c, weight: cal.combo_weights[c.name] ?? c.weight }))
+            : combos;
+
+        setCombinations(prev => {
+            const existing = new Set(prev.map(c => c.name));
+            return [...prev, ...finalCombos.filter(c => !existing.has(c.name))];
+        });
+    }
 
     const getPatternMeta = (gametypeId: string, patternId: string): ExtendedRule | undefined => {
         return metadataMap[gametypeId]?.rules?.find(r => r.pattern_id === patternId);
@@ -341,7 +475,7 @@ export default function GametypesAdmin() {
                                                 <span className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_weight')}</span>
                                                 <input
                                                     className="w-14 text-xs font-mono px-1 py-0.5 rounded border border-[--cb-border-default] bg-transparent text-center"
-                                                    type="number" min="1" value={sel.weight}
+                                                    type="number" min="1" step="0.01" value={sel.weight}
                                                     onClick={e => e.stopPropagation()}
                                                     onChange={e => updateRuleField(p.pattern_id, 'weight', e.target.value)}
                                                 />
@@ -367,7 +501,19 @@ export default function GametypesAdmin() {
                     {combinations.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-3">
                             {combinations.map((c, i) => (
-                                <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[--cb-bg-surface] border border-[--cb-border-default] text-xs">
+                                <div key={i}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                                        editingComboIdx === i
+                                            ? 'bg-[--cb-brand]/10 border-[--cb-brand] ring-1 ring-[--cb-brand]'
+                                            : 'bg-[--cb-bg-surface] border-[--cb-border-default] hover:border-[--cb-brand]'
+                                    }`}
+                                    onClick={() => {
+                                        setComboName(c.name);
+                                        setComboWeight(String(c.weight / 100));
+                                        setComboClauses(c.clauses.map(cl => ({ ...cl })));
+                                        setEditingComboIdx(i);
+                                    }}
+                                >
                                     <span className="font-semibold text-[--cb-text-primary]">{c.name}</span>
                                     <span className="text-[--cb-text-tertiary]">
                                         {c.clauses.map((cl, ci) => (
@@ -380,8 +526,8 @@ export default function GametypesAdmin() {
                                             </span>
                                         ))}
                                     </span>
-                                    <span className="font-mono font-bold text-[--cb-accent]">{c.weight}x</span>
-                                    <button type="button" className="text-[--cb-danger] hover:underline ml-1" onClick={() => removeCombination(i)}>✕</button>
+                                    <span className="font-mono font-bold text-[--cb-accent]">{(c.weight / 100).toFixed(2)}x</span>
+                                    <button type="button" className="text-[--cb-danger] hover:underline ml-1" onClick={e => { e.stopPropagation(); removeCombination(i); }}>✕</button>
                                 </div>
                             ))}
                         </div>
@@ -396,7 +542,7 @@ export default function GametypesAdmin() {
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_combo_weight')}</label>
-                                <input className="cb-input text-xs w-16 font-mono" type="number" min="1" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
+                                <input className="cb-input text-xs w-20 font-mono" type="number" min="1" step="0.01" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
                             </div>
                         </div>
 
@@ -476,8 +622,18 @@ export default function GametypesAdmin() {
                             <button type="button" className="cb-btn cb-btn-outline cb-btn-xs" onClick={addCombination}
                                 disabled={!comboName || !comboWeight || comboClauses.length === 0}
                             >
-                                {t('admin.gametypes_combo_add')}
+                                {editingComboIdx !== null ? t('admin.gametypes_combo_update') : t('admin.gametypes_combo_add')}
                             </button>
+                            {editingComboIdx !== null && (
+                                <button type="button" className="cb-btn cb-btn-ghost cb-btn-xs text-[--cb-danger]" onClick={() => {
+                                    setComboName('');
+                                    setComboWeight('1');
+                                    setComboClauses([{ type: 'all_of', pattern_ids: [] }]);
+                                    setEditingComboIdx(null);
+                                }}>
+                                    {t('admin.gametypes_combo_cancel')}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -518,7 +674,7 @@ export default function GametypesAdmin() {
                                         const ptype = ruleMeta?.type ?? 'simple';
                                         return (
                                             <span key={r.pattern_id} className={`text-xs px-2 py-0.5 rounded-full border font-medium ${TYPE_COLORS[ptype] ?? TYPE_COLORS.simple}`}>
-                                                #{r.pattern_id} <strong>{r.weight}%</strong>
+                                                #{r.pattern_id} <strong>{(r.weight / 100).toFixed(2)}x</strong>
                                                 <span className="ml-1 opacity-70">({ptype})</span>
                                             </span>
                                         );
@@ -535,7 +691,7 @@ export default function GametypesAdmin() {
                                                     if (cl.type === 'n_of_type') return `${cl.count ?? 1}× ${cl.pattern_type}`;
                                                     return `${cl.type === 'all_of' ? 'todos' : 'qualquer'}[${(cl.pattern_ids ?? []).join(',')}]`;
                                                 }).join(' E ')}>
-                                                    {c.name} <strong>{c.weight}x</strong>
+                                                    {c.name} <strong>{(c.weight / 100).toFixed(2)}x</strong>
                                                 </span>
                                             ))}
                                         </div>

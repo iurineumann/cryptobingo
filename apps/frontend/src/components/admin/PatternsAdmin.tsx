@@ -21,6 +21,22 @@ const BIT_NAMES: Record<number, string> = {
     20:'O1', 21:'O2', 22:'O3', 23:'O4', 24:'O5',
 };
 
+const SUGGEST_PATTERNS = [
+    { name: 'ROW_0', mask: 1_082_401, group: 'basic' as const },
+    { name: 'ROW_1', mask: 2_164_802, group: 'basic' as const },
+    { name: 'ROW_2', mask: 4_329_604, group: 'basic' as const },
+    { name: 'ROW_3', mask: 8_659_208, group: 'basic' as const },
+    { name: 'ROW_4', mask: 17_318_416, group: 'basic' as const },
+    { name: 'DIAG_TL_BR', mask: 17_043_521, group: 'basic' as const },
+    { name: 'DIAG_TR_BL', mask: 1_118_480, group: 'basic' as const },
+    { name: 'COL_B', mask: 31, group: 'special' as const },
+    { name: 'COL_I', mask: 992, group: 'special' as const },
+    { name: 'COL_N', mask: 31_744, group: 'special' as const },
+    { name: 'COL_G', mask: 1_015_808, group: 'special' as const },
+    { name: 'COL_O', mask: 32_505_856, group: 'special' as const },
+    { name: 'MASTER', mask: (1 << 25) - 1, group: 'master' as const },
+];
+
 function maskToGrid(mask: number): boolean[] {
     const grid = new Array(25).fill(false);
     for (let b = 0; b < 25; b++) {
@@ -116,6 +132,8 @@ export default function PatternsAdmin() {
     const [name, setName] = useState('');
     const [editMask, setEditMask] = useState<number>(1 << 12); // só FREE SPACE
     const [saving, setSaving] = useState(false);
+    const [suggesting, setSuggesting] = useState(false);
+    const [suggestMsg, setSuggestMsg] = useState<{ created: number; skipped: number; total: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const load = async () => {
@@ -128,6 +146,28 @@ export default function PatternsAdmin() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSuggest = async () => {
+        setSuggesting(true);
+        setSuggestMsg(null);
+        setError(null);
+        const existing = new Set(patterns.map(p => p.name.toLocaleLowerCase()));
+        const missing = SUGGEST_PATTERNS.filter(p => !existing.has(p.name.toLocaleLowerCase()));
+        let created = 0;
+        for (const p of missing) {
+            const maxId = patterns.reduce((max, p) => Math.max(max, parseInt(p.pattern_id) || 0), 0) + created;
+            try {
+                await createAdminPattern({ pattern_id: maxId + 1, name: p.name, mask: p.mask });
+                created++;
+            } catch {
+                continue;
+            }
+        }
+        const skipped = SUGGEST_PATTERNS.length - missing.length + (missing.length - created);
+        setSuggestMsg({ created, skipped, total: SUGGEST_PATTERNS.length });
+        await load();
+        setSuggesting(false);
     };
 
     useEffect(() => { load(); }, []);
@@ -216,6 +256,38 @@ export default function PatternsAdmin() {
                     </div>
                 </div>
             </form>
+
+            <div className="cb-card p-4 mb-6 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs text-[--cb-text-tertiary] font-semibold uppercase tracking-wide">
+                        {t('admin.patterns_suggest')}
+                    </span>
+                    {suggestMsg && (
+                        <span className={`text-xs ${suggestMsg.created === suggestMsg.total ? 'text-[--cb-success]' : 'text-[--cb-warning]'}`}>
+                            {suggestMsg.created === suggestMsg.total
+                                ? t('admin.patterns_suggest_done', { created: suggestMsg.created, skipped: suggestMsg.skipped })
+                                : t('admin.patterns_suggest_error', { created: suggestMsg.created, total: suggestMsg.total })}
+                        </span>
+                    )}
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-[--cb-text-tertiary]">
+                    <span>{t('admin.patterns_suggest_basic')} ·</span>
+                    <span>{t('admin.patterns_suggest_special')} ·</span>
+                    <span>{t('admin.patterns_suggest_master')}</span>
+                </div>
+                <button
+                    type="button"
+                    className="cb-btn cb-btn-secondary self-start"
+                    disabled={suggesting}
+                    onClick={handleSuggest}
+                >
+                    {suggesting ? (
+                        <span className="flex items-center gap-2"><span className="cb-spinner w-3 h-3" />{t('admin.patterns_suggest_creating')}</span>
+                    ) : (
+                        t('admin.patterns_suggest')
+                    )}
+                </button>
+            </div>
 
             {loading ? (
                 <div className="flex items-center gap-2 text-[--cb-text-tertiary] py-4">

@@ -10,8 +10,9 @@ A plataforma CryptoBingo precisa de uma mecânica de pagamentos que seja atrativ
 
 1. **Cálculo Relativo ao Ticket (Ticket-Based Payout):**
    O prêmio de uma cartela não será um valor estático dividido, mas sim um multiplicador do valor pago pelo jogador.
-   - Fórmula On-Chain: `Prize = Ticket_Price * Game_Base_Multiplier * Pattern_Weight`.
-   - *Exemplo:* Ticket custa 2 $BINGO. O `Game_Base_Multiplier` é 1. O padrão "BIG G" tem `weight` 20. Prêmio = 2 * 1 * 20 = 40 $BINGO.
+   - Fórmula On-Chain: `Prize = Ticket_Price * Game_Base_Multiplier * (Pattern_Weight / 100)`.
+   - O `weight` é armazenado em **hundredths** (uint16_t): 1.50 → 150, 5.00 → 500, max 255.00 → 25500.
+   - *Exemplo:* Ticket custa 2 $BINGO. O `Game_Base_Multiplier` é 1. O padrão "BIG G" tem `weight` 150 (1.50x). Prêmio = 2 * 1 * 150 / 100 = 3 $BINGO.
 
 2. **Regra de Pagamento Único (Max Weight Payout):**
    Para evitar a sangria da tesouraria por sobreposição geométrica de padrões (ex: um jogador preenche 4 linhas e também as diagonais na mesma cartela), o Smart Contract avaliará todas as bitmasks preenchidas, mas pagará **exclusivamente a combinação que oferecer o maior multiplicador (weight)** para aquela cartela.
@@ -65,9 +66,9 @@ data: {
 
 Implementado em `claimwin()` para jogos com `gametype_id > 0`:
 ```cpp
-// Fórmula: ticket_price * base_multiplier * win_weight
+// Fórmula: ticket_price * base_multiplier * win_weight / 100 (weight em hundredths)
 payout.quantity.amount =
-    payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight;
+    payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
 ```
 - Modo legado (`gametype_id = 0`): RTP fixo 85% do prize_pool (retrocompatível)
 - `win_weight`: extraído da regra do gametype cujo `pattern.mask == win_pattern_mask`
@@ -91,7 +92,14 @@ Métricas retornadas:
 - `alerts`: RTP < 75% ou RTP > 98%
 - `is_viable`: boolean de aprovação
 
+Suporte a combinações: `all_of`, `any_of`, `n_of_type` avaliados após patterns individuais aplicando a regra max_weight.
+Calibração RTP: o frontend `handleSuggest` executa 3 fases — (1) sugere pesos individuais inversamente proporcionais ao hit_rate, (2) gera combinações candidatas, (3) re-simula com o config completo e escala iterativamente todos os pesos até RTP ≈ 85% (±3%).
+
 Limites: máx 100.000 simulações; worker_threads para > 5.000 rodadas.
+
+### Weight Storage (Hundredths)
+
+O campo `pattern_rule.weight` foi alterado de `uint8_t` (1–255) para `uint16_t` (100–25500, hundredths) para suportar 2 casas decimais sem ponto flutuante on-chain. A conversão no frontend usa `parseFloat(v) × 100` ao submeter e `(w / 100).toFixed(2)x` para exibição. O contrato divide por 100 no cálculo do payout.
 
 ### Dívidas Técnicas Atualizadas
 - `[DEBT]` Auto-sweep de GGR para tesouraria não implementado

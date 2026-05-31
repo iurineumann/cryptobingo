@@ -6,6 +6,7 @@ dotenv.config();
 import { connectRabbitMQ }    from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
+import { ensureFirstGameForActiveRooms } from './services/roomManager';
 
 console.log('=============================================');
 console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
@@ -33,6 +34,11 @@ async function bootstrap(): Promise<void> {
 
     // ── 3. Consumidor RabbitMQ ────────────────────────────────────────────────
     await connectRabbitMQ();
+
+    // ── 4. Polling de primeiro jogo para salas ativas ─────────────────────────
+    // Verifica a cada 30s se há salas ativas sem jogo atual e cria o primeiro.
+    ensureFirstGameForActiveRooms();
+    setInterval(ensureFirstGameForActiveRooms, 30_000);
 }
 
 bootstrap().catch((err) => {

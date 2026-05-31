@@ -1,7 +1,7 @@
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
-import { workerSession } from './blockchain';
+import { contractSession, microserviceSession } from './blockchain';
 import { connectRedis } from './redis';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
@@ -27,7 +27,7 @@ export async function findRoomByGameId(gameId: string): Promise<BlockchainRoom |
         });
 
         const rooms = roomsResponse.rows as BlockchainRoom[];
-        return rooms.find(r => r.current_game_id === gameId) ?? null;
+        return rooms.find(r => String(r.current_game_id) === String(gameId)) ?? null;
     } catch (err) {
         console.error('[RoomManager] Erro ao buscar sala por game_id:', err);
         return null;
@@ -82,13 +82,13 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
 
         const newGameId = generateGameId();
 
-        // Cria o jogo
+        // Cria o jogo (requer bingo.game@active)
         console.log(`[RoomManager] Sala ${room.room_id}: criando game ${newGameId}...`);
-        const createResult = await workerSession.transact({
+        const createResult = await contractSession.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
                 name:          'creategame',
-                authorization: [workerSession.permissionLevel],
+                authorization: [contractSession.permissionLevel],
                 data: {
                     game_id:      newGameId,
                     ticket_price: {
@@ -102,30 +102,16 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         }, { broadcast: true });
         console.log(`✅ Game ${newGameId} criado. TX: ${createResult.response?.transaction_id}`);
 
-        // Funde o jogo (CREATED → FUNDING)
-        const fundResult = await workerSession.transact({
+        // Funde o jogo (CREATED → FUNDING) — requer microservice@active
+        const fundResult = await microserviceSession.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
                 name:          'fundgame',
-                authorization: [workerSession.permissionLevel],
+                authorization: [microserviceSession.permissionLevel],
                 data:          { game_id: newGameId },
             }],
         }, { broadcast: true });
         console.log(`✅ Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
-
-        // Atualiza o current_game_id da sala
-        const setResult = await workerSession.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'setroomgame',
-                authorization: [workerSession.permissionLevel],
-                data: {
-                    room_id: room.room_id,
-                    game_id: newGameId,
-                },
-            }],
-        }, { broadcast: true });
-        console.log(`✅ Sala ${room.room_id} atualizada para game ${newGameId}. TX: ${setResult.response?.transaction_id}`);
 
         return newGameId;
     } catch (err) {
@@ -158,6 +144,31 @@ async function fetchRoomOnChain(roomId: string): Promise<BlockchainRoom | null> 
 // ==========================================
 // Handler principal — chamado após game resolvido (ARCHIVED ou ABORTED)
 // ==========================================
+
+// ==========================================
+// Polling: cria primeiro jogo para salas ativas sem jogo atual
+// ==========================================
+
+export async function ensureFirstGameForActiveRooms(): Promise<void> {
+    try {
+        const roomsResponse = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'rooms',
+            limit: 100,
+            json:  true,
+        });
+        const rooms = roomsResponse.rows as BlockchainRoom[];
+        for (const room of rooms) {
+            if (room.status === 'active' && String(room.current_game_id) === '0') {
+                console.log(`[RoomManager] Sala ${room.room_id} ativa sem jogo atual. Criando primeiro jogo...`);
+                await createNextGameForRoom(room);
+            }
+        }
+    } catch (err) {
+        console.error('[RoomManager] Erro no polling de primeira partida:', err);
+    }
+}
 
 export async function onGameResolved(gameId: string): Promise<void> {
     console.log(`[RoomManager] Game ${gameId} resolvido. Verificando se pertence a uma sala...`);
