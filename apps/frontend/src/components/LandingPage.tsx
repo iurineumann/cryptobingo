@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchRooms, fetchRtpReport, fetchGamesHistory } from '../services/api';
 import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api';
+import Logo from './Logo';
 
 interface DevAccount {
   actor: string;
@@ -189,7 +190,10 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
       {/* ── Nav ── */}
       <header className="sticky top-0 z-50" style={{ background: 'color-mix(in srgb, var(--cb-bg-base) 90%, transparent)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--cb-border-subtle)' }}>
         <div className="cb-container flex items-center justify-between gap-4" style={{ height: '4rem' }}>
-          <span className="cb-logo">Crypto<span>Bingo</span></span>
+          <Logo
+            variant="horizontal"
+            height={64}            
+          />
 
           <nav className="flex gap-6 text-sm text-[--cb-text-secondary]" aria-label={t('landing.nav_aria')}>
             <a href="#rooms" className="no-underline text-inherit">{t('nav.lobby')}</a>

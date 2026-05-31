@@ -11,11 +11,30 @@ import { Session }           from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
+import mongoose, { Schema, Document } from 'mongoose';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+
+interface GametypeMetadataDocument extends Document {
+    gametype_id: string;
+    description: string;
+    cover_image_url: string;
+    rules_summary: string;
+    sort_order: number;
+}
+
+const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
+    gametype_id:     { type: String, required: true, unique: true, index: true },
+    description:     { type: String, default: '' },
+    cover_image_url: { type: String, default: '' },
+    rules_summary:   { type: String, default: '' },
+    sort_order:      { type: Number, default: 0 },
+}, { timestamps: true });
+
+const GametypeMetadataModel = mongoose.model<GametypeMetadataDocument>('GametypeMetadata', GametypeMetadataSchema);
 
 // Sessão do microserviço para enviar transações admin ao contrato
 function getAdminSession(): Session {
@@ -237,5 +256,61 @@ export async function deleteGametype(req: Request, res: Response): Promise<void>
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[PatternCtrl] Erro ao deletar gametype:', err);
         res.status(500).json({ error: `Erro ao remover gametype: ${msg}` });
+    }
+}
+
+// ==========================================
+// GAMETYPE METADATA (off-chain, MongoDB)
+// ==========================================
+
+/**
+ * GET /api/v1/admin/gametypes/:gametypeId/metadata
+ * Retorna metadados off-chain de um gametype.
+ */
+export async function getGametypeMetadata(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+
+    try {
+        const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId }).lean();
+        if (!metadata) {
+            res.status(404).json({ error: 'Metadados não encontrados para este gametype.' });
+            return;
+        }
+        res.status(200).json(metadata);
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao buscar metadados do gametype:', err);
+        res.status(500).json({ error: 'Erro ao buscar metadados.' });
+    }
+}
+
+/**
+ * PUT /api/v1/admin/gametypes/:gametypeId/metadata
+ * Cria ou atualiza metadados off-chain de um gametype.
+ *
+ * Body: { description, cover_image_url, rules_summary, sort_order }
+ */
+export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+    const { description, cover_image_url, rules_summary, sort_order } = req.body;
+
+    try {
+        const metadata = await GametypeMetadataModel.findOneAndUpdate(
+            { gametype_id: gametypeId },
+            {
+                $set: {
+                    description:     description ?? '',
+                    cover_image_url: cover_image_url ?? '',
+                    rules_summary:   rules_summary ?? '',
+                    sort_order:      sort_order ?? 0,
+                },
+            },
+            { upsert: true, new: true },
+        ).lean();
+
+        console.log(`✅ [PatternCtrl] Metadados do gametype ${gametypeId} upsertados.`);
+        res.status(200).json(metadata);
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao upsert metadados do gametype:', err);
+        res.status(500).json({ error: 'Erro ao salvar metadados.' });
     }
 }

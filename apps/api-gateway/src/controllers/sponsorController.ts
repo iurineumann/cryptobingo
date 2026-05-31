@@ -5,6 +5,7 @@
 import { Request, Response }     from 'express';
 import { Session }               from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
+import { UInt64 }                from '@wharfkit/antelope';
 import { rpcClient }             from '@cryptobingo/blockchain-core';
 import type { BlockchainCampaign } from '@cryptobingo/shared-types';
 
@@ -57,8 +58,8 @@ export async function getCampaign(req: Request, res: Response): Promise<void> {
             code:        CONTRACT_ACCOUNT,
             scope:       CONTRACT_ACCOUNT,
             table:       'campaigns',
-            lower_bound: campaignId,
-            upper_bound: campaignId,
+            lower_bound: UInt64.from(campaignId),
+            upper_bound: UInt64.from(campaignId),
             limit:       1,
             json:        true,
         });

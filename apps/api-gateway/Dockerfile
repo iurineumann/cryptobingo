@@ -14,7 +14,10 @@ COPY tsconfig.json ./
 COPY apps/api-gateway/ apps/api-gateway/
 COPY packages/ packages/
 
-# Build
+# Build dependencies first (dist/ must exist for tsconfig.build.json resolution)
+RUN pnpm --filter @cryptobingo/shared-types build
+RUN pnpm --filter @cryptobingo/blockchain-core build
+# Build api-gateway (uses tsconfig.build.json — no paths, resolves via node_modules)
 RUN pnpm --filter @cryptobingo/api-gateway build
 RUN pnpm --filter @cryptobingo/api-gateway deploy /app/deploy --prod
 

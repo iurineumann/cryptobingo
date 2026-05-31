@@ -317,7 +317,7 @@ async function fetchTicketById(
 ): Promise<BlockchainTicketRecord | null> {
     try {
         const res = await rpcClient.v1.chain.get_table_rows({
-            code:        'bingo.game',
+            code:        CONTRACT_ACCOUNT,
             scope:       gameId,
             table:       'tickets',
             lower_bound: ticketId as any,

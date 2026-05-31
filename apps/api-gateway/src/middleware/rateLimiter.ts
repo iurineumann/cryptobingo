@@ -51,11 +51,11 @@ let _monteCarloLimiter:  RateLimitRequestHandler = passthrough;
 // mesmo que initRateLimiters() seja chamado após o registro das rotas.
 // ==========================================
 
-export const authLimiter: RateLimitRequestHandler       = (req, res, next) => _authLimiter(req, res, next);
-export const playerLimiter: RateLimitRequestHandler     = (req, res, next) => _playerLimiter(req, res, next);
-export const ticketLimiter: RateLimitRequestHandler     = (req, res, next) => _ticketLimiter(req, res, next);
-export const adminLimiter: RateLimitRequestHandler      = (req, res, next) => _adminLimiter(req, res, next);
-export const monteCarloLimiter: RateLimitRequestHandler = (req, res, next) => _monteCarloLimiter(req, res, next);
+export const authLimiter: RateLimitRequestHandler       = ((req: Request, res: Response, next: NextFunction) => _authLimiter(req, res, next))       as unknown as RateLimitRequestHandler;
+export const playerLimiter: RateLimitRequestHandler     = ((req: Request, res: Response, next: NextFunction) => _playerLimiter(req, res, next))     as unknown as RateLimitRequestHandler;
+export const ticketLimiter: RateLimitRequestHandler     = ((req: Request, res: Response, next: NextFunction) => _ticketLimiter(req, res, next))     as unknown as RateLimitRequestHandler;
+export const adminLimiter: RateLimitRequestHandler      = ((req: Request, res: Response, next: NextFunction) => _adminLimiter(req, res, next))      as unknown as RateLimitRequestHandler;
+export const monteCarloLimiter: RateLimitRequestHandler = ((req: Request, res: Response, next: NextFunction) => _monteCarloLimiter(req, res, next)) as unknown as RateLimitRequestHandler;
 
 // ==========================================
 // FACTORY — cria um limiter com RedisStore

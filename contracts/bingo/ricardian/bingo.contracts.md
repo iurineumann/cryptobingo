@@ -169,13 +169,13 @@ I, {{buyer}}, authorize the deduction of the total cost of the submitted ticket 
 The purpose of the `linkcampaign` action is to inject a sponsorship allocation from a registered campaign into a specific game's sponsor pool, establishing a trustless B2B prize enhancement.
 
 ### Terms
-By linking campaign {{campaign_id}} to game {{game_id}}, the configured `payout_per_game` amount is atomically transferred from the campaign's `balance_remaining` into the game's `sponsor_pool`. This action requires the game to be in `created` or `funding` status. Once linked, the sponsor's allocated funds are irrevocably committed to this game. They will be distributed to the winning ticket holder atomically within `claimwin`, or returned to the sponsor (or directed to the treasury) according to the campaign's `leftover_policy` upon `closecampaign`.
+By linking campaign {{campaign_id}} to game {{game_id}}, the configured `payout_per_game` amount is atomically transferred from the campaign's `balance_remaining` into the game's `sponsor_pool`. This action requires the game to be in `created` or `funding` status. Once linked, the sponsor's allocated funds are irrevocably committed to this game. They will be distributed to the winning ticket holder atomically within `claimwin`, or returned to the sponsor (or directed to the treasury) according to the campaign's `leftover_policy` upon `closecmpgn`.
 
 ---
 
-<h1 class="contract">closecampaign</h1>
+<h1 class="contract">closecmpgn</h1>
 ### Intent
-The purpose of the `closecampaign` action is to finalize a B2B sponsorship campaign by settling its residual balance according to the pre-defined leftover policy and permanently erasing the campaign record.
+The purpose of the `closecmpgn` action is to finalize a B2B sponsorship campaign by settling its residual balance according to the pre-defined leftover policy and permanently erasing the campaign record.
 
 ### Terms
 By closing campaign {{campaign_id}}, the residual `balance_remaining` is settled as follows:

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CryptoBingo — Logomarca</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="logo.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #ece8e3; }
+  * { box-sizing: border-box; }
+  .ab { width: 100%; height: 100%; display: flex; flex-direction: column;
+        font-family: 'Inter', sans-serif; position: relative; overflow: hidden; }
+  .ab.dark  { background: radial-gradient(120% 90% at 28% 18%, #221a40 0%, #14132a 46%, #0c0b18 100%); color:#f1f5f9; }
+  .ab.light { background: radial-gradient(120% 90% at 28% 18%, #ffffff 0%, #f3f0fb 60%, #e9e4f6 100%); color:#15152a; }
+  .ab.ink   { background:#0c0b18; }
+  .grid-faint::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px;
+    -webkit-mask-image:radial-gradient(ellipse at center, #000 25%, transparent 72%);
+            mask-image:radial-gradient(ellipse at center, #000 25%, transparent 72%);
+  }
+  .ab-head { padding: 26px 30px 0; flex: none; }
+  .ab-eyebrow { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:11px;
+                letter-spacing:.22em; text-transform:uppercase; color:#a78bfa; }
+  .ab-title { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:21px;
+              letter-spacing:-.02em; margin:7px 0 4px; }
+  .ab-idea { font-size:12.5px; line-height:1.45; opacity:.62; max-width:30ch; }
+  .ab-mid { flex:1; display:flex; align-items:center; justify-content:center; padding:8px 30px; }
+  .ab-foot { flex:none; padding:0 30px 26px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .ab-foot .note { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em;
+                   opacity:.4; text-transform:uppercase; }
+  .sysrow { display:flex; align-items:center; gap:14px; }
+  .swatch-cap { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.08em;
+                text-transform:uppercase; opacity:.5; margin-top:8px; text-align:center; }
+  .fav { display:flex; flex-direction:column; align-items:center; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="logos.jsx"></script>
+
+<script type="text/babel">
+const { FoxBall, FoxHex, FoxNet, FoxCoin, MascotBadge, FoxTile, Silhouette, Wordmark, LockupH, LockupV } = window;
+
+function Concept({ n, title, idea, theme = 'dark', symbol, note, lockProps }) {
+  const Sym = symbol;
+  return (
+    <div className={'ab ' + theme + ' grid-faint'}>
+      <div className="ab-head">
+        <div className="ab-eyebrow">Conceito {String(n).padStart(2,'0')}</div>
+        <div className="ab-title">{title}</div>
+        <div className="ab-idea">{idea}</div>
+      </div>
+      <div className="ab-mid"><Sym size={172} /></div>
+      <div className="ab-foot">
+        <LockupH Symbol={Sym} sym={48} wm={28} theme={theme} {...(lockProps||{})} />
+        <span className="note">{note}</span>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <window.DesignCanvas>
+      <window.DCSection id="conceitos" title="6 Conceitos de logomarca"
+        subtitle="Mesmo sistema — Space Grotesk + violeta/âmbar. Variando o tratamento do símbolo “raposa na bola de bingo”. Conceito 01 é a recomendação.">
+
+        <window.DCArtboard id="c1" label="01 · Orbe (recomendado)" width={560} height={460}>
+          <Concept n={1} title="Orbe" theme="dark" symbol={FoxBall}
+            idea="A raposa dentro da bola de bingo — esférica, brilhante, instantânea. O coração da marca."
+            note="símbolo principal" />
+        </window.DCArtboard>
+
+        <window.DCArtboard id="c2" label="02 · Hexágono Token" width={560} height={460}>
+          <Concept n={2} title="Hexágono Token" theme="dark" symbol={FoxHex}
+            idea="Faceta de cristal em hexágono — leitura imediata de token / web3."
+            note="cripto-tech" />
+        </window.DCArtboard>
+
+        <window.DCArtboard id="c3" label="03 · Rede On-chain" width={560} height={460}>
+          <Concept n={3} title="Rede On-chain" theme="dark" symbol={FoxNet}
+            idea="Esfera com nós em órbita: provably fair, liquidação on-chain, transparência."
+            note="blockchain" />
+        </window.DCArtboard>
+
+        <window.DCArtboard id="c4" label="04 · Moeda Dourada" width={560} height={460}>
+          <Concept n={4} title="Moeda Dourada" theme="dark" symbol={FoxCoin}
+            idea="Aro metálico âmbar ao redor da esfera — prêmio, valor, jackpot."
+            note="accent dourado" />
+        </window.DCArtboard>
+
+        <window.DCArtboard id="c5" label="05 · Mascote" width={560} height={460}>
+          <Concept n={5} title="Mascote Coin" theme="light" symbol={MascotBadge}
+            idea="A raposinha 3D em medalhão — calor e diversão para social, app store e marketing."
+            note="lúdico / b2c"
+            lockProps={{ symProps: {}, }} />
+        </window.DCArtboard>
+
+        <window.DCArtboard id="c6" label="06 · App / Monograma CB" width={560} height={460}>
+          <Concept n={6} title="App · CB" theme="dark" symbol={FoxTile}
+            idea="Squircle de app com monograma CB embutido — ideal para favicon, ícone e avatar."
+            note="ícone de app" />
+        </window.DCArtboard>
+
+      </window.DCSection>
+
+      <window.DCSection id="sistema" title="Sistema completo · Orbe"
+        subtitle="O conceito recomendado aplicado: lockups horizontal e empilhado, ícone, favicons, versão monocromática (1 cor) e exemplo de navbar — em fundo claro e escuro.">
+
+        <window.DCArtboard id="s1" label="Horizontal · escuro" width={560} height={260}>
+          <div className="ab dark grid-faint" style={{ alignItems:'center', justifyContent:'center' }}>
+            <LockupH Symbol={FoxBall} symProps={{ showTag:false }} sym={88} wm={52} theme="dark" gap={26} />
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s2" label="Horizontal · claro" width={560} height={260}>
+          <div className="ab light" style={{ alignItems:'center', justifyContent:'center' }}>
+            <LockupH Symbol={FoxBall} symProps={{ showTag:false }} sym={88} wm={52} theme="light" gap={26} />
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s3" label="Empilhado" width={360} height={400}>
+          <div className="ab dark grid-faint" style={{ alignItems:'center', justifyContent:'center' }}>
+            <LockupV Symbol={FoxBall} symProps={{ tag:'CB' }} sym={130} wm={34} theme="dark" gap={22} />
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s4" label="Ícone & favicon" width={460} height={400}>
+          <div className="ab dark grid-faint" style={{ padding:'34px 30px', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', justifyContent:'center' }}>
+              <FoxBall size={150} tag="CB" />
+            </div>
+            <div className="sysrow" style={{ justifyContent:'center', gap:24, alignItems:'flex-end' }}>
+              {[64,40,24,16].map(s=>(
+                <div className="fav" key={s}>
+                  <FoxBall size={s} showTag={false} />
+                  <span className="swatch-cap">{s}px</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s5" label="Monocromático (1 cor)" width={560} height={300}>
+          <div className="ab light" style={{ padding:'30px' }}>
+            <div className="ab-eyebrow" style={{ color:'#7c3aed' }}>Uma cor · silhueta</div>
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'space-around', gap:18 }}>
+              <div className="fav">
+                <Silhouette size={120} color="#7c3aed" />
+                <span className="swatch-cap" style={{ color:'#15152a' }}>Violeta / branco</span>
+              </div>
+              <div className="fav" style={{ background:'#7c3aed', padding:'22px 26px', borderRadius:18 }}>
+                <Silhouette size={120} color="#ffffff" />
+                <span className="swatch-cap" style={{ color:'#fff', opacity:.85 }}>Branco / violeta</span>
+              </div>
+              <div className="fav">
+                <Silhouette size={120} color="#15152a" />
+                <span className="swatch-cap" style={{ color:'#15152a' }}>Tinta / branco</span>
+              </div>
+            </div>
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s6" label="App icon & splash" width={340} height={400}>
+          <div className="ab dark grid-faint" style={{ alignItems:'center', justifyContent:'center', gap:26 }}>
+            <FoxTile size={150} />
+            <Wordmark size={30} theme="dark" />
+          </div>
+        </window.DCArtboard>
+
+        <window.DCArtboard id="s7" label="Aplicação · navbar" width={760} height={200}>
+          <div className="ab ink" style={{ justifyContent:'center', padding:'0' }}>
+            <div style={{ height:64, borderBottom:'1px solid rgba(255,255,255,.08)',
+              display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 22px',
+              background:'rgba(15,15,26,.92)' }}>
+              <LockupH Symbol={FoxBall} symProps={{ showTag:false }} sym={32} wm={21} theme="dark" gap={11} />
+              <div style={{ display:'flex', gap:4, padding:4, background:'rgba(255,255,255,.05)',
+                border:'1px solid rgba(255,255,255,.06)', borderRadius:10 }}>
+                {['Jogar','Salas','Histórico'].map((t,i)=>(
+                  <span key={t} style={{ padding:'6px 14px', fontSize:13, fontWeight:600, borderRadius:7,
+                    color: i===0 ? '#f1f5f9' : '#94a3b8',
+                    background: i===0 ? '#0f0f1a' : 'transparent',
+                    boxShadow: i===0 ? '0 0 0 1px rgba(255,255,255,.1)' : 'none' }}>{t}</span>
+                ))}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ display:'inline-flex', gap:6, alignItems:'baseline', padding:'7px 12px',
+                  borderRadius:999, background:'linear-gradient(135deg,rgba(245,158,11,.18),rgba(30,30,53,.8))',
+                  border:'1px solid rgba(245,158,11,.3)', fontFamily:'JetBrains Mono', fontSize:12,
+                  color:'#fcd34d', fontWeight:700 }}>1,240 <span style={{ fontSize:10, opacity:.8 }}>WAX</span></span>
+                <span style={{ display:'inline-flex', gap:7, alignItems:'center', padding:'7px 12px',
+                  borderRadius:999, background:'#1e1e35', border:'1px solid rgba(255,255,255,.1)',
+                  fontFamily:'JetBrains Mono', fontSize:12, color:'#94a3b8' }}>
+                  <span style={{ width:7, height:7, borderRadius:99, background:'#34d399', boxShadow:'0 0 8px #34d399' }}></span>
+                  wax··7f3a</span>
+              </div>
+            </div>
+          </div>
+        </window.DCArtboard>
+
+      </window.DCSection>
+    </window.DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

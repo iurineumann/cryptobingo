@@ -1,9 +1,30 @@
 # Compose Specification
-# Totalmente atualizado: sem tag 'version', utilizando atributos modernos de Healthcheck e Naming.
+# Inclui blockchain local (waxdev), infraestrutura e apps.
 
 name: cryptobingo-infra
 
 services:
+  # ==========================================
+  # 0. BLOCKCHAIN LOCAL (waxteam/waxdev)
+  # Substitui DUNES (deprecated).
+  # nodeos + keosd + cdt dentro de um único container.
+  # Iniciado e configurado por init_dev_env.sh.
+  # ==========================================
+  waxdev:
+    image: waxteam/waxdev:latest
+    container_name: bingo_waxdev
+    restart: unless-stopped
+    ports:
+      - "8888:8888"   # nodeos RPC
+      - "8900:8900"   # keosd wallet
+    volumes:
+      - waxdev_data:/root/waxdev-data
+      - waxdev_wallet:/root/eosio-wallet
+      - ./contracts/bingo:/app/contracts/bingo:rw
+    networks:
+      - bingo_net
+    command: tail -f /dev/null   # processos iniciados pelo init_dev_env.sh
+
   # ==========================================
   # 1. POSTGRESQL (Core Ledger, Auditoria e LGPD)
   # ==========================================
@@ -138,7 +159,7 @@ services:
     networks:
       - bingo_net
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # Alcança o worker (porta 9091) rodando no host
+      - "host.docker.internal:host-gateway"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -154,7 +175,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=bingo_grafana_2026
-      # Permite que o Grafana acesse o host (worker rodando fora do Docker em dev)
       - GF_SERVER_ROOT_URL=http://localhost:3001
     volumes:
       - grafana_data:/var/lib/grafana
@@ -165,7 +185,7 @@ services:
     networks:
       - bingo_net
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # Resolve host no Linux
+      - "host.docker.internal:host-gateway"
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.0
@@ -183,10 +203,95 @@ services:
     networks:
       - bingo_net
 
+  # ==========================================
+  # 6. APPS — API Gateway
+  # ==========================================
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: bingo_api_gateway
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    env_file:
+      - apps/api-gateway/.env
+    environment:
+      PORT: "8083"
+      POSTGRES_URL: postgres://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger
+      MONGO_URL: mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/cryptobingo_edge?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RPC_URL: http://bingo_waxdev:8888
+      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:8083
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
+  # ==========================================
+  # 7. APPS — Frontend (Vite + Nginx)
+  # ==========================================
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_RPC_URL: http://bingo_waxdev:8888
+        VITE_API_GATEWAY_URL: http://bingo_api_gateway:8083
+        VITE_WS_URL: http://bingo_worker:8085
+        VITE_CHAIN_ID: ${CHAIN_ID}
+        VITE_CONTRACT_ACCOUNT: bingo.game
+    container_name: bingo_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./infra/nginx/frontend.compose.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - bingo_net
+
+  # ==========================================
+  # 8. APPS — Worker Game Loop (WS + Métricas)
+  # ==========================================
+  worker-game-loop:
+    build:
+      context: .
+      dockerfile: apps/worker-game-loop/Dockerfile
+    container_name: bingo_worker
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+      - "9091:9091"
+    env_file:
+      - apps/worker-game-loop/.env
+    environment:
+      RPC_URL: http://bingo_waxdev:8888
+      POSTGRES_URL: postgres://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://rabbit_admin:rabbit_secure_pass_2026@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
 # ==========================================
 # VOLUMES E REDES
 # ==========================================
 volumes:
+  waxdev_data:
+  waxdev_wallet:
   postgres_data:
   mongo_data:
   rabbitmq_data:
