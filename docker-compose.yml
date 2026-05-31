@@ -1,33 +1,11 @@
 # Compose Specification
-# Inclui blockchain local (waxdev), infraestrutura e apps.
+# Gerencia apenas a infraestrutura de suporte (Postgres, Mongo, Redis, RabbitMQ).
+# O container blockchain (bingo_waxdev) é gerenciado EXCLUSIVAMENTE pelo
+# init_dev_env.sh — não incluir aqui para evitar conflito de nomes.
 
 name: cryptobingo-infra
 
 services:
-  # ==========================================
-  # 0. BLOCKCHAIN LOCAL (waxteam/waxdev)
-  # Substitui DUNES (deprecated).
-  # nodeos + keosd + cdt dentro de um único container.
-  # Iniciado e configurado por init_dev_env.sh.
-  # ==========================================
-  waxdev:
-    image: waxteam/waxdev:latest
-    container_name: bingo_waxdev
-    restart: unless-stopped
-    ports:
-      - "8888:8888"   # nodeos RPC
-      - "8900:8900"   # keosd wallet
-    volumes:
-      - waxdev_data:/root/waxdev-data
-      - waxdev_wallet:/root/eosio-wallet
-      - ./contracts/bingo:/app/contracts/bingo:rw
-    networks:
-      - bingo_net
-    command: tail -f /dev/null   # processos iniciados pelo init_dev_env.sh
-
-  # ==========================================
-  # 1. POSTGRESQL (Core Ledger, Auditoria e LGPD)
-  # ==========================================
   postgres:
     image: postgres:15-alpine
     container_name: bingo_postgres
@@ -290,8 +268,6 @@ services:
 # VOLUMES E REDES
 # ==========================================
 volumes:
-  waxdev_data:
-  waxdev_wallet:
   postgres_data:
   mongo_data:
   rabbitmq_data:

@@ -9,7 +9,7 @@
 //     1. Um sorteio de 75 bolas via Fisher-Yates (distribuição uniforme)
 //     2. N cartelas geradas aleatoriamente (distribuição BINGO por coluna)
 //     3. Avaliação de cada cartela contra os padrões do gametype
-//     4. Cálculo do payout: ticket_price * base_multiplier * max_weight
+//     4. Cálculo do payout: ticket_price * base_multiplier * max_weight / 100
 //
 //   RTP de uma rodada = total_payout / total_wagered
 //   RTP simulado = média aritmética sobre todas as rodadas
@@ -46,16 +46,31 @@ const RTP_MAX_THRESHOLD  = 0.98;  // Acima: casa sem margem operacional
 // ==========================================
 
 export interface PatternRuleInput {
-    pattern_id: number | string;
-    name:       string;   // Nome descritivo (para o relatório)
-    mask:       number;   // uint32 bitmask (25 bits)
-    weight:     number;   // Multiplicador de prêmio (uint8, 1-255)
+    pattern_id:   number | string;
+    name:         string;   // Nome descritivo (para o relatório)
+    mask:         number;   // uint32 bitmask (25 bits)
+    weight:       number;   // hundredths (1.00=100, 1.50=150, max 255.00=25500)
+    pattern_type?: string;  // 'simple' | 'special' | 'master' — usado por combos n_of_type
+}
+
+export interface CombinationClauseInput {
+    type:          'all_of' | 'any_of' | 'n_of_type';
+    pattern_ids?:  string[];
+    pattern_type?: string;
+    count?:        number;
+}
+
+export interface CombinationRuleInput {
+    name:    string;
+    weight:  number;
+    clauses: CombinationClauseInput[];
 }
 
 export interface SimulationInput {
     gametype_name:    string;
     base_multiplier:  number;    // uint8 (1-255)
     patterns:         PatternRuleInput[];
+    combinations?:    CombinationRuleInput[];
     simulations?:     number;    // Número de rodadas (1-100.000, padrão 10.000)
     tickets_per_game?: number;   // Tickets por rodada (1-500, padrão 100)
     ticket_price?:    number;    // Preço do ticket em unidades (padrão 10)
@@ -170,23 +185,51 @@ function applyBalls(matrix: number[], drawnBalls: number[]): number {
 }
 
 /**
- * Verifica todos os padrões vencedores de uma cartela.
- * Retorna o de maior weight (max_weight rule — ADR-005 §2).
- * null se nenhum padrão foi atingido.
+ * Encontra todos os padrões individuais que uma cartela atingiu.
  */
-function findMaxWeightWinner(
+function findMatchingPatterns(
     state:    number,
     patterns: PatternRuleInput[],
-): PatternRuleInput | null {
+): PatternRuleInput[] {
     const stateBig = BigInt(state);
-    let best: PatternRuleInput | null = null;
+    const matched: PatternRuleInput[] = [];
+    for (const p of patterns) {
+        if ((stateBig & BigInt(p.mask)) === BigInt(p.mask)) {
+            matched.push(p);
+        }
+    }
+    return matched;
+}
 
-    for (const pattern of patterns) {
-        const mask = BigInt(pattern.mask);
-        if ((stateBig & mask) === mask) {
-            if (!best || pattern.weight > best.weight) {
-                best = pattern;
+/**
+ * Avalia combinações contra os padrões individuais já atingidos.
+ * Retorna a de maior weight (ou null se nenhuma combinação foi satisfeita).
+ */
+function evaluateCombinations(
+    matched:      PatternRuleInput[],
+    combinations: CombinationRuleInput[],
+): CombinationRuleInput | null {
+    let best: CombinationRuleInput | null = null;
+
+    for (const combo of combinations) {
+        let ok = true;
+        for (const clause of combo.clauses) {
+            if (clause.type === 'all_of') {
+                ok = (clause.pattern_ids ?? []).every(pid =>
+                    matched.some(m => String(m.pattern_id) === pid)
+                );
+            } else if (clause.type === 'any_of') {
+                ok = (clause.pattern_ids ?? []).some(pid =>
+                    matched.some(m => String(m.pattern_id) === pid)
+                );
+            } else if (clause.type === 'n_of_type') {
+                const count = matched.filter(m => m.pattern_type === clause.pattern_type).length;
+                ok = count >= (clause.count ?? 1);
             }
+            if (!ok) break;
+        }
+        if (ok && (!best || combo.weight > best.weight)) {
+            best = combo;
         }
     }
 
@@ -194,14 +237,50 @@ function findMaxWeightWinner(
 }
 
 /**
+ * Verifica todos os padrões e combinações vencedores de uma cartela.
+ * Retorna o de maior weight (max_weight rule — ADR-005 §2).
+ * null se nenhum padrão foi atingido.
+ */
+function findBestWinner(
+    state:       number,
+    patterns:    PatternRuleInput[],
+    combinations?: CombinationRuleInput[],
+): { name: string; weight: number } | null {
+    const matched = findMatchingPatterns(state, patterns);
+    if (matched.length === 0) return null;
+
+    // Best individual pattern
+    let bestName   = matched[0].name;
+    let bestWeight = matched[0].weight;
+    for (let i = 1; i < matched.length; i++) {
+        if (matched[i].weight > bestWeight) {
+            bestName   = matched[i].name;
+            bestWeight = matched[i].weight;
+        }
+    }
+
+    // Check combinations
+    if (combinations && combinations.length > 0) {
+        const bestCombo = evaluateCombinations(matched, combinations);
+        if (bestCombo && bestCombo.weight > bestWeight) {
+            bestName   = bestCombo.name;
+            bestWeight = bestCombo.weight;
+        }
+    }
+
+    return { name: bestName, weight: bestWeight };
+}
+
+/**
  * Simula uma única rodada de bingo.
- * Retorna: payout total, vencedores e padrões atingidos.
+ * Retorna: payout total, vencedores e padrões/combinações atingidos.
  */
 function simulateOneGame(
     patterns:       PatternRuleInput[],
     baseMultiplier: number,
     ticketPrice:    number,
     numTickets:     number,
+    combinations?:  CombinationRuleInput[],
 ): {
     payout:        number;
     winners:       number;
@@ -220,32 +299,34 @@ function simulateOneGame(
     for (let t = 0; t < numTickets; t++) {
         const matrix = generateRandomMatrix();
 
-        // Encontra o número mínimo de bolas para atingir algum padrão
-        let winnerPattern: PatternRuleInput | null = null;
-        let ballsNeeded = 0;
+        // Encontra o número mínimo de bolas para atingir algum padrão ou combinação
+        let winnerName   = '';
+        let winnerWeight = 0;
+        let ballsNeeded  = 0;
 
         for (let b = 1; b <= drawnBalls.length; b++) {
             const partialBalls = drawnBalls.slice(0, b);
             const state        = applyBalls(matrix, partialBalls);
-            const winner       = findMaxWeightWinner(state, patterns);
+            const winner       = findBestWinner(state, patterns, combinations);
 
             if (winner) {
-                winnerPattern = winner;
-                ballsNeeded   = b;
+                winnerName   = winner.name;
+                winnerWeight = winner.weight;
+                ballsNeeded  = b;
                 break;
             }
         }
 
-        if (winnerPattern) {
-            const payout = ticketPrice * baseMultiplier * winnerPattern.weight;
+        if (winnerWeight > 0) {
+            const payout = ticketPrice * baseMultiplier * winnerWeight / 100;
             totalPayout += payout;
             winners++;
 
-            if (!patternHits[winnerPattern.name]) {
-                patternHits[winnerPattern.name] = { count: 0, totalBalls: 0 };
+            if (!patternHits[winnerName]) {
+                patternHits[winnerName] = { count: 0, totalBalls: 0 };
             }
-            patternHits[winnerPattern.name].count++;
-            patternHits[winnerPattern.name].totalBalls += ballsNeeded;
+            patternHits[winnerName].count++;
+            patternHits[winnerName].totalBalls += ballsNeeded;
         }
     }
 
@@ -266,6 +347,7 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
         gametype_name,
         base_multiplier,
         patterns,
+        combinations = [],
         simulations    = DEFAULT_SIMULATIONS,
         tickets_per_game = DEFAULT_TICKETS,
         ticket_price   = DEFAULT_TICKET_PRICE,
@@ -275,15 +357,18 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
     let totalPaidOut   = 0;
     let totalWinners   = 0;
 
-    // Acumuladores por padrão
+    // Acumuladores por padrão + combinação
     const patternAccum: Record<string, { hits: number; totalBalls: number }> = {};
     for (const p of patterns) {
         patternAccum[p.name] = { hits: 0, totalBalls: 0 };
     }
+    for (const c of combinations) {
+        patternAccum[c.name] = { hits: 0, totalBalls: 0 };
+    }
 
     for (let s = 0; s < simulations; s++) {
         const wageredThisGame = tickets_per_game * ticket_price;
-        const game = simulateOneGame(patterns, base_multiplier, ticket_price, tickets_per_game);
+        const game = simulateOneGame(patterns, base_multiplier, ticket_price, tickets_per_game, combinations);
 
         totalWagered += wageredThisGame;
         totalPaidOut += game.payout;
@@ -293,6 +378,8 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
             if (patternAccum[name]) {
                 patternAccum[name].hits       += stats.count;
                 patternAccum[name].totalBalls += stats.totalBalls;
+            } else {
+                patternAccum[name] = { hits: stats.count, totalBalls: stats.totalBalls };
             }
         }
     }
@@ -301,19 +388,23 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
     const rtp          = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
     const ggr          = 1 - rtp;
 
-    // Monta estatísticas por padrão
-    const patternStats: PatternStats[] = patterns.map(p => {
-        const acc  = patternAccum[p.name] ?? { hits: 0, totalBalls: 0 };
+    // Monta estatísticas por padrão (individuais + combinações)
+    const allNames = new Set<string>();
+    for (const p of patterns)    allNames.add(p.name);
+    for (const c of combinations) allNames.add(c.name);
+    const patternStats: PatternStats[] = [];
+    for (const name of allNames) {
+        const acc  = patternAccum[name] ?? { hits: 0, totalBalls: 0 };
         const rate = totalTickets > 0 ? acc.hits / totalTickets : 0;
-        return {
-            name:             p.name,
-            mask:             p.mask,
-            weight:           p.weight,
+        patternStats.push({
+            name,
+            mask:             0,
+            weight:           0,
             hit_count:        acc.hits,
             hit_rate:         Math.round(rate * 1_000_000) / 1_000_000,
             avg_balls_needed: acc.hits > 0 ? Math.round((acc.totalBalls / acc.hits) * 10) / 10 : 0,
-        };
-    });
+        });
+    }
 
     // Alertas
     const alerts: string[] = [];
@@ -410,17 +501,23 @@ function runInWorker(input: SimulationInput): Promise<Omit<SimulationResult, 'du
  *   gametype_name:    string,
  *   base_multiplier:  number,        // 1-255
  *   patterns: [{
- *     pattern_id:  number,
- *     name:        string,
- *     mask:        number,           // uint32 bitmask 25 bits
- *     weight:      number,           // 1-255
+ *     pattern_id:    number,
+ *     name:          string,
+ *     mask:          number,         // uint32 bitmask 25 bits
+ *     weight:        number,         // hundredths (1.00=100, max 255.00=25500)
+ *     pattern_type?: string,         // 'simple' | 'special' | 'master'
+ *   }],
+ *   combinations?: [{               // combinações avaliadas após patterns individuais
+ *     name:    string,
+ *     weight:  number,               // hundredths
+ *     clauses: [{ type, pattern_ids?, pattern_type?, count? }],
  *   }],
  *   simulations?:      number,       // 1-100.000 (padrão 10.000)
  *   tickets_per_game?: number,       // 1-500 (padrão 100)
  *   ticket_price?:     number,       // unidades abstratas (padrão 10)
  * }
  *
- * Retorna: SimulationResult completo com RTP, GGR, estatísticas por padrão e alertas.
+ * Retorna: SimulationResult completo com RTP, GGR, estatísticas por padrão+combinação e alertas.
  * Ref: ADR-005 §3
  */
 export async function simulateWeights(req: Request, res: Response): Promise<void> {
@@ -428,6 +525,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         gametype_name,
         base_multiplier,
         patterns,
+        combinations,
         simulations,
         tickets_per_game,
         ticket_price,
@@ -445,8 +543,8 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         return;
     }
 
-    if (!Array.isArray(patterns) || patterns.length === 0 || patterns.length > 12) {
-        res.status(400).json({ error: '"patterns" deve ser um array de 1 a 12 elementos.' });
+    if (!Array.isArray(patterns) || patterns.length === 0) {
+        res.status(400).json({ error: '"patterns" deve ser um array com pelo menos 1 elemento.' });
         return;
     }
 
@@ -455,8 +553,8 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
             res.status(400).json({ error: 'Cada pattern deve ter name, mask (uint32 ≤ 25 bits) e weight.' });
             return;
         }
-        if (typeof p.weight !== 'number' || p.weight < 1 || p.weight > 255) {
-            res.status(400).json({ error: '"weight" de cada pattern deve ser um inteiro entre 1 e 255.' });
+        if (typeof p.weight !== 'number' || p.weight < 100 || p.weight > 25500) {
+            res.status(400).json({ error: '"weight" de cada pattern deve ser 1.00 a 255.00 (hundredths).' });
             return;
         }
     }
@@ -492,6 +590,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         gametype_name,
         base_multiplier,
         patterns,
+        combinations:    combinations ?? [],
         simulations:     numSims,
         tickets_per_game: numTickets,
         ticket_price:    Number(ticket_price ?? DEFAULT_TICKET_PRICE),

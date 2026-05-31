@@ -37,6 +37,7 @@ ACCOUNT_NAMES=(
     orng.wax
     bingo.game
     alien.worlds
+    microservice
     jogador1
     jogador2
     gameadmin11
@@ -427,13 +428,20 @@ cleos push action bingo.token issue \
     -p bingo.game@active 2>/dev/null || true
 
 echo "[*] Distribuindo BINGO..."
-for dest in jogador1 jogador2 gameadmin11 contractad1 sponsor1111; do
+for dest in microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111; do
     cleos push action bingo.token open \
         "[\"$dest\", \"4,BINGO\", \"bingo.game\"]" \
         -p bingo.game@active > /dev/null 2>&1 || true
     cleos push action bingo.token transfer \
         "[\"bingo.game\", \"$dest\", \"10000.0000 BINGO\", \"Dev tokens\"]" \
         -p bingo.game@active 2>/dev/null || true
+done
+
+echo "[*] Distribuindo WAX para contas de desenvolvimento..."
+for dest in bingo.game bingo.token microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111; do
+    cleos push action eosio.token transfer \
+        "[\"eosio\", \"$dest\", \"100000.0000 WAX\", \"Dev WAX\"]" \
+        -p eosio@active 2>/dev/null || true
 done
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -452,6 +460,16 @@ else
     echo "    Compile o contrato e execute novamente ou:"
     echo "    cleos set contract bingo.game $CONTRACT_SRC_CONTAINER -p bingo.game@active"
 fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8b. CONFIGURA signer_key DO CONTRATO
+# ──────────────────────────────────────────────────────────────────────────────
+source .waxdev.env
+echo "[*] Configurando signer_key do contrato bingo.game..."
+cleos push action bingo.game setconfig \
+    "{\"signer_key\": \"${BINGO_GAME_PUB}\"}" \
+    -p bingo.game@active || \
+    echo "[!] Aviso: setconfig falhou (pode executar manualmente depois)."
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 9. CAPTURA CHAIN_ID
@@ -514,6 +532,7 @@ _upsert_env "$F" "MONGO_URL"                "mongodb://mongo_admin:mongo_secure_
 _upsert_env "$F" "REDIS_URL"                "redis://localhost:6379"
 _upsert_env "$F" "CONTRACT_ACCOUNT"         "bingo.game"
 _upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGO_GAME_KEY:-}"
+_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGO_GAME_KEY:-}"
 _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
 _upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3000"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
@@ -522,7 +541,8 @@ F="apps/worker-game-loop/.env"
 _upsert_env "$F" "CHAIN_ID"                 "$CHAIN_ID"
 _upsert_env "$F" "RPC_URL"                  "http://127.0.0.1:8888"
 _upsert_env "$F" "CONTRACT_ACCOUNT"         "bingo.game"
-_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGO_GAME_KEY:-}"
+_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${MICROSERVICE_KEY:-}"
+_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGO_GAME_KEY:-}"
 _upsert_env "$F" "POSTGRES_URL"             "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
 _upsert_env "$F" "REDIS_URL"                "redis://localhost:6379"
 _upsert_env "$F" "RABBITMQ_URL"             "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"

@@ -75,37 +75,36 @@ A comunicação mutável com o contrato segue assinaturas rigorosas e delegaçã
 
 ### 2.1. Ingestão de Compras (Batch Processing)
 
-* **Assinatura:** `buytickets(name user, uint64_t game_id, vector<vector<uint8_t>> matrices, vector<signature> signatures)`
-* **Auth Exigido:** `user@active`
+* **Assinatura:** `buytickets(name buyer, uint64_t game_id, bytes[] matrices, signature[] signatures, uint64_t nft_id)`
+* **Auth Exigido:** `buyer@active`
 * **Fluxo de Validação:**
-1. O contrato itera sobre `matrices` e `signatures`.
-2. Calcula o Hash SHA-256 de cada `vector<uint8_t>`.
-3. Aplica `recover_key(hash, signature)`.
-4. Valida (`assert`) se a `public_key` retornada pertence à conta administrativa do Backend. Falha imediata (Rollback) caso alguma assinatura seja espúria.
-5. Valida `assert(games[game_id].status == "FUNDING")`.
-6. Deduz `matrices.size() * games[game_id].ticket_price` da tabela `balances` do `user`.
-7. Executa `emplace` em lote na tabela `tickets`, setando o contrato como `ram_payer`.
+1. Valida `game.status == "funding"` e limites da sala.
+2. Se `nft_id != 0`, aplica desconto do NFT na tabela `nftconfigs`.
+3. Deduz `matrices.size() * ticket_price` da tabela `balances` do `buyer`.
+4. Para cada cartela: serializa `matrix + game_id + buyer`, calcula SHA-256, e executa `assert_recover_key(hash, signature, config.signer_key)` — garantindo que foi assinada pelo microserviço.
+5. O hash é usado como `ticket_id` (anti-replay).
+6. Executa `emplace` em lote na tabela `tickets`.
+
+**Pré-requisito:** O contrato precisa ter a configuração inicializada via `setconfig(public_key signer_key)` com a chave pública do microserviço. Executado pelo script `init_dev_env.sh` na seção 8b.
 
 
 
-### 2.2. Liquidação de Prêmios (Multidrop & Precision Loss)
+### 2.2. Liquidação de Prêmios (Max Weight Payout)
 
 * **Assinatura:** `claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask)`
 * **Auth Exigido:** `microservice@active`
-* **Cálculo Matemático e Distribuição:**
-* O contrato extrai as primeiras `ball_count` dezenas de `games[game_id].drawn_balls`.
-* Constrói o mapa de bits baseando-se no cruzamento on-chain.
-* **Prevenção de Perda de Precisão:**
-A fração é calculada estritamente com multiplicadores inteiros antes da divisão:
+* **Regra de Pagamento Único (Max Weight):** A cartela pode preencher múltiplos padrões. O worker off-chain seleciona o padrão/combinação de maior `weight` dentre todos os vencedores. O contrato recebe apenas o `win_pattern_mask` correspondente ao maior peso e paga exclusivamente aquele.
+* **Cálculo Matemático (modo gametype, `gametype_id > 0`):**
+O prêmio é calculado com base no weight do padrão vencedor (armazenado em hundredths — 1.50 → 150):
+
+$$Prize = ticket\_price \times base\_multiplier \times \frac{win\_weight}{100}$$
+
+* **Cálculo Matemático (modo legado, `gametype_id == 0`):**
+Para jogos sem gametype definido, mantém-se o RTP fixo de 85% do prize_pool (retrocompatível):
 
 $$Valor\_RTP = \frac{(prize\_pool.amount \times 85)}{100}$$
 
-
-$$Valor\_GGR = prize\_pool.amount - Valor\_RTP$$
-
-
-* Credita o `Valor_RTP` em `balances[owner]`.
-* Itera sobre `sponsor_pool` e credita integralmente cada `extended_asset` na mesma `balances[owner]`.
+* **Distribuição:** credita o prêmio em `balances[owner]`; itera sobre `sponsor_pool` e credita integralmente cada `extended_asset` na mesma `balances[owner]` (multidrop).
 
 
 
@@ -143,9 +142,24 @@ if ((estado[ticket_id] & MASK_CONDICAO) === MASK_CONDICAO) {
    // Dispara evento de Winner Found
 }
 
-```
 
+### 3.4. Motor de Simulação Monte Carlo (Weight Calibration)
 
+Endpoint: `POST /api/v1/admin/simulate-weights`
+
+Simula N rodadas completas para calibrar os weights de um gametype antes do deploy on-chain:
+
+1. **Patterns individuais:** gera `n_cards` cartelas aleatórias, aplica bolas progressivas (Fisher-Yates criptográfico) até cada cartela atingir algum padrão. Acumula `hits` e `avg_balls_needed` por padrão, calcula `hit_rate`.
+2. **Combinações:** cláusulas `all_of` (cartela precisa acertar todos os patterns listados), `any_of` (pelo menos um), `n_of_type` (N patterns de um tipo, ex: 2 linhas). Avaliadas após os patterns individuais, aplicando a regra max_weight.
+3. **Payout:** `ticket_price * base_multiplier * max_win_weight / 100`. Retorna `rtp_pct`, `ggr_pct`, `pattern_stats`, `alerts` (RTP fora de 75%–98%) e `is_viable`.
+
+#### 3.4.1. Frontend: handleSuggest (3 fases)
+
+O botão "Suggest Standard Patterns" no `GametypesAdmin.tsx` executa:
+
+- **Fase 1 — Sugestão de pesos individuais:** simula apenas patterns individuais, sugere pesos inversamente proporcionais ao hit_rate (padrão mais difícil = maior peso, mapeado 1.00x–5.00x em hundredths).
+- **Fase 2 — Geração de combinações:** 3 estratégias — N-of-type (2 linhas, 2 colunas), pares top-5 hit_rate, especial+simples.
+- **Fase 3 — Calibração RTP:** re-simula com config completo (individuais + combos). Se RTP fora de 85% ± 3%, escala todos os pesos (factor = target_RTP / current_RTP, clamped 0.5x–2.0x) e re-simula (até 10 iterações). Aplica os pesos calibrados finais.
 
 ---
 

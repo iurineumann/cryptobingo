@@ -67,7 +67,7 @@
 - [ ] Lobby.tsx — refatorar para listar salas (rooms) em vez de games (ADR-010).
 - [ ] SponsorRooms.tsx — painel do sponsor para gerenciar suas salas.
 - [ ] useChat.ts — hook WebSocket separado para chat.
-- [ ] GametypesAdmin — Suggest Combinations helper (Monte Carlo + dificuldade).
+- [x] GametypesAdmin — Suggest Combinations helper (Monte Carlo + dificuldade + calibração RTP).
 - [ ] PWA (Lighthouse > 90).
 
 ## Épico 5: Documentação

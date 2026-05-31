@@ -105,7 +105,7 @@ export interface BlockchainPattern {
  */
 export interface PatternRule {
     pattern_id: string;
-    weight:     number; // uint8
+    weight:     number; // uint16 (hundredths, 1.00=100)
 }
 
 /**

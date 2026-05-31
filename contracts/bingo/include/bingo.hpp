@@ -126,7 +126,7 @@ namespace bingo {
 
     struct pattern_rule {
         uint64_t pattern_id;
-        uint8_t  weight;
+        uint16_t weight;             // hundredths (1.50 → 150)
     };
 
     // ==========================================
