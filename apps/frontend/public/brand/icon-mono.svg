@@ -1,0 +1,12 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CryptoBingo">
+  <polygon points="50,1 93,25.5 93,74.5 50,99 7,74.5 7,25.5" fill="currentColor"/>
+  <g fill="white">
+    <polygon points="33,26 26,14 38,26" opacity="0.9"/>
+    <polygon points="67,26 62,14 74,26" opacity="0.9"/>
+    <ellipse cx="50" cy="50" rx="22" ry="20" opacity="0.9"/>
+    <ellipse cx="50" cy="57" rx="13" ry="10" fill="currentColor" opacity="0.4"/>
+    <ellipse cx="42" cy="46" rx="3.5" ry="4" fill="currentColor" opacity="0.7"/>
+    <ellipse cx="58" cy="46" rx="3.5" ry="4" fill="currentColor" opacity="0.7"/>
+    <polygon points="50,55 47.5,52 52.5,52" fill="currentColor" opacity="0.7"/>
+  </g>
+</svg>

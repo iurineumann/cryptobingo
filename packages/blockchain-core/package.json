@@ -5,9 +5,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc --project tsconfig.build.json"
   },
   "dependencies": {
+    "@cryptobingo/shared-types": "workspace:*",
     "@wharfkit/antelope": "^1.0.0",
     "@wharfkit/session": "^1.0.0"
   },

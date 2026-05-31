@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CryptoBingo App">
+  <defs>
+    <radialGradient id="tile-bg" cx="30%" cy="22%" r="78%">
+      <stop offset="0%"   stop-color="#8b5cf6"/>
+      <stop offset="48%"  stop-color="#6d28d9"/>
+      <stop offset="100%" stop-color="#3f1d8a"/>
+    </radialGradient>
+    <linearGradient id="tile-shine" x1="0.06" y1="0.97" x2="0.94" y2="0.03">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="38%"  stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect width="512" height="512" rx="123"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="123" fill="url(#tile-bg)"/>
+  <g clip-path="url(#squircle)">
+    <rect width="512" height="512" rx="123" fill="url(#tile-shine)"/>
+  </g>
+  <image href="fox_03.png" x="67" y="67" width="378" height="378"/>
+  <text x="476" y="486" font-family="'Space Grotesk','Inter',sans-serif" font-size="102" font-weight="700" fill="rgba(255,255,255,.92)" text-anchor="end" letter-spacing="-4.1">CB</text>
+</svg>

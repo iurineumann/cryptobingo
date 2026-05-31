@@ -4,6 +4,7 @@
 
 import { Request, Response } from 'express';
 import { getRtpReport, getRecentGames, upsertGameHistory } from '../database/ledger';
+import { UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
@@ -69,8 +70,8 @@ export async function syncGameToLedger(req: Request, res: Response): Promise<voi
             code:        CONTRACT_ACCOUNT,
             scope:       CONTRACT_ACCOUNT,
             table:       'games',
-            lower_bound: gameId,
-            upper_bound: gameId,
+            lower_bound: UInt64.from(gameId),
+            upper_bound: UInt64.from(gameId),
             limit:       1,
             json:        true,
         });

@@ -14,7 +14,10 @@ COPY tsconfig.json ./
 COPY apps/worker-game-loop/ apps/worker-game-loop/
 COPY packages/ packages/
 
-# Build
+# Build dependencies first (dist/ must exist for tsconfig.build.json resolution)
+RUN pnpm --filter @cryptobingo/shared-types build
+RUN pnpm --filter @cryptobingo/blockchain-core build
+# Build worker (uses tsconfig.build.json — no paths, resolves via node_modules)
 RUN pnpm --filter @cryptobingo/worker-game-loop build
 RUN pnpm --filter @cryptobingo/worker-game-loop deploy /app/deploy --prod
 

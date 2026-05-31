@@ -26,6 +26,7 @@ import Lobby             from './components/Lobby';
 import GameRoom          from './components/GameRoom';
 import WalletPage        from './components/WalletPage';
 import AdminLayout       from './components/admin/AdminLayout';
+import Logo             from './components/Logo';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -251,13 +252,11 @@ export default function App() {
             {/* ── Navbar ── */}
             <header className="site-nav">
                 <div className="site-nav-left">
-                    <a
-                        href="#"
-                        className="cb-logo"
-                        onClick={(e) => { e.preventDefault(); setRoute({ page: 'lobby' }); }}
-                    >
-                        Crypto<span>Bingo</span>
-                    </a>
+                    <Logo
+                        variant="horizontal"
+                        height={64}
+                        onClick={() => setRoute({ page: 'lobby' })}
+                    />
 
                     <nav className="site-tabs" aria-label={t('nav.lobby') ?? 'Salas de Jogo'}>
                         {NAV_TABS.map(tab => (

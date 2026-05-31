@@ -1,4 +1,5 @@
-import { rpcClient, UInt64 } from '@cryptobingo/blockchain-core';
+import { rpcClient } from '@cryptobingo/blockchain-core';
+import { UInt64 } from '@wharfkit/antelope';
 import { Pool } from 'pg';
 import { redisClient } from './redis';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';

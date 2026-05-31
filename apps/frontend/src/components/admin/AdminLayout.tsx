@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import Logo from '../Logo';
 import AdminDashboard  from './AdminDashboard';
 import PatternsAdmin   from './PatternsAdmin';
 import GametypesAdmin  from './GametypesAdmin';
@@ -86,13 +87,11 @@ export default function AdminLayout({
       {/* ── Top Nav ── */}
       <header className="site-nav">
         <div className="site-nav-left">
-          <a
-            href="#"
-            className="cb-logo"
-            onClick={(e) => { e.preventDefault(); onNavigate('dashboard'); }}
-          >
-            Crypto<span>Bingo</span>
-          </a>
+          <Logo
+            variant="horizontal"
+            height={64}
+            onClick={() => onNavigate('dashboard')}
+          />
           <span className="site-mode-pill">
             <span aria-hidden="true">●</span>
             {t('admin.dashboard')}

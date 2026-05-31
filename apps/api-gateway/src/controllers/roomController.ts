@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { Session } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
-import { rpcClient, UInt64, Name } from '@cryptobingo/blockchain-core';
+import { rpcClient } from '@cryptobingo/blockchain-core';
+import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom, RoomMetadata } from '@cryptobingo/shared-types';
 import RoomMetadataModel from '../models/RoomMetadata';
 

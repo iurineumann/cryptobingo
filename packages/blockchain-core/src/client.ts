@@ -6,7 +6,7 @@ import type {
 } from '@cryptobingo/shared-types';
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8888';
-const CONTRACT_ACCOUNT = 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 
 export const rpcClient = new APIClient({ url: RPC_URL });
 

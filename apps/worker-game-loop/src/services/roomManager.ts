@@ -1,4 +1,5 @@
-import { rpcClient, UInt64 } from '@cryptobingo/blockchain-core';
+import { rpcClient } from '@cryptobingo/blockchain-core';
+import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { workerSession } from './blockchain';
 import { connectRedis } from './redis';

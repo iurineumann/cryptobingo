@@ -1,0 +1,630 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "abortgame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "reason",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "activateroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "addgametype",
+            "base": "",
+            "fields": [
+                {
+                    "name": "gametype_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "name": "base_multiplier",
+                    "type": "uint8"
+                },
+                {
+                    "name": "rules",
+                    "type": "pattern_rule[]"
+                }
+            ]
+        },
+        {
+            "name": "addpattern",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pattern_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "name": "mask",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "allocatedrop",
+            "base": "",
+            "fields": [
+                {
+                    "name": "caller",
+                    "type": "name"
+                },
+                {
+                    "name": "deposit_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "quantity_per_drop",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "nft_asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "drop_chance_bps",
+                    "type": "uint16"
+                }
+            ]
+        },
+        {
+            "name": "buytickets",
+            "base": "",
+            "fields": [
+                {
+                    "name": "buyer",
+                    "type": "name"
+                },
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "matrices",
+                    "type": "bytes[]"
+                },
+                {
+                    "name": "signatures",
+                    "type": "signature[]"
+                },
+                {
+                    "name": "nft_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "claimwin",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ticket_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ball_count",
+                    "type": "uint8"
+                },
+                {
+                    "name": "win_pattern_mask",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "cleargame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "max_rows",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "closecmpgn",
+            "base": "",
+            "fields": [
+                {
+                    "name": "campaign_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "closeroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "creategame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ticket_price",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "gametype_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "createroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "sponsor",
+                    "type": "name"
+                },
+                {
+                    "name": "gametype_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ticket_price_min",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "ticket_price_max",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "ticket_price_default",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "max_tickets_per_player",
+                    "type": "uint32"
+                },
+                {
+                    "name": "sponsor_room",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "deallocdrop",
+            "base": "",
+            "fields": [
+                {
+                    "name": "caller",
+                    "type": "name"
+                },
+                {
+                    "name": "alloc_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "delgametype",
+            "base": "",
+            "fields": [
+                {
+                    "name": "gametype_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "delnftconf",
+            "base": "",
+            "fields": [
+                {
+                    "name": "template_id",
+                    "type": "int32"
+                }
+            ]
+        },
+        {
+            "name": "delpattern",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pattern_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "execdrop",
+            "base": "",
+            "fields": [
+                {
+                    "name": "alloc_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "winner",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "fundgame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "linkcampaign",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "campaign_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "lockgame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "pattern_rule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pattern_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "weight",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "pauseroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "receiverand",
+            "base": "",
+            "fields": [
+                {
+                    "name": "assoc_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "random_bytes",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "reclaimasset",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "deposit_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "refundticket",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ticket_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "setconfig",
+            "base": "",
+            "fields": [
+                {
+                    "name": "signer_key",
+                    "type": "public_key"
+                }
+            ]
+        },
+        {
+            "name": "setnftconf",
+            "base": "",
+            "fields": [
+                {
+                    "name": "template_id",
+                    "type": "int32"
+                },
+                {
+                    "name": "discount_pct",
+                    "type": "uint8"
+                },
+                {
+                    "name": "is_vip",
+                    "type": "bool"
+                },
+                {
+                    "name": "valid_until",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setroommeta",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "room_drop_chance_bps",
+                    "type": "uint16"
+                },
+                {
+                    "name": "max_tickets_per_player",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "startdraw",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "withdraw",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "extended_asset"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "abortgame",
+            "type": "abortgame",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "activateroom",
+            "type": "activateroom",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "addgametype",
+            "type": "addgametype",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "addpattern",
+            "type": "addpattern",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "allocatedrop",
+            "type": "allocatedrop",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "buytickets",
+            "type": "buytickets",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "claimwin",
+            "type": "claimwin",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "cleargame",
+            "type": "cleargame",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "closecmpgn",
+            "type": "closecmpgn",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "closeroom",
+            "type": "closeroom",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "creategame",
+            "type": "creategame",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "createroom",
+            "type": "createroom",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "deallocdrop",
+            "type": "deallocdrop",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "delgametype",
+            "type": "delgametype",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "delnftconf",
+            "type": "delnftconf",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "delpattern",
+            "type": "delpattern",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "execdrop",
+            "type": "execdrop",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "fundgame",
+            "type": "fundgame",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "linkcampaign",
+            "type": "linkcampaign",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "lockgame",
+            "type": "lockgame",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "pauseroom",
+            "type": "pauseroom",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "receiverand",
+            "type": "receiverand",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "reclaimasset",
+            "type": "reclaimasset",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "refundticket",
+            "type": "refundticket",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setconfig",
+            "type": "setconfig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setnftconf",
+            "type": "setnftconf",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setroommeta",
+            "type": "setroommeta",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "startdraw",
+            "type": "startdraw",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdraw",
+            "type": "withdraw",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [],
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}

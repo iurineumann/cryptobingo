@@ -2,11 +2,11 @@
 // Ref: SPEC.md §3.1 — "hash serializado é validado atomicamente via SADD no Redis"
 // Ref: SPEC.md §3.2 — estrutura de chaves Redis: game:{game_id}:matrix:{hash}
 
-import { createClient } from 'redis';
+import { createClient, type RedisClientType } from 'redis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
-export const redisClient = createClient({ url: REDIS_URL });
+export const redisClient: RedisClientType = createClient({ url: REDIS_URL }) as any;
 
 redisClient.on('error', (err: Error) => {
     // Log sem derrubar o processo — o controller tem fail-open controlado

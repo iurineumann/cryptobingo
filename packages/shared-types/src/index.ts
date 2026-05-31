@@ -213,6 +213,27 @@ export interface MongoChatMessage {
     timestamp:      Date;
 }
 
+export interface RoomMetadata {
+    room_id:              string;
+    name:                 string;
+    description:          string;
+    cover_image_url:       string;
+    rules_summary:        string;
+    chat_enabled:         boolean;
+    auto_start_delay_sec: number;
+    drops:                RoomDropConfig[];
+}
+
+export interface RoomDropConfig {
+    token_contract:    string;
+    symbol:            string;
+    amount:            string;
+    template_id:       number;
+    collection_name:   string;
+    drop_chance_pct:   number;
+    max_drops_per_game: number;
+}
+
 export interface MongoNftCache {
     wallet_address: string;
     assets: Array<{
