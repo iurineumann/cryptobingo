@@ -114,7 +114,7 @@ export function initRateLimiters(): void {
         _playerLimiter     = createLimiter({ windowMs: 60_000, max: 100, keyPrefix: 'player',     message: 'Muitas requisições. Aguarde alguns segundos.'                   });
         _ticketLimiter     = createLimiter({ windowMs: 60_000, max: 30,  keyPrefix: 'tickets',    message: 'Limite de geração de cartelas atingido. Aguarde 1 minuto.'      });
         _adminLimiter      = createLimiter({ windowMs: 60_000, max: 30,  keyPrefix: 'admin',      message: 'Limite de operações administrativas atingido. Aguarde 1 minuto.' });
-        _monteCarloLimiter = createLimiter({ windowMs: 60_000, max: 5,   keyPrefix: 'montecarlo', message: 'Limite de simulações atingido. Aguarde 1 minuto.'               });
+        _monteCarloLimiter = createLimiter({ windowMs: 60_000, max: 60,   keyPrefix: 'montecarlo', message: 'Limite de simulações atingido. Aguarde 1 minuto.'               });
 
         console.log('✅ [RateLimit] Limiters inicializados com RedisStore.');
     } catch (err) {

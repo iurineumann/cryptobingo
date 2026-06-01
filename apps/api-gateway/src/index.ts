@@ -30,7 +30,7 @@ import {
     listGametypes, upsertGametype, deleteGametype,
     getGametypeMetadata, upsertGametypeMetadata,
 } from './controllers/patternController';
-import { simulateWeights }                           from './controllers/monteCarloController';
+import { simulateWeights, calibrateWeights }         from './controllers/monteCarloController';
 import { getRtpStatistics, getGamesHistory, syncGameToLedger } from './controllers/statisticsController';
 import { ensureLedgerTables }                         from './database/ledger';
 import {
@@ -211,6 +211,10 @@ function registerRoutes(): void {
     app.post(
         '/api/v1/admin/simulate-weights',
         monteCarloLimiter, requireAuth, requireRole('admin'), simulateWeights
+    );
+    app.post(
+        '/api/v1/admin/calibrate-weights',
+        monteCarloLimiter, requireAuth, requireRole('admin'), calibrateWeights
     );
 
     // ── Statistics / Compliance (públicas) — Lei 14.790/2023 ─────────────────
