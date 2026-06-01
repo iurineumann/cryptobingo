@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminPatterns, createAdminPattern, deleteAdminPattern, type BlockchainPattern } from '../../services/api';
+import { fetchAdminPatterns, createAdminPattern, deleteAdminPattern, fetchAdminGametypes, type BlockchainPattern, type BlockchainGametype } from '../../services/api';
 
 // Layout coluna-maior do grid 5×5
 //     B  I  N  G  O
@@ -21,20 +21,30 @@ const BIT_NAMES: Record<number, string> = {
     20:'O1', 21:'O2', 22:'O3', 23:'O4', 24:'O5',
 };
 
+// Máscaras computadas com layout coluna-maior: bit = col×5 + row
+// Visualização (B I N G O, linhas 1-5) — '*' = FREE SPACE (sempre ativo):
+//   BINGO_B  █████ █···█ ██*██ █···█ █████  (Col B + Row 1 + Row 5 + Col O + Row 3)
+//   BINGO_I  █████ ··█·· ··*·· ··█·· █████  (Row 1 + Col N central + Row 5)
+//   BINGO_N  █···█ ██··█ █·*·█ █··██ █···█  (Col B + Diag TL-BR + Col O)
+//   BINGO_G  █████ █···· █·*██ █···█ █████  (Row 1 + Col B + Row 5 + O3 + O4 + G3 + N3)
+//   BINGO_O  █████ █···█ █·*·█ █···█ █████  (Row 1 + Row 5 + Col B + Col O)
 const SUGGEST_PATTERNS = [
-    { name: 'ROW_0', mask: 1_082_401, group: 'basic' as const },
-    { name: 'ROW_1', mask: 2_164_802, group: 'basic' as const },
-    { name: 'ROW_2', mask: 4_329_604, group: 'basic' as const },
-    { name: 'ROW_3', mask: 8_659_208, group: 'basic' as const },
-    { name: 'ROW_4', mask: 17_318_416, group: 'basic' as const },
-    { name: 'DIAG_TL_BR', mask: 17_043_521, group: 'basic' as const },
-    { name: 'DIAG_TR_BL', mask: 1_118_480, group: 'basic' as const },
-    { name: 'COL_B', mask: 31, group: 'special' as const },
-    { name: 'COL_I', mask: 992, group: 'special' as const },
-    { name: 'COL_N', mask: 31_744, group: 'special' as const },
-    { name: 'COL_G', mask: 1_015_808, group: 'special' as const },
-    { name: 'COL_O', mask: 32_505_856, group: 'special' as const },
-    { name: 'MASTER', mask: (1 << 25) - 1, group: 'master' as const },
+    // Básicos: 5 linhas + 2 diagonais
+    { name: 'ROW_0',      mask: 1_082_401,  group: 'basic'   as const },
+    { name: 'ROW_1',      mask: 2_164_802,  group: 'basic'   as const },
+    { name: 'ROW_2',      mask: 4_329_604,  group: 'basic'   as const },
+    { name: 'ROW_3',      mask: 8_659_208,  group: 'basic'   as const },
+    { name: 'ROW_4',      mask: 17_318_416, group: 'basic'   as const },
+    { name: 'DIAG_TL_BR', mask: 17_043_521, group: 'basic'   as const },
+    { name: 'DIAG_TR_BL', mask: 1_118_480,  group: 'basic'   as const },
+    // Especiais: letras BINGO (formas compostas de múltiplas linhas/colunas)
+    { name: 'BINGO_B',    mask: 33_216_191, group: 'special' as const },
+    { name: 'BINGO_I',    mask: 18_415_153, group: 'special' as const }, // Col N (central), não Col I
+    { name: 'BINGO_N',    mask: 32_772_191, group: 'special' as const },
+    { name: 'BINGO_G',    mask: 31_118_911, group: 'special' as const },
+    { name: 'BINGO_O',    mask: 33_080_895, group: 'special' as const },
+    // Mestre: cartela completa
+    { name: 'MASTER',     mask: (1 << 25) - 1, group: 'master' as const },
 ];
 
 function maskToGrid(mask: number): boolean[] {
@@ -118,7 +128,9 @@ function maskToGridPreview(mask: number): string {
         const row: string[] = [];
         for (let c = 0; c < 5; c++) {
             const bit = c * 5 + r;
-            row.push(bit === 12 ? '★' : (mask & (1 << bit)) ? '█' : '·');
+            // '★' (U+2605) tem largura ambígua em fontes monospace e desalinha as células
+            // seguintes; '*' é ASCII puro e sempre ocupa exatamente 1 coluna.
+            row.push(bit === 12 ? '*' : (mask & (1 << bit)) ? '█' : '·');
         }
         lines.push(row.join(' '));
     }
@@ -127,7 +139,8 @@ function maskToGridPreview(mask: number): string {
 
 export default function PatternsAdmin() {
     const { t } = useTranslation();
-    const [patterns, setPatterns] = useState<BlockchainPattern[]>([]);
+    const [patterns,  setPatterns]  = useState<BlockchainPattern[]>([]);
+    const [gametypes, setGametypes] = useState<BlockchainGametype[]>([]);
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState('');
     const [editMask, setEditMask] = useState<number>(1 << 12); // só FREE SPACE
@@ -139,8 +152,12 @@ export default function PatternsAdmin() {
     const load = async () => {
         setLoading(true);
         try {
-            const data = await fetchAdminPatterns();
-            setPatterns(data.patterns);
+            const [patData, gtData] = await Promise.all([
+                fetchAdminPatterns(),
+                fetchAdminGametypes(),
+            ]);
+            setPatterns(patData.patterns);
+            setGametypes(gtData.gametypes);
         } catch (err) {
             setError(err instanceof Error ? err.message : t('admin.patterns_error_load'));
         } finally {
@@ -148,15 +165,26 @@ export default function PatternsAdmin() {
         }
     };
 
+    // IDs de padrões atualmente em uso por algum gametype (impede remoção)
+    const usedPatternIds = useMemo(
+        () => new Set(gametypes.flatMap(gt => (gt.rules ?? []).map(r => String(r.pattern_id)))),
+        [gametypes]
+    );
+
     const handleSuggest = async () => {
         setSuggesting(true);
         setSuggestMsg(null);
         setError(null);
-        const existing = new Set(patterns.map(p => p.name.toLocaleLowerCase()));
-        const missing = SUGGEST_PATTERNS.filter(p => !existing.has(p.name.toLocaleLowerCase()));
+        // Verifica por nome E por máscara para evitar duplicatas
+        // (cobre tanto padrões já cadastrados quanto os exibidos na tela)
+        const existingNames = new Set(patterns.map(p => p.name.toLocaleLowerCase()));
+        const existingMasks = new Set(patterns.map(p => Number(p.mask)));
+        const missing = SUGGEST_PATTERNS.filter(
+            p => !existingNames.has(p.name.toLocaleLowerCase()) && !existingMasks.has(p.mask)
+        );
         let created = 0;
         for (const p of missing) {
-            const maxId = patterns.reduce((max, p) => Math.max(max, parseInt(p.pattern_id) || 0), 0) + created;
+            const maxId = patterns.reduce((max, pp) => Math.max(max, parseInt(pp.pattern_id) || 0), 0) + created;
             try {
                 await createAdminPattern({ pattern_id: maxId + 1, name: p.name, mask: p.mask });
                 created++;
@@ -277,15 +305,14 @@ export default function PatternsAdmin() {
                 </div>
                 <button
                     type="button"
-                    className="cb-btn cb-btn-secondary self-start"
+                    className="cb-btn cb-btn-outline self-start"
                     disabled={suggesting}
                     onClick={handleSuggest}
                 >
-                    {suggesting ? (
-                        <span className="flex items-center gap-2"><span className="cb-spinner w-3 h-3" />{t('admin.patterns_suggest_creating')}</span>
-                    ) : (
-                        t('admin.patterns_suggest')
-                    )}
+                    {suggesting
+                        ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('admin.patterns_suggest_creating')}</>
+                        : `✨ ${t('admin.patterns_suggest')}`
+                    }
                 </button>
             </div>
 
@@ -302,9 +329,21 @@ export default function PatternsAdmin() {
                                     <span className="font-bold text-[--cb-text-primary]">{p.name}</span>
                                     <span className="text-xs text-[--cb-text-tertiary] ml-2 font-mono">#{p.pattern_id}</span>
                                 </div>
-                                <button className="text-xs text-[--cb-danger] hover:underline" onClick={() => handleDelete(p.pattern_id)}>
-                                    {t('admin.patterns_delete')}
-                                </button>
+                                {usedPatternIds.has(String(p.pattern_id)) ? (
+                                    <span
+                                        className="text-xs text-[--cb-text-tertiary] cursor-help select-none"
+                                        title={t('admin.patterns_delete_blocked')}
+                                    >
+                                        🔒 {t('admin.patterns_in_use')}
+                                    </span>
+                                ) : (
+                                    <button
+                                        className="text-xs text-[--cb-danger] hover:underline"
+                                        onClick={() => handleDelete(p.pattern_id)}
+                                    >
+                                        {t('admin.patterns_delete')}
+                                    </button>
+                                )}
                             </div>
                             <pre className="font-mono text-xs leading-tight text-[--cb-text-secondary]">{maskToGridPreview(p.mask)}</pre>
                             <span className="text-xs text-[--cb-text-tertiary] font-mono">mask: {p.mask}</span>

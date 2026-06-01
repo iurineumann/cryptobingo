@@ -74,6 +74,9 @@ export interface SimulationInput {
     simulations?:     number;    // Número de rodadas (1-100.000, padrão 10.000)
     tickets_per_game?: number;   // Tickets por rodada (1-500, padrão 100)
     ticket_price?:    number;    // Preço do ticket em unidades (padrão 10)
+    max_balls?:       number;    // Limite de bolas por rodada (1-75, padrão 75 = todas)
+                                 // Valores menores modelam jogos que encerram cedo (1ª vitória)
+                                 // e produzem hit_rates realistas (< 100%) para calibração de RTP.
 }
 
 export interface PatternStats {
@@ -166,37 +169,16 @@ function generateRandomMatrix(): number[] {
 }
 
 /**
- * Aplica as bolas sorteadas a uma cartela e retorna o bitmask final.
- * Bit 12 = FREE SPACE (sempre setado: 0x00001000).
- * Ref: evaluator.ts (mesmo algoritmo)
- */
-function applyBalls(matrix: number[], drawnBalls: number[]): number {
-    const drawnSet = new Set(drawnBalls);
-    let state = 0x00001000; // bit 12 = FREE SPACE
-
-    for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
-        if (bitIndex === 12) continue;
-        const matrixIdx = bitIndex < 12 ? bitIndex : bitIndex - 1;
-        if (drawnSet.has(matrix[matrixIdx])) {
-            state |= (1 << bitIndex);
-        }
-    }
-    return state;
-}
-
-/**
  * Encontra todos os padrões individuais que uma cartela atingiu.
+ * Usa aritmética 32-bit direta — máscaras são uint25 (cabem em int32 com sinal).
  */
 function findMatchingPatterns(
     state:    number,
     patterns: PatternRuleInput[],
 ): PatternRuleInput[] {
-    const stateBig = BigInt(state);
     const matched: PatternRuleInput[] = [];
     for (const p of patterns) {
-        if ((stateBig & BigInt(p.mask)) === BigInt(p.mask)) {
-            matched.push(p);
-        }
+        if ((state & p.mask) === p.mask) matched.push(p);
     }
     return matched;
 }
@@ -204,35 +186,34 @@ function findMatchingPatterns(
 /**
  * Avalia combinações contra os padrões individuais já atingidos.
  * Retorna a de maior weight (ou null se nenhuma combinação foi satisfeita).
+ * Pré-computa Set de IDs e contagem por tipo para evitar varreduras repetidas.
  */
 function evaluateCombinations(
     matched:      PatternRuleInput[],
     combinations: CombinationRuleInput[],
 ): CombinationRuleInput | null {
-    let best: CombinationRuleInput | null = null;
+    // Pré-computação O(N) uma vez, ao invés de O(N×C×K) no loop
+    const matchedIds = new Set(matched.map(m => String(m.pattern_id)));
+    const typeCount: Record<string, number> = {};
+    for (const m of matched) {
+        if (m.pattern_type) typeCount[m.pattern_type] = (typeCount[m.pattern_type] ?? 0) + 1;
+    }
 
+    let best: CombinationRuleInput | null = null;
     for (const combo of combinations) {
         let ok = true;
         for (const clause of combo.clauses) {
             if (clause.type === 'all_of') {
-                ok = (clause.pattern_ids ?? []).every(pid =>
-                    matched.some(m => String(m.pattern_id) === pid)
-                );
+                ok = (clause.pattern_ids ?? []).every(pid => matchedIds.has(pid));
             } else if (clause.type === 'any_of') {
-                ok = (clause.pattern_ids ?? []).some(pid =>
-                    matched.some(m => String(m.pattern_id) === pid)
-                );
+                ok = (clause.pattern_ids ?? []).some(pid => matchedIds.has(pid));
             } else if (clause.type === 'n_of_type') {
-                const count = matched.filter(m => m.pattern_type === clause.pattern_type).length;
-                ok = count >= (clause.count ?? 1);
+                ok = (typeCount[clause.pattern_type ?? ''] ?? 0) >= (clause.count ?? 1);
             }
             if (!ok) break;
         }
-        if (ok && (!best || combo.weight > best.weight)) {
-            best = combo;
-        }
+        if (ok && (!best || combo.weight > best.weight)) best = combo;
     }
-
     return best;
 }
 
@@ -274,6 +255,12 @@ function findBestWinner(
 /**
  * Simula uma única rodada de bingo.
  * Retorna: payout total, vencedores e padrões/combinações atingidos.
+ *
+ * `maxBalls`: limita quantas bolas são reveladas por rodada (default: todas as 75).
+ * Valores menores (ex: 45) modelam jogos que encerram quando o primeiro jogador vence —
+ * produzindo hit_rates realistas (< 100%) que permitem calibração de RTP abaixo de 100%.
+ *
+ * Otimização: estado incremental com ballToBit map (O(n_balls) por cartela).
  */
 function simulateOneGame(
     patterns:       PatternRuleInput[],
@@ -281,38 +268,47 @@ function simulateOneGame(
     ticketPrice:    number,
     numTickets:     number,
     combinations?:  CombinationRuleInput[],
+    maxBalls?:      number,
 ): {
     payout:        number;
     winners:       number;
     ballsDrawn:    number;
     patternHits:   Record<string, { count: number; totalBalls: number }>;
 } {
-    // 1. Sorteio completo das 75 bolas
-    const allBalls    = Array.from({ length: 75 }, (_, i) => i + 1);
-    const drawnBalls  = fisherYatesShuffle(allBalls); // Sempre todas as 75
+    const allBalls   = Array.from({ length: 75 }, (_, i) => i + 1);
+    const drawnBalls = fisherYatesShuffle(allBalls);
+    // Limite de bolas por rodada — modela jogos que encerram antes de revelar todas as 75.
+    // Com max_balls < 75, padrões difíceis têm hit_rate < 100%, permitindo calibração de RTP.
+    const ballLimit  = Math.min(drawnBalls.length, maxBalls ?? drawnBalls.length);
 
     let totalPayout = 0;
     let winners     = 0;
     const patternHits: Record<string, { count: number; totalBalls: number }> = {};
 
-    // 2. Avalia cada cartela
     for (let t = 0; t < numTickets; t++) {
         const matrix = generateRandomMatrix();
 
-        // Encontra o número mínimo de bolas para atingir algum padrão ou combinação
+        // Pré-computa bola → bitIndex para esta cartela (evita busca linear a cada bola)
+        // matrixIdx 0-11 → bitIndex 0-11 ; matrixIdx 12-23 → bitIndex 13-24 (pula bit 12 = FREE)
+        const ballToBit = new Map<number, number>();
+        for (let mi = 0; mi < 24; mi++) {
+            ballToBit.set(matrix[mi], mi < 12 ? mi : mi + 1);
+        }
+
+        let state        = 0x00001000; // bit 12 = FREE SPACE sempre ativo
         let winnerName   = '';
         let winnerWeight = 0;
         let ballsNeeded  = 0;
 
-        for (let b = 1; b <= drawnBalls.length; b++) {
-            const partialBalls = drawnBalls.slice(0, b);
-            const state        = applyBalls(matrix, partialBalls);
-            const winner       = findBestWinner(state, patterns, combinations);
+        for (let b = 0; b < ballLimit; b++) {
+            const bit = ballToBit.get(drawnBalls[b]);
+            if (bit !== undefined) state |= (1 << bit);
 
+            const winner = findBestWinner(state, patterns, combinations);
             if (winner) {
                 winnerName   = winner.name;
                 winnerWeight = winner.weight;
-                ballsNeeded  = b;
+                ballsNeeded  = b + 1;
                 break;
             }
         }
@@ -321,21 +317,13 @@ function simulateOneGame(
             const payout = ticketPrice * baseMultiplier * winnerWeight / 100;
             totalPayout += payout;
             winners++;
-
-            if (!patternHits[winnerName]) {
-                patternHits[winnerName] = { count: 0, totalBalls: 0 };
-            }
+            if (!patternHits[winnerName]) patternHits[winnerName] = { count: 0, totalBalls: 0 };
             patternHits[winnerName].count++;
             patternHits[winnerName].totalBalls += ballsNeeded;
         }
     }
 
-    return {
-        payout:      totalPayout,
-        winners,
-        ballsDrawn:  drawnBalls.length,
-        patternHits,
-    };
+    return { payout: totalPayout, winners, ballsDrawn: ballLimit, patternHits };
 }
 
 /**
@@ -351,6 +339,7 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
         simulations    = DEFAULT_SIMULATIONS,
         tickets_per_game = DEFAULT_TICKETS,
         ticket_price   = DEFAULT_TICKET_PRICE,
+        max_balls,
     } = input;
 
     let totalWagered   = 0;
@@ -368,7 +357,7 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
 
     for (let s = 0; s < simulations; s++) {
         const wageredThisGame = tickets_per_game * ticket_price;
-        const game = simulateOneGame(patterns, base_multiplier, ticket_price, tickets_per_game, combinations);
+        const game = simulateOneGame(patterns, base_multiplier, ticket_price, tickets_per_game, combinations, max_balls);
 
         totalWagered += wageredThisGame;
         totalPaidOut += game.payout;
@@ -529,6 +518,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         simulations,
         tickets_per_game,
         ticket_price,
+        max_balls,
     } = req.body as SimulationInput;
 
     // ── Validações ────────────────────────────────────────────────────────────
@@ -553,11 +543,15 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
             res.status(400).json({ error: 'Cada pattern deve ter name, mask (uint32 ≤ 25 bits) e weight.' });
             return;
         }
-        if (typeof p.weight !== 'number' || p.weight < 100 || p.weight > 25500) {
-            res.status(400).json({ error: '"weight" de cada pattern deve ser 1.00 a 255.00 (hundredths).' });
+        if (typeof p.weight !== 'number' || p.weight < 10 || p.weight > 25500) {
+            res.status(400).json({ error: '"weight" de cada pattern deve ser 0.10 a 255.00 (hundredths: 10–25500).' });
             return;
         }
     }
+
+    const numBalls = max_balls != null
+        ? Math.max(1, Math.min(75, Number(max_balls)))
+        : undefined;
 
     const numSims = Math.min(Number(simulations ?? DEFAULT_SIMULATIONS), MAX_SIMULATIONS);
     if (numSims < 1) {
@@ -594,6 +588,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         simulations:     numSims,
         tickets_per_game: numTickets,
         ticket_price:    Number(ticket_price ?? DEFAULT_TICKET_PRICE),
+        max_balls:       numBalls,
     };
 
     console.log(
