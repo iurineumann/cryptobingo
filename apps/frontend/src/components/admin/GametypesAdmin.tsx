@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, simulateWeights, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats, type McResult } from '../../services/api';
+import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, setAdminGametypeStages, simulateWeights, type DrawMode, type StageRule, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats, type McResult } from '../../services/api';
 
 const TYPE_COLORS: Record<string, string> = {
     simple:  'bg-blue-500/10 text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700',
@@ -27,6 +27,42 @@ export default function GametypesAdmin() {
     const [saving, setSaving] = useState(false);
     const [suggesting, setSuggesting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // ADR-012: campos de modo de sorteio
+    const [drawMode, setDrawMode] = useState<DrawMode>('standard');
+    const [maxBalls, setMaxBalls] = useState('35');
+    const [goldenBallAfter, setGoldenBallAfter] = useState('35');
+    const [masterWeightOverride, setMasterWeightOverride] = useState('5.00');
+
+    // ADR-013: estágios MULTI_MATCH
+    const [stages, setStages] = useState<StageRule[]>([]);
+    const [savingStages, setSavingStages] = useState<string | null>(null); // gametype_id sendo salvo
+
+    const addStage = () => {
+        const nextStage = stages.length + 1;
+        const prevRequired = stages.length > 0 ? stages[stages.length - 1].patterns_required : 0;
+        setStages(prev => [...prev, { stage: nextStage, patterns_required: prevRequired + 1, weight: 100 }]);
+    };
+
+    const removeStage = (idx: number) => {
+        setStages(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, stage: i + 1 })));
+    };
+
+    const updateStageField = (idx: number, field: keyof StageRule, value: number) => {
+        setStages(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+    };
+
+    const handleSaveStages = async (gametypeId: string) => {
+        setSavingStages(gametypeId);
+        try {
+            await setAdminGametypeStages(gametypeId, stages);
+            await load();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao salvar estágios.');
+        } finally {
+            setSavingStages(null);
+        }
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -148,12 +184,21 @@ export default function GametypesAdmin() {
             const res = await createAdminGametype({
                 gametype_id, name, base_multiplier: parseFloat(baseMultiplier),
                 rules, rules_extended, combinations,
+                draw_mode:          drawMode,
+                max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0 : 0,
+                golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
+                master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
             });
             await upsertGametypeMetadata(String(gametype_id), { rules: rules_extended, combinations }).catch(() => {});
             setName('');
             setBaseMultiplier('1.0');
             setSelectedRules({});
             setCombinations([]);
+            setDrawMode('standard');
+            setMaxBalls('35');
+            setGoldenBallAfter('35');
+            setMasterWeightOverride('5.00');
+            setStages([]);
             await load();
         } catch (err) {
             setError(err instanceof Error ? err.message : t('admin.gametypes_error_create'));
@@ -173,10 +218,10 @@ export default function GametypesAdmin() {
     };
 
     // Número de bolas simuladas por rodada.
-    // Com 45 bolas: hit_rates realistas (7-50% para linhas, <5% para padrões complexos)
-    // → pesos acima de 100 para todas as configurações → calibração converge para 85% RTP.
-    // Com 75 (padrão): todas as cartelas completam todos os padrões → hit_rate=100% → RTP≥100%.
-    const SUGGEST_MAX_BALLS = 45;
+    // Deve corresponder ao DEFAULT_DRAW_BALLS real do jogo (35 bolas de 75 disponíveis).
+    // Com 35 bolas: hit_rates realistas (1-20% por padrão) → pesos calibráveis para RTP=85%.
+    // Com 75 (oracle completo): todas as cartelas sempre completam → hit_rate=100% → impossível calibrar.
+    const SUGGEST_MAX_BALLS = 35;
 
     /**
      * Peso inicial via inverse hit_rate escalado ao RTP alvo.
@@ -532,6 +577,96 @@ export default function GametypesAdmin() {
                         <input className="cb-input font-mono w-28" type="number" step="0.1" min="0.1" value={baseMultiplier} onChange={e => setBaseMultiplier(e.target.value)} required />
                     </div>
                 </div>
+
+                {/* Modo de Sorteio — ADR-012 */}
+                <div className="flex flex-wrap gap-3 items-end">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_draw_mode')}</label>
+                        <select
+                            className="cb-input"
+                            value={drawMode}
+                            onChange={e => setDrawMode(e.target.value as DrawMode)}
+                        >
+                            <option value="standard">{t('admin.draw_mode_standard')}</option>
+                            <option value="fixed">{t('admin.draw_mode_fixed')}</option>
+                            <option value="firstfull">{t('admin.draw_mode_firstfull')}</option>
+                            <option value="goldenball">{t('admin.draw_mode_goldenball')}</option>
+                            <option value="multimatch">{t('admin.draw_mode_multimatch')}</option>
+                        </select>
+                    </div>
+
+                    {drawMode === 'fixed' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_max_balls')}</label>
+                            <input
+                                className="cb-input font-mono w-24"
+                                type="number" min="10" max="74" step="1"
+                                value={maxBalls}
+                                onChange={e => setMaxBalls(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {drawMode === 'goldenball' && (
+                        <div className="flex flex-col gap-1">
+                            {/* golden_ball_after: bola logo após o sorteio normal (padrão 35) */}
+                            <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_golden_ball_after')}</label>
+                            <input
+                                className="cb-input font-mono w-24"
+                                type="number" min="20" max="73" step="1"
+                                value={goldenBallAfter}
+                                onChange={e => setGoldenBallAfter(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {drawMode === 'firstfull' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_master_weight')}</label>
+                            <input
+                                className="cb-input font-mono w-28"
+                                type="number" min="1" max="255" step="0.01"
+                                value={masterWeightOverride}
+                                onChange={e => setMasterWeightOverride(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Editor de Estágios — MULTI_MATCH (ADR-013) */}
+                {drawMode === 'multimatch' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs text-[--cb-text-tertiary] font-semibold uppercase tracking-wide">
+                                {t('admin.gametypes_stages')}
+                            </span>
+                            <button type="button" className="cb-btn cb-btn-outline text-xs px-2 py-1" onClick={addStage}>
+                                + {t('admin.gametypes_add_stage')}
+                            </button>
+                        </div>
+                        {stages.length === 0 && (
+                            <p className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_no_stages')}</p>
+                        )}
+                        {stages.map((s, idx) => (
+                            <div key={idx} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-[--cb-border-default] bg-[--cb-bg-surface] text-xs">
+                                <span className="font-semibold text-[--cb-brand] w-16">{t('admin.gametypes_stage')} {s.stage}</span>
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[--cb-text-tertiary]">{t('admin.gametypes_patterns_required')}</label>
+                                    <input className="cb-input font-mono w-16 text-xs py-0.5" type="number" min="1" max="10" step="1"
+                                        value={s.patterns_required}
+                                        onChange={e => updateStageField(idx, 'patterns_required', parseInt(e.target.value) || 1)} />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[--cb-text-tertiary]">{t('admin.gametypes_weight')} (×)</label>
+                                    <input className="cb-input font-mono w-20 text-xs py-0.5" type="number" min="0.01" max="255" step="0.01"
+                                        value={(s.weight / 100).toFixed(2)}
+                                        onChange={e => updateStageField(idx, 'weight', Math.round(parseFloat(e.target.value) * 100) || 100)} />
+                                </div>
+                                <button type="button" className="ml-auto text-[--cb-text-tertiary] hover:text-red-500 transition-colors" onClick={() => removeStage(idx)}>✕</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Regras com tipo */}
                 <div>

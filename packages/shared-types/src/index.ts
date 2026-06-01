@@ -10,23 +10,30 @@ export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 
 export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
 export type PatternType = 'regular' | 'combination';
 
+/**
+ * Modos de sorteio do gametype (ADR-012).
+ * Espelha os valores de draw_mode no contrato (eosio::name, max 12 chars).
+ */
+export type DrawMode = 'standard' | 'fixed' | 'firstfull' | 'goldenball' | 'multimatch';
+
 // ==========================================
 // 2. ESTRUTURAS ON-CHAIN (Espelho fiel do bingo.hpp / bingo.abi)
 // ==========================================
 
 /**
  * FSM do contrato bingo.cpp.
- * Progressão: created → funding → locked → drawing → drawn → archived
- *                                         ↘ aborted (fail-safe)
- * Ref: SPEC.md §1.2, architecture.md FSM
+ * Progressão: created → funding → locked → drawing → drawn → paying → archived
+ *                                         ↘ aborted (fail-safe; aceita: locked|drawing|paying)
+ * Ref: SPEC.md §1.2, ADR-012 §1, architecture.md FSM
  */
 export type GameStatus =
-    | 'created'   // Jogo agendado, aguardando fundgame() — NOVO
+    | 'created'   // Jogo agendado, aguardando fundgame()
     | 'funding'   // Vendas abertas (buytickets habilitado)
     | 'locked'    // Vendas encerradas
     | 'drawing'   // Requisição de entropia enviada ao orng.wax
     | 'drawn'     // Entropia recebida, drawn_balls preenchido
-    | 'archived'  // Prêmio pago, em quarentena de 24h
+    | 'paying'    // Pagando vencedores (multi-winner — ADR-012)
+    | 'archived'  // Todos os prêmios pagos, em quarentena de 24h
     | 'aborted';  // Fail-safe ativado (timeout de oráculo ou admin halt)
 
 /**
@@ -34,16 +41,18 @@ export type GameStatus =
  * Scope: _self. Primary Key: game_id.
  */
 export interface BlockchainGameState {
-    game_id:     string;            // uint64 como string
-    status:      GameStatus;
-    ticket_price: ExtendedAsset;
-    prize_pool:   ExtendedAsset;
-    sponsor_pool: ExtendedAsset[];  // vector<extended_asset>
-    drawn_balls:  number[];         // 75 posições após receiverand()
-    campaign_id:  string;           // uint64 — '0' se não patrocinado
-    gametype_id:  string;           // uint64 — '0' se modo legado
-    end_time:     number;           // time_point_sec (unix timestamp) — 0 até claimwin/abortgame
-    room_id:      string;           // uint64 — '0' se jogo avulso
+    game_id:          string;            // uint64 como string
+    status:           GameStatus;
+    ticket_price:     ExtendedAsset;
+    prize_pool:       ExtendedAsset;
+    sponsor_pool:     ExtendedAsset[];   // vector<extended_asset>
+    drawn_balls:      number[];          // 75 posições após receiverand()
+    campaign_id:      string;            // uint64 — '0' se não patrocinado
+    gametype_id:      string;            // uint64 — '0' se modo legado
+    end_time:         number;            // time_point_sec — 0 até closegame/abortgame
+    room_id:          string;            // uint64 — '0' se jogo avulso
+    golden_ball_num:  number;            // ADR-012: 1-75, 0=sem golden ball
+    golden_multiplier: number;           // ADR-012: multiplicador (0=sem efeito)
 }
 
 /**
@@ -109,14 +118,29 @@ export interface PatternRule {
 }
 
 /**
- * Espelha a tabela `gametypes` do bingo.hpp (ADR-004 Fase 2).
+ * Estágio progressivo do modo MULTI_MATCH (ADR-013).
+ * Espelha o struct `stage_rule` do bingo.hpp.
+ */
+export interface StageRule {
+    stage:              number; // uint8 — 1, 2, 3... (ordenado)
+    patterns_required:  number; // uint8 — nº de padrões completados para ganhar este estágio
+    weight:             number; // uint16 — peso do prêmio em hundredths
+}
+
+/**
+ * Espelha a tabela `gametypes` do bingo.hpp (ADR-004 Fase 2, ADR-012).
  * Scope: _self. Primary Key: gametype_id.
  */
 export interface BlockchainGametype {
-    gametype_id:     string;
-    name:            string;
-    base_multiplier: number; // uint8
-    rules:           PatternRule[];
+    gametype_id:        string;
+    name:               string;
+    base_multiplier:    number;      // uint8
+    rules:              PatternRule[];
+    draw_mode:          DrawMode;    // ADR-012
+    max_balls:          number;      // ADR-012: bolas sorteadas (0 = 35 padrão)
+    golden_ball_after:  number;      // ADR-012: GOLDEN_BALL
+    master_weight_ovrd: number;      // ADR-012: FIRST_FULL
+    stages:             StageRule[]; // ADR-013: MULTI_MATCH (vazio = não é multi-match)
 }
 
 /**

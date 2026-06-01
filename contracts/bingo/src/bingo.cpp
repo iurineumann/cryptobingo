@@ -134,11 +134,26 @@ namespace bingo {
         patterns.erase(patterns.require_find(pattern_id, "pattern_id nao encontrado."));
     }
 
-    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules) {
+    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd) {
         require_auth(get_self());
         check(base_multiplier > 0, "base_multiplier deve ser maior que zero.");
         check(rules.size() > 0, "rules deve ter pelo menos 1 elemento.");
         check(name.size() <= 64, "name muito longo (max 64 chars).");
+
+        // Valida draw_mode (ADR-012)
+        const std::vector<name> valid_modes = {
+            "standard"_n, "fixed"_n, "firstfull"_n, "goldenball"_n, "multimatch"_n
+        };
+        bool valid = (draw_mode.value == 0); // 0 = não informado → default standard
+        for (const auto& m : valid_modes) { if (draw_mode == m) { valid = true; break; } }
+        check(valid, "draw_mode invalido. Use: standard, fixed, firstfull, goldenball, multimatch.");
+
+        // Valida campos por modo
+        if (draw_mode == "goldenball"_n) {
+            check(golden_ball_after > 0 && golden_ball_after < 74,
+                "golden_ball_after deve ser entre 1 e 73.");
+        }
+
         patterns_table patterns(get_self(), get_self().value);
         for (const auto& rule : rules) {
             check(patterns.find(rule.pattern_id) != patterns.end(),
@@ -146,16 +161,31 @@ namespace bingo {
             check(rule.weight > 0, "weight deve ser maior que zero.");
             check(rule.weight <= 25500, "weight max 255.00 (hundredths).");
         }
+
+        name effective_mode = (draw_mode.value == 0) ? "standard"_n : draw_mode;
+
         gametypes_table gametypes(get_self(), get_self().value);
         auto itr = gametypes.find(gametype_id);
         if (itr == gametypes.end()) {
             gametypes.emplace(get_self(), [&](auto& row) {
-                row.gametype_id = gametype_id; row.name = name;
-                row.base_multiplier = base_multiplier; row.rules = rules;
+                row.gametype_id       = gametype_id;
+                row.name              = name;
+                row.base_multiplier   = base_multiplier;
+                row.rules             = rules;
+                row.draw_mode         = effective_mode;
+                row.max_balls         = max_balls;
+                row.golden_ball_after = golden_ball_after;
+                row.master_weight_ovrd= master_weight_ovrd;
             });
         } else {
             gametypes.modify(itr, get_self(), [&](auto& row) {
-                row.name = name; row.base_multiplier = base_multiplier; row.rules = rules;
+                row.name              = name;
+                row.base_multiplier   = base_multiplier;
+                row.rules             = rules;
+                row.draw_mode         = effective_mode;
+                row.max_balls         = max_balls;
+                row.golden_ball_after = golden_ball_after;
+                row.master_weight_ovrd= master_weight_ovrd;
             });
         }
     }
@@ -164,6 +194,92 @@ namespace bingo {
         require_auth(get_self());
         gametypes_table gametypes(get_self(), get_self().value);
         gametypes.erase(gametypes.require_find(gametype_id, "gametype_id nao encontrado."));
+    }
+
+    // ==========================================
+    // SET STAGES — MULTI_MATCH (ADR-013)
+    // ==========================================
+
+    void bingo_contract::setstages(uint64_t gametype_id, std::vector<stage_rule> stages) {
+        require_auth(get_self());
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto itr = gametypes.require_find(gametype_id, "gametype_id nao encontrado.");
+
+        // Valida estágios: ordenados, sem duplicatas, weight > 0
+        for (size_t i = 0; i < stages.size(); i++) {
+            check(stages[i].stage > 0,        "stage deve ser maior que zero.");
+            check(stages[i].patterns_required > 0, "patterns_required deve ser maior que zero.");
+            check(stages[i].weight > 0,        "weight deve ser maior que zero.");
+            check(stages[i].weight <= 25500,   "weight max 255.00 (hundredths).");
+            if (i > 0) {
+                check(stages[i].stage > stages[i-1].stage,
+                    "stages devem ser ordenados crescentemente por stage.");
+                check(stages[i].patterns_required >= stages[i-1].patterns_required,
+                    "patterns_required deve ser nao-decrescente entre stages.");
+            }
+        }
+
+        gametypes.modify(itr, get_self(), [&](auto& row) {
+            row.stages = stages;
+            if (!stages.empty()) row.draw_mode = "multimatch"_n;
+        });
+    }
+
+    // ==========================================
+    // CLAIM STAGE — MULTI_MATCH (ADR-013)
+    //
+    // Paga um ticket por um estágio específico.
+    // Aceita drawn|paying; transiciona drawn→paying na primeira chamada.
+    // Múltiplas chamadas com stages diferentes para o mesmo ticket são permitidas.
+    // ==========================================
+
+    void bingo_contract::claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage_num, uint8_t ball_count, uint64_t win_pattern_mask) {
+        require_auth("microservice"_n);
+
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.require_find(game_id, "Game not found.");
+        check(
+            game_itr->status == "drawn"_n || game_itr->status == "paying"_n,
+            "Game deve estar em DRAWN ou PAYING para pagar stages."
+        );
+
+        // Transição drawn → paying na primeira chamada
+        if (game_itr->status == "drawn"_n) {
+            games.modify(game_itr, same_payer, [&](auto& g) { g.status = "paying"_n; });
+            game_itr = games.find(game_id);
+        }
+
+        // Busca o stage_rule no gametype
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
+        check(!gt_itr->stages.empty(), "Gametype nao tem stages definidos.");
+
+        uint16_t stage_weight = 0;
+        for (const auto& s : gt_itr->stages) {
+            if (s.stage == stage_num) { stage_weight = s.weight; break; }
+        }
+        check(stage_weight > 0, "stage_num nao encontrado nos stages do gametype.");
+
+        // Calcula payout: ticket_price × base_multiplier × stage_weight / 100
+        tickets_table tickets(get_self(), game_id);
+        auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
+        name winner = ticket_itr->owner;
+
+        extended_asset payout = game_itr->ticket_price;
+        payout.quantity.amount =
+            payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)stage_weight / 100;
+
+        // Credita o vencedor
+        if (payout.quantity.amount > 0) {
+            balances_table balances(get_self(), winner.value);
+            auto bal_itr = balances.find(payout.quantity.symbol.code().raw());
+            if (bal_itr == balances.end()) {
+                balances.emplace(get_self(), [&](auto& b) { b.balance = payout; });
+            } else {
+                balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
+            }
+        }
+        // Jogo permanece em "paying". Worker chama closegame() após todos os stages.
     }
 
     // ==========================================
@@ -402,15 +518,32 @@ namespace bingo {
     }
 
     // ==========================================
-    // CLAIM WIN (ADR-005 Fase 2)
+    // CLAIM WIN (ADR-005 Fase 2, ADR-012)
+    //
+    // ADR-012: aceita status "drawn" e "paying".
+    //   drawn → paying na primeira chamada (multi-winner support).
+    //   Worker chama closegame() após todos os claimwin do lote.
+    //
+    // golden_multiplier: 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode.
     // ==========================================
 
-    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask) {
+    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
         require_auth("microservice"_n);
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
-        check(game_itr->status == "drawn"_n, "Game is not in DRAWN status.");
+        check(
+            game_itr->status == "drawn"_n || game_itr->status == "paying"_n,
+            "Game deve estar em DRAWN ou PAYING para pagar vencedores."
+        );
+
+        // Transição drawn → paying na primeira chamada
+        if (game_itr->status == "drawn"_n) {
+            games.modify(game_itr, same_payer, [&](auto& g) {
+                g.status = "paying"_n;
+            });
+            game_itr = games.find(game_id);
+        }
 
         tickets_table tickets(get_self(), game_id);
         auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
@@ -438,6 +571,11 @@ namespace bingo {
             payout = game_itr->ticket_price;
             payout.quantity.amount =
                 payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
+
+            // ADR-012: aplica golden_multiplier se > 1 (GOLDEN_BALL mode)
+            if (golden_multiplier > 1) {
+                payout.quantity.amount *= (int64_t)golden_multiplier;
+            }
         }
 
         if (payout.quantity.amount > 0) {
@@ -459,7 +597,23 @@ namespace bingo {
                 }
             }
         }
+        // Jogo permanece em "paying". Worker chama closegame() após o lote.
+    }
 
+    // ==========================================
+    // CLOSE GAME (ADR-012)
+    // Chamado pelo worker após todos os claimwin do lote.
+    // Aceita paying|drawn (drawn: jogo sem vencedores encerrado diretamente).
+    // ==========================================
+
+    void bingo_contract::closegame(uint64_t game_id) {
+        require_auth("microservice"_n);
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.require_find(game_id, "Game not found.");
+        check(
+            game_itr->status == "paying"_n || game_itr->status == "drawn"_n,
+            "Game deve estar em PAYING ou DRAWN para ser encerrado."
+        );
         games.modify(game_itr, same_payer, [&](auto& g) {
             g.status   = "archived"_n;
             g.end_time = time_point_sec(current_time_point().sec_since_epoch());
@@ -478,8 +632,10 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(
-            game_itr->status == "locked"_n || game_itr->status == "drawing"_n,
-            "Game deve estar em LOCKED ou DRAWING para ser abortado."
+            game_itr->status == "locked"_n   ||
+            game_itr->status == "drawing"_n  ||
+            game_itr->status == "paying"_n,
+            "Game deve estar em LOCKED, DRAWING ou PAYING para ser abortado."
         );
         games.modify(game_itr, same_payer, [&](auto& g) {
             g.status   = "aborted"_n;

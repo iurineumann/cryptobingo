@@ -32,8 +32,9 @@ namespace bingo {
 
     // ==========================================
     // GAMES
-    // FSM: created → funding → locked → drawing → drawn → archived
-    //                                ↘ aborted (fail-safe)
+    // FSM: created → funding → locked → drawing → drawn → paying → archived
+    //                                ↘ aborted (fail-safe; aceita: locked|drawing|paying)
+    // ADR-012: paying = estado intermediário durante pagamento de múltiplos vencedores.
     // ==========================================
 
     struct [[eosio::table("games")]] game_state {
@@ -43,10 +44,12 @@ namespace bingo {
         extended_asset              prize_pool;
         std::vector<extended_asset> sponsor_pool;
         std::vector<char>           drawn_balls;
-        uint64_t                    campaign_id  = 0;
-        uint64_t                    gametype_id  = 0;
-        uint64_t                    room_id      = 0;  // ADR-010: 0 = jogo avulso
-        time_point_sec              end_time     = time_point_sec(0);
+        uint64_t                    campaign_id       = 0;
+        uint64_t                    gametype_id       = 0;
+        uint64_t                    room_id           = 0;  // ADR-010: 0 = jogo avulso
+        time_point_sec              end_time          = time_point_sec(0);
+        uint8_t                     golden_ball_num   = 0;  // ADR-012: número da bola dourada (1-75; 0=nenhuma)
+        uint16_t                    golden_multiplier = 0;  // ADR-012: multiplicador derivado (0=nenhum)
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }
@@ -129,8 +132,22 @@ namespace bingo {
         uint16_t weight;             // hundredths (1.50 → 150)
     };
 
+    // ADR-013: estágio progressivo para o modo MULTI_MATCH
+    struct stage_rule {
+        uint8_t  stage;              // 1, 2, 3... (ordenado crescentemente)
+        uint8_t  patterns_required;  // nº de padrões simples que o ticket deve ter completado
+        uint16_t weight;             // peso do prêmio em hundredths (100 = 1×)
+    };
+
     // ==========================================
-    // GAMETYPES (ADR-004 Fase 2)
+    // GAMETYPES (ADR-004 Fase 2, ADR-012 Draw Modes)
+    //
+    // draw_mode values: "standard"_n (default) | "fixed"_n | "firstfull"_n |
+    //                   "goldenball"_n | "multimatch"_n (reservado)
+    //
+    // max_balls: FIXED — número de bolas sorteadas (0 = 75, padrão)
+    // golden_ball_after: GOLDEN_BALL — bolas normais antes da bola dourada
+    // master_weight_ovrd: FIRST_FULL — peso customizado do padrão MASTER (0 = usa regra)
     // ==========================================
 
     struct [[eosio::table("gametypes")]] gametype_record {
@@ -138,6 +155,11 @@ namespace bingo {
         std::string               name;
         uint8_t                   base_multiplier;
         std::vector<pattern_rule> rules;
+        name                      draw_mode          = "standard"_n;
+        uint8_t                   max_balls          = 0;
+        uint8_t                   golden_ball_after  = 0;
+        uint8_t                   master_weight_ovrd = 0;
+        std::vector<stage_rule>   stages;             // ADR-013: vazio = não é MULTI_MATCH
         uint64_t primary_key() const { return gametype_id; }
     };
     typedef multi_index<"gametypes"_n, gametype_record> gametypes_table;
@@ -289,7 +311,9 @@ namespace bingo {
         [[eosio::action]] void lockgame(uint64_t game_id);
         [[eosio::action]] void startdraw(uint64_t game_id);
         [[eosio::action]] void receiverand(uint64_t assoc_id, std::vector<char> random_bytes);
-        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask);
+        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
+        [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
+        [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived
         [[eosio::action]] void abortgame(uint64_t game_id, std::string reason);
         [[eosio::action]] void refundticket(uint64_t game_id, uint64_t ticket_id);
         [[eosio::action]] void cleargame(uint64_t game_id, uint32_t max_rows);
@@ -301,7 +325,8 @@ namespace bingo {
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);
         [[eosio::action]] void delpattern(uint64_t pattern_id);
-        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules);
+        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd);
+        [[eosio::action]] void setstages(uint64_t gametype_id, std::vector<stage_rule> stages); // ADR-013
         [[eosio::action]] void delgametype(uint64_t gametype_id);
 
         // ── Compra de Cartelas ───────────────────────────────────────────────

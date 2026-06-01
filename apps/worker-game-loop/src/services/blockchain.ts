@@ -76,24 +76,71 @@ export async function executeStartDraw(gameId: string): Promise<string | undefin
     return txId;
 }
 
-/** DRAWN → ARCHIVED: liquida o prêmio ao vencedor. */
+/**
+ * DRAWN|PAYING → PAYING: liquida o prêmio ao vencedor.
+ * ADR-012: jogo transiciona drawn→paying na primeira chamada.
+ * Worker chama executeCloseGame() após o lote completo.
+ *
+ * @param goldenMultiplier - 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode
+ */
 export async function executeClaimWin(
+    gameId:           string,
+    ticketId:         string,
+    ballCount:        number,
+    winPatternMask:   bigint,
+    goldenMultiplier: number = 0,
+): Promise<string | undefined> {
+    console.log(
+        `🏆 [Blockchain] claimwin → jogo ${gameId}, cartela #${ticketId}, ` +
+        `${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}` +
+        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '')
+    );
+    const txId = await transact('claimwin', {
+        game_id:           gameId,
+        ticket_id:         ticketId,
+        ball_count:        ballCount,
+        win_pattern_mask:  winPatternMask.toString(),
+        golden_multiplier: goldenMultiplier,
+    }, true);
+    console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
+    return txId;
+}
+
+/**
+ * DRAWN|PAYING → PAYING: liquida o prêmio de um ticket por estágio MULTI_MATCH.
+ * ADR-013: cada ticket pode ganhar múltiplos estágios independentemente.
+ * Worker chama executeCloseGame() após todos os claimstage do lote.
+ */
+export async function executeClaimStage(
     gameId:         string,
     ticketId:       string,
+    stage:          number,
     ballCount:      number,
     winPatternMask: bigint,
 ): Promise<string | undefined> {
     console.log(
-        `🏆 [Blockchain] claimwin → jogo ${gameId}, cartela #${ticketId}, ` +
-        `${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}`
+        `🎯 [Blockchain] claimstage → jogo ${gameId}, cartela #${ticketId}, ` +
+        `estágio ${stage}, ${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}`
     );
-    const txId = await transact('claimwin', {
+    const txId = await transact('claimstage', {
         game_id:          gameId,
         ticket_id:        ticketId,
+        stage,
         ball_count:       ballCount,
         win_pattern_mask: winPatternMask.toString(),
     }, true);
-    console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
+    console.log(`✅ Estágio ${stage} liquidado para cartela #${ticketId}. TX: ${txId}`);
+    return txId;
+}
+
+/**
+ * PAYING|DRAWN → ARCHIVED: encerra o jogo após todos os claimwin do lote.
+ * ADR-012: substitui a lógica anterior onde claimwin arquivava diretamente.
+ */
+export async function executeCloseGame(gameId: string): Promise<string | undefined> {
+    console.log(`📦 [Blockchain] closegame → jogo ${gameId}`);
+    const txId = await transact('closegame', { game_id: gameId }, true);
+    console.log(`✅ Jogo ${gameId} arquivado. TX: ${txId}`);
     return txId;
 }
 
