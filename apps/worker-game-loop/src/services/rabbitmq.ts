@@ -19,11 +19,11 @@ import {
     executeRefundTicket,
     executeClearGame,
 }                          from './blockchain';
-import { processAllGameWinners, findAllWinners } from './evaluator';
-import { buildInvertedIndex, deleteIndex }        from './invertedIndex';
-import { onGameResolved }                            from './roomManager';
+import { findAllWinners }                          from './evaluator';
+import { buildInvertedIndex }                       from './invertedIndex';
+import { onGameResolved }                           from './roomManager';
+import { orchestrateGame }                          from './gameOrchestrator';
 import {
-    startSlowReveal,
     notifyGameLocked,
     notifyGameAborted,
     notifyWinners,
@@ -229,7 +229,9 @@ function consumeMessages(): void {
                     break;
                 }
 
-                // ── startdraw: LOCKED → DRAWING → aguarda oráculo ────────────
+                // ── startdraw: LOCKED → DRAWING → aguarda oráculo → orquestra reveal + pagamento ──
+                // ADR-014: ACK imediato antes do reveal (o reveal pode durar ~120s para 35 bolas).
+                // O orquestrador assume o controle: reveal → avalia → paga → próxima partida.
                 case 'startdraw': {
                     await executeStartDraw(gameId);
 
@@ -237,7 +239,6 @@ function consumeMessages(): void {
 
                     if (!drawnBalls) {
                         console.error(`❌ [RabbitMQ] Timeout do oráculo para jogo ${gameId}.`);
-                        // Aborta o jogo e notifica clientes
                         await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
                         notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
                         eventsFailedTotal.inc({ action, reason: 'oracle_timeout' });
@@ -247,19 +248,24 @@ function consumeMessages(): void {
                         return;
                     }
 
-                    startSlowReveal(gameId, drawnBalls);
-                    break;
+                    // ACK antes de iniciar o reveal longo — libera o consumidor RabbitMQ
+                    timer();
+                    channel.ack(msg);
+
+                    // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
+                    orchestrateGame(gameId).catch(err =>
+                        console.error(`❌ [RabbitMQ] orchestrateGame error (jogo ${gameId}):`, err)
+                    );
+                    return; // Retorno antecipado — ACK já foi enviado acima
                 }
 
-                // ── claimwin: liquida vencedores e notifica broadcaster ───────
+                // ── claimwin (fallback manual): reprocessa jogo em DRAWN/PAYING ────────────
+                // ADR-014: no fluxo normal, o orquestrador faz tudo via startdraw.
+                // Este handler serve para reprocessamento manual de jogos presos.
                 case 'claimwin': {
-                    const winners = await processAllGameWinnersWithResult(gameId);
-                    if (winners.length > 0) {
-                        notifyWinners(gameId, winners);
-                    }
-                    // Hook ADR-010: notifica RoomManager para auto-criar próxima partida
-                    onGameResolved(gameId).catch(err =>
-                        console.error(`[RabbitMQ] onGameResolved error (jogo ${gameId}):`, err)
+                    console.log(`[RabbitMQ] claimwin manual (fallback) para jogo ${gameId}`);
+                    orchestrateGame(gameId).catch(err =>
+                        console.error(`❌ [RabbitMQ] orchestrateGame fallback error (jogo ${gameId}):`, err)
                     );
                     break;
                 }
@@ -270,7 +276,7 @@ function consumeMessages(): void {
                     const reason = (payload as any).reason ?? 'ADMIN_HALT';
                     await executeAbortGame(gameId, reason);
                     notifyGameAborted(gameId, reason as any);
-                    // Hook ADR-010: notifica RoomManager mesmo em abort
+                    // ADR-014: onGameResolved no abort (cria próxima partida da sala)
                     onGameResolved(gameId).catch(err =>
                         console.error(`[RabbitMQ] onGameResolved error (abort, jogo ${gameId}):`, err)
                     );
@@ -408,21 +414,3 @@ async function processClearGame(gameId: string): Promise<void> {
     console.log(`✅ [RabbitMQ] cleargame concluído: ~${totalCleared} linhas liberadas (jogo ${gameId})`);
 }
 
-/**
- * Wrapper que combina processAllGameWinners + monta payload para o broadcaster.
- */
-async function processAllGameWinnersWithResult(gameId: string): Promise<WinnerPayload[]> {
-    await processAllGameWinners(gameId);
-
-    const game = await fetchGame(gameId);
-    if (!game || !game.drawn_balls.length) return [];
-
-    const winResults = await findAllWinners(gameId, game.drawn_balls);
-
-    return winResults.map(({ ticket, patternName }) => ({
-        account:     ticket.owner,
-        ticket_id:   ticket.ticket_id,
-        win_pattern: patternName,
-        payouts:     [game.prize_pool.quantity],
-    }));
-}

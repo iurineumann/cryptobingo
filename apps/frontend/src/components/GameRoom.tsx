@@ -171,8 +171,10 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
   const density                         = 'comfortable' as const;
 
   // ── WebSocket (Slow Reveal) ───────────────────────────────────────────────
-  const { drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus } =
-    useSlowReveal(gameId);
+  const {
+    drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
+    isGameEnded, goldenBall, clearedStages, drawMode,
+  } = useSlowReveal(gameId);
 
   // drawnBalls é DrawnBall[] → extraímos os números
   const drawnNumbers = useMemo(
@@ -280,6 +282,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             </span>
             {isDrawing && <span className="gr-live">{t('game_room.badge_live')}</span>}
             {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
+            {isGameEnded && !isAborted && <span className="cb-status-dot cb-status-dot-offline" title={t('game_room.badge_ended')} />}
           </div>
         </div>
         <div className="gr-nav-right">
@@ -383,6 +386,53 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             </div>
           </div>
         </section>
+
+        {/* ── ADR-014: Golden Ball — banner quando a bola dourada é anunciada ── */}
+        {goldenBall && (
+          <div className="gr-golden-banner" role="status" aria-live="assertive">
+            <span className="gr-golden-icon">🌟</span>
+            <div className="gr-golden-text">
+              <strong>{t('game_room.golden_ball_title')}</strong>
+              <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
+            </div>
+            <span className="gr-golden-mult">×{goldenBall.multiplier}</span>
+          </div>
+        )}
+
+        {/* ── ADR-013/014: MULTI_MATCH — progresso de estágios ─────────────── */}
+        {clearedStages.length > 0 && (
+          <div className="gr-stages-panel" role="status">
+            <span className="gr-stages-title">{t('game_room.stages_title')}</span>
+            <div className="gr-stages-list">
+              {clearedStages.map(s => (
+                <div key={s.stage} className="gr-stage-item">
+                  <span className="gr-stage-badge">
+                    {t('game_room.stage_label', { stage: s.stage })}
+                  </span>
+                  <span className="gr-stage-count">
+                    {t('game_room.stage_winners', { count: s.winners.length })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── ADR-014: Game Ended — resultado final, aguardando próxima partida */}
+        {isGameEnded && (
+          <div className="gr-ended-banner" role="status" aria-live="polite">
+            <span className="gr-ended-icon">🏁</span>
+            <div className="gr-ended-text">
+              <strong>{t('game_room.game_ended_title')}</strong>
+              <span>
+                {winners.length > 0
+                  ? t('game_room.game_ended_winners', { count: winners.length })
+                  : t('game_room.game_ended_no_winners')}
+              </span>
+              <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Painel de Padrões ──────────────────────────────────────────────── */}
         {showPatterns && (
