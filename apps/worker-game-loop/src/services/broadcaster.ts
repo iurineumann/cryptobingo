@@ -48,10 +48,11 @@ setInterval(() => {
 /** Estado interno de um Slow Reveal em andamento para um jogo. */
 interface RevealSession {
     gameId:     string;
-    balls:      number[];         // Sequência completa do sorteio (75 bolas)
-    currentIdx: number;           // Próximo índice a emitir (0-74)
+    balls:      number[];                  // Lote de bolas a emitir nesta sessão
+    currentIdx: number;                    // Próximo índice a emitir
     timer:      ReturnType<typeof setInterval> | null;
-    winners:    WinnerPayload[];  // Preenchido pelo evaluator ao detectar vencedores
+    winners:    WinnerPayload[];           // Preenchido pelo evaluator ao detectar vencedores
+    resolve:    () => void;                // ADR-014: resolve a Promise quando lote completo
 }
 
 export interface WinnerPayload {
@@ -208,78 +209,152 @@ io.on('connection', (socket: Socket) => {
 // ==========================================
 
 /**
- * Inicia o Slow Reveal de um jogo.
- * Emite uma bola a cada REVEAL_INTERVAL_MS para todos os clientes na room.
- * Carrega wsConnectionsActive, slowRevealBallsTotal e slowRevealSessionsActive.
- * Ref: ADR-007 §2, §6
+ * Inicia (ou continua) o Slow Reveal de um lote de bolas.
+ * ADR-014: retorna Promise<void> que resolve quando o lote completo foi emitido.
+ * Isso permite ao orquestrador await o reveal antes de processar pagamentos.
+ *
+ * Pode ser chamado múltiplas vezes para o mesmo jogo em lotes (MULTI_MATCH, GOLDEN_BALL).
+ * O session.currentIdx persiste entre lotes para manter o Sequence ID correto.
  */
-export function startSlowReveal(gameId: string, balls: number[]): void {
-    if (activeSessions.has(gameId)) {
-        console.warn(`⚠️  [WS] Jogo ${gameId} já tem um reveal em andamento. Ignorando.`);
-        return;
-    }
-
+export function startSlowReveal(gameId: string, balls: number[]): Promise<void> {
     if (!balls || balls.length === 0) {
-        console.error(`❌ [WS] drawn_balls vazio para jogo ${gameId}. Abortando reveal.`);
-        return;
+        console.warn(`⚠️  [WS] Lote vazio para jogo ${gameId}. Resolvendo imediatamente.`);
+        return Promise.resolve();
     }
 
-    const session: RevealSession = {
-        gameId,
-        balls,
-        currentIdx: 0,
-        timer:      null,
-        winners:    [],
-    };
+    return new Promise<void>((resolve) => {
+        // Se já existe uma sessão para este jogo (lote anterior), reutiliza o currentIdx
+        const existing = activeSessions.get(gameId);
+        const startIdx = existing?.currentIdx ?? 0;
 
-    activeSessions.set(gameId, session);
-    slowRevealSessionsActive.inc();
+        // Monta a sequência completa acumulada: bolas já emitidas + novo lote
+        const allBalls = existing
+            ? [...existing.balls.slice(0, startIdx), ...balls]
+            : balls;
 
-    const room = `game:${gameId}`;
-    console.log(`🎱 [WS] Iniciando Slow Reveal do jogo ${gameId} (${balls.length} bolas, ${REVEAL_INTERVAL_MS}ms/bola)`);
+        const session: RevealSession = {
+            gameId,
+            balls:      allBalls,
+            currentIdx: startIdx,
+            timer:      null,
+            winners:    existing?.winners ?? [],
+            resolve,
+        };
 
-    session.timer = setInterval(() => {
-        const idx = session.currentIdx;
+        // Cancela timer anterior se existia (troca de lote)
+        if (existing?.timer) clearInterval(existing.timer);
+        activeSessions.set(gameId, session);
 
-        if (idx >= session.balls.length) {
-            // Todas as bolas emitidas — encerra o reveal
-            clearInterval(session.timer!);
-            activeSessions.delete(gameId);
-            slowRevealSessionsActive.dec();
-            console.log(`✅ [WS] Slow Reveal do jogo ${gameId} concluído.`);
-            return;
-        }
+        if (!existing) slowRevealSessionsActive.inc();
 
-        const number    = session.balls[idx];
-        const order     = idx + 1; // Sequence ID 1-based
-        const timestamp = new Date().toISOString();
+        const room = `game:${gameId}`;
+        console.log(
+            `🎱 [WS] Reveal jogo ${gameId}: bolas ${startIdx + 1}–${allBalls.length} ` +
+            `(${balls.length} novas, ${REVEAL_INTERVAL_MS}ms/bola)`
+        );
 
-        io.to(room).emit('ball_drawn', {
-            event:   'ball_drawn',
-            game_id: parseInt(gameId, 10),
-            payload: { order, number, timestamp },
-        });
+        session.timer = setInterval(() => {
+            const idx = session.currentIdx;
 
-        slowRevealBallsTotal.inc();
-        console.log(`🎱 [WS] Jogo ${gameId} — Bola #${order}: ${number}`);
+            if (idx >= session.balls.length) {
+                clearInterval(session.timer!);
+                session.timer = null;
+                // Não remove da sessão — orquestrador pode adicionar mais lotes
+                console.log(`✅ [WS] Lote concluído (jogo ${gameId}, até bola ${idx}).`);
+                resolve();
+                return;
+            }
 
-        // Verifica se algum vencedor foi detectado nesta bola.
-        // Winners são injetados por notifyWinners() após processAllGameWinners().
-        if (session.winners.length > 0) {
-            io.to(room).emit('winner_found', {
-                event:   'winner_found',
+            const number    = session.balls[idx];
+            const order     = idx + 1;
+            const timestamp = new Date().toISOString();
+
+            io.to(room).emit('ball_drawn', {
+                event:   'ball_drawn',
                 game_id: parseInt(gameId, 10),
-                payload: {
-                    winning_ball: number,
-                    winners:      session.winners,
-                },
+                payload: { order, number, timestamp },
             });
-            console.log(`🏆 [WS] Jogo ${gameId} — ${session.winners.length} vencedor(es) notificados!`);
-            session.winners = [];
-        }
 
-        session.currentIdx++;
-    }, REVEAL_INTERVAL_MS);
+            slowRevealBallsTotal.inc();
+
+            if (session.winners.length > 0) {
+                io.to(room).emit('winner_found', {
+                    event:   'winner_found',
+                    game_id: parseInt(gameId, 10),
+                    payload: { winning_ball: number, winners: session.winners },
+                });
+                console.log(`🏆 [WS] ${session.winners.length} vencedor(es) — jogo ${gameId} bola #${order}`);
+                session.winners = [];
+            }
+
+            session.currentIdx++;
+        }, REVEAL_INTERVAL_MS);
+    });
+}
+
+/**
+ * Encerra e limpa a sessão de reveal de um jogo.
+ * Chamado pelo orquestrador após o último lote para liberar memória.
+ */
+export function endRevealSession(gameId: string): void {
+    const session = activeSessions.get(gameId);
+    if (session) {
+        if (session.timer) clearInterval(session.timer);
+        activeSessions.delete(gameId);
+        slowRevealSessionsActive.dec();
+        console.log(`🧹 [WS] Sessão de reveal encerrada (jogo ${gameId}).`);
+    }
+}
+
+/**
+ * ADR-014 — GOLDEN_BALL: anuncia a bola dourada antes de revelá-la.
+ * Emite evento especial para a UI mostrar animação de destaque.
+ */
+export function notifyGoldenBall(
+    gameId:     string,
+    ballNum:    number,
+    multiplier: number,
+): void {
+    io.to(`game:${gameId}`).emit('golden_ball', {
+        event:   'golden_ball',
+        game_id: parseInt(gameId, 10),
+        payload: { ball_num: ballNum, multiplier },
+    });
+    console.log(`🌟 [WS] golden_ball ${ballNum} (×${multiplier}) — jogo ${gameId}`);
+}
+
+/**
+ * ADR-014 — MULTI_MATCH: anuncia os vencedores de um estágio após o cutoff ball.
+ * Emite pausa visual entre estágios.
+ */
+export function notifyStageCleared(
+    gameId:  string,
+    stage:   number,
+    winners: WinnerPayload[],
+): void {
+    io.to(`game:${gameId}`).emit('stage_cleared', {
+        event:   'stage_cleared',
+        game_id: parseInt(gameId, 10),
+        payload: { stage, winners },
+    });
+    console.log(`🎯 [WS] stage_cleared estágio ${stage} (${winners.length} vencedor(es)) — jogo ${gameId}`);
+}
+
+/**
+ * ADR-014: sinaliza o fim completo do reveal (após último lote).
+ * UI usa este evento para mostrar tela de resultado / countdown da próxima partida.
+ */
+export function notifyGameEnded(
+    gameId:        string,
+    drawMode:      string,
+    totalWinners:  number,
+): void {
+    io.to(`game:${gameId}`).emit('game_ended', {
+        event:   'game_ended',
+        game_id: parseInt(gameId, 10),
+        payload: { draw_mode: drawMode, total_winners: totalWinners },
+    });
+    console.log(`🏁 [WS] game_ended (modo: ${drawMode}, vencedores: ${totalWinners}) — jogo ${gameId}`);
 }
 
 /**

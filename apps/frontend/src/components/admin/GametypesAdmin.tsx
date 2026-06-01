@@ -713,7 +713,7 @@ export default function GametypesAdmin() {
                                                 <span className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_weight')}</span>
                                                 <input
                                                     className="w-14 text-xs font-mono px-1 py-0.5 rounded border border-[--cb-border-default] bg-transparent text-center"
-                                                    type="number" min="1" step="0.01" value={sel.weight}
+                                                    type="number" min="0.5" step="0.01" value={sel.weight}
                                                     onClick={e => e.stopPropagation()}
                                                     onChange={e => updateRuleField(p.pattern_id, 'weight', e.target.value)}
                                                 />
@@ -780,7 +780,7 @@ export default function GametypesAdmin() {
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_combo_weight')}</label>
-                                <input className="cb-input text-xs w-20 font-mono" type="number" min="1" step="0.01" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
+                                <input className="cb-input text-xs w-20 font-mono" type="number" min="0.5" step="0.01" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
                             </div>
                         </div>
 
