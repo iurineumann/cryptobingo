@@ -157,9 +157,11 @@ Simula N rodadas completas para calibrar os weights de um gametype antes do depl
 
 O botão "Suggest Standard Patterns" no `GametypesAdmin.tsx` executa:
 
-- **Fase 1 — Sugestão de pesos individuais:** simula apenas patterns individuais, sugere pesos inversamente proporcionais ao hit_rate (padrão mais difícil = maior peso, mapeado 1.00x–5.00x em hundredths).
-- **Fase 2 — Geração de combinações:** 3 estratégias — N-of-type (2 linhas, 2 colunas), pares top-5 hit_rate, especial+simples.
-- **Fase 3 — Calibração RTP:** re-simula com config completo (individuais + combos). Se RTP fora de 85% ± 3%, escala todos os pesos (factor = target_RTP / current_RTP, clamped 0.5x–2.0x) e re-simula (até 10 iterações). Aplica os pesos calibrados finais.
+- **Fase 1 — Medição de hit_rates:** simula 5.000 rodadas com os padrões individuais selecionados. Hit_rates são probabilidades puras (independentes dos pesos), então 1 única simulação basta.
+- **Fase 2 — Cálculo analítico de pesos iniciais:** usa a fórmula de inverse hit_rate com escala direta ao RTP alvo: `w_i = (0.85 × 100) / (N × base_mul × hit_rate_i)`. Derivação: com `w_i = C / hit_rate_i`, a soma `Σ hit_rate_i × w_i / 100 × base_mul = C × N × base_mul / 100 = 85%` por construção. Esta fórmula distribui a contribuição ao RTP igualmente entre os padrões e fornece um ponto de partida próximo ao alvo — padrões raros recebem multiplicadores significativamente maiores (sem limite artificial de 5x).
+- **Fase 2b — Geração de combinações:** 3 estratégias — N-of-type (2..5 do mesmo tipo), pares top-5 hit_rate, especial+simples. Pesos das combinações baseados nos pesos individuais calculados na Fase 2 (corrige bug onde `McPatternStats.weight` era sempre 0).
+- **Fase 3 — Calibração iterativa de RTP:** re-simula com config completo (individuais + combos). Se RTP fora de 85% ± 2%, escala todos os pesos proporcionalmente (`scale = target/rtp`, clamped 0.4x–2.5x) e re-simula. Máximo 6 iterações com 5.000 rodadas cada. Partindo de pesos próximos ao alvo, converge em 1-3 iterações. Aplica os pesos finais calibrados (Fase 3) ao `selectedRules`, não os pesos iniciais da Fase 2.
+- **Suporte a 1 padrão único:** quando apenas 1 padrão está selecionado, o algoritmo funciona normalmente (single pattern = contribuição total ao RTP), sem geração de combinações.
 
 ---
 

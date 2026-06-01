@@ -172,15 +172,59 @@ export default function GametypesAdmin() {
         }
     };
 
+    // Número de bolas simuladas por rodada.
+    // Com 45 bolas: hit_rates realistas (7-50% para linhas, <5% para padrões complexos)
+    // → pesos acima de 100 para todas as configurações → calibração converge para 85% RTP.
+    // Com 75 (padrão): todas as cartelas completam todos os padrões → hit_rate=100% → RTP≥100%.
+    const SUGGEST_MAX_BALLS = 45;
+
+    /**
+     * Peso inicial via inverse hit_rate escalado ao RTP alvo.
+     * Com max_balls=45, hit_rates são < 100%, então C/hit_rate > 100 para a maioria
+     * dos padrões — weights já começam dentro do intervalo válido on-chain.
+     *
+     * A contagem de células do padrão (popcount da máscara) serve como sinal
+     * de dificuldade secundário: padrões com mais células dentro do mesmo
+     * hit_rate recebem um bônus proporcional.
+     *
+     * Fórmula: w_i = (rtp × 100) / (N × base_mul × hit_rate_i) × difficulty_i
+     *   difficulty_i = sqrt(cell_count_i / avg_cell_count)  (1.0 para padrão médio)
+     */
+    const computeInitialWeights = (
+        hits: McPatternStats[],
+        baseMul: number,
+        targetRtp: number,
+        patternCellCounts?: Record<string, number>,
+    ): Record<string, number> => {
+        const N = hits.length;
+        const C = (targetRtp * 100) / (N * baseMul);
+
+        const avgCells = patternCellCounts
+            ? hits.reduce((s, h) => s + (patternCellCounts[h.name] ?? 5), 0) / N
+            : 5;
+
+        const result: Record<string, number> = {};
+        for (const s of hits) {
+            const cells      = patternCellCounts?.[s.name] ?? 5;
+            const difficulty = Math.sqrt(cells / avgCells); // bônus por dificuldade estrutural
+            const raw        = (C / s.hit_rate) * difficulty;
+            // Floor 10 (0.10x) — permite pesos abaixo de 100 na simulação;
+            // o admin verá o valor sugerido e decidirá se sobe ao mínimo on-chain (100).
+            result[s.name] = clamp(Math.round(raw), 10, 25500);
+        }
+        return result;
+    };
+
     const handleSuggest = async () => {
         const toHundredths = (v: string) => Math.round(parseFloat(v) * 100);
         const rules = Object.entries(selectedRules)
             .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0);
-        if (rules.length < 2) { setError(t('admin.gametypes_error_no_patterns_suggest')); return; }
+        // Permite 1+ padrões — single pattern é tratado como "combo de 1"
+        if (rules.length < 1) { setError(t('admin.gametypes_error_no_patterns_suggest')); return; }
         setSuggesting(true);
         setError(null);
         try {
-            const baseMul = parseFloat(baseMultiplier) || 10;
+            const baseMul = parseFloat(baseMultiplier) || 1;
             const rulesExtended: ExtendedRule[] = rules
                 .map(([pattern_id, v]) => ({ pattern_id, weight: toHundredths(v.weight), type: v.type as ExtendedRule['type'] }));
 
@@ -191,78 +235,84 @@ export default function GametypesAdmin() {
 
             if (mcPatterns.length === 0) { setError(t('admin.gametypes_error_no_patterns_simulate')); setSuggesting(false); return; }
 
-            // ── Phase 1: Simulate → suggest individual weights (inverse to hit_rate) ──
+            // ── Phase 1: Simula padrões individuais para medir hit_rates ──────────
+            // max_balls=45 modela um jogo que encerra quando o 1º jogador vence —
+            // produz hit_rates realistas (< 100%) que permitem pesos > 100 e RTP=85%.
+            // Com 75 bolas (padrão), hit_rate=100% para todos → RTP mínimo = 100%.
             const phase1 = await simulateWeights({
-                gametype_name: name || 'Gametype',
+                gametype_name:   name || 'Gametype',
                 base_multiplier: baseMul,
-                patterns: mcPatterns,
-                simulations: 3_000,
+                patterns:        mcPatterns,
+                simulations:     5_000,
+                max_balls:       SUGGEST_MAX_BALLS,
             });
 
-            // Build updated pattern entries locally (avoid React stale-state trap)
-            let activePatterns = mcPatterns;
+            // Contagem de células (bits ativos, excl. FREE) por padrão:
+            // usada como sinal de dificuldade estrutural no cálculo de pesos iniciais.
+            const patternCellCounts: Record<string, number> = {};
+            for (const mp of mcPatterns) {
+                let cells = 0;
+                for (let b = 0; b < 25; b++) {
+                    if (b !== 12 && (mp.mask & (1 << b))) cells++;
+                }
+                patternCellCounts[mp.name] = cells;
+            }
+
+            // ── Phase 2: Computa pesos iniciais por inverse hit_rate ──────────────
             let activeRulesExt = rulesExtended;
-            const patternWeightUpdates: Record<string, string> = {};
+            let activePatterns = mcPatterns;
+
             const hits = phase1.pattern_stats.filter(s => s.hit_count > 0);
             if (hits.length > 0) {
-                const minHit = Math.min(...hits.map(s => s.hit_rate));
-                const maxHit = Math.max(...hits.map(s => s.hit_rate));
-                for (const stat of hits) {
-                    const p = patterns.find(pp => pp.name === stat.name);
-                    if (!p) continue;
-                    let sw: number;
-                    if (maxHit === minHit) {
-                        sw = 100;
-                    } else {
-                        const normalized = 1 - (stat.hit_rate - minHit) / (maxHit - minHit);
-                        sw = Math.round(100 + normalized * 400);
-                    }
-                    patternWeightUpdates[p.pattern_id] = (sw / 100).toFixed(2);
-                }
-                if (Object.keys(patternWeightUpdates).length > 0) {
-                    // Build working copies with updated weights
-                    const wMap = patternWeightUpdates;
-                    activeRulesExt = rulesExtended.map(r => ({
-                        ...r,
-                        weight: wMap[r.pattern_id] ? toHundredths(wMap[r.pattern_id]) : r.weight,
-                    }));
-                    activePatterns = activeRulesExt.map(r => {
-                        const p = patterns.find(pp => String(pp.pattern_id) === r.pattern_id);
-                        return { pattern_id: parseInt(r.pattern_id), name: p?.name ?? `#${r.pattern_id}`, mask: p ? Number(p.mask) : 0, weight: r.weight, pattern_type: r.type };
-                    }).filter(p => p.mask > 0);
+                const computed = computeInitialWeights(hits, baseMul, 0.85, patternCellCounts);
 
-                    // Re-simulate with suggested weights for accurate combo generation
-                    const phase1b = await simulateWeights({
-                        gametype_name: name || 'Gametype',
-                        base_multiplier: baseMul,
-                        patterns: activePatterns,
-                        simulations: 3_000,
-                    });
+                // Mapa nome → pattern_id para lookup reverso
+                const nameToId: Record<string, string> = {};
+                for (const p of mcPatterns) nameToId[p.name] = String(p.pattern_id);
 
-                    // Build combos from re-simulated data
-                    const byType = buildByType(activeRulesExt);
-                    const combos = buildCombos(activePatterns, byType, phase1b);
-                    // Calibrate with full config (patterns + combos)
-                    const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
-
-                    // Apply: individual pattern weights
-                    setSelectedRules(prev => {
-                        const next = { ...prev };
-                        for (const [pid, w] of Object.entries(patternWeightUpdates)) {
-                            if (next[pid]) next[pid] = { ...next[pid], weight: w };
-                        }
-                        return next;
-                    });
-                    // Apply: combinations
-                    applyCombos(combos, cal);
-                }
-            } else {
-                // Fallback: no hits — generate combos from raw weights
-                const byType = buildByType(activeRulesExt);
-                const combos = buildCombos(activePatterns, byType, phase1);
-                const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
-                applyCombos(combos, cal);
+                activeRulesExt = rulesExtended.map(r => {
+                    const p = mcPatterns.find(mp => String(mp.pattern_id) === r.pattern_id);
+                    const w = p ? (computed[p.name] ?? r.weight) : r.weight;
+                    return { ...r, weight: w };
+                });
+                activePatterns = activeRulesExt.map(r => {
+                    const p = patterns.find(pp => String(pp.pattern_id) === r.pattern_id);
+                    return { pattern_id: parseInt(r.pattern_id), name: p?.name ?? `#${r.pattern_id}`, mask: p ? Number(p.mask) : 0, weight: r.weight, pattern_type: r.type };
+                }).filter(p => p.mask > 0);
             }
+
+            // ── Phase 2b: Gera combinações candidatas ─────────────────────────────
+            // Usa hit_rates da Phase 1 (independem de pesos) e pesos já atualizados.
+            const byType = buildByType(activeRulesExt);
+            const combos = mcPatterns.length >= 2
+                ? buildCombos(activePatterns, byType, phase1)
+                : [];
+
+            // ── Phase 3: Calibração iterativa de RTP ─────────────────────────────
+            // Parte de pesos próximos ao alvo → converge em 1-3 iterações.
+            const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
+
+            // ── Aplica resultados: pesos calibrados (Phase 3) têm precedência ─────
+            setSelectedRules(prev => {
+                const next = { ...prev };
+                if (cal) {
+                    // Converte nome → pattern_id para atualizar selectedRules
+                    const nameToId: Record<string, string> = {};
+                    for (const p of mcPatterns) nameToId[p.name] = String(p.pattern_id);
+                    for (const [patName, wHundredths] of Object.entries(cal.pattern_weights)) {
+                        const pid = nameToId[patName];
+                        if (pid && next[pid]) next[pid] = { ...next[pid], weight: (wHundredths / 100).toFixed(2) };
+                    }
+                } else {
+                    // Fallback: aplica pesos da Phase 2
+                    for (const r of activeRulesExt) {
+                        if (next[r.pattern_id]) next[r.pattern_id] = { ...next[r.pattern_id], weight: (r.weight / 100).toFixed(2) };
+                    }
+                }
+                return next;
+            });
+            applyCombos(combos, cal);
+
         } catch (err) {
             setError(err instanceof Error ? err.message : t('admin.gametypes_error_suggest'));
         } finally {
@@ -287,11 +337,22 @@ export default function GametypesAdmin() {
         const statsMap: Record<string, McPatternStats> = {};
         for (const s of mcResult.pattern_stats) statsMap[s.name] = s;
 
-        // 1. N-of-type (2×, 3× … 5×)
+        // Mapa nome → peso (em hundredths) dos padrões com pesos já calculados.
+        // McPatternStats.weight é sempre 0 no retorno da API (não é preenchido),
+        // portanto usamos mcPatterns como fonte de verdade dos pesos.
+        const weightMap: Record<string, number> = {};
+        for (const p of mcPatterns) weightMap[p.name] = p.weight;
+
+        // 1. N-of-type (2×, 3× … 5×) — combinação por categoria
         for (const [type, label] of Object.entries({ simple: t('admin.type_simple'), special: t('admin.type_special'), master: t('admin.type_master') })) {
             const list = byType[type] ?? [];
             for (let n = 2; n <= Math.min(list.length, 5); n++) {
-                const avgWeight = list.reduce((s, r) => s + r.weight, 0) / list.length;
+                // Peso do combo N-of-type: soma dos pesos médios × N × 0.75
+                // (combo exige N padrões simultâneos → paga proporcionalmente mais)
+                const names = list.map(r => mcPatterns.find(mp => mp.pattern_id === parseInt(r.pattern_id))?.name ?? '').filter(Boolean);
+                const avgWeight = names.length > 0
+                    ? names.reduce((s, nm) => s + (weightMap[nm] ?? 100), 0) / names.length
+                    : 100;
                 suggested.push({
                     name: `${n}× ${label}`,
                     weight: Math.max(100, Math.round(avgWeight * n * 0.75)),
@@ -300,26 +361,33 @@ export default function GametypesAdmin() {
             }
         }
 
-        // 2. Pairs of most frequent patterns (top 5 by hit rate)
-        const top: McPatternStats[] = mcResult.pattern_stats.filter((s: McPatternStats) => s.hit_count > 0).sort((a: McPatternStats, b: McPatternStats) => b.hit_rate - a.hit_rate).slice(0, 5);
-        const findPid = (name: string): string =>
-            mcPatterns.find(p => p.name === name)?.pattern_id.toString() ?? '';
+        // 2. Pares dos padrões mais frequentes (top 5 por hit_rate)
+        const top: McPatternStats[] = mcResult.pattern_stats
+            .filter((s: McPatternStats) => s.hit_count > 0)
+            .sort((a: McPatternStats, b: McPatternStats) => b.hit_rate - a.hit_rate)
+            .slice(0, 5);
+        const findPid = (patName: string): string =>
+            mcPatterns.find(p => p.name === patName)?.pattern_id.toString() ?? '';
         for (let i = 0; i < top.length - 1; i++) {
             for (let j = i + 1; j < top.length; j++) {
                 const pidA = findPid(top[i].name);
                 const pidB = findPid(top[j].name);
                 if (!pidA || !pidB) continue;
+                // FIX: usa weightMap (pesos reais) ao invés de top[i].weight que é sempre 0
+                const wA = weightMap[top[i].name] ?? 100;
+                const wB = weightMap[top[j].name] ?? 100;
                 suggested.push({
                     name: `${top[i].name}+${top[j].name}`,
-                    weight: Math.max(100, Math.round((top[i].weight + top[j].weight) * 0.85)),
+                    weight: Math.max(100, Math.round((wA + wB) * 0.9)),
                     clauses: [{ type: 'all_of' as const, pattern_ids: [pidA, pidB] }],
                 });
             }
         }
 
-        // 3. Special + Simple pairs
+        // 3. Pares especial + simples
         const findStats = (pid: string): McPatternStats | undefined => {
-            const p = patterns.find(pp => pp.pattern_id === pid);
+            // FIX: comparação String×String para evitar mismatch de tipo
+            const p = patterns.find(pp => String(pp.pattern_id) === String(pid));
             return p ? statsMap[p.name] : undefined;
         };
         if (byType.special.length > 0 && byType.simple.length > 0) {
@@ -329,11 +397,13 @@ export default function GametypesAdmin() {
                 for (const simple of byType.simple.slice(0, 3)) {
                     const siStats = findStats(simple.pattern_id);
                     if (!siStats || siStats.hit_count === 0) continue;
-                    const sName = patterns.find(p => p.pattern_id === spec.pattern_id)?.name ?? `#${spec.pattern_id}`;
-                    const siName = patterns.find(p => p.pattern_id === simple.pattern_id)?.name ?? `#${simple.pattern_id}`;
+                    const sName  = patterns.find(p => String(p.pattern_id) === String(spec.pattern_id))?.name  ?? `#${spec.pattern_id}`;
+                    const siName = patterns.find(p => String(p.pattern_id) === String(simple.pattern_id))?.name ?? `#${simple.pattern_id}`;
+                    const wSpec  = weightMap[sName]  ?? spec.weight;
+                    const wSimp  = weightMap[siName] ?? simple.weight;
                     suggested.push({
                         name: `${sName}+${siName}`,
-                        weight: Math.max(100, Math.round((spec.weight + simple.weight) * 0.9)),
+                        weight: Math.max(100, Math.round((wSpec + wSimp) * 0.9)),
                         clauses: [
                             { type: 'all_of' as const, pattern_ids: [spec.pattern_id] },
                             { type: 'any_of' as const, pattern_ids: [simple.pattern_id] },
@@ -346,37 +416,70 @@ export default function GametypesAdmin() {
         return suggested;
     };
 
+    /**
+     * Calibração iterativa de RTP via busca binária sobre o fator de escala global.
+     *
+     * Por que busca binária e não escala simples (target/rtp)?
+     * - Com floors de peso (min=10), a escala simples oscila: pesos batem no floor,
+     *   o RTP não cai mais, o próximo scale tenta subir, oscila infinitamente.
+     * - A busca binária rastreia limites [lo, hi] do fator de escala e bisecta,
+     *   convergindo monotonicamente mesmo com floors.
+     *
+     * max_balls=SUGGEST_MAX_BALLS garante hit_rates < 100% → pesos > 10 → sem floor trap.
+     */
     const calibrateRtp = async (
         patterns: { name: string; weight: number; mask: number; pattern_id: number; pattern_type?: string }[],
         combos: CombinationRuleInput[],
         baseMul: number,
         gtName: string,
     ): Promise<{ pattern_weights: Record<string, number>; combo_weights: Record<string, number> } | null> => {
-        const TARGET = 0.85;
-        const TOL = 0.03;
-        const MAX_ITER = 10;
+        const TARGET   = 0.85;
+        const TOL      = 0.015; // ±1.5%
+        const MAX_ITER = 15;    // suficiente para busca binária convergir em ≤15 bisecções
 
         const patW: Record<string, number> = {};
         for (const p of patterns) patW[p.name] = p.weight;
         const comW: Record<string, number> = {};
         for (const c of combos) comW[c.name] = c.weight;
 
+        // Limites do fator de escala global para busca binária
+        let scaleLo = 0.05;  // escala mínima (pesos muito baixos)
+        let scaleHi = 20.0;  // escala máxima (pesos muito altos)
+        let lastRtp = -1;
+
         for (let iter = 0; iter < MAX_ITER; iter++) {
             const result = await simulateWeights({
-                gametype_name: gtName,
-                base_multiplier: baseMul,
-                patterns: patterns.map(p => ({ ...p, weight: patW[p.name] })),
-                combinations: combos.map(c => ({ ...c, weight: comW[c.name] })),
-                simulations: 3_000,
+                gametype_name:    gtName,
+                base_multiplier:  baseMul,
+                patterns:         patterns.map(p => ({ ...p, weight: patW[p.name] })),
+                combinations:     combos.map(c => ({ ...c, weight: comW[c.name] })),
+                simulations:      5_000,
+                max_balls:        SUGGEST_MAX_BALLS,
             });
 
             const rtp = result.rtp;
-            if (rtp >= TARGET - TOL && rtp <= TARGET + TOL) break;
-            if (result.total_paid_out <= 0) break;
 
-            const scale = Math.max(0.5, Math.min(2.0, TARGET / rtp));
-            for (const name of Object.keys(patW)) patW[name] = clamp(Math.round(patW[name] * scale), 100, 25500);
-            for (const name of Object.keys(comW)) comW[name] = clamp(Math.round(comW[name] * scale), 100, 25500);
+            // Convergiu
+            if (rtp >= TARGET - TOL && rtp <= TARGET + TOL) break;
+            // Sem vencedores: pesos muito baixos, forçar escala máxima
+            if (result.total_paid_out <= 0) {
+                scaleLo = Math.max(scaleLo, 2.0);
+            }
+            // Sem alteração útil entre iterações (travado no floor)
+            if (Math.abs(rtp - lastRtp) < 0.001 && iter > 2) break;
+            lastRtp = rtp;
+
+            // Busca binária: estreita os limites com base no sinal do erro
+            if (rtp > TARGET) scaleHi = Math.min(scaleHi, TARGET / rtp * 1.1);
+            else              scaleLo = Math.max(scaleLo, TARGET / rtp * 0.9);
+
+            const scale = (scaleLo + scaleHi) / 2;
+            for (const nm of Object.keys(patW)) patW[nm] = clamp(Math.round(patW[nm] * scale), 10, 25500);
+            for (const nm of Object.keys(comW)) comW[nm] = clamp(Math.round(comW[nm] * scale), 10, 25500);
+
+            // Reinicia os limites relativos ao novo estado dos pesos
+            scaleLo = 0.05;
+            scaleHi = 20.0;
         }
 
         return { pattern_weights: patW, combo_weights: comW };

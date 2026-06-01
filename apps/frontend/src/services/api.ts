@@ -291,6 +291,7 @@ export async function simulateWeights(data: {
     patterns:        McPatternInput[];
     combinations?:   McCombinationInput[];
     simulations?:    number;
+    max_balls?:      number;  // limita o sorteio por rodada (default = 75 = todas as bolas)
 }): Promise<McResult> {
     const res = await fetch(`${API_BASE}/admin/simulate-weights`, {
         method: 'POST', headers: authHeaders(),
