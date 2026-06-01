@@ -142,11 +142,24 @@ export interface BlockchainPattern {
     mask: number;
 }
 
+export type DrawMode = 'standard' | 'fixed' | 'firstfull' | 'goldenball' | 'multimatch';
+
+export interface StageRule {
+    stage:             number; // 1, 2, 3...
+    patterns_required: number; // nº de padrões a completar
+    weight:            number; // hundredths (100 = 1×)
+}
+
 export interface BlockchainGametype {
-    gametype_id: string;
-    name: string;
-    base_multiplier: number;
-    rules: Array<{ pattern_id: string; weight: number }>;
+    gametype_id:        string;
+    name:               string;
+    base_multiplier:    number;
+    rules:              Array<{ pattern_id: string; weight: number }>;
+    draw_mode:          DrawMode;    // ADR-012
+    max_balls:          number;      // ADR-012: FIXED mode
+    golden_ball_after:  number;      // ADR-012: GOLDEN_BALL mode
+    master_weight_ovrd: number;      // ADR-012: FIRST_FULL mode
+    stages:             StageRule[]; // ADR-013: MULTI_MATCH
 }
 
 export async function fetchAdminPatterns(): Promise<{ patterns: BlockchainPattern[] }> {
@@ -197,6 +210,10 @@ export async function createAdminGametype(data: {
     rules: Array<{ pattern_id: string; weight: number }>;
     rules_extended?: ExtendedRule[];
     combinations?: CombinationRuleInput[];
+    draw_mode?: DrawMode;         // ADR-012
+    max_balls?: number;           // ADR-012: FIXED mode
+    golden_ball_after?: number;   // ADR-012: GOLDEN_BALL mode
+    master_weight_ovrd?: number;  // ADR-012: FIRST_FULL mode
 }): Promise<{ gametype_id: number; transaction_id: string }> {
     const res = await fetch(`${API_BASE}/admin/gametypes`, {
         method: 'POST', headers: authHeaders(),
@@ -209,6 +226,17 @@ export async function deleteAdminGametype(gametypeId: string): Promise<void> {
     await fetch(`${API_BASE}/admin/gametypes/${gametypeId}`, {
         method: 'DELETE', headers: authHeaders(),
     });
+}
+
+export async function setAdminGametypeStages(
+    gametypeId: string,
+    stages: StageRule[],
+): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/gametypes/${gametypeId}/stages`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ stages }),
+    });
+    return handleResponse(res);
 }
 
 export async function fetchGametypeMetadata(gametypeId: string): Promise<{

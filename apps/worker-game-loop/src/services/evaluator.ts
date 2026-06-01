@@ -10,8 +10,8 @@
 // antes de enviar claimwin — conforme ADR-005.
 
 import { fetchGame, fetchPlayerTickets, rpcClient } from '@cryptobingo/blockchain-core';
-import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern } from '@cryptobingo/shared-types';
-import { executeClaimWin }                                                    from './blockchain';
+import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern, DrawMode } from '@cryptobingo/shared-types';
+import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
@@ -331,14 +331,199 @@ async function fetchTicketById(
     }
 }
 
+// ==========================================
+// ADR-012 — HELPERS DOS NOVOS MODOS DE SORTEIO
+// ==========================================
+
 /**
- * Motor de resolução completo: lê o jogo, varre todos os tickets,
- * e submete claimwin para cada vencedor.
+ * Número padrão de bolas efetivamente sorteadas por rodada.
+ * O oracle (orng.wax) sempre entrega 75 bytes (baralho completo embaralhado),
+ * mas o jogo usa apenas os primeiros DEFAULT_DRAW_BALLS para avaliação.
+ * Os bytes restantes ficam disponíveis como entropia extra (ex: GOLDEN_BALL).
+ */
+const DEFAULT_DRAW_BALLS = 35;
+
+/** Máscara do padrão MASTER: todos os 25 bits setados (FREE SPACE incluso). */
+const MASTER_MASK = BigInt(0x1FFFFFF);
+
+/**
+ * Deriving do multiplicador GOLDEN_BALL a partir de 2 bytes de entropia.
+ * Usa os bytes subsequentes ao índice da golden ball.
+ * Distribuição: 2×(60%) · 3×(25%) · 5×(10%) · 10×(3%) · 20×(1.5%) · 50×(0.4%) · 100×(0.1%)
+ */
+function deriveGoldenMultiplier(drawnBalls: number[], goldenBallAfter: number): number {
+    const b1   = drawnBalls[goldenBallAfter + 1] ?? 1;
+    const b2   = drawnBalls[goldenBallAfter + 2] ?? 1;
+    const roll = ((b1 << 8) | b2) % 10_000;
+    if (roll < 6_000) return 2;
+    if (roll < 8_500) return 3;
+    if (roll < 9_500) return 5;
+    if (roll < 9_800) return 10;
+    if (roll < 9_950) return 20;
+    if (roll < 9_990) return 50;
+    return 100;
+}
+
+/**
+ * Verifica se um número de bola (1-75) está coberto pelo padrão vencedor
+ * de uma cartela específica.
+ */
+function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, patternMask: bigint): boolean {
+    for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
+        if (bitIndex === 12) continue;
+        const matrixIndex = bitIndex < 12 ? bitIndex : bitIndex - 1;
+        if (ticket.matrix[matrixIndex] === ballNumber) {
+            return (patternMask & BigInt(1 << bitIndex)) !== 0n;
+        }
+    }
+    return false;
+}
+
+/**
+ * FIRST_FULL: encontra o número mínimo de bolas para que qualquer ticket complete o MASTER.
+ * Varre todos os tickets RPC para determinar o cutoff ball.
+ */
+async function findFirstFullCutoff(gameId: string, drawnBalls: number[]): Promise<number> {
+    let minBalls = drawnBalls.length;
+    let lowerBound: string | undefined;
+    let hasMore = true;
+
+    while (hasMore) {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:        CONTRACT_ACCOUNT,
+            scope:       gameId,
+            table:       'tickets',
+            limit:       100,
+            lower_bound: lowerBound as any,
+            json:        true,
+        });
+
+        for (const ticket of response.rows as BlockchainTicketRecord[]) {
+            const matrixSet = new Set(ticket.matrix);
+            let count = 0;
+            for (let i = 0; i < drawnBalls.length; i++) {
+                if (matrixSet.has(drawnBalls[i])) {
+                    matrixSet.delete(drawnBalls[i]);
+                    if (matrixSet.size === 0) { count = i + 1; break; }
+                }
+            }
+            if (count > 0 && count < minBalls) minBalls = count;
+        }
+
+        hasMore = response.more === true && response.rows.length === 100;
+        if (hasMore) {
+            const last = (response.rows as BlockchainTicketRecord[])[response.rows.length - 1];
+            lowerBound = (BigInt(last.ticket_id) + 1n).toString();
+        }
+    }
+
+    return minBalls;
+}
+
+// ==========================================
+// ADR-013 — MULTI_MATCH: resolução por estágios
+// ==========================================
+
+interface StageWinner {
+    ticket:      BlockchainTicketRecord;
+    patternMask: bigint;
+    ballCount:   number;
+}
+
+/**
+ * Para cada estágio: encontra o cutoff ball (primeiro ticket a atingir N padrões)
+ * e paga todos os tickets que atingiram N padrões nessa bola ou antes.
+ * Um ticket pode ganhar múltiplos estágios independentemente.
+ */
+async function processMultiMatchWinners(
+    gameId:      string,
+    drawnBalls:  number[],
+    gametypeId:  string,
+): Promise<void> {
+    // Busca estágios do gametype
+    const gtRes = await rpcClient.v1.chain.get_table_rows({
+        code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'gametypes',
+        lower_bound: gametypeId as any, upper_bound: gametypeId as any,
+        limit: 1, json: true,
+    });
+    if (!gtRes.rows.length) throw new Error(`[MULTI_MATCH] Gametype ${gametypeId} não encontrado.`);
+    const gametype = gtRes.rows[0] as any;
+    const stages: Array<{ stage: number; patterns_required: number; weight: number }> =
+        gametype.stages ?? [];
+    if (!stages.length) throw new Error(`[MULTI_MATCH] Gametype ${gametypeId} não tem stages.`);
+
+    // Busca padrões do gametype para avaliação
+    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+    if (!dynamicPatterns) throw new Error(`[MULTI_MATCH] Nenhum padrão para gametype ${gametypeId}.`);
+
+    // Pré-computa todos os tickets uma vez
+    const allTickets: BlockchainTicketRecord[] = [];
+    let lowerBound: string | undefined;
+    let hasMore = true;
+    while (hasMore) {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: CONTRACT_ACCOUNT, scope: gameId, table: 'tickets',
+            limit: 100, lower_bound: lowerBound as any, json: true,
+        });
+        allTickets.push(...(res.rows as BlockchainTicketRecord[]));
+        hasMore = res.more === true && res.rows.length === 100;
+        if (hasMore) {
+            const last = (res.rows as BlockchainTicketRecord[])[res.rows.length - 1];
+            lowerBound = (BigInt(last.ticket_id) + 1n).toString();
+        }
+    }
+
+    console.log(`🎯 [MULTI_MATCH] ${allTickets.length} tickets, ${stages.length} estágios, ${drawnBalls.length} bolas.`);
+
+    // Para cada estágio, encontra cutoff e paga vencedores
+    for (const stageDef of stages.sort((a, b) => a.patterns_required - b.patterns_required)) {
+        let cutoffBall = drawnBalls.length; // fallback: sem vencedores
+
+        // Encontra o menor nº de bolas onde qualquer ticket tem >= patterns_required padrões
+        for (let i = 1; i <= drawnBalls.length; i++) {
+            const partialBalls = drawnBalls.slice(0, i);
+            const anyWinner = allTickets.some(ticket => {
+                const state = applyDrawnBalls(ticket, partialBalls);
+                return checkWinPatterns(state, dynamicPatterns).length >= stageDef.patterns_required;
+            });
+            if (anyWinner) { cutoffBall = i; break; }
+        }
+
+        if (cutoffBall > drawnBalls.length) {
+            console.log(`⏭️  [MULTI_MATCH] Estágio ${stageDef.stage}: nenhum ticket atingiu ${stageDef.patterns_required} padrões.`);
+            continue;
+        }
+
+        // Avalia todos os tickets no cutoff
+        const effectiveBalls = drawnBalls.slice(0, cutoffBall);
+        const stageWinners: StageWinner[] = [];
+
+        for (const ticket of allTickets) {
+            const state = applyDrawnBalls(ticket, effectiveBalls);
+            const wins  = checkWinPatterns(state, dynamicPatterns);
+            if (wins.length >= stageDef.patterns_required) {
+                const best = wins.reduce((a, b) => b.weight > a.weight ? b : a);
+                stageWinners.push({ ticket, patternMask: best.mask, ballCount: cutoffBall });
+            }
+        }
+
+        console.log(`🏆 [MULTI_MATCH] Estágio ${stageDef.stage} (${stageDef.patterns_required} padrões): ${stageWinners.length} vencedor(es) na bola ${cutoffBall}.`);
+
+        for (const { ticket, patternMask, ballCount } of stageWinners) {
+            console.log(`  → Liquidando #${ticket.ticket_id} (${ticket.owner}) estágio ${stageDef.stage}`);
+            await executeClaimStage(gameId, ticket.ticket_id, stageDef.stage, ballCount, patternMask);
+        }
+    }
+
+    await executeCloseGame(gameId);
+    console.log(`✅ [MULTI_MATCH] Jogo ${gameId} resolvido (todos os estágios processados).`);
+}
+
+/**
+ * Motor de resolução completo: lê o jogo, aplica lógica do draw_mode,
+ * submete claimwin para cada vencedor e fecha o jogo com closegame().
  *
- * Estratégia:
- *   1. Se o índice invertido Redis existe → usa O(1) por bola (SPEC.md §3.2)
- *   2. Se não existe (ex: lockgame sem Redis) → fallback para varredura RPC
- *
+ * ADR-012: suporta modos standard | fixed | firstfull | goldenball
  * ADR-005 Fase 2: passa o win_pattern_mask do padrão de maior weight.
  */
 export async function processAllGameWinners(gameId: string): Promise<void> {
@@ -350,43 +535,129 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
         throw new Error(`[Avaliador] Jogo ${gameId} não está em estado 'drawn'. Status: ${game.status}`);
     }
 
-    const gametypeId = (game as any).gametype_id?.toString() ?? '0';
-    const hasIndex   = await indexExists(gameId);
+    const gametypeId  = (game as any).gametype_id?.toString() ?? '0';
+    const hasIndex    = await indexExists(gameId);
 
-    console.log(
-        `🔍 [Avaliador] Estratégia: ${hasIndex ? 'Índice Invertido O(1)' : 'Varredura RPC O(n)'} ` +
-        `(gametype: ${gametypeId === '0' ? 'legado' : gametypeId})`
-    );
+    // Busca metadados do gametype para determinar draw_mode e parâmetros
+    let drawMode: DrawMode       = 'standard';
+    let maxBalls: number         = 75;
+    let goldenBallAfter: number  = 0;
+    let goldenBallNum: number    = 0;
+    let goldenMultiplierGlobal   = 0;
 
-    let winners: WinResult[];
+    if (gametypeId !== '0') {
+        const gtRes = await rpcClient.v1.chain.get_table_rows({
+            code:        CONTRACT_ACCOUNT,
+            scope:       CONTRACT_ACCOUNT,
+            table:       'gametypes',
+            lower_bound: gametypeId as any,
+            upper_bound: gametypeId as any,
+            limit:       1,
+            json:        true,
+        });
 
-    if (hasIndex) {
-        winners = await findAllWinnersWithIndex(gameId, game.drawn_balls, gametypeId);
+        if (gtRes.rows.length) {
+            const gt = gtRes.rows[0] as any;
+            drawMode       = (gt.draw_mode ?? 'standard') as DrawMode;
+            maxBalls       = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
+            goldenBallAfter= gt.golden_ball_after ?? 0;
+        }
     } else {
-        winners = await findAllWinners(gameId, game.drawn_balls, gametypeId);
+        // Modo legado (gametype_id = 0): aplica padrão de 35 bolas
+        maxBalls = DEFAULT_DRAW_BALLS;
     }
 
-    if (winners.length === 0) {
-        console.log(`😔 [Avaliador] Nenhum vencedor no jogo ${gameId}.`);
+    console.log(
+        `🔍 [Avaliador] Modo: ${drawMode} | Bolas: ${maxBalls} | ` +
+        `Estratégia: ${hasIndex ? 'Índice O(1)' : 'RPC O(n)'} | ` +
+        `Gametype: ${gametypeId === '0' ? 'legado' : gametypeId}`
+    );
+
+    // ── MULTI_MATCH: delega para handler especializado ───────────────────────
+    if (drawMode === 'multimatch') {
+        await processMultiMatchWinners(gameId, game.drawn_balls.slice(0, maxBalls), gametypeId);
+        if (hasIndex) await deleteIndex(gameId);
         return;
     }
 
-    console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
+    // ── Aplica limite de bolas (vale para todos os modos — oracle entrega 75 sempre) ──
+    // O oracle (orng.wax) entrega 75 bytes (baralho completo). Usamos apenas maxBalls.
+    // Os bytes restantes permanecem disponíveis como entropia extra (GOLDEN_BALL).
+    let effectiveBalls = game.drawn_balls.slice(0, maxBalls);
 
-    for (const { ticket, patternName, patternMask, weight } of winners) {
+    if (drawMode === 'fixed') {
+        console.log(`📌 [FIXED] Usando ${effectiveBalls.length} bolas explícitas (de ${game.drawn_balls.length}).`);
+
+    } else if (drawMode === 'firstfull') {
+        // FIRST_FULL: varre com o baralho completo do oracle para encontrar o cutoff
+        // (MASTER pode exigir mais de max_balls bolas — usamos as 75 disponíveis)
+        const cutoff = await findFirstFullCutoff(gameId, game.drawn_balls);
+        effectiveBalls = game.drawn_balls.slice(0, cutoff);
+        console.log(`🃏 [FIRST_FULL] Cutoff na bola ${cutoff} (de ${game.drawn_balls.length} disponíveis). Avaliando MASTER apenas.`);
+
+    } else if (drawMode === 'goldenball') {
+        // GOLDEN_BALL: a fase normal usa as primeiras maxBalls bolas (já aplicadas acima).
+        // A bola dourada é a próxima após o sorteio normal.
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
+        goldenBallNum          = game.drawn_balls[ga] ?? 0;
+        goldenMultiplierGlobal = deriveGoldenMultiplier(game.drawn_balls, ga);
+        // effectiveBalls inclui a fase normal + a golden ball
+        effectiveBalls         = game.drawn_balls.slice(0, ga + 1);
         console.log(
-            `🏆 [Avaliador] Liquidando #${ticket.ticket_id} ` +
-            `(${ticket.owner}, padrão: ${patternName}, weight: ${weight})...`
+            `🌟 [GOLDEN_BALL] Fase normal: ${maxBalls} bolas. ` +
+            `Bola dourada: ${goldenBallNum} (pos ${ga}). ` +
+            `Multiplicador: ×${goldenMultiplierGlobal}`
         );
-        await executeClaimWin(gameId, ticket.ticket_id, game.drawn_balls.length, patternMask);
     }
 
-    // Limpa o índice após a resolução (o TTL garante a expiração, mas limpamos explicitamente)
-    if (hasIndex) {
-        await deleteIndex(gameId);
+    // ── Avalia vencedores ────────────────────────────────────────────────────
+    let winners: WinResult[];
+
+    if (hasIndex && drawMode === 'standard') {
+        winners = await findAllWinnersWithIndex(gameId, effectiveBalls, gametypeId);
+    } else {
+        winners = await findAllWinners(gameId, effectiveBalls, gametypeId);
     }
 
-    console.log(`✅ [Avaliador] Resolução do jogo ${gameId} concluída.`);
+    // FIRST_FULL: filtra apenas tickets que completaram MASTER
+    if (drawMode === 'firstfull') {
+        winners = winners.filter(w => (BigInt(w.patternMask) & MASTER_MASK) === MASTER_MASK);
+    }
+
+    // ── Submete pagamentos ───────────────────────────────────────────────────
+    if (winners.length === 0) {
+        console.log(`😔 [Avaliador] Nenhum vencedor no jogo ${gameId}.`);
+    } else {
+        console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
+
+        for (const { ticket, patternName, patternMask, weight } of winners) {
+            // GOLDEN_BALL: verifica se a bola dourada está coberta pelo padrão vencedor
+            let appliedMultiplier = 0;
+            if (drawMode === 'goldenball' && goldenBallNum > 0) {
+                const inPattern = isBallInPattern(ticket, goldenBallNum, patternMask);
+                if (inPattern) appliedMultiplier = goldenMultiplierGlobal;
+            }
+
+            console.log(
+                `🏆 [Avaliador] Liquidando #${ticket.ticket_id} ` +
+                `(${ticket.owner}, padrão: ${patternName}, weight: ${weight}` +
+                (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
+            );
+            await executeClaimWin(
+                gameId,
+                ticket.ticket_id,
+                effectiveBalls.length,
+                patternMask,
+                appliedMultiplier,
+            );
+        }
+    }
+
+    // ── Limpa índice e fecha jogo ────────────────────────────────────────────
+    if (hasIndex) await deleteIndex(gameId);
+
+    await executeCloseGame(gameId);
+    console.log(`✅ [Avaliador] Resolução do jogo ${gameId} concluída (modo: ${drawMode}).`);
 }
 
 /**
