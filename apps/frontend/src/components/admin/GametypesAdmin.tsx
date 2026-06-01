@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, setAdminGametypeStages, simulateWeights, type DrawMode, type StageRule, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats, type McResult } from '../../services/api';
+import { fetchAdminGametypes, createAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, setAdminGametypeStages, simulateWeights, calibrateWeightsApi, type CalibrateResult, type DrawMode, type StageRule, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput, type McPatternStats, type McResult } from '../../services/api';
 
 const TYPE_COLORS: Record<string, string> = {
     simple:  'bg-blue-500/10 text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700',
@@ -102,11 +102,16 @@ export default function GametypesAdmin() {
         });
     };
 
-    // Fix: use destructuring properly
     const updateRuleField = (patternId: string, field: 'weight' | 'type', value: string) => {
         setSelectedRules(prev => {
             if (!prev[patternId]) return prev;
-            return { ...prev, [patternId]: { ...prev[patternId], [field]: value } };
+            const updated = { ...prev[patternId], [field]: value };
+            // MASTER = peso máximo fixo em todos os modos, EXCETO firstfull,
+            // onde o peso da cartela cheia é o prêmio principal e deve ser configurável.
+            if (field === 'type' && value === 'master' && drawMode !== 'firstfull') {
+                updated.weight = '255.00';
+            }
+            return { ...prev, [patternId]: updated };
         });
     };
 
@@ -288,8 +293,8 @@ export default function GametypesAdmin() {
                 gametype_name:   name || 'Gametype',
                 base_multiplier: baseMul,
                 patterns:        mcPatterns,
-                simulations:     5_000,
-                max_balls:       SUGGEST_MAX_BALLS,
+                simulations:     25_000,
+                max_balls:       drawMode === 'fixed' ? parseInt(maxBalls) || 35 : 75,
             });
 
             // Contagem de células (bits ativos, excl. FREE) por padrão:
@@ -326,37 +331,97 @@ export default function GametypesAdmin() {
                 }).filter(p => p.mask > 0);
             }
 
-            // ── Phase 2b: Gera combinações candidatas ─────────────────────────────
-            // Usa hit_rates da Phase 1 (independem de pesos) e pesos já atualizados.
-            const byType = buildByType(activeRulesExt);
-            const combos = mcPatterns.length >= 2
-                ? buildCombos(activePatterns, byType, phase1)
-                : [];
+            // ── Phase 2b: Geração Dinâmica de Múltiplas Combinações (Sem Sobreposição) ─────
+            const combos: CombinationRuleInput[] = [];
 
-            // ── Phase 3: Calibração iterativa de RTP ─────────────────────────────
-            // Parte de pesos próximos ao alvo → converge em 1-3 iterações.
-            const cal = await calibrateRtp(activePatterns, combos, baseMul, name || 'Gametype');
+            // 1. Isolamos o MASTER (ele não entra em combos, é a coroa final)
+            // CORREÇÃO 1: Voltar para maiúsculo ('MASTER')
+            const combinablePatterns = activePatterns.filter(p => p.pattern_type !== 'master');
 
-            // ── Aplica resultados: pesos calibrados (Phase 3) têm precedência ─────
+            // 2. Algoritmo Recursivo de Busca em Profundidade (Backtracking)
+            const generateNonOverlappingCombos = (
+                startIndex: number,
+                currentCombo: typeof combinablePatterns,
+                currentMask: bigint
+            ) => {
+                // Se temos 2 ou mais padrões, registramos o combo
+                if (currentCombo.length >= 2) {
+                    combos.push({
+                        name: currentCombo.map(p => p.name).join(' + '),
+                        weight: 0, // Será calibrado pelo Motor Matemático
+                        clauses: [
+                            {
+                                type: 'all_of',
+                                // CORREÇÃO 2: Converter o ID numérico para string
+                                pattern_ids: currentCombo.map(p => p.pattern_id.toString())
+                            }
+                        ]
+                    });
+                }
+
+                // Explora as próximas camadas da árvore de combinações
+                for (let i = startIndex; i < combinablePatterns.length; i++) {
+                    const candidate = combinablePatterns[i];
+                    
+                    const candidateMask = BigInt(candidate.mask);
+
+                    // A MAGIA ESTÁ AQUI: (currentMask & candidateMask) === 0n
+                    if ((currentMask & candidateMask) === 0n) {
+                        generateNonOverlappingCombos(
+                            i + 1, 
+                            [...currentCombo, candidate], 
+                            currentMask | candidateMask
+                        );
+                    }
+                }
+            };
+
+            // Inicia a recursão com máscara vazia
+            generateNonOverlappingCombos(0, [], 0n);
+
+            // ── Phase 3: Atribui pesos iniciais às combinações geradas ───────
+            // Peso inicial = soma dos pesos dos membros × 0.8 (custo de exigir N simultâneos)
+            const weightedCombos: CombinationRuleInput[] = combos.map(c => {
+                const memberWeights = (c.clauses[0]?.pattern_ids ?? []).map(pid => {
+                    const mp = activePatterns.find(p => String(p.pattern_id) === pid);
+                    return mp?.weight ?? 100;
+                });
+                const sumW = memberWeights.reduce((a, b) => a + b, 0);
+                return { ...c, weight: clamp(Math.round(sumW * 0.8), 100, 25500) };
+            });
+
+            // ── Phase 4: Calibra RTP ──────────────────────────────────────────
+            // firstfull: MASTER participa da calibração — seu peso define o prêmio
+            //            da cartela cheia, que é o único padrão que importa no modo.
+            // demais modos: MASTER excluído (peso fixo em 255.00) para não distorcer
+            //               o RTP dos padrões simples/especiais.
+            const patternsForCalibration = drawMode === 'firstfull'
+                ? activePatterns
+                : activePatterns.filter(p => p.pattern_type !== 'master');
+            const cal = patternsForCalibration.length > 0
+                ? await calibrateRtp(patternsForCalibration, weightedCombos, baseMul, name || 'Gametype')
+                : null;
+
+            // ── Phase 5: Aplica pesos calibrados ao estado ───────────────────
             setSelectedRules(prev => {
                 const next = { ...prev };
-                if (cal) {
-                    // Converte nome → pattern_id para atualizar selectedRules
-                    const nameToId: Record<string, string> = {};
-                    for (const p of mcPatterns) nameToId[p.name] = String(p.pattern_id);
-                    for (const [patName, wHundredths] of Object.entries(cal.pattern_weights)) {
-                        const pid = nameToId[patName];
-                        if (pid && next[pid]) next[pid] = { ...next[pid], weight: (wHundredths / 100).toFixed(2) };
-                    }
-                } else {
-                    // Fallback: aplica pesos da Phase 2
-                    for (const r of activeRulesExt) {
-                        if (next[r.pattern_id]) next[r.pattern_id] = { ...next[r.pattern_id], weight: (r.weight / 100).toFixed(2) };
+                for (const [pid, rule] of Object.entries(next)) {
+                    const mp = activePatterns.find(p => String(p.pattern_id) === pid);
+                    if (!mp) continue;
+                    if (mp.pattern_type === 'master' && drawMode !== 'firstfull') {
+                        // MASTER = peso máximo em todos os modos exceto firstfull
+                        next[pid] = { ...rule, weight: '255.00' };
+                    } else if (cal) {
+                        const w = cal.pattern_weights[mp.name] ?? mp.weight;
+                        next[pid] = { ...rule, weight: (w / 100).toFixed(2) };
+                    } else {
+                        next[pid] = { ...rule, weight: (mp.weight / 100).toFixed(2) };
                     }
                 }
                 return next;
             });
-            applyCombos(combos, cal);
+
+            applyCombos(weightedCombos, cal);
 
         } catch (err) {
             setError(err instanceof Error ? err.message : t('admin.gametypes_error_suggest'));
@@ -462,72 +527,39 @@ export default function GametypesAdmin() {
     };
 
     /**
-     * Calibração iterativa de RTP via busca binária sobre o fator de escala global.
+     * Calibração de RTP via motor de 4 fases do backend (ADR-014 analogia).
      *
-     * Por que busca binária e não escala simples (target/rtp)?
-     * - Com floors de peso (min=10), a escala simples oscila: pesos batem no floor,
-     *   o RTP não cai mais, o próximo scale tenta subir, oscila infinitamente.
-     * - A busca binária rastreia limites [lo, hi] do fator de escala e bisecta,
-     *   convergindo monotonicamente mesmo com floors.
-     *
-     * max_balls=SUGGEST_MAX_BALLS garante hit_rates < 100% → pesos > 10 → sem floor trap.
+     * Substitui o antigo loop de 15 chamadas a simulateWeights (estocástico + divergente).
+     * O backend executa em uma única requisição:
+     *   Fase 1 — descoberta empírica (20k rodadas, sem max_weight, sem ruído por iteração)
+     *   Fase 2 — suavização de Laplace (epsilon para P=0 — evita ÷0 e ancora o MASTER)
+     *   Fase 3 — calibração algébrica em memória (sem RNG, convergência garantida)
+     *   Fase 4 — validação estocástica final (prova dos nove com 10k rodadas)
      */
     const calibrateRtp = async (
-        patterns: { name: string; weight: number; mask: number; pattern_id: number; pattern_type?: string }[],
+        patternsArg: { name: string; weight: number; mask: number; pattern_id: number; pattern_type?: string }[],
         combos: CombinationRuleInput[],
         baseMul: number,
         gtName: string,
     ): Promise<{ pattern_weights: Record<string, number>; combo_weights: Record<string, number> } | null> => {
-        const TARGET   = 0.85;
-        const TOL      = 0.015; // ±1.5%
-        const MAX_ITER = 15;    // suficiente para busca binária convergir em ≤15 bisecções
+        const mcPatterns = patternsArg.map(p => ({
+            pattern_id:   p.pattern_id,
+            name:         p.name,
+            mask:         p.mask,
+            weight:       p.weight,
+            pattern_type: p.pattern_type,
+        }));
 
-        const patW: Record<string, number> = {};
-        for (const p of patterns) patW[p.name] = p.weight;
-        const comW: Record<string, number> = {};
-        for (const c of combos) comW[c.name] = c.weight;
+        const result: CalibrateResult = await calibrateWeightsApi({
+            gametype_name:   gtName,
+            base_multiplier: baseMul,
+            patterns:        mcPatterns,
+            combinations:    combos,
+            max_balls:       SUGGEST_MAX_BALLS,
+            target_rtp:      0.85,
+        });
 
-        // Limites do fator de escala global para busca binária
-        let scaleLo = 0.05;  // escala mínima (pesos muito baixos)
-        let scaleHi = 20.0;  // escala máxima (pesos muito altos)
-        let lastRtp = -1;
-
-        for (let iter = 0; iter < MAX_ITER; iter++) {
-            const result = await simulateWeights({
-                gametype_name:    gtName,
-                base_multiplier:  baseMul,
-                patterns:         patterns.map(p => ({ ...p, weight: patW[p.name] })),
-                combinations:     combos.map(c => ({ ...c, weight: comW[c.name] })),
-                simulations:      5_000,
-                max_balls:        SUGGEST_MAX_BALLS,
-            });
-
-            const rtp = result.rtp;
-
-            // Convergiu
-            if (rtp >= TARGET - TOL && rtp <= TARGET + TOL) break;
-            // Sem vencedores: pesos muito baixos, forçar escala máxima
-            if (result.total_paid_out <= 0) {
-                scaleLo = Math.max(scaleLo, 2.0);
-            }
-            // Sem alteração útil entre iterações (travado no floor)
-            if (Math.abs(rtp - lastRtp) < 0.001 && iter > 2) break;
-            lastRtp = rtp;
-
-            // Busca binária: estreita os limites com base no sinal do erro
-            if (rtp > TARGET) scaleHi = Math.min(scaleHi, TARGET / rtp * 1.1);
-            else              scaleLo = Math.max(scaleLo, TARGET / rtp * 0.9);
-
-            const scale = (scaleLo + scaleHi) / 2;
-            for (const nm of Object.keys(patW)) patW[nm] = clamp(Math.round(patW[nm] * scale), 10, 25500);
-            for (const nm of Object.keys(comW)) comW[nm] = clamp(Math.round(comW[nm] * scale), 10, 25500);
-
-            // Reinicia os limites relativos ao novo estado dos pesos
-            scaleLo = 0.05;
-            scaleHi = 20.0;
-        }
-
-        return { pattern_weights: patW, combo_weights: comW };
+        return { pattern_weights: result.pattern_weights, combo_weights: result.combo_weights };
     };
 
     const clamp = (v: number, lo: number, hi: number): number =>
@@ -712,8 +744,10 @@ export default function GametypesAdmin() {
                                                 </select>
                                                 <span className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_weight')}</span>
                                                 <input
-                                                    className="w-14 text-xs font-mono px-1 py-0.5 rounded border border-[--cb-border-default] bg-transparent text-center"
-                                                    type="number" min="0.5" step="0.01" value={sel.weight}
+                                                    className={`w-14 text-xs font-mono px-1 py-0.5 rounded border border-[--cb-border-default] text-center ${sel.type === 'master' && drawMode !== 'firstfull' ? 'bg-amber-500/10 opacity-70 cursor-not-allowed' : 'bg-transparent'}`}
+                                                    type="number" min="0.5" max="255" step="0.01"
+                                                    value={sel.type === 'master' && drawMode !== 'firstfull' ? '255.00' : sel.weight}
+                                                    disabled={sel.type === 'master' && drawMode !== 'firstfull'}
                                                     onClick={e => e.stopPropagation()}
                                                     onChange={e => updateRuleField(p.pattern_id, 'weight', e.target.value)}
                                                 />
@@ -821,7 +855,7 @@ export default function GametypesAdmin() {
                                         </>
                                     ) : (
                                         <div className="flex flex-wrap gap-1">
-                                            {patterns.filter(p => selectedRules[p.pattern_id]).map(p => {
+                                            {patterns.filter(p => selectedRules[p.pattern_id] && selectedRules[p.pattern_id].type !== 'master').map(p => {
                                                 const isSelected = (clause.pattern_ids ?? []).includes(p.pattern_id);
                                                 return (
                                                     <button

@@ -8,7 +8,7 @@
 // ==========================================
 export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 'zh-CN' | 'ja-JP';
 export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
-export type PatternType = 'regular' | 'combination';
+export type PatternType = 'simple' | 'special' | 'master';
 
 /**
  * Modos de sorteio do gametype (ADR-012).

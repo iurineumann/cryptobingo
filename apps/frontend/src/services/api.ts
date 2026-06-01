@@ -328,6 +328,49 @@ export async function simulateWeights(data: {
     return handleResponse(res);
 }
 
+export interface CalibrateResult {
+    gametype_name:       string;
+    target_rtp:          number;
+    algebraic_rtp:       number;
+    algebraic_rtp_pct:   string;
+    iterations:          number;
+    converged:           boolean;
+    pattern_weights:     Record<string, number>;  // name → hundredths
+    combo_weights:       Record<string, number>;
+    calibrations:        Array<{ name: string; probability: number; weight: number }>;
+    validation:          McResult;
+    refinement_iters:     number;   // Fase 3b
+    refinement_converged: boolean;
+    retries:              number;
+    duration_ms:         number;
+    computed_at:         string;
+}
+
+/**
+ * Motor de calibração em 4 fases (backend):
+ * Fase1: descoberta empírica → Fase2: Laplace → Fase3: algébrico → Fase4: validação.
+ * Substitui o loop de simulateWeights no frontend — uma única chamada estável.
+ */
+export async function calibrateWeightsApi(data: {
+    gametype_name:    string;
+    base_multiplier:  number;
+    patterns:         McPatternInput[];
+    combinations?:    McCombinationInput[];
+    tickets_per_game?: number;
+    max_balls?:       number;
+    target_rtp?:      number;
+    discovery_sims?:  number;
+    alpha?:           number;
+    tolerance?:       number;
+    validation_sims?: number;
+}): Promise<CalibrateResult> {
+    const res = await fetch(`${API_BASE}/admin/calibrate-weights`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse<CalibrateResult>(res);
+}
+
 // ==========================================
 // ADMIN — STATISTICS / COMPLIANCE
 // ==========================================
