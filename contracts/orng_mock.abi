@@ -4,30 +4,6 @@
     "types": [],
     "structs": [
         {
-            "name": "fulfillrand",
-            "base": "",
-            "fields": [
-                {
-                    "name": "assoc_id",
-                    "type": "uint64"
-                }
-            ]
-        },
-        {
-            "name": "request_record",
-            "base": "",
-            "fields": [
-                {
-                    "name": "assoc_id",
-                    "type": "uint64"
-                },
-                {
-                    "name": "caller",
-                    "type": "name"
-                }
-            ]
-        },
-        {
             "name": "requestrand",
             "base": "",
             "fields": [
@@ -48,25 +24,12 @@
     ],
     "actions": [
         {
-            "name": "fulfillrand",
-            "type": "fulfillrand",
-            "ricardian_contract": ""
-        },
-        {
             "name": "requestrand",
             "type": "requestrand",
             "ricardian_contract": ""
         }
     ],
-    "tables": [
-        {
-            "name": "requests",
-            "type": "request_record",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
-        }
-    ],
+    "tables": [],
     "ricardian_clauses": [],
     "variants": [],
     "action_results": []

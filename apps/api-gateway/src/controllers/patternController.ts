@@ -173,24 +173,31 @@ export async function listGametypes(_req: Request, res: Response): Promise<void>
 
 /**
  * POST /api/v1/admin/gametypes
- * Cria ou atualiza um gametype on-chain.
+ * Cria ou atualiza um gametype on-chain (addgametype).
  *
  * Body: {
  *   gametype_id: number,
  *   name: string,
  *   base_multiplier: number,        // uint8 (1-255)
- *   rules: [{ pattern_id, weight }]
+ *   rules: [{ pattern_id, weight }],
+ *   draw_mode?: string,             // 'standard' | 'fixed' | 'firstfull' | 'goldenball' | 'multimatch'
+ *   max_balls?: number,             // uint8
+ *   golden_ball_after?: number,     // uint8
+ *   master_weight_ovrd?: number,    // uint8
  * }
  */
 export async function upsertGametype(req: Request, res: Response): Promise<void> {
-    const { gametype_id, name, base_multiplier, rules } = req.body;
+    const {
+        gametype_id, name, base_multiplier, rules,
+        draw_mode, max_balls, golden_ball_after, master_weight_ovrd,
+    } = req.body;
 
     if (!gametype_id || !name || !base_multiplier || !rules) {
         res.status(400).json({ error: 'Campos obrigatórios: gametype_id, name, base_multiplier, rules.' });
         return;
     }
     if (!Array.isArray(rules) || rules.length === 0) {
-        res.status(400).json({ error: 'rules deve ser um array com pelo menos 1 elemento.' });
+        res.status(400).json({ error: 'rules deve ter pelo menos 1 elemento.' });
         return;
     }
     if (typeof base_multiplier !== 'number' || base_multiplier < 1 || base_multiplier > 255) {
@@ -212,7 +219,13 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
                 account:       CONTRACT_ACCOUNT,
                 name:          'addgametype',
                 authorization: [session.permissionLevel],
-                data:          { gametype_id, name, base_multiplier, rules },
+                data: {
+                    gametype_id, name, base_multiplier, rules,
+                    draw_mode:       draw_mode ?? 'standard',
+                    max_balls:       max_balls ?? 0,
+                    golden_ball_after: golden_ball_after ?? 0,
+                    master_weight_ovrd: master_weight_ovrd ?? 0,
+                },
             }],
         }, { broadcast: true });
 

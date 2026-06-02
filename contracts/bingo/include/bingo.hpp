@@ -155,7 +155,7 @@ namespace bingo {
         std::string               name;
         uint8_t                   base_multiplier;
         std::vector<pattern_rule> rules;
-        name                      draw_mode          = "standard"_n;
+        eosio::name               draw_mode          = "standard"_n;
         uint8_t                   max_balls          = 0;
         uint8_t                   golden_ball_after  = 0;
         uint8_t                   master_weight_ovrd = 0;
@@ -325,12 +325,12 @@ namespace bingo {
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);
         [[eosio::action]] void delpattern(uint64_t pattern_id);
-        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd);
+        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd);
         [[eosio::action]] void setstages(uint64_t gametype_id, std::vector<stage_rule> stages); // ADR-013
         [[eosio::action]] void delgametype(uint64_t gametype_id);
 
         // ── Compra de Cartelas ───────────────────────────────────────────────
-        [[eosio::action]] void buytickets(name buyer, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures, uint64_t nft_id);
+        [[eosio::action]] void buytickets(name buyer, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures, uint64_t nft_id, extended_asset requested_price);
 
         // ── Patrocínio B2B ────────────────────────────────────────────────────
         [[eosio::action]] void linkcampaign(uint64_t game_id, uint64_t campaign_id);

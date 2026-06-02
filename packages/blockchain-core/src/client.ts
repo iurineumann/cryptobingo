@@ -11,8 +11,23 @@ const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 export const rpcClient = new APIClient({ url: RPC_URL });
 
 /**
+ * Converte uma hex string da ABI (tipo `bytes`) para um array de números.
+ * O contrato serializa `vector<uint8_t>` / `std::vector<char>` como hex na ABI.
+ */
+export function parseHexBytes(hex: string): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < hex.length; i += 2) {
+        out.push(parseInt(hex.substring(i, i + 2), 16));
+    }
+    return out;
+}
+
+/**
  * Busca o estado de um jogo na tabela `games` (scope: bingo.game).
  * Retorna null se o jogo não existir.
+ *
+ * IMPORTANTE: `drawn_balls` vem como hex string (`bytes` na ABI) e é convertida
+ * automaticamente para `number[]`.
  */
 export async function fetchGame(gameId: string): Promise<BlockchainGameState | null> {
     const gameIdU64 = UInt64.from(gameId);
@@ -27,7 +42,11 @@ export async function fetchGame(gameId: string): Promise<BlockchainGameState | n
     });
 
     if (response.rows.length === 0) return null;
-    return response.rows[0] as BlockchainGameState;
+    const row = response.rows[0] as Record<string, any>;
+    if (typeof row.drawn_balls === 'string') {
+        row.drawn_balls = parseHexBytes(row.drawn_balls);
+    }
+    return row as unknown as BlockchainGameState;
 }
 
 /**
@@ -38,6 +57,7 @@ export async function fetchGame(gameId: string): Promise<BlockchainGameState | n
  *
  * IMPORTANTE: Retorna BlockchainTicketRecord[] com os campos reais do contrato:
  *   { ticket_id, owner, matrix, state, game_id }
+ *   `matrix` vem como hex string (`bytes` na ABI) e é convertida para `number[]`.
  */
 export async function fetchPlayerTickets(gameId: string, playerWallet: string): Promise<BlockchainTicketRecord[]> {
     const ownerU64 = Name.from(playerWallet).value;
@@ -52,7 +72,13 @@ export async function fetchPlayerTickets(gameId: string, playerWallet: string): 
         json: true,
     });
 
-    return response.rows as BlockchainTicketRecord[];
+    const rows = response.rows as Record<string, any>[];
+    for (const row of rows) {
+        if (typeof row.matrix === 'string') {
+            row.matrix = parseHexBytes(row.matrix);
+        }
+    }
+    return rows as unknown as BlockchainTicketRecord[];
 }
 
 /**

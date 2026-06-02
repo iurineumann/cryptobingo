@@ -14,6 +14,7 @@
 //   5. Após o último lote: notifyGameEnded → onGameResolved
 
 import { fetchGame, rpcClient }                                     from '@cryptobingo/blockchain-core';
+import { UInt64 }                                                    from '@wharfkit/antelope';
 import type { DrawMode }                                             from '@cryptobingo/shared-types';
 import {
     processAllGameWinners,
@@ -202,7 +203,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
     if (gametypeId !== '0') {
         const gtRes = await rpcClient.v1.chain.get_table_rows({
             code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'gametypes',
-            lower_bound: gametypeId as any, upper_bound: gametypeId as any,
+            lower_bound: UInt64.from(gametypeId), upper_bound: UInt64.from(gametypeId),
             limit: 1, json: true,
         });
         if (gtRes.rows.length) {

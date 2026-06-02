@@ -15,6 +15,15 @@ import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
 import ChatPanel from './chat/ChatPanel';
 
+function parseHexMatrix(hex: string): number[] {
+  const bytes: number[] = [];
+  const raw = hex.startsWith('0x') ? hex.slice(2) : hex;
+  for (let i = 0; i < raw.length; i += 2) {
+    bytes.push(parseInt(raw.substring(i, i + 2), 16));
+  }
+  return bytes;
+}
+
 // ==========================================
 // TIPOS
 // ==========================================
@@ -145,7 +154,7 @@ function TicketCard({ ticketId, matrix, drawnSet, lastDrawn, winPattern, prize, 
 
       <div className="gr-ticket-foot">
         <span className="best">
-          {isWinner ? t('game_room.ticket_footer_pattern') : t('game_room.ticket_footer_marked', { count: markedCount })}
+          {isWinner ? t('game_room.ticket_footer_pattern', { count: 1 }) : t('game_room.ticket_footer_marked', { marked: markedCount, total: 25 })}
         </span>
         {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
       </div>
@@ -162,13 +171,51 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
 
   // ── Estado local ──────────────────────────────────────────────────────────
   const [game,         setGame]         = useState<BlockchainGameState | null>(null);
+  const [nextGame,     setNextGame]     = useState<BlockchainGameState | null>(null);
   const [playerTickets,setPlayerTickets]= useState<Array<{ id: string; matrix: number[] }>>([]);
   const [room,         setRoom]         = useState<EnrichedRoom | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
   const [showChat,     setShowChat]     = useState(false);
   const [loadingGame,  setLoadingGame]  = useState(true);
+  const [now,          setNow]          = useState(Date.now());
   const density                         = 'comfortable' as const;
+
+  const AUTO_LOCK_SEC = 60;
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const timeRemaining = useMemo(() => {
+    if (!game) return '';
+    if (game.status === 'funding') {
+      const closeAt = Number(game.game_id) + AUTO_LOCK_SEC * 1000;
+      const diff = closeAt - now;
+      if (diff <= 0) return '🔒 Fechando...';
+      const s = Math.ceil(diff / 1000);
+      if (s < 60) return `🔒 ${s}s`;
+      return `🔒 ${Math.floor(s / 60)}m ${s % 60}s`;
+    }
+    return '';
+  }, [game, now]);
+
+  const nextGameTimer = useMemo(() => {
+    if (!nextGame || nextGame.status !== 'funding') return '';
+    const closeAt = Number(nextGame.game_id) + AUTO_LOCK_SEC * 1000;
+    const diff = closeAt - now;
+    if (diff <= 0) return '0s';
+    const s = Math.ceil(diff / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  }, [nextGame, now]);
+
+  const gameStatusText = useMemo(() => {
+    if (!game) return '';
+    const emoji: Record<string, string> = { created: '🕐', funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌' };
+    return `${emoji[game.status] ?? ''} ${game.status}`;
+  }, [game]);
 
   // ── WebSocket (Slow Reveal) ───────────────────────────────────────────────
   const {
@@ -184,6 +231,16 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
   const drawnSet   = useMemo(() => new Set(drawnNumbers), [drawnNumbers]);
   const lastDrawn  = lastBall?.number ?? null;
 
+  // ── Cartelas ordenadas por células marcadas (decrescente) ────────────────
+  const sortedTickets = useMemo(() => {
+    if (playerTickets.length === 0) return playerTickets;
+    return [...playerTickets].sort((a, b) => {
+      const marksA = a.matrix.filter(n => drawnSet.has(n)).length + 1;
+      const marksB = b.matrix.filter(n => drawnSet.has(n)).length + 1;
+      return marksB - marksA;
+    });
+  }, [playerTickets, drawnSet]);
+
   // ── Refs para animação ────────────────────────────────────────────────────
   const heroRef   = useRef<HTMLDivElement>(null);
   const seqRef    = useRef<HTMLDivElement>(null);
@@ -198,10 +255,6 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
     el.classList.add('gr-drop');
   }, [lastDrawn]);
 
-  useEffect(() => {
-    if (seqRef.current) seqRef.current.scrollLeft = seqRef.current.scrollWidth;
-  }, [drawnBalls.length]);
-
   // ── Carrega jogo + cartelas + room (se aplicável) ─────────────────────────
   const loadGame = useCallback(async () => {
     setLoadingGame(true);
@@ -212,7 +265,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
           lower_bound: UInt64.from(gameId), upper_bound: UInt64.from(gameId), limit: 1, json: true,
         }),
         session.client.v1.chain.get_table_rows({
-          code: CONTRACT, scope: gameId, table: 'tickets', limit: 50, json: true,
+          code: CONTRACT, scope: UInt64.from(gameId), table: 'tickets', limit: 50, json: true,
         }),
       ]);
       if (gameRes.rows.length) setGame(gameRes.rows[0] as BlockchainGameState);
@@ -223,19 +276,38 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
           const { fetchRoom } = await import('../services/api');
           const roomData = await fetchRoom(loadedGame.room_id);
           setRoom(roomData);
+          // Se o jogo atual terminou, busca o current_game_id da sala
+          if (['archived', 'aborted'].includes(loadedGame.status)) {
+            const nextId = String(roomData.current_game_id);
+            if (nextId !== '0' && nextId !== gameId) {
+              const nextRes = await session.client.v1.chain.get_table_rows({
+                code: CONTRACT, scope: CONTRACT, table: 'games',
+                lower_bound: UInt64.from(nextId), upper_bound: UInt64.from(nextId), limit: 1, json: true,
+              });
+              if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
+            }
+          }
         } catch { /* silencioso */ }
       } else if (roomId) {
         try {
           const { fetchRoom } = await import('../services/api');
           const roomData = await fetchRoom(roomId);
           setRoom(roomData);
+          if (roomData.current_game_id && String(roomData.current_game_id) !== '0' && String(roomData.current_game_id) !== gameId) {
+            const nextRes = await session.client.v1.chain.get_table_rows({
+              code: CONTRACT, scope: CONTRACT, table: 'games',
+              lower_bound: UInt64.from(String(roomData.current_game_id)),
+              upper_bound: UInt64.from(String(roomData.current_game_id)), limit: 1, json: true,
+            });
+            if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
+          }
         } catch { /* silencioso */ }
       }
 
       setPlayerTickets(
-        (ticketsRes.rows as Array<{ ticket_id: string; matrix: number[] }>).map(r => ({
+        (ticketsRes.rows as Array<{ ticket_id: string; matrix: number[] | string }>).map(r => ({
           id:     r.ticket_id,
-          matrix: r.matrix,
+          matrix: Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
         }))
       );
     } catch (err) {
@@ -280,9 +352,18 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
               {room?.metadata?.name ?? `#${gameId}`}
               {room && <span className="text-[--cb-text-tertiary] text-xs ml-1">(Sala {room.room_id})</span>}
             </span>
+            {game && (
+              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
+                {gameStatusText}
+              </span>
+            )}
+            {timeRemaining && (
+              <span className="text-xs font-mono font-bold text-[--cb-accent] bg-[--cb-bg-elevated] px-2 py-0.5 rounded-md border border-[--cb-border-default]">
+                {timeRemaining}
+              </span>
+            )}
             {isDrawing && <span className="gr-live">{t('game_room.badge_live')}</span>}
             {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
-            {isGameEnded && !isAborted && <span className="cb-status-dot cb-status-dot-offline" title={t('game_room.badge_ended')} />}
           </div>
         </div>
         <div className="gr-nav-right">
@@ -323,7 +404,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--cb-text-tertiary)' }}>
               <span className={`cb-status-dot ${wsStatusClass[wsStatus] ?? 'cb-status-dot-offline'}`} aria-hidden="true" />
               <span style={{ fontWeight: 600, color: 'var(--cb-text-secondary)' }}>
-                {t('game_room.ball_count', { drawn: drawnNumbers.length })}
+                {t('game_room.ball_count', { count: drawnNumbers.length })}
               </span>
             </span>
           </div>
@@ -338,7 +419,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
-                aria-label={lastDrawn != null ? t('game_room.hero_ball_aria', { col, num: lastDrawn, count: drawnNumbers.length }) : t('game_room.hero_ball_waiting')}
+                aria-label={lastDrawn != null ? t('game_room.hero_ball_aria', { number: lastDrawn, count: drawnNumbers.length }) : t('game_room.hero_ball_waiting')}
               >
                 <div className="ball-surface" aria-hidden="true" />
                 <span className="ball-letter">{col}</span>
@@ -359,13 +440,13 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             {/* Footer: histórico + progress */}
             <div className="gr-stage-footer">
               <div ref={seqRef} className="gr-sequence" aria-label={t('game_room.history_aria')}>
-                {drawnBalls.map((ball, idx) => {
+                {[...drawnBalls].reverse().map((ball, idx) => {
                   const c   = getCol(ball.number);
                   const clr = BINGO_COLORS[c];
                   return (
                     <div
                       key={ball.order}
-                      className={`gr-mini-ball${idx === drawnBalls.length - 1 ? ' latest' : ''}`}
+                      className={`gr-mini-ball${idx === 0 ? ' latest' : ''}`}
                       style={{ '--ball-color': clr } as React.CSSProperties}
                       title={`${c}${ball.number}`}
                     >
@@ -429,8 +510,22 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
                   ? t('game_room.game_ended_winners', { count: winners.length })
                   : t('game_room.game_ended_no_winners')}
               </span>
-              <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
+              {nextGame && nextGame.status === 'funding' ? (
+                <span className="gr-ended-next">
+                  {t('game_room.next_game_funding', { time: nextGameTimer })}
+                </span>
+              ) : (
+                <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
+              )}
             </div>
+            {nextGame && nextGame.status === 'funding' && (
+              <button
+                className="cb-btn cb-btn-primary cb-btn-sm"
+                onClick={onLeave}
+              >
+                {t('game_room.go_to_next')}
+              </button>
+            )}
           </div>
         )}
 
@@ -480,7 +575,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             </div>
           ) : (
             <div className="gr-tickets-grid">
-              {playerTickets.map(ticket => (
+              {sortedTickets.map(ticket => (
                 <TicketCard
                   key={ticket.id}
                   ticketId={ticket.id}
@@ -516,6 +611,10 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
           session={session}
           onClose={() => setShowBuyModal(false)}
           onSuccess={() => { setShowBuyModal(false); loadGame(); }}
+          maxTicketsPerPlayer={room?.max_tickets_per_player}
+          roomPriceMin={room?.ticket_price_min}
+          roomPriceMax={room?.ticket_price_max}
+          roomPriceDefault={room?.ticket_price_default}
         />
       )}
     </div>

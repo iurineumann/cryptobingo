@@ -41,12 +41,12 @@
 .gr-live::before { content: ''; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--color-danger-500); box-shadow: 0 0 8px var(--color-danger-500); animation: cb-pulse 1.6s ease-in-out infinite; }
 
 .gr-main { flex: 1; min-height: 0; display: grid; gap: 1rem; padding: 0.5rem 1.5rem 1.5rem; }
-.gr-main.gr-comfortable { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-rows: minmax(0, 0.85fr) minmax(0, 1.25fr); }
-.gr-main.gr-comfortable > .gr-stage    { grid-column: 1; grid-row: 1; }
+.gr-main.gr-comfortable { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.gr-main.gr-comfortable > .gr-stage    { grid-column: 1; grid-row: 1; max-height: 55vh; }
 .gr-main.gr-comfortable > .gr-patterns { grid-column: 2; grid-row: 1; }
 .gr-main.gr-comfortable > .gr-tickets-section { grid-column: 1 / -1; grid-row: 2; }
-.gr-main.gr-compact { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 0.75rem; padding: 0.75rem 1.25rem 1rem; }
-.gr-main.gr-compact > .gr-stage    { grid-column: 1; grid-row: 1; }
+.gr-main.gr-compact { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 0.75rem; padding: 0.75rem 1.25rem 1rem; }
+.gr-main.gr-compact > .gr-stage    { grid-column: 1; grid-row: 1; max-height: 45vh; }
 .gr-main.gr-compact > .gr-patterns { grid-column: 2; grid-row: 1; }
 .gr-main.gr-compact > .gr-tickets-section { grid-column: 1 / -1; grid-row: 2; }
 
@@ -54,7 +54,7 @@
 .gr-stage::before { content: ''; position: absolute; inset: 0; background-image: var(--cb-stage-grid); pointer-events: none; mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%); }
 .gr-stage-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--cb-border-subtle); position: relative; z-index: 1; }
 .gr-stage-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cb-text-tertiary); }
-.gr-stage-body { flex: 1; display: grid; grid-template-rows: 1fr auto auto; position: relative; z-index: 1; }
+.gr-stage-body { flex: 1; display: grid; grid-template-rows: 1fr auto auto; position: relative; z-index: 1; overflow-y: auto; min-height: 0; }
 .gr-stage-spot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; position: relative; min-height: 0; padding: 1.5rem 1rem; }
 .gr-stage-footer { padding: 0.75rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; border-top: 1px solid var(--cb-border-subtle); background: color-mix(in srgb, var(--cb-bg-base) 30%, transparent); }
 
@@ -71,8 +71,7 @@
 .gr-call { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-family-display); font-size: 1.125rem; font-weight: 700; letter-spacing: 0.03em; color: var(--cb-text-primary); }
 .gr-call .col-tag { font-family: var(--font-family-display); font-size: 1.5rem; font-weight: 800; letter-spacing: 0.02em; color: var(--ball-color, var(--cb-brand)); text-shadow: 0 0 16px color-mix(in srgb, var(--ball-color, var(--cb-brand)) 60%, transparent); }
 
-.gr-sequence { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; scroll-behavior: smooth; scrollbar-width: none; }
-.gr-sequence::-webkit-scrollbar { display: none; }
+.gr-sequence { display: flex; gap: 0.5rem; flex-wrap: wrap; padding-bottom: 0.25rem; }
 .gr-mini-ball { flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-family-mono); font-size: 0.875rem; font-weight: 700; color: var(--ball-color); background: color-mix(in srgb, var(--ball-color) 14%, transparent); border: 1.5px solid color-mix(in srgb, var(--ball-color) 50%, transparent); transition: transform 200ms; position: relative; }
 .gr-mini-ball.latest { color: white; background: var(--ball-color); transform: scale(1.18); box-shadow: 0 0 14px color-mix(in srgb, var(--ball-color) 70%, transparent); }
 .gr-mini-ball.matched::after { content: ''; position: absolute; top: -2px; right: -2px; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--cb-success); box-shadow: 0 0 6px var(--cb-success); border: 1.5px solid var(--cb-bg-card); }

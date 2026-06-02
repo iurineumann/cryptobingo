@@ -148,7 +148,11 @@ export default function GametypesAdmin() {
             (c.type === 'n_of_type' && c.pattern_type && (c.count ?? 1) >= 1) ||
             ((c.type === 'all_of' || c.type === 'any_of') && (c.pattern_ids?.length ?? 0) >= 1)
         );
-        if (!valid) return;
+        if (!valid) {
+            setError(t('admin.gametypes_error_combo_empty'));
+            return;
+        }
+        setError(null);
         const entry: CombinationRuleInput = { name: comboName, weight: Math.round(parseFloat(comboWeight) * 100), clauses: comboClauses.map(c => ({ ...c })) };
         setCombinations(prev => {
             if (editingComboIdx !== null) {
@@ -334,9 +338,8 @@ export default function GametypesAdmin() {
             // ── Phase 2b: Geração Dinâmica de Múltiplas Combinações (Sem Sobreposição) ─────
             const combos: CombinationRuleInput[] = [];
 
-            // 1. Isolamos o MASTER (ele não entra em combos, é a coroa final)
-            // CORREÇÃO 1: Voltar para maiúsculo ('MASTER')
-            const combinablePatterns = activePatterns.filter(p => p.pattern_type !== 'master');
+            // 1. Combinações apenas de padrões SIMPLES (especiais têm precificação própria)
+            const combinablePatterns = activePatterns.filter(p => p.pattern_type === 'simple');
 
             // 2. Algoritmo Recursivo de Busca em Profundidade (Backtracking)
             const generateNonOverlappingCombos = (
@@ -379,14 +382,80 @@ export default function GametypesAdmin() {
             // Inicia a recursão com máscara vazia
             generateNonOverlappingCombos(0, [], 0n);
 
-            // ── Phase 3: Atribui pesos iniciais às combinações geradas ───────
-            // Peso inicial = soma dos pesos dos membros × 0.8 (custo de exigir N simultâneos)
-            const weightedCombos: CombinationRuleInput[] = combos.map(c => {
-                const memberWeights = (c.clauses[0]?.pattern_ids ?? []).map(pid => {
-                    const mp = activePatterns.find(p => String(p.pattern_id) === pid);
-                    return mp?.weight ?? 100;
+            // ── Phase 3: Precificação das combinações por similaridade com especiais ──
+            // Cada especial tem uma "dificuldade" = weight / células a acertar.
+            // Para cada combo simples, encontramos o especial de "desenho" mais próximo
+            // (máscara bit a bit) e precificamos proporcionalmente à dificuldade relativa.
+
+            // Índice de dificuldade dos especiais
+            interface SpecialInfo {
+                name: string;
+                mask: number;
+                weight: number;
+                cells: number;
+                diffPerCell: number;
+            }
+            const specials: SpecialInfo[] = activePatterns
+                .filter(p => p.pattern_type === 'special')
+                .map(p => {
+                    const cells = patternCellCounts[p.name] ?? 0;
+                    return {
+                        name: p.name,
+                        mask: p.mask,
+                        weight: p.weight,
+                        cells,
+                        diffPerCell: cells > 0 ? p.weight / cells : 0,
+                    };
                 });
-                const sumW = memberWeights.reduce((a, b) => a + b, 0);
+
+            // Similaridade de Jaccard entre duas máscaras (exclui FREE)
+            const maskSim = (a: number, b: number): number => {
+                const clean = (m: number) => m & ~(1 << 12);
+                const ca = clean(a), cb = clean(b);
+                let inter = 0, union = 0;
+                for (let bit = 0; bit < 25; bit++) {
+                    if (bit === 12) continue;
+                    const hasA = (ca & (1 << bit)) !== 0;
+                    const hasB = (cb & (1 << bit)) !== 0;
+                    if (hasA && hasB) inter++;
+                    if (hasA || hasB) union++;
+                }
+                return union > 0 ? inter / union : 0;
+            };
+
+            const weightedCombos: CombinationRuleInput[] = combos.map(c => {
+                const memberIds = c.clauses[0]?.pattern_ids ?? [];
+                let combinedMask = 0;
+                let comboCellCount = 0;
+                for (const pid of memberIds) {
+                    const mp = activePatterns.find(p => String(p.pattern_id) === pid);
+                    if (mp) {
+                        combinedMask |= mp.mask;
+                        comboCellCount += patternCellCounts[mp.name] ?? 0;
+                    }
+                }
+
+                if (specials.length > 0) {
+                    // Encontra o especial com desenho mais parecido
+                    let best = specials[0];
+                    let bestSim = 0;
+                    for (const si of specials) {
+                        const sim = maskSim(combinedMask, si.mask);
+                        if (sim > bestSim) { bestSim = sim; best = si; }
+                    }
+                    if (best.diffPerCell > 0) {
+                        // Fator de dificuldade: combo é mais fácil ou mais difícil que o especial?
+                        const diffFactor = comboCellCount / best.cells;
+                        const price = best.diffPerCell * comboCellCount * diffFactor;
+                        return { ...c, weight: clamp(Math.round(price), 100, 25500) };
+                    }
+                }
+
+                // Fallback (sem especiais): soma dos membros × 0.8
+                const sumW = memberIds.reduce((s, pid) => {
+                    const mp = activePatterns.find(p => String(p.pattern_id) === pid);
+                    return s + (mp?.weight ?? 100);
+                }, 0);
                 return { ...c, weight: clamp(Math.round(sumW * 0.8), 100, 25500) };
             });
 
@@ -826,7 +895,15 @@ export default function GametypesAdmin() {
                                     <select
                                         className="text-xs px-1 py-0.5 rounded border border-[--cb-border-default] bg-[--cb-bg-elevated] text-[--cb-text-primary]"
                                         value={clause.type}
-                                        onChange={e => updateClause(ci, { type: e.target.value as CombinationClauseInput['type'], pattern_ids: [], pattern_type: undefined, count: undefined })}
+                                        onChange={e => {
+                                            const newType = e.target.value as CombinationClauseInput['type'];
+                                            updateClause(ci, {
+                                                type: newType,
+                                                pattern_ids: [],
+                                                pattern_type: newType === 'n_of_type' ? 'simple' : undefined,
+                                                count: undefined,
+                                            });
+                                        }}
                                     >
                                         <option value="all_of">{t('admin.gametypes_clause_all')}</option>
                                         <option value="any_of">{t('admin.gametypes_clause_any')}</option>

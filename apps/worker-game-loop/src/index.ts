@@ -3,10 +3,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { connectRabbitMQ }    from './services/rabbitmq';
+import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
+import { connectRedis }        from './services/redis';
 
 console.log('=============================================');
 console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
@@ -27,18 +28,31 @@ async function bootstrap(): Promise<void> {
     // Iniciado primeiro para estar disponível desde o início do processo.
     startMetricsServer();
 
-    // ── 2. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
+    // ── 2. Redis (Inverted Index) ─────────────────────────────────────────────
+    await connectRedis();
+
+    // ── 3. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
     // Iniciado antes do RabbitMQ para estar pronto para conexões de clientes
     // quando o primeiro evento 'startdraw' chegar.
     startBroadcaster();
 
-    // ── 3. Consumidor RabbitMQ ────────────────────────────────────────────────
+    // ── 4. Consumidor RabbitMQ ────────────────────────────────────────────────
     await connectRabbitMQ();
 
-    // ── 4. Polling de primeiro jogo para salas ativas ─────────────────────────
+    // ── 5. Polling de primeiro jogo para salas ativas ─────────────────────────
     // Verifica a cada 30s se há salas ativas sem jogo atual e cria o primeiro.
     ensureFirstGameForActiveRooms();
     setInterval(ensureFirstGameForActiveRooms, 30_000);
+
+    // ── 6. Auto-advance do ciclo de vida ──────────────────────────────────────
+    // A cada 15s, verifica jogos em FUNDING → lock + startdraw.
+    // A cada 15s, verifica jogos em DRAWN → orquestra conclusão.
+    // A cada 30s, verifica jogos em LOCKED esquecidos (startdraw).
+    autoLockFundingGames();
+    autoClaimDrawnGames();
+    setInterval(autoLockFundingGames, 15_000);
+    setInterval(autoClaimDrawnGames, 15_000);
+    setInterval(autoStartLockedGames, 30_000);
 }
 
 bootstrap().catch((err) => {

@@ -49,12 +49,13 @@ namespace bingo {
             check(gametypes.find(gametype_id) != gametypes.end(), "gametype_id nao encontrado.");
         }
 
-        // Se vinculado a uma sala, valida que ela existe e está ativa
+        // Se vinculado a uma sala, valida que ela existe, está ativa e sem partida corrente
         if (room_id != 0) {
             rooms_table rooms(get_self(), get_self().value);
             auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
             check(room_itr->status == "active"_n, "Sala nao esta ativa.");
-            // Atualiza current_game_id da sala
+            check(room_itr->current_game_id == 0,
+                "Sala ja possui uma partida em andamento. Finalize a partida atual primeiro.");
             rooms.modify(room_itr, same_payer, [&](auto& r) {
                 r.current_game_id = game_id;
             });
@@ -134,14 +135,14 @@ namespace bingo {
         patterns.erase(patterns.require_find(pattern_id, "pattern_id nao encontrado."));
     }
 
-    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd) {
+    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd) {
         require_auth(get_self());
         check(base_multiplier > 0, "base_multiplier deve ser maior que zero.");
         check(rules.size() > 0, "rules deve ter pelo menos 1 elemento.");
         check(name.size() <= 64, "name muito longo (max 64 chars).");
 
         // Valida draw_mode (ADR-012)
-        const std::vector<name> valid_modes = {
+        const std::vector<eosio::name> valid_modes = {
             "standard"_n, "fixed"_n, "firstfull"_n, "goldenball"_n, "multimatch"_n
         };
         bool valid = (draw_mode.value == 0); // 0 = não informado → default standard
@@ -162,7 +163,7 @@ namespace bingo {
             check(rule.weight <= 25500, "weight max 255.00 (hundredths).");
         }
 
-        name effective_mode = (draw_mode.value == 0) ? "standard"_n : draw_mode;
+        eosio::name effective_mode = (draw_mode.value == 0) ? "standard"_n : draw_mode;
 
         gametypes_table gametypes(get_self(), get_self().value);
         auto itr = gametypes.find(gametype_id);
@@ -398,7 +399,7 @@ namespace bingo {
     // BUY TICKETS
     // ==========================================
 
-    void bingo_contract::buytickets(name buyer, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures, uint64_t nft_id) {
+    void bingo_contract::buytickets(name buyer, uint64_t game_id, std::vector<std::vector<char>> matrices, std::vector<signature> signatures, uint64_t nft_id, extended_asset requested_price) {
         require_auth(buyer);
 
         games_table games(get_self(), get_self().value);
@@ -423,12 +424,32 @@ namespace bingo {
             }
         }
 
+        // Determina preço efetivo: se o usuário solicitou um preço customizado,
+        // valida contra o range da sala e usa o solicitado; senão usa o padrão.
+        extended_asset effective_price = game_itr->ticket_price;
+        if (requested_price.quantity.amount > 0) {
+            if (game_itr->room_id != 0) {
+                rooms_table rooms(get_self(), get_self().value);
+                auto room_itr = rooms.find(game_itr->room_id);
+                check(room_itr != rooms.end(), "room_id nao encontrado.");
+                check(requested_price.quantity.symbol == room_itr->ticket_price_min.quantity.symbol,
+                    "Simbolo do preco solicitado nao corresponde ao da sala.");
+                check(requested_price.contract == room_itr->ticket_price_min.contract,
+                    "Contrato do preco solicitado nao corresponde ao da sala.");
+                check(requested_price.quantity.amount >= room_itr->ticket_price_min.quantity.amount,
+                    "Preco solicitado e menor que o minimo da sala.");
+                check(requested_price.quantity.amount <= room_itr->ticket_price_max.quantity.amount,
+                    "Preco solicitado e maior que o maximo da sala.");
+            }
+            effective_price = requested_price;
+        }
+
         config_singleton config_table(get_self(), get_self().value);
         check(config_table.exists(), "Contract configuration not initialized.");
         auto config = config_table.get();
 
         tickets_table tickets(get_self(), game_id);
-        extended_asset total_cost = game_itr->ticket_price;
+        extended_asset total_cost = effective_price;
         total_cost.quantity.amount *= (int64_t)matrices.size();
 
         if (total_cost.quantity.amount > 0) {
@@ -610,14 +631,28 @@ namespace bingo {
         require_auth("microservice"_n);
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
-        check(
-            game_itr->status == "paying"_n || game_itr->status == "drawn"_n,
-            "Game deve estar em PAYING ou DRAWN para ser encerrado."
-        );
-        games.modify(game_itr, same_payer, [&](auto& g) {
-            g.status   = "archived"_n;
-            g.end_time = time_point_sec(current_time_point().sec_since_epoch());
-        });
+
+        bool needs_archive = game_itr->status == "paying"_n || game_itr->status == "drawn"_n;
+        // Aceita também games já arquivados para corrigir current_game_id da sala (recovery)
+        bool already_done  = game_itr->status == "archived"_n;
+        check(needs_archive || already_done,
+            "Game deve estar em PAYING, DRAWN ou ARCHIVED para closegame.");
+
+        // Libera o slot da sala para que uma nova partida possa ser criada
+        if (game_itr->room_id != 0) {
+            rooms_table rooms(get_self(), get_self().value);
+            auto room_itr = rooms.find(game_itr->room_id);
+            if (room_itr != rooms.end() && room_itr->current_game_id == game_id) {
+                rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+            }
+        }
+
+        if (needs_archive) {
+            games.modify(game_itr, same_payer, [&](auto& g) {
+                g.status   = "archived"_n;
+                g.end_time = time_point_sec(current_time_point().sec_since_epoch());
+            });
+        }
     }
 
     // ==========================================
@@ -637,6 +672,15 @@ namespace bingo {
             game_itr->status == "paying"_n,
             "Game deve estar em LOCKED, DRAWING ou PAYING para ser abortado."
         );
+        // Libera o slot da sala para que uma nova partida possa ser criada
+        if (game_itr->room_id != 0) {
+            rooms_table rooms(get_self(), get_self().value);
+            auto room_itr = rooms.find(game_itr->room_id);
+            if (room_itr != rooms.end() && room_itr->current_game_id == game_id) {
+                rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+            }
+        }
+
         games.modify(game_itr, same_payer, [&](auto& g) {
             g.status   = "aborted"_n;
             g.end_time = time_point_sec(current_time_point().sec_since_epoch());
@@ -801,8 +845,8 @@ namespace bingo {
         check(ticket_price_default.quantity.amount >= ticket_price_min.quantity.amount &&
               ticket_price_default.quantity.amount <= ticket_price_max.quantity.amount,
             "ticket_price_default deve estar entre min e max.");
-        check(max_tickets_per_player > 0 && max_tickets_per_player <= 1000,
-            "max_tickets_per_player deve estar entre 1 e 1000.");
+        check(max_tickets_per_player <= 1000,
+            "max_tickets_per_player maximo é 1000 (0 = sem limite).");
 
         rooms.emplace(get_self(), [&](auto& r) {
             r.room_id                 = room_id;
@@ -853,8 +897,8 @@ namespace bingo {
     void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
         require_auth(get_self());
         check(room_drop_chance_bps <= 10000, "room_drop_chance_bps deve ser 0–10000.");
-        check(max_tickets_per_player > 0 && max_tickets_per_player <= 1000,
-            "max_tickets_per_player deve estar entre 1 e 1000.");
+        check(max_tickets_per_player <= 1000,
+            "max_tickets_per_player maximo é 1000 (0 = sem limite).");
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");

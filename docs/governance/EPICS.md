@@ -63,8 +63,8 @@
 - [x] Varredura paginada de tickets (`findAllWinners`)
 - [x] Pipeline completo conectado: `claimwin` RabbitMQ → evaluator → blockchain
 - [x] NACK sem requeue para mensagens malformadas; NACK com requeue para erros transitórios
-- [ ] Métricas Prometheus (eventos processados, latência, erros)
-- [ ] WebSocket Broadcaster para Slow Reveal (3s por bola)
+- [x] Métricas Prometheus (eventos processados, latência, erros)
+- [x] WebSocket Broadcaster para Slow Reveal (3s por bola)
 - [ ] Suporte a múltiplos padrões dinâmicos via `patterns`/`gametypes`
 
 ### Critérios de Sucesso
@@ -83,11 +83,11 @@
 - [x] Lobby com leitura direta de tabelas on-chain
 - [x] Internacionalização (pt-BR, en-US, zh-CN) com persistência no MongoDB
 - [x] Tree-shaking seguro de chaves de desenvolvimento (import dinâmico + guard `import.meta.env.DEV`)
-- [ ] Compra de cartelas com payload assinado pelo backend
-- [ ] Renderização visual 5x5 das cartelas no dashboard
-- [ ] Slow Reveal: animação das bolas via WebSocket
-- [ ] Painel administrativo React para criação visual de padrões 5x5
-- [ ] Seletor de moeda e saldo em tempo real
+- [x] Compra de cartelas com payload assinado pelo backend
+- [x] Renderização visual 5x5 das cartelas no dashboard
+- [x] Slow Reveal: animação das bolas via WebSocket
+- [x] Painel administrativo React para criação visual de padrões 5x5
+- [x] Seletor de moeda e saldo em tempo real
 - [ ] PWA (Progressive Web App) para mobile
 
 ### Critérios de Sucesso
