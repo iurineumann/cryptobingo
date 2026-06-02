@@ -31,20 +31,28 @@ const SPEEDS = [0.5, 1, 2, 4, 8];
 export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps) {
   const { t } = useTranslation();
   const {
-    game, tickets, revealedBalls, fullDrawnBalls, totalBalls,
+    game, tickets, revealedBalls, totalBalls,
     isPlaying, isComplete, isLoading, speed,
     setSpeed, togglePlay, skipToEnd, restart,
   } = useReplay(gameId, session);
 
   const heroRef = useRef<HTMLDivElement>(null);
-  const seqRef = useRef<HTMLDivElement>(null);
   const prevCount = useRef(0);
 
   const lastDrawn = revealedBalls.length > 0 ? revealedBalls[revealedBalls.length - 1] : null;
-  const drawnSet = useMemo(() => new Set(revealedBalls), [revealedBalls]);
+  const revealedSet = useMemo(() => new Set(revealedBalls), [revealedBalls]);
 
   const col = lastDrawn != null ? getCol(lastDrawn) : 'N';
   const color = BINGO_COLORS[col];
+
+  const sortedTickets = useMemo(() => {
+    if (tickets.length === 0) return tickets;
+    return [...tickets].sort((a, b) => {
+      const marksA = a.matrix.filter(n => revealedSet.has(n)).length + 1;
+      const marksB = b.matrix.filter(n => revealedSet.has(n)).length + 1;
+      return marksB - marksA;
+    });
+  }, [tickets, revealedSet]);
 
   useEffect(() => {
     if (!heroRef.current || revealedBalls.length === prevCount.current) return;
@@ -53,10 +61,6 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
     el.classList.remove('gr-drop');
     void el.offsetWidth;
     el.classList.add('gr-drop');
-  }, [revealedBalls.length]);
-
-  useEffect(() => {
-    if (seqRef.current) seqRef.current.scrollLeft = seqRef.current.scrollWidth;
   }, [revealedBalls.length]);
 
   if (isLoading) {
@@ -133,13 +137,13 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
             </div>
 
             <div className="gr-stage-footer">
-              <div ref={seqRef} className="gr-sequence" aria-label={t('replay.history_aria')}>
-                {revealedBalls.map((ball, idx) => {
+              <div className="gr-sequence" aria-label={t('replay.history_aria')}>
+                {[...revealedBalls].reverse().map((ball, idx) => {
                   const c = getCol(ball);
                   return (
                     <div
                       key={idx}
-                      className={`gr-mini-ball${idx === revealedBalls.length - 1 ? ' latest' : ''}`}
+                      className={`gr-mini-ball${idx === 0 ? ' latest' : ''}`}
                       style={{ '--ball-color': BINGO_COLORS[c] } as React.CSSProperties}
                       title={`${c}${ball}`}
                     >
@@ -161,11 +165,12 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           </div>
         </section>
 
+        {/* ── Controles do replay ─────────────────────────────────────────────── */}
         <div className="gr-replay-controls" style={{
           display: 'flex', alignItems: 'center', gap: '0.75rem',
           padding: '0.75rem 1rem', background: 'var(--cb-bg-elevated)',
           borderRadius: 'var(--radius-lg)', border: '1px solid var(--cb-border-default)',
-          flexWrap: 'wrap',
+          flexWrap: 'wrap', gridColumn: '1 / -1',
         }}>
           <button
             className="cb-btn cb-btn-primary cb-btn-sm"
@@ -206,32 +211,33 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           </span>
         </div>
 
-        {tickets.length === 0 ? (
-          <div className="gr-summary-empty" style={{ marginTop: '1.5rem' }}>
-            {t('replay.no_tickets')}
+        {/* ── Cartelas ──────────────────────────────────────────────────────── */}
+        <div className="gr-tickets-section">
+          <div className="gr-tickets-head">
+            <span className="title">
+              {t('replay.my_tickets_heading')}
+              <span className="count">{tickets.length}</span>
+            </span>
           </div>
-        ) : (
-          <div className="gr-tickets-section" style={{ marginTop: '1.5rem' }}>
-            <div className="gr-tickets-head">
-              <span className="title">
-                {t('replay.my_tickets_heading')}
-                <span className="count">{tickets.length}</span>
-              </span>
+
+          {tickets.length === 0 ? (
+            <div className="gr-summary-empty">
+              {t('replay.no_tickets')}
             </div>
-            <div className="flex flex-wrap gap-5">
-              {tickets.map((ticket, i) => (
-                <div key={ticket.id} className="flex flex-col items-center gap-1.5">
-                  <span className="text-xs font-bold text-[--cb-text-tertiary]">#{i + 1}</span>
+          ) : (
+            <div className="gr-tickets-grid">
+              {sortedTickets.map(ticket => (
+                <div key={ticket.id}>
                   <TicketGrid
                     matrix={ticket.matrix}
-                    drawnBalls={drawnSet}
+                    drawnBalls={revealedSet}
                     lastDrawn={lastDrawn ?? undefined}
                   />
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

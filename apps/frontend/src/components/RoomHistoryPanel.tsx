@@ -40,13 +40,14 @@ export default function RoomHistoryPanel({ roomId, session, onViewReplay, onBack
 
       {rows.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table className="cb-table" style={{ width: '100%', minWidth: '36rem' }}>
+          <table className="cb-table" style={{ width: '100%', minWidth: '42rem' }}>
             <thead>
               <tr>
                 <th>{t('replay.col_date')}</th>
                 <th>{t('replay.col_game')}</th>
                 <th>{t('replay.col_tickets')}</th>
                 <th>{t('replay.col_spent')}</th>
+                <th>{t('replay.col_won')}</th>
                 <th>{t('replay.col_action')}</th>
               </tr>
             </thead>
@@ -64,6 +65,9 @@ export default function RoomHistoryPanel({ roomId, session, onViewReplay, onBack
                   <td>{r.ticketsCount}</td>
                   <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
                     {r.totalSpent}
+                  </td>
+                  <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
+                    {r.totalWon}
                   </td>
                   <td>
                     <button
@@ -86,7 +90,7 @@ export default function RoomHistoryPanel({ roomId, session, onViewReplay, onBack
         </div>
       )}
 
-      {!allLoaded && !loading && rows.length > 0 && (
+      {!allLoaded && !loading && (
         <div style={{ textAlign: 'center', marginTop: '1rem' }}>
           <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={handleLoadMore}>
             {t('common.load_more')}

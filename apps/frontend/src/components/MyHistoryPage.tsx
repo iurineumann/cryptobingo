@@ -61,7 +61,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
       {filtered.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table className="cb-table" style={{ width: '100%', minWidth: '42rem' }}>
+          <table className="cb-table" style={{ width: '100%', minWidth: '48rem' }}>
             <thead>
               <tr>
                 <th>{t('replay.col_date')}</th>
@@ -69,6 +69,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                 <th>{t('replay.col_game')}</th>
                 <th>{t('replay.col_tickets')}</th>
                 <th>{t('replay.col_spent')}</th>
+                <th>{t('replay.col_won')}</th>
                 <th>{t('replay.col_action')}</th>
               </tr>
             </thead>
@@ -89,6 +90,9 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                   <td>{r.ticketsCount}</td>
                   <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
                     {r.totalSpent}
+                  </td>
+                  <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
+                    {r.totalWon}
                   </td>
                   <td>
                     <button
@@ -111,7 +115,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
         </div>
       )}
 
-      {!allLoaded && !loading && filtered.length > 0 && (
+      {!allLoaded && !loading && (
         <div style={{ textAlign: 'center', marginTop: '1rem' }}>
           <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={handleLoadMore}>
             {t('common.load_more')}

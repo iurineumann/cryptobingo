@@ -493,6 +493,7 @@
     "col_game": "游戏",
     "col_tickets": "彩票",
     "col_spent": "总花费",
+    "col_won": "总奖金",
     "col_action": ""
   },
   "errors": {

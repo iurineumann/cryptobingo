@@ -493,6 +493,7 @@
     "col_game": "Partida",
     "col_tickets": "Bilhetes",
     "col_spent": "Total Gasto",
+    "col_won": "Total Ganho",
     "col_action": ""
   },
   "errors": {

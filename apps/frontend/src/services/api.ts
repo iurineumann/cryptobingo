@@ -464,6 +464,36 @@ export async function fetchMyNfts(): Promise<{ nfts: NftAsset[] }> {
 }
 
 // ==========================================
+// WINNINGS
+// ==========================================
+
+export interface GameWinningsResponse {
+    gameId: string;
+    wallet: string;
+    totalWon: number;
+}
+
+export interface BatchWinningsResponse {
+    winnings: Record<string, number>;
+}
+
+export async function fetchGameWinnings(gameId: string): Promise<GameWinningsResponse> {
+    const res = await fetch(`${API_BASE}/player/winnings/${gameId}`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<GameWinningsResponse>(res);
+}
+
+export async function fetchBatchWinnings(gameIds: string[]): Promise<BatchWinningsResponse> {
+    const res = await fetch(`${API_BASE}/player/winnings/batch`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ gameIds }),
+    });
+    return handleResponse<BatchWinningsResponse>(res);
+}
+
+// ==========================================
 // ROOMS (ADR-010)
 // ==========================================
 

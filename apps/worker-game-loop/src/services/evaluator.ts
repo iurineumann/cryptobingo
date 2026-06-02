@@ -14,6 +14,61 @@ import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
+import { Pool } from 'pg';
+
+let pgPool: Pool | null = null;
+function getPgPool(): Pool {
+    if (!pgPool) {
+        pgPool = new Pool({ connectionString: process.env.POSTGRES_URL });
+    }
+    return pgPool;
+}
+
+async function recordClaimWin(
+    txHash: string,
+    walletAddress: string,
+    gameId: string,
+    ticketId: string,
+    amount: number,
+    currency: string,
+): Promise<void> {
+    try {
+        const pool = getPgPool();
+        await pool.query(
+            `INSERT INTO transactions_ledger
+                (tx_hash, wallet_address, game_id, action_type, amount, currency, memo, block_time)
+             VALUES ($1, $2, $3, 'claim_win', $4, $5, $6, NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [txHash, walletAddress, gameId, amount, currency, `Ticket #${ticketId}`]
+        );
+    } catch (err) {
+        console.error('[Evaluator] Failed to record claim win:', err);
+    }
+}
+
+function computePayoutAmount(
+    ticketQuantity: string,
+    prizePoolQuantity: string,
+    gametypeId: string,
+    baseMultiplier: number,
+    weight: number,
+    goldenMultiplier: number,
+): { amount: number; currency: string } {
+    const priceParts = ticketQuantity.split(' ');
+    const priceNum = parseFloat(priceParts[0]);
+    const currency = priceParts.slice(1).join(' ') || 'WAX';
+
+    if (gametypeId === '0') {
+        const ppNum = parseFloat(prizePoolQuantity.split(' ')[0]);
+        return { amount: Math.round(ppNum * 85) / 100, currency };
+    }
+
+    let payout = priceNum * baseMultiplier * weight / 100;
+    if (goldenMultiplier > 1) {
+        payout *= goldenMultiplier;
+    }
+    return { amount: Math.round(payout * 10000) / 10000, currency };
+}
 
 function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[] {
     for (const row of rows) {
@@ -591,6 +646,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
     let goldenBallAfter: number  = 0;
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
+    let baseMultiplier: number   = 1;
 
     if (gametypeId !== '0') {
         const gtRes = await rpcClient.v1.chain.get_table_rows({
@@ -608,6 +664,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             drawMode       = (gt.draw_mode ?? 'standard') as DrawMode;
             maxBalls       = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
             goldenBallAfter= gt.golden_ball_after ?? 0;
+            baseMultiplier = gt.base_multiplier ?? 1;
         }
     } else {
         // Modo legado (gametype_id = 0): aplica padrão de 35 bolas
@@ -690,13 +747,32 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                 `(${ticket.owner}, padrão: ${patternName}, weight: ${weight}` +
                 (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
             );
-            await executeClaimWin(
+            const txHash = await executeClaimWin(
                 gameId,
                 ticket.ticket_id,
                 effectiveBalls.length,
                 patternMask,
                 appliedMultiplier,
             );
+
+            if (txHash) {
+                const payout = computePayoutAmount(
+                    game.ticket_price.quantity,
+                    game.prize_pool.quantity,
+                    game.gametype_id,
+                    baseMultiplier,
+                    weight,
+                    appliedMultiplier,
+                );
+                recordClaimWin(
+                    txHash,
+                    ticket.owner,
+                    gameId,
+                    ticket.ticket_id,
+                    payout.amount,
+                    payout.currency,
+                ).catch(() => {});
+            }
         }
     }
 

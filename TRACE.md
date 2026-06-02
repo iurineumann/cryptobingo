@@ -39,3 +39,4 @@
   - **Next-game detection**: `loadGame` busca `current_game_id` via API. Banner "Nova partida disponível" com botão "Ir para nova partida".
   - **Ticket sorting**: `sortedTickets` (useMemo) ordena por células marcadas descendente, recalculado a cada bola.
   - **Slow-reveal Lobby**: `drawn` e `archived` (dentro da janela de `60s + 75×3s`) exibidos como `drawing` — badge 🎲, timer, e Watch corretos.
+- **2026-06-02**: (History Page BugFix) Histórico do jogador não exibia registros porque `useGamesHistory` consultava jogos em ordem ascendente (mais antigos primeiro) — o jogo com tickets do jogador ficava na página 2+. Adicionado `reverse: true` para trazer os jogos mais recentes primeiro. "Load More" agora visível mesmo quando a página atual não tem resultados, permitindo navegar por todo o histórico.
