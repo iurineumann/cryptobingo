@@ -493,6 +493,7 @@
     "col_game": "Game",
     "col_tickets": "Tickets",
     "col_spent": "Total Spent",
+    "col_won": "Total Won",
     "col_action": ""
   },
   "errors": {

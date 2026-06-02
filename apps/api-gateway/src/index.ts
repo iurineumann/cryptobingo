@@ -38,6 +38,7 @@ import {
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
 import { getMyNfts }                                 from './controllers/nftController';
+import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winningsController';
 import {
     listRooms, getRoom, createRoom, upsertRoomMetadata,
     updateRoomSettings, activateRoom, pauseRoom, closeRoom,
@@ -235,6 +236,10 @@ function registerRoutes(): void {
 
     // ── NFTs (JWT) ───────────────────────────────────────────────────────
     app.get('/api/v1/nfts/my-assets', playerLimiter, requireAuth, getMyNfts);
+
+    // ── Winnings (JWT) ───────────────────────────────────────────────────
+    app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
+    app.post('/api/v1/player/winnings/batch', playerLimiter, requireAuth, getPlayerWinningsBatch);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {

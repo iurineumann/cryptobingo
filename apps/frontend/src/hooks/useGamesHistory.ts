@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
+import { fetchBatchWinnings, getAuthToken } from '../services/api';
 
 const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
 
@@ -12,6 +13,7 @@ export interface GameHistoryRow {
   endTime: number;
   ticketsCount: number;
   totalSpent: string;
+  totalWon: string;
 }
 
 function formatQuantity(price: string, count: number): string {
@@ -40,7 +42,7 @@ export function useGamesHistory(session: Session) {
       });
 
       const games = gamesRes.rows as BlockchainGameState[];
-      if (games.length < 20) setAllLoaded(true);
+      if (games.length < 20 || !gamesRes.more) setAllLoaded(true);
       if (games.length > 0) {
         const last = games[games.length - 1];
         cursorRef.current = String(BigInt(last.game_id) + 1n);
@@ -74,9 +76,23 @@ export function useGamesHistory(session: Session) {
           endTime: r.game.end_time,
           ticketsCount: r.tickets.length,
           totalSpent: formatQuantity(r.game.ticket_price.quantity, r.tickets.length),
+          totalWon: '—',
         }));
 
       setRows(prev => [...prev, ...newRows].sort((a, b) => Number(b.gameId) - Number(a.gameId)));
+
+      // Fetch winnings from API gateway (best-effort)
+      if (newRows.length > 0 && getAuthToken()) {
+        const gameIds = newRows.map(r => r.gameId);
+        fetchBatchWinnings(gameIds).then(({ winnings }) => {
+          setRows(prev => prev.map(r => ({
+            ...r,
+            totalWon: winnings[r.gameId] != null
+              ? `${Number(winnings[r.gameId]).toFixed(4)} BINGO`
+              : '—',
+          })));
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('[useGamesHistory]', err);
     } finally {
