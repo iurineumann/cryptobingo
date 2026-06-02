@@ -160,7 +160,7 @@ else
         --name "$CONTAINER_NAME" \
         -p "${NODEOS_PORT}:8888" \
         -p "8900:8900" \
-        -v "${CONTRACT_SRC_HOST}:${CONTRACT_SRC_CONTAINER}:ro" \
+        -v "$(pwd)/contracts:/app/contracts:ro" \
         --network cryptobingo-infra_bingo_net \
         "$WAXDEV_IMAGE" \
         tail -f /dev/null
@@ -462,7 +462,21 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8b. CONFIGURA signer_key DO CONTRATO
+# 8b. DEPLOY DO ORÁCULO MOCK (orng.wax)
+# ──────────────────────────────────────────────────────────────────────────────
+echo "[*] Deploy do oráculo mock (orng.wax)..."
+if [ -f "$(pwd)/contracts/orng_mock.wasm" ] && [ -f "$(pwd)/contracts/orng_mock.abi" ]; then
+    cleos set code orng.wax /app/contracts/orng_mock.wasm -p orng.wax@active
+    cleos set abi orng.wax /app/contracts/orng_mock.abi -p orng.wax@active
+    cleos set account permission orng.wax active --add-code -p orng.wax@active 2>/dev/null || true
+    echo "[✓] orng_mock deployado em orng.wax."
+else
+    echo "[!] orng_mock.wasm/orng_mock.abi não encontrados em contracts/"
+    echo "    Compile o mock: cdt-cpp contracts/bingo/src/orng_mock.cpp -o contracts/orng_mock.wasm"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8c. CONFIGURA signer_key DO CONTRATO
 # ──────────────────────────────────────────────────────────────────────────────
 source .waxdev.env
 echo "[*] Configurando signer_key do contrato bingo.game..."

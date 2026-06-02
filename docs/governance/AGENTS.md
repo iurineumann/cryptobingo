@@ -200,3 +200,47 @@
 4. Testes de claimwin devem validar RTP 85% e sponsor multidrop
 5. Simulação Monte Carlo no harness para validar sustentabilidade dos pesos (ADR-005)
 6. Testes de segurança: replay attack, saldo insuficiente, estado inválido
+
+---
+
+## Sessão Atual — Rounds 3–5 (Jun 2026)
+
+### Problemas Resolvidos
+
+1. **Assinatura inválida (`buytickets`)** — raiz: ABI do contrato faltava o campo `requested_price: extended_asset` no struct `buytickets` e a `config` table não estava exposta. Wharfkit serializava 5 campos, o datastream do CDT tentava ler 6 e falhava com `read`, que o frontend mapeava como "Assinatura inválida". **Fix:** adicionado `extended_asset` struct, campo `requested_price`, e `config` table ao ABI; redeploy via `cleos set contract`. ABI agora espelha exatamente o C++ (`bingo.cpp` linha 402 com 6 params).
+
+2. **Overflow/ordenação bolas** — `GameRoom.tsx`: `drawnBalls.map` → `[...drawnBalls].reverse().map` (bola mais recente à esquerda, mais antiga à direita). Removido `useEffect` de auto-scroll. `globals.design.css`: `.gr-sequence` de `overflow-x: auto` → `flex-wrap: wrap`.
+
+3. **Timers de estado** — Lobby e GameRoom agora exibem contagem regressiva para cada transição: funding (`🔒 Xs`), locked/drawing (`🎲 Sorteando`). GameRoom navbar mostra badge de status (🟢 funding) + timer ao lado do nome da sala. Traduções adicionadas nos três idiomas.
+
+4. **AUTO_LOCK_SEC 30 → 60** — alterado em Lobby.tsx, GameRoom.tsx, e worker-game-loop (`rabbitmq.ts`).
+
+5. **Clipping mini-balls** — `.gr-stage` com `overflow: hidden` restaurado (impedia overlap com cartelas). `.gr-stage-body` com `overflow-y: auto; min-height: 0` para scroll interno sem vazar.
+
+6. **Layout estágio/cartelas** — grid alterado de `minmax(0, 0.85fr) / 1.25fr` para `auto / 1fr`. `.gr-stage` com `max-height: 55vh` (compact: 45vh). Cartelas ocupam resto com scroll.
+
+7. **Ordenação de cartelas** — `sortedTickets` (useMemo) ordena por células marcadas descendente, recalculado a cada bola (`drawnSet` como dependência).
+
+8. **Próxima partida** — `loadGame` busca `current_game_id` da sala via API. Banner de game-ended mostra "Nova partida disponível! Vendas encerram em Xs" com botão "Ir para nova partida".
+
+9. **Slow-reveal no Lobby** — `drawn` e `archived` (dentro da janela de `AUTO_LOCK_SEC × 1000 + 75 × 3000ms`) são exibidos como `drawing` — badge 🎲 "Sorteio ao vivo", timer, e botão Watch corretos. A janela impede que o jogo suma do card enquanto o slow-reveal ainda está rodando.
+
+### Pendências / Next Steps
+
+- Testar compra de tickets via frontend com conta jogador1 para confirmar que "Assinatura inválida" não ocorre mais
+- Verificar se o worker auto-advance respeita o novo `AUTO_LOCK_DELAY_SEC = 60`
+
+### Chaves e Config
+
+- `signer_key` on-chain: `EOS8Ke4HGnKjQV26sooEdYh5KnUsPMn88FY8kvod6xLXTGJN5TkXf` (corresponde a `BINGO_GAME_PUB` / `MICROSERVICE_PRIVATE_KEY`)
+- Container `bingo_waxdev` faz bind mount de `contracts/` em `/app/contracts:ro`
+- ABI redeploy: `cleos set contract bingo.game /app/contracts/bingo -p bingo.game@active`
+
+### Arquivos Relevantes
+
+- `contracts/bingo/bingo.abi` — ABI corrigido (6 campos em `buytickets`, `config` table adicionada)
+- `contracts/bingo/src/bingo.cpp:402` — assinatura `buytickets` com 6 params
+- `apps/frontend/src/components/Lobby.tsx` — slow-reveal status mapping, room cards, timers
+- `apps/frontend/src/components/GameRoom.tsx` — ball display reverso, sortedTickets, next-game banner, header badge+timer
+- `apps/frontend/src/styles/globals.design.css` — grid layout, stage/tickets overflow
+- `apps/worker-game-loop/src/services/rabbitmq.ts:428` — `AUTO_LOCK_DELAY_SEC` default `'60'`

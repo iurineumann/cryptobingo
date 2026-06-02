@@ -5,7 +5,8 @@ export { rpcClient } from './client';
 export { 
     fetchGame, 
     fetchPlayerTickets, 
-    fetchPlayerBalance 
+    fetchPlayerBalance,
+    parseHexBytes,
 } from './client';
 
 // Re-exporta os tipos on-chain para conveniência dos consumers

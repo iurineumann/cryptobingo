@@ -24,6 +24,9 @@ import { useTheme }      from './hooks/useTheme';
 import LandingPage       from './components/LandingPage';
 import Lobby             from './components/Lobby';
 import GameRoom          from './components/GameRoom';
+import ReplayRoom        from './components/ReplayRoom';
+import RoomHistoryPanel  from './components/RoomHistoryPanel';
+import MyHistoryPage     from './components/MyHistoryPage';
 import WalletPage        from './components/WalletPage';
 import AdminLayout       from './components/admin/AdminLayout';
 import Logo             from './components/Logo';
@@ -86,6 +89,9 @@ type Route =
     | { page: 'landing' }
     | { page: 'lobby' }
     | { page: 'game';   roomId: string; gameId: string }
+    | { page: 'replay'; gameId: string }
+    | { page: 'room_history'; roomId: string }
+    | { page: 'my_history' }
     | { page: 'wallet' }
     | { page: 'admin';  section?: string };
 
@@ -220,6 +226,35 @@ export default function App() {
         );
     }
 
+    // ── Replay Room (tela cheia) ──────────────────────────────────────────────
+    if (route.page === 'replay') {
+        return (
+            <ReplayRoom
+                gameId={route.gameId}
+                session={session}
+                onLeave={() => setRoute({ page: 'lobby' })}
+            />
+        );
+    }
+
+    // ── Room History (tela cheia) ─────────────────────────────────────────────
+    if (route.page === 'room_history') {
+        return (
+            <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
+                <div className="site-content">
+                    <main className="site-main" style={{ padding: '1.5rem' }}>
+                        <RoomHistoryPanel
+                            roomId={route.roomId}
+                            session={session}
+                            onViewReplay={(gameId) => setRoute({ page: 'replay', gameId })}
+                            onBack={() => setRoute({ page: 'lobby' })}
+                        />
+                    </main>
+                </div>
+            </div>
+        );
+    }
+
     // ── Admin Panel ────────────────────────────────────────────────────────────
     if (route.page === 'admin') {
         return (
@@ -239,11 +274,12 @@ export default function App() {
     // ── Shell do Jogador (lobby / wallet) ──────────────────────────────────────
     const isAdmin  = profile.role === 'admin' || profile.role === 'contract_admin'
         || (import.meta.env.DEV && devAdminActors.has(session.actor.toString()));
-    const activeTab = route.page === 'wallet' ? 'wallet' : 'lobby';
+    const activeTab = route.page === 'wallet' ? 'wallet' : route.page === 'my_history' ? 'my_history' : 'lobby';
 
     const NAV_TABS = [
-        { id: 'lobby',  label: t('nav.lobby')  ?? 'Salas'    },
-        { id: 'wallet', label: t('nav.wallet') ?? 'Carteira' },
+        { id: 'lobby',      label: t('nav.lobby')      ?? 'Salas'    },
+        { id: 'my_history', label: t('nav.my_history') ?? 'Histórico' },
+        { id: 'wallet',     label: t('nav.wallet')     ?? 'Carteira' },
     ];
 
     return (
@@ -265,10 +301,10 @@ export default function App() {
                                 href={`#${tab.id}`}
                                 className={`site-tab${activeTab === tab.id ? ' is-active' : ''}`}
                                 aria-current={activeTab === tab.id ? 'page' : undefined}
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    setRoute({ page: tab.id as 'lobby' | 'wallet' });
-                                }}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setRoute({ page: tab.id as 'lobby' | 'my_history' | 'wallet' });
+                                    }}
                             >
                                 {tab.label}
                             </a>
@@ -356,6 +392,14 @@ export default function App() {
                         <Lobby
                             session={session}
                             onEnterRoom={(roomId, gameId) => setRoute({ page: 'game', roomId, gameId })}
+                            onReplayGame={(gameId) => setRoute({ page: 'replay', gameId })}
+                        />
+                    )}
+
+                    {route.page === 'my_history' && (
+                        <MyHistoryPage
+                            session={session}
+                            onViewReplay={(gameId) => setRoute({ page: 'replay', gameId })}
                         />
                     )}
 

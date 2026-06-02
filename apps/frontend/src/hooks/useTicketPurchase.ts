@@ -1,14 +1,14 @@
 // apps/frontend/src/hooks/useTicketPurchase.ts
 // Hook que orquestra o fluxo completo de compra de cartelas:
 //
-//   1. Chama o backend para gerar N cartelas assinadas (ADR-001)
-//   2. Monta a ação buytickets() com as matrizes e assinaturas
-//   3. Submete a transação on-chain via Wharfkit session.transact()
-//   4. Retorna estado de loading, erro e resultado da TX
+//   1. Gera N cartelas assinadas via backend (/tickets/generate) — preview
+//   2. Usuário visualiza, remove ou adiciona mais cartelas (preview)
+//   3. Submete buytickets() para cada grupo de preço na confirmação
 //
-// O contrato C++ valida a assinatura via assert_recover_key antes de
-// debitar o saldo e inserir as cartelas na tabela tickets.
-// Ref: ADR-001, SPEC.md §2.1, openapi.yaml /games/{gameId}/tickets/generate
+// Se um grupo de tickets exceder BATCH_SIZE (50), o hook divide
+// automaticamente em múltiplas chamadas de geração + on-chain.
+//
+// Ref: ADR-001, SPEC.md §2.1
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,12 @@ import { Session } from '@wharfkit/session';
 import { generateSignedTickets, type SignedTicket } from '../services/api';
 
 const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const BATCH_SIZE       = 50;
+
+export interface PurchaseGroup {
+    tickets: SignedTicket[];
+    price:   { quantity: string; contract: string };
+}
 
 export interface PurchaseResult {
     transactionId: string;
@@ -27,8 +33,44 @@ export interface UseTicketPurchaseReturn {
     isPurchasing: boolean;
     purchaseError: string | null;
     lastPurchase: PurchaseResult | null;
-    purchaseTickets: (session: Session, gameId: string, count: number) => Promise<PurchaseResult | null>;
+    /** Gera N cartelas assinadas (para preview). Lida com batching interno. */
+    generateForPreview: (gameId: string, count: number) => Promise<SignedTicket[]>;
+    /** Submete um ou mais grupos ao contrato. Cada grupo vira uma tx separada. */
+    purchaseTickets: (session: Session, gameId: string, groups: PurchaseGroup[]) => Promise<PurchaseResult | null>;
     clearError: () => void;
+}
+
+async function submitBatch(
+    session: Session,
+    gameId: string,
+    tickets: SignedTicket[],
+    requestedPrice: { quantity: string; contract: string },
+): Promise<string> {
+    const matrices   = tickets.map(t => t.matrix);
+    const signatures = tickets.map(t => t.signature);
+
+    console.log(`📡 [Purchase] Submetendo buytickets() para ${tickets.length} cartela(s)...`);
+
+    const result = await session.transact(
+        {
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'buytickets',
+                authorization: [session.permissionLevel],
+                data: {
+                    buyer:           String(session.actor),
+                    game_id:         gameId,
+                    matrices,
+                    signatures,
+                    nft_id:          0,
+                    requested_price: requestedPrice,
+                },
+            }],
+        },
+        { broadcast: true },
+    );
+
+    return result.response?.transaction_id ?? 'pending';
 }
 
 export function useTicketPurchase(): UseTicketPurchaseReturn {
@@ -39,58 +81,61 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
 
     const clearError = useCallback(() => setPurchaseError(null), []);
 
+    const generateForPreview = useCallback(async (
+        gameId: string,
+        count: number,
+    ): Promise<SignedTicket[]> => {
+        const all: SignedTicket[] = [];
+        let remaining = count;
+        while (remaining > 0) {
+            const n = Math.min(remaining, BATCH_SIZE);
+            const { tickets } = await generateSignedTickets(gameId, n);
+            all.push(...tickets);
+            remaining -= n;
+        }
+        return all;
+    }, []);
+
     const purchaseTickets = useCallback(async (
         session: Session,
         gameId: string,
-        count: number,
+        groups: PurchaseGroup[],
     ): Promise<PurchaseResult | null> => {
 
         setIsPurchasing(true);
         setPurchaseError(null);
 
+        const allTickets: SignedTicket[] = [];
+        let lastTxId = 'pending';
+
         try {
-            // ── Fase 1: Solicita cartelas assinadas ao backend ────────────────
-            console.log(`🎲 [Purchase] Gerando ${count} cartela(s) para o jogo ${gameId}...`);
-            const { tickets } = await generateSignedTickets(gameId, count);
+            for (const group of groups) {
+                if (group.tickets.length === 0) continue;
 
-            // ── Fase 2: Monta a ação buytickets() para o contrato ─────────────
-            // A ABI do contrato espera:
-            //   buytickets(name buyer, uint64 game_id, bytes[] matrices, signature[] signatures, uint64 nft_id)
-            // Ref: SPEC.md §2.1
+                const price = group.price;
+                let remaining = group.tickets.length;
+                let offset = 0;
 
-            const matrices   = tickets.map(t => t.matrix);      // vector<vector<uint8_t>>
-            const signatures = tickets.map(t => t.signature);   // vector<signature>
+                while (remaining > 0) {
+                    const chunkSize = Math.min(remaining, BATCH_SIZE);
+                    const chunk = group.tickets.slice(offset, offset + chunkSize);
+                    const txId = await submitBatch(session, gameId, chunk, price);
+                    lastTxId = txId;
 
-            console.log(`📡 [Purchase] Submetendo buytickets() para ${tickets.length} cartela(s)...`);
-
-            const result = await session.transact(
-                {
-                    actions: [{
-                        account:       CONTRACT_ACCOUNT,
-                        name:          'buytickets',
-                        authorization: [session.permissionLevel],
-                        data: {
-                            buyer:      String(session.actor),
-                            game_id:    gameId,
-                            matrices,
-                            signatures,
-                            nft_id:     0,
-                        },
-                    }],
-                },
-                { broadcast: true },
-            );
-
-            const transactionId = result.response?.transaction_id ?? 'pending';
+                    allTickets.push(...chunk);
+                    offset   += chunkSize;
+                    remaining -= chunkSize;
+                }
+            }
 
             const purchaseResult: PurchaseResult = {
-                transactionId,
-                ticketCount: tickets.length,
-                tickets,
+                transactionId: lastTxId,
+                ticketCount: allTickets.length,
+                tickets: allTickets,
             };
 
             setLastPurchase(purchaseResult);
-            console.log(`✅ [Purchase] ${tickets.length} cartela(s) comprada(s). TX: ${transactionId}`);
+            console.log(`✅ [Purchase] Total: ${allTickets.length} cartela(s). Última TX: ${lastTxId}`);
 
             return purchaseResult;
 
@@ -111,7 +156,7 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
         } finally {
             setIsPurchasing(false);
         }
-    }, []);
+    }, [t]);
 
-    return { isPurchasing, purchaseError, lastPurchase, purchaseTickets, clearError };
+    return { isPurchasing, purchaseError, lastPurchase, generateForPreview, purchaseTickets, clearError };
 }

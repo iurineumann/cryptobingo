@@ -3,7 +3,7 @@
 
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { PrivateKey, Checksum256 } from '@wharfkit/antelope';
+import { Name, PrivateKey, Checksum256 } from '@wharfkit/antelope';
 import { fetchGame } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
 
@@ -83,29 +83,53 @@ function generateBingoMatrix(): number[] {
     return matrix;
 }
 
+function encodeName(accountName: string): Buffer {
+    const n = Name.from(accountName);
+    const buf = Buffer.allocUnsafe(8);
+    buf.writeBigUInt64LE(BigInt(n.value.toString()));
+    return buf;
+}
+
+/**
+ * Codifica varuint32 (unsigned LEB128) usado pelo eosio::datastream.
+ */
+function encodeVaruint32(value: number): Buffer {
+    const bytes: number[] = [];
+    while (value >= 0x80) {
+        bytes.push((value & 0x7f) | 0x80);
+        value >>>= 7;
+    }
+    bytes.push(value & 0x7f);
+    return Buffer.from(bytes);
+}
+
 /**
  * Calcula o hash SHA-256 contextual de uma cartela para assinatura anti-replay.
  *
  * Serialização determinística equivalente ao eosio::datastream do C++:
- *   [ matrix(24 bytes uint8) ][ game_id(8 bytes uint64-LE) ][ account_name(utf-8 bytes) ]
+ *   [ unsigned_int(matrix.size()) ][ matrix bytes ][ game_id(uint64 LE) ][ buyer(name uint64 LE) ]
  *
- * REGRA: Nunca usar concatenação de strings para serializar — usar Buffer.concat.
- * Ref: ADR-001, ENGINEERING_PROTOCOL.md — prevenção de ataques de colisão de hash.
+ * Deve ser idêntico a:
+ *   size_t buf_size = pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
+ *   vector<char> buffer(buf_size);
+ *   datastream ds(buffer.data(), buffer.size());
+ *   ds << matrices[i] << game_id << buyer;
+ *   auto hash = sha256(buffer.data(), buffer.size());
  *
- * @param matrix      - Array de 24 uint8 da cartela
- * @param gameId      - ID do jogo como string (uint64)
- * @param accountName - Account name Antelope do comprador (ex: "jogador1")
+ * Ref: ADR-001, contract: bingo.cpp buytickets()
  */
 function computeTicketHash(matrix: number[], gameId: string, accountName: string): Checksum256 {
-    // 1. Matrix: 24 bytes (uint8 cada)
-    const matrixBuf = Buffer.from(new Uint8Array(matrix));
+    // 1. Matrix: unsigned_int(size) + raw bytes (pack_size = varuint32 + N)
+    const rawMatrix = Buffer.from(new Uint8Array(matrix));
+    const sizePrefix = encodeVaruint32(matrix.length);
+    const matrixBuf = Buffer.concat([sizePrefix, rawMatrix]);
 
-    // 2. game_id: uint64 little-endian (8 bytes) — mesmo formato CDT
+    // 2. game_id: uint64 little-endian (8 bytes)
     const gameIdBuf = Buffer.allocUnsafe(8);
     gameIdBuf.writeBigUInt64LE(BigInt(gameId));
 
-    // 3. account_name: bytes UTF-8 (nome Antelope: máx 13 chars ASCII)
-    const nameBuf = Buffer.from(accountName, 'utf-8');
+    // 3. account name: uint64 LE (EOSIO name encoding, fixed 8 bytes)
+    const nameBuf = encodeName(accountName);
 
     // 4. Concatenação e hash
     const payload = Buffer.concat([matrixBuf, gameIdBuf, nameBuf]);
@@ -150,7 +174,7 @@ function matrixRedisKey(gameId: string, matrix: number[]): string {
  */
 export async function generateTickets(req: Request, res: Response): Promise<void> {
     const { gameId } = req.params;
-    const accountName = req.user!.wallet; // Garantido pelo requireAuth
+    const accountName = req.body.account || req.user!.wallet;
     const rawCount = req.body.count;
     const count = Number(rawCount ?? 1);
 
@@ -158,6 +182,17 @@ export async function generateTickets(req: Request, res: Response): Promise<void
 
     if (!gameId || !/^\d+$/.test(gameId)) {
         res.status(400).json({ error: 'Parâmetro game_id inválido. Deve ser um inteiro positivo.' });
+        return;
+    }
+
+    if (accountName !== req.user!.wallet) {
+        console.warn(
+            `[TicketGen] account "${accountName}" difere do JWT wallet "${req.user!.wallet}"`
+        );
+    }
+
+    if (!/^[a-z1-5.]{1,13}$/.test(accountName)) {
+        res.status(400).json({ error: 'Campo "account" inválido.' });
         return;
     }
 

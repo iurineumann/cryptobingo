@@ -235,18 +235,19 @@ export default function BallDisplay({
                 </div>
             )}
 
-            {/* ── Sequência de bolas ── */}
+            {/* ── Sequência de bolas (mais recente à esquerda, com wrap) ── */}
             {drawnBalls.length > 0 && (
                 <div>
                     <p className="text-xs text-[--cb-text-tertiary] mb-2 uppercase tracking-wide">
                         {t('game_room.ball_order')}
                     </p>
                     <div
-                        className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1"
-                        style={{ scrollbarWidth: 'thin' }}
+                        className="flex flex-row-reverse flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1"
+                        style={{ scrollbarWidth: 'thin', justifyContent: 'flex-end' }}
                         aria-label="Bolas já sorteadas"
                     >
-                        {drawnBalls.map((ball) => {
+                        <div ref={ballsEndRef} />
+                        {[...drawnBalls].reverse().map((ball) => {
                             const col    = getBingoCol(ball.number);
                             const isLast = ball.order === lastBall?.order;
                             const color  = COL_BG_VAR[col];
@@ -256,13 +257,13 @@ export default function BallDisplay({
                                     key={ball.order}
                                     className={[
                                         'cb-ball cb-ball-sm transition-all duration-300',
-                                        isLast ? 'scale-125 z-10' : 'scale-100',
+                                        isLast ? 'scale-110 z-10' : 'scale-100',
                                     ].join(' ')}
                                     style={{
                                         background:  isLast ? color : `color-mix(in srgb, ${color} 20%, transparent)`,
                                         color:       isLast ? 'white' : color,
                                         border:      `1.5px solid ${color}`,
-                                        boxShadow:   isLast ? `0 0 12px ${color}88` : 'none',
+                                        boxShadow:   isLast ? `0 0 10px ${color}88` : 'none',
                                         animation:   isLast ? 'cb-ball-drop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none',
                                     }}
                                     title={`${col}${ball.number} — bola #${ball.order}`}
@@ -272,7 +273,6 @@ export default function BallDisplay({
                                 </div>
                             );
                         })}
-                        <div ref={ballsEndRef} />
                     </div>
                 </div>
             )}

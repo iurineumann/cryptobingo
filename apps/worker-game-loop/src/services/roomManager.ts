@@ -1,4 +1,4 @@
-import { rpcClient } from '@cryptobingo/blockchain-core';
+import { rpcClient, fetchGame } from '@cryptobingo/blockchain-core';
 import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { contractSession, microserviceSession } from './blockchain';
@@ -73,11 +73,21 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         console.log(`[RoomManager] Sala ${room.room_id}: aguardando ${delayMs}ms para criar próxima partida...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
 
-        // Verifica se a sala ainda está ativa
+        // Verifica se a sala ainda está ativa e sem jogo (previne duplicatas)
         const freshRoom = await fetchRoomOnChain(room.room_id);
         if (!freshRoom || freshRoom.status !== 'active') {
             console.log(`[RoomManager] Sala ${room.room_id} não está mais ativa (status: ${freshRoom?.status}). Pulando.`);
             return null;
+        }
+        if (String(freshRoom.current_game_id) !== '0') {
+            // Verifica se o jogo existente está ativo ou já terminal
+            const existingGame = await fetchGame(String(freshRoom.current_game_id)).catch(() => null);
+            if (!existingGame || !['archived', 'aborted'].includes(existingGame.status)) {
+                console.log(`[RoomManager] Sala ${room.room_id}: jogo ${freshRoom.current_game_id} já criado durante o delay. Pulando.`);
+                return null;
+            }
+            // Jogo terminal — slot não foi zerado (legado). Não criamos duplicata.
+            console.log(`[RoomManager] Sala ${room.room_id}: current_game_id aponta para jogo terminal — slot já deve ter sido liberado.`);
         }
 
         const newGameId = generateGameId();
@@ -160,8 +170,36 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
         });
         const rooms = roomsResponse.rows as BlockchainRoom[];
         for (const room of rooms) {
-            if (room.status === 'active' && String(room.current_game_id) === '0') {
-                console.log(`[RoomManager] Sala ${room.room_id} ativa sem jogo atual. Criando primeiro jogo...`);
+            if (room.status !== 'active') continue;
+
+            const gameId = String(room.current_game_id);
+
+            if (gameId === '0') {
+                // Sem jogo — cria o próximo
+                console.log(`[RoomManager] Sala ${room.room_id} ativa sem jogo. Criando...`);
+                await createNextGameForRoom(room);
+                continue;
+            }
+
+            // Tem game_id mas pode ser um jogo terminal — current_game_id não foi zerado
+            // (estado legado antes do fix do contrato). Chama closegame no jogo arquivado
+            // para resetar current_game_id (closegame agora aceita archived para recovery).
+            const existingGame = await fetchGame(gameId).catch(() => null);
+            if (existingGame && ['archived', 'aborted'].includes(existingGame.status)) {
+                console.log(`[RoomManager] Sala ${room.room_id}: recovery — jogo ${gameId} é ${existingGame.status} mas current_game_id não foi zerado. Liberando slot...`);
+                try {
+                    await microserviceSession.transact({
+                        actions: [{
+                            account:       CONTRACT_ACCOUNT,
+                            name:          'closegame',
+                            authorization: [microserviceSession.permissionLevel],
+                            data:          { game_id: gameId },
+                        }],
+                    }, { broadcast: true });
+                    console.log(`[RoomManager] Sala ${room.room_id}: current_game_id zerado via closegame.`);
+                } catch (err) {
+                    console.warn(`[RoomManager] Sala ${room.room_id}: closegame recovery falhou:`, err);
+                }
                 await createNextGameForRoom(room);
             }
         }
@@ -171,18 +209,26 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
 }
 
 export async function onGameResolved(gameId: string): Promise<void> {
-    console.log(`[RoomManager] Game ${gameId} resolvido. Verificando se pertence a uma sala...`);
+    console.log(`[RoomManager] Game ${gameId} resolvido. Verificando sala...`);
 
-    const room = await findRoomByGameId(gameId);
-    if (!room) {
+    // Lê room_id diretamente do jogo arquivado — current_game_id da sala já foi zerado pelo closegame
+    const game = await fetchGame(gameId).catch(() => null);
+    const roomId = game ? String((game as any).room_id ?? '0') : '0';
+
+    if (!roomId || roomId === '0') {
         console.log(`[RoomManager] Game ${gameId} não pertence a nenhuma sala. Nenhuma ação.`);
         return;
     }
 
-    console.log(`[RoomManager] Game ${gameId} pertence à sala ${room.room_id} (status: ${room.status})`);
+    console.log(`[RoomManager] Game ${gameId} pertence à sala ${roomId}.`);
 
+    const room = await fetchRoomOnChain(roomId);
+    if (!room) {
+        console.log(`[RoomManager] Sala ${roomId} não encontrada on-chain.`);
+        return;
+    }
     if (room.status !== 'active') {
-        console.log(`[RoomManager] Sala ${room.room_id} não está ativa. Não criará nova partida.`);
+        console.log(`[RoomManager] Sala ${roomId} não está ativa (status: ${room.status}). Não criará nova partida.`);
         return;
     }
 

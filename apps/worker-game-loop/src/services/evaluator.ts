@@ -9,10 +9,20 @@
 // vencedores de uma cartela. O worker seleciona o de maior weight (max_weight)
 // antes de enviar claimwin — conforme ADR-005.
 
-import { fetchGame, fetchPlayerTickets, rpcClient } from '@cryptobingo/blockchain-core';
+import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@cryptobingo/blockchain-core';
+import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
+
+function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[] {
+    for (const row of rows) {
+        if (typeof row.matrix === 'string') {
+            row.matrix = parseHexBytes(row.matrix);
+        }
+    }
+    return rows as unknown as BlockchainTicketRecord[];
+}
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 
@@ -125,8 +135,8 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
         code:        CONTRACT_ACCOUNT,
         scope:       CONTRACT_ACCOUNT,
         table:       'gametypes',
-        lower_bound: gametypeId as any,
-        upper_bound: gametypeId as any,
+        lower_bound: UInt64.from(gametypeId),
+        upper_bound: UInt64.from(gametypeId),
         limit:       1,
         json:        true,
     });
@@ -142,12 +152,13 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
     const entries: PatternEntry[] = [];
 
     for (const rule of gametype.rules) {
+        const patId = UInt64.from(String(rule.pattern_id));
         const patRes = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
             scope:       CONTRACT_ACCOUNT,
             table:       'patterns',
-            lower_bound: rule.pattern_id as any,
-            upper_bound: rule.pattern_id as any,
+            lower_bound: patId,
+            upper_bound: patId,
             limit:       1,
             json:        true,
         });
@@ -202,7 +213,7 @@ export async function findAllWinners(
             json:         true,
         });
 
-        const tickets = response.rows as BlockchainTicketRecord[];
+        const tickets = normalizeTickets(response.rows);
 
         for (const ticket of tickets) {
             const finalState = applyDrawnBalls(ticket, drawnBalls);
@@ -403,7 +414,7 @@ export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]):
             json:        true,
         });
 
-        for (const ticket of response.rows as BlockchainTicketRecord[]) {
+        for (const ticket of normalizeTickets(response.rows)) {
             const matrixSet = new Set(ticket.matrix);
             let count = 0;
             for (let i = 0; i < drawnBalls.length; i++) {
@@ -417,7 +428,7 @@ export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]):
 
         hasMore = response.more === true && response.rows.length === 100;
         if (hasMore) {
-            const last = (response.rows as BlockchainTicketRecord[])[response.rows.length - 1];
+            const last = normalizeTickets(response.rows)[response.rows.length - 1];
             lowerBound = (BigInt(last.ticket_id) + 1n).toString();
         }
     }
@@ -454,7 +465,7 @@ export async function preComputeMultiMatchCutoffs(
 ): Promise<StageCutoffResult[]> {
     const gtRes = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'gametypes',
-        lower_bound: gametypeId as any, upper_bound: gametypeId as any,
+        lower_bound: UInt64.from(gametypeId), upper_bound: UInt64.from(gametypeId),
         limit: 1, json: true,
     });
     if (!gtRes.rows.length) throw new Error(`[MULTI_MATCH] Gametype ${gametypeId} não encontrado.`);
@@ -474,10 +485,10 @@ export async function preComputeMultiMatchCutoffs(
             code: CONTRACT_ACCOUNT, scope: gameId, table: 'tickets',
             limit: 100, lower_bound: lowerBound as any, json: true,
         });
-        allTickets.push(...(res.rows as BlockchainTicketRecord[]));
+        allTickets.push(...normalizeTickets(res.rows));
         hasMore = res.more === true && res.rows.length === 100;
         if (hasMore) {
-            const last = (res.rows as BlockchainTicketRecord[])[res.rows.length - 1];
+            const last = normalizeTickets(res.rows)[res.rows.length - 1];
             lowerBound = (BigInt(last.ticket_id) + 1n).toString();
         }
     }
@@ -576,7 +587,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
 
     // Busca metadados do gametype para determinar draw_mode e parâmetros
     let drawMode: DrawMode       = 'standard';
-    let maxBalls: number         = 75;
+    let maxBalls: number         = DEFAULT_DRAW_BALLS;
     let goldenBallAfter: number  = 0;
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
@@ -586,8 +597,8 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             code:        CONTRACT_ACCOUNT,
             scope:       CONTRACT_ACCOUNT,
             table:       'gametypes',
-            lower_bound: gametypeId as any,
-            upper_bound: gametypeId as any,
+            lower_bound: UInt64.from(gametypeId),
+            upper_bound: UInt64.from(gametypeId),
             limit:       1,
             json:        true,
         });

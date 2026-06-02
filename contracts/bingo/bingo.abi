@@ -28,6 +28,20 @@
       ]
     },
     {
+      "name": "extended_asset",
+      "base": "",
+      "fields": [
+        {
+          "name": "quantity",
+          "type": "asset"
+        },
+        {
+          "name": "contract",
+          "type": "name"
+        }
+      ]
+    },
+    {
       "name": "balance_record",
       "base": "",
       "fields": [
@@ -562,6 +576,10 @@
         {
           "name": "nft_id",
           "type": "uint64"
+        },
+        {
+          "name": "requested_price",
+          "type": "extended_asset"
         }
       ]
     },
@@ -1259,6 +1277,13 @@
       "key_types": [
         "uint64"
       ]
+    },
+    {
+      "name": "config",
+      "type": "config_state",
+      "index_type": "i64",
+      "key_names": [],
+      "key_types": []
     }
   ],
   "ricardian_clauses": [],

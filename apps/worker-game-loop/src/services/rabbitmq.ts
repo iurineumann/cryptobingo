@@ -31,7 +31,7 @@ import {
 }                          from './broadcaster';
 import { fetchGame }       from '@cryptobingo/blockchain-core';
 import { rpcClient }       from '@cryptobingo/blockchain-core';
-import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
     eventsFailedTotal,
@@ -412,5 +412,143 @@ async function processClearGame(gameId: string): Promise<void> {
     }
 
     console.log(`✅ [RabbitMQ] cleargame concluído: ~${totalCleared} linhas liberadas (jogo ${gameId})`);
+}
+
+// ==========================================
+// AUTO-ADVANCE: polling do ciclo de vida do jogo
+// ==========================================
+
+/**
+ * Auto-lock: encontra jogos em FUNDING com game_id (timestamp) anterior ao cutoff
+ * e publica lockgame + inicia o sorteio.
+ *
+ * O game_id é gerado via Date.now() em generateGameId(), então o valor numérico
+ * é um timestamp válido para medir idade do jogo.
+ */
+const AUTO_LOCK_DELAY_SEC = parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
+const processedGames = new Set<string>();
+
+export async function autoLockFundingGames(): Promise<void> {
+    const cutoff = Date.now() - AUTO_LOCK_DELAY_SEC * 1000;
+
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'games',
+            limit: 100,
+            json:  true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        for (const game of games) {
+            const gameId = String(game.game_id);
+
+            if (game.status !== 'funding') continue;
+            if (processedGames.has(gameId)) continue;
+            if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+
+            processedGames.add(gameId);
+            console.log(`[AutoAdvance] 🔒 Travando jogo ${gameId} (funding >${AUTO_LOCK_DELAY_SEC}s)...`);
+
+            try {
+                await executeLockGame(gameId);
+                notifyGameLocked(gameId);
+
+                buildInvertedIndex(gameId).catch(err =>
+                    console.error(`[AutoAdvance] Erro índice invertido (jogo ${gameId}):`, err)
+                );
+
+                // Inicia o sorteio imediatamente após o lock
+                autoStartDraw(gameId).catch(err =>
+                    console.error(`[AutoAdvance] Erro startdraw (jogo ${gameId}):`, err)
+                );
+            } catch (err) {
+                console.error(`[AutoAdvance] Erro ao travar jogo ${gameId}:`, err);
+                processedGames.delete(gameId);
+            }
+        }
+    } catch (err) {
+        console.error('[AutoAdvance] Erro no polling funding:', err);
+    }
+}
+
+/**
+ * Auto-start: encontra jogos em LOCKED (criados antes do worker iniciar
+ * ou que falharam no auto-advance) e inicia o sorteio.
+ */
+/**
+ * Auto-claim: encontra jogos em DRAWN (já sorteados, oracle respondeu)
+ * e orquestra a conclusão (claimwin + closegame).
+ */
+export async function autoClaimDrawnGames(): Promise<void> {
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'games',
+            limit: 100,
+            json:  true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        for (const game of games) {
+            const gameId = String(game.game_id);
+            if (game.status !== 'drawn') continue;
+            if (processedGames.has(gameId)) continue;
+
+            processedGames.add(gameId);
+            console.log(`[AutoAdvance] 🏁 Jogo ${gameId} em DRAWN. Orquestrando conclusão...`);
+            orchestrateGame(gameId).catch(err =>
+                console.error(`[AutoAdvance] Erro orquestrando jogo ${gameId}:`, err)
+            );
+        }
+    } catch (err) {
+        console.error('[AutoAdvance] Erro no polling drawn:', err);
+    }
+}
+
+export async function autoStartLockedGames(): Promise<void> {
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:  CONTRACT_ACCOUNT,
+            scope: CONTRACT_ACCOUNT,
+            table: 'games',
+            limit: 100,
+            json:  true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        for (const game of games) {
+            const gameId = String(game.game_id);
+            if (game.status !== 'locked') continue;
+            if (processedGames.has(gameId)) continue;
+
+            processedGames.add(gameId);
+            autoStartDraw(gameId).catch(err =>
+                console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err)
+            );
+        }
+    } catch (err) {
+        console.error('[AutoAdvance] Erro no polling locked:', err);
+    }
+}
+
+async function autoStartDraw(gameId: string): Promise<void> {
+    console.log(`[AutoAdvance] 🎲 Iniciando sorteio do jogo ${gameId}...`);
+
+    await executeStartDraw(gameId);
+
+    const drawnBalls = await waitForDrawnBalls(gameId);
+
+    if (!drawnBalls) {
+        console.error(`[AutoAdvance] ❌ Timeout do oráculo para jogo ${gameId}. Abortando.`);
+        await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
+        notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
+        return;
+    }
+
+    console.log(`[AutoAdvance] ✅ Oráculo respondeu (jogo ${gameId}). Orquestrando...`);
+    await orchestrateGame(gameId);
 }
 

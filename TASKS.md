@@ -64,7 +64,7 @@
 - [x] globals.design.css — classes gr-*, site-*, lobby-*, admin-* (Claude Design).
 - [x] Locales pt/en/zh — chaves aninhadas completas.
 - [x] ChatPanel.tsx — chat por sala via Socket.io (ADR-010).
-- [ ] Lobby.tsx — refatorar para listar salas (rooms) em vez de games (ADR-010).
+- [x] Lobby.tsx — refatorar para listar salas (rooms) em vez de games (ADR-010).
 - [ ] SponsorRooms.tsx — painel do sponsor para gerenciar suas salas.
 - [ ] useChat.ts — hook WebSocket separado para chat.
 - [x] GametypesAdmin — Suggest Combinations helper (Monte Carlo + dificuldade + calibração RTP).

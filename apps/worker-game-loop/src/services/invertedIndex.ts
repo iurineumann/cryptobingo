@@ -19,8 +19,17 @@
 // Ref: SPEC.md §3.2
 
 import { redisClient }      from './redis';
-import { rpcClient }        from '@cryptobingo/blockchain-core';
+import { rpcClient, parseHexBytes }        from '@cryptobingo/blockchain-core';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+
+function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[] {
+    for (const row of rows) {
+        if (typeof row.matrix === 'string') {
+            row.matrix = parseHexBytes(row.matrix);
+        }
+    }
+    return rows as unknown as BlockchainTicketRecord[];
+}
 
 const CONTRACT_ACCOUNT  = process.env.CONTRACT_ACCOUNT  || 'bingo.game';
 const INDEX_TTL_SECONDS = 86_400; // 24h
@@ -105,7 +114,7 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
             json:        true,
         });
 
-        const tickets = response.rows as BlockchainTicketRecord[];
+        const tickets = normalizeTickets(response.rows);
 
         for (const ticket of tickets) {
             const bitMap = matrixToBitMap(ticket.matrix);

@@ -187,23 +187,31 @@ export default function RoomsAdmin() {
         setError(null);
         try {
             await updateRoomMetadata(editTarget.room_id, {
-                room_id: editTarget.room_id,
                 name: editForm.name,
                 description: editForm.description,
                 auto_start_delay_sec: editForm.auto_start_delay_sec,
                 chat_enabled: editForm.chat_enabled,
             });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('admin.rooms_error_edit'));
+            setEditSubmitting(false);
+            return;
+        }
+
+        // Atualiza config on-chain (não bloqueia o sucesso da metadata)
+        let settingsWarning = '';
+        try {
             await updateRoomSettings(editTarget.room_id, {
                 max_tickets_per_player: editForm.max_tickets_per_player,
             });
-            setSuccess(t('admin.rooms_success_edit', { id: editTarget.room_id }));
-            setEditTarget(null);
-            await loadRooms();
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('admin.rooms_error_edit'));
-        } finally {
-            setEditSubmitting(false);
+            settingsWarning = ` (${t('admin.rooms_error_settings')})`;
         }
+
+        setSuccess(t('admin.rooms_success_edit', { id: editTarget.room_id }) + settingsWarning);
+        setEditTarget(null);
+        setEditSubmitting(false);
+        await loadRooms();
     };
 
     return (

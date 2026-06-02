@@ -37,6 +37,7 @@ Controla o ciclo de vida global de cada rodada e o armazenamento da entropia (RN
 | `sponsor_pool` | `vector<extended_asset>` | Array dinâmico suportando $N$ tokens patrocinados pela mecânica B2B. |
 | `end_time` | `time_point_sec` | Timestamp de transição para `ARCHIVED` ou `ABORTED`. Base para o TTL de 24h do GC. |
 | `drawn_balls` | `vector<uint8_t>` | Array serializado de 75 posições. Permanece vazio até o evento `receiverand`. |
+| `room_id` | `uint64_t` | FK para a tabela `rooms`. `0` se jogo avulso sem sala (legado). |
 | `campaign_id` | `uint64_t` | Relacionamento (Foreign Key) com a tabela `campaigns`. `0` se não for patrocinado. |
 
 ### 1.3. Tabela: `tickets` (Índice de Cartelas)
@@ -75,12 +76,13 @@ A comunicação mutável com o contrato segue assinaturas rigorosas e delegaçã
 
 ### 2.1. Ingestão de Compras (Batch Processing)
 
-* **Assinatura:** `buytickets(name buyer, uint64_t game_id, bytes[] matrices, signature[] signatures, uint64_t nft_id)`
+* **Assinatura:** `buytickets(name buyer, uint64_t game_id, bytes[] matrices, signature[] signatures, extended_asset requested_price, uint64_t nft_id)`
 * **Auth Exigido:** `buyer@active`
 * **Fluxo de Validação:**
 1. Valida `game.status == "funding"` e limites da sala.
-2. Se `nft_id != 0`, aplica desconto do NFT na tabela `nftconfigs`.
-3. Deduz `matrices.size() * ticket_price` da tabela `balances` do `buyer`.
+2. Verifica que `requested_price` == `game.ticket_price` (proteção anti-fraude — o frontend não pode manipular o valor).
+3. Se `nft_id != 0`, aplica desconto do NFT na tabela `nftconfigs`.
+4. Deduz `matrices.size() * requested_price` da tabela `balances` do `buyer`.
 4. Para cada cartela: serializa `matrix + game_id + buyer`, calcula SHA-256, e executa `assert_recover_key(hash, signature, config.signer_key)` — garantindo que foi assinada pelo microserviço.
 5. O hash é usado como `ticket_id` (anti-replay).
 6. Executa `emplace` em lote na tabela `tickets`.
