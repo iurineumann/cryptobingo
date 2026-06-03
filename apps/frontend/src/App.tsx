@@ -1,17 +1,37 @@
 // apps/frontend/src/App.tsx
-// Componente raiz — roteamento state-based, sessão Web3, autenticação JWT.
+// Raiz da aplicação — BrowserRouter + AppRoot com roteamento URL-based (ADR-015).
+//
+// Hierarquia:
+//   App          → <BrowserRouter> (necessário para hooks de router)
+//   AppRoot      → estado de sessão/tema + useNavigate + <Routes>
+//   AuthGuard    → layout route; redireciona para / se não autenticado
+//   AdminGuard   → layout route; redireciona para /lobby se não admin
 //
 // Rotas:
-//   landing  → LandingPage (visitantes não autenticados)
-//   lobby    → Lobby (listagem de salas — ADR-010)
-//   game     → GameRoom (sala ao vivo, identificada por roomId + gameId)
-//   wallet   → WalletPage
-//   admin    → AdminLayout (painel administrativo — ADR-009)
+//   /                    → RootRedirect (sessão → /lobby, sem sessão → Landing)
+//   /lobby               → PlayerShell > Lobby
+//   /history             → PlayerShell > MyHistoryPage
+//   /wallet              → PlayerShell > WalletPage
+//   /room/:roomId/:gameId → GameRoom (full-screen)
+//   /replay/:gameId      → ReplayRoom (full-screen)
+//   /room/:roomId/history → RoomHistoryPanel (full-screen)
+//   /admin               → redirect /admin/dashboard
+//   /admin/:section      → AdminLayout (full-screen)
 //
-// Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms)
+// Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms), ADR-015 (Routing)
 
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation }                   from 'react-i18next';
+import {
+    BrowserRouter,
+    Routes,
+    Route,
+    Navigate,
+    Outlet,
+    useNavigate,
+    useLocation,
+    useParams,
+} from 'react-router-dom';
 import { Session }                          from '@wharfkit/session';
 import {
     fetchUserProfile, updateUserLocale,
@@ -84,38 +104,146 @@ if (import.meta.env.DEV) {
     }
 }
 
-// ── TIPOS DE ROTA ─────────────────────────────────────────────────────────────
-type Route =
-    | { page: 'landing' }
-    | { page: 'lobby' }
-    | { page: 'game';   roomId: string; gameId: string }
-    | { page: 'replay'; gameId: string }
-    | { page: 'room_history'; roomId: string }
-    | { page: 'my_history' }
-    | { page: 'wallet' }
-    | { page: 'admin';  section?: string };
+// ── GUARDS ───────────────────────────────────────────────────────────────────
 
-// ── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────────
-export default function App() {
+interface AuthGuardProps {
+    session:           Session | null;
+    profile:           MongoUserProfile | null;
+    restoringSession:  boolean;
+}
+
+function AuthGuard({ session, profile, restoringSession }: AuthGuardProps) {
+    if (restoringSession) {
+        return (
+            <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+                <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+            </div>
+        );
+    }
+    if (!session || !profile) return <Navigate to="/" replace />;
+    return <Outlet />;
+}
+
+function AdminGuard({ isAdmin }: { isAdmin: boolean }) {
+    if (!isAdmin) return <Navigate to="/lobby" replace />;
+    return <Outlet />;
+}
+
+// ── WRAPPERS DE ROTA (extraem useParams e delegam props) ─────────────────────
+
+interface PageProps {
+    session:  Session;
+    profile:  MongoUserProfile;
+    isAdmin:  boolean;
+    theme:    'dark' | 'light';
+    onToggleTheme:    () => void;
+    onLanguageChange: (locale: string) => void;
+    onLogout:         () => void;
+}
+
+function GameRoomPage({ session, profile, isAdmin, theme, onToggleTheme, onLanguageChange, onLogout }: PageProps) {
+    const { roomId, gameId } = useParams<{ roomId: string; gameId: string }>();
+    const navigate = useNavigate();
+    return (
+        <GameRoom
+            key={gameId}
+            roomId={roomId!}
+            gameId={gameId!}
+            session={session}
+            profile={profile}
+            onLeave={() => navigate('/lobby')}
+            onGoToHistory={() => navigate('/history')}
+            onGoToWallet={() => navigate('/wallet')}
+            onGoToAdmin={isAdmin ? () => navigate('/admin/dashboard') : undefined}
+            isAdmin={isAdmin}
+            onLogout={onLogout}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
+            onLanguageChange={onLanguageChange}
+        />
+    );
+}
+
+function ReplayPage({ session }: { session: Session }) {
+    const { gameId } = useParams<{ gameId: string }>();
+    const navigate = useNavigate();
+    return (
+        <ReplayRoom
+            gameId={gameId!}
+            session={session}
+            onLeave={() => navigate('/lobby')}
+        />
+    );
+}
+
+function RoomHistoryPage({ session }: { session: Session }) {
+    const { roomId } = useParams<{ roomId: string }>();
+    const navigate = useNavigate();
+    return (
+        <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
+            <div className="site-content">
+                <main className="site-main" style={{ padding: '1.5rem' }}>
+                    <RoomHistoryPanel
+                        roomId={roomId!}
+                        session={session}
+                        onViewReplay={(gid) => navigate(`/replay/${gid}`)}
+                        onBack={() => navigate('/lobby')}
+                    />
+                </main>
+            </div>
+        </div>
+    );
+}
+
+function AdminPage({ session, profile, theme, onToggleTheme, onLogout }: Omit<PageProps, 'isAdmin' | 'onLanguageChange'>) {
+    const { section } = useParams<{ section: string }>();
+    const navigate = useNavigate();
+    return (
+        <AdminLayout
+            profile={profile}
+            session={session}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
+            section={section ?? 'dashboard'}
+            onNavigate={(s) => navigate(`/admin/${s}`)}
+            onLogout={onLogout}
+            onBackToLobby={() => navigate('/lobby')}
+        />
+    );
+}
+
+// ── APP ROOT (dentro do BrowserRouter — pode usar hooks de router) ────────────
+
+function AppRoot() {
     const { t, i18n }                                          = useTranslation();
     const { isAuthenticating, authError, authenticateSession } = useAuth();
     const { theme, toggleTheme }                               = useTheme();
+    const navigate = useNavigate();
+    const location = useLocation();
 
-    const [session,  setSession]  = useState<Session | null>(null);
-    const [profile,  setProfile]  = useState<MongoUserProfile | null>(null);
-    const [route,    setRoute]    = useState<Route>({ page: 'landing' });
-    const [loading,  setLoading]  = useState(false);
-    const [error,    setError]    = useState<string | null>(null);
+    const [session,          setSession]          = useState<Session | null>(null);
+    const [profile,          setProfile]          = useState<MongoUserProfile | null>(null);
+    const [loading,          setLoading]          = useState(false);
+    const [error,            setError]            = useState<string | null>(null);
+    const [restoringSession, setRestoringSession] = useState(true);
 
-    // Restaura sessão ao recarregar página
+    const isAdmin = !!(
+        profile && (
+            profile.role === 'admin' ||
+            profile.role === 'contract_admin' ||
+            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
+        )
+    );
+
+    // ── Restore de sessão ao recarregar (suporta deep links) ─────────────────
     useEffect(() => {
         sessionKit.restore().then(async (restored) => {
             if (restored && getAuthToken()) {
                 setSession(restored);
                 await loadProfile();
-                setRoute({ page: 'lobby' });
+                // Não navega — o usuário permanece na URL que acessou (deep link funciona)
             }
-        });
+        }).catch(() => {}).finally(() => setRestoringSession(false));
     }, []);
 
     const loadProfile = useCallback(async () => {
@@ -143,14 +271,14 @@ export default function App() {
             if (!authenticated) throw new Error(t('auth.auth_failed') ?? 'Falha na autenticação');
             setSession(newSession);
             await loadProfile();
-            setRoute({ page: 'lobby' });
+            navigate('/lobby');
         } catch (err) {
             setError(err instanceof Error ? err.message : t('errors.generic') ?? 'Erro');
             clearAuthToken();
         } finally {
             setLoading(false);
         }
-    }, [authenticateSession, loadProfile, t]);
+    }, [authenticateSession, loadProfile, navigate, t]);
 
     const login = useCallback(
         () => handleLogin(sessionKit.login().then(({ session: s }) => s)),
@@ -167,8 +295,8 @@ export default function App() {
         setSession(null);
         setProfile(null);
         setError(null);
-        setRoute({ page: 'landing' });
-    }, []);
+        navigate('/', { replace: true });
+    }, [navigate]);
 
     const handleLanguageChange = useCallback(async (locale: string) => {
         i18n.changeLanguage(locale);
@@ -177,134 +305,46 @@ export default function App() {
         }
     }, [i18n, session]);
 
-    const isLoading = loading || isAuthenticating;
+    // Props compartilhadas entre páginas autenticadas
+    const pageProps: PageProps = {
+        session:          session!,
+        profile:          profile!,
+        isAdmin,
+        theme,
+        onToggleTheme:    toggleTheme,
+        onLanguageChange: handleLanguageChange,
+        onLogout:         logout,
+    };
 
-    // ── Landing (não autenticado) ──────────────────────────────────────────────
-    if (!session) {
-        return (
-            <LandingPage
-                theme={theme}
-                onToggleTheme={toggleTheme}
-                onConnect={login}
-                devAccounts={import.meta.env.DEV ? devAccounts : null}
-                onDevLogin={import.meta.env.DEV ? ((actor, key) => {
-                    if (createCustomSession) handleLogin(createCustomSession(actor, key));
-                }) : null}
-            />
-        );
-    }
-
-    // ── Carregando perfil ──────────────────────────────────────────────────────
-    if (isLoading || !profile) {
-        return (
-            <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
-                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-                    <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
-                    <p style={{ color: 'var(--cb-text-secondary)', fontSize: '0.875rem' }}>
-                        {t('common.loading') ?? 'Carregando...'}
-                    </p>
-                    {(error ?? authError) && (
-                        <p style={{ color: 'var(--cb-danger)', fontSize: '0.875rem' }}>
-                            {error ?? authError}
-                        </p>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    // ── Game Room (tela cheia) ─────────────────────────────────────────────────
-    if (route.page === 'game') {
-        return (
-            <GameRoom
-                roomId={route.roomId}
-                gameId={route.gameId}
-                session={session}
-                profile={profile}
-                onLeave={() => setRoute({ page: 'lobby' })}
-            />
-        );
-    }
-
-    // ── Replay Room (tela cheia) ──────────────────────────────────────────────
-    if (route.page === 'replay') {
-        return (
-            <ReplayRoom
-                gameId={route.gameId}
-                session={session}
-                onLeave={() => setRoute({ page: 'lobby' })}
-            />
-        );
-    }
-
-    // ── Room History (tela cheia) ─────────────────────────────────────────────
-    if (route.page === 'room_history') {
-        return (
-            <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
-                <div className="site-content">
-                    <main className="site-main" style={{ padding: '1.5rem' }}>
-                        <RoomHistoryPanel
-                            roomId={route.roomId}
-                            session={session}
-                            onViewReplay={(gameId) => setRoute({ page: 'replay', gameId })}
-                            onBack={() => setRoute({ page: 'lobby' })}
-                        />
-                    </main>
-                </div>
-            </div>
-        );
-    }
-
-    // ── Admin Panel ────────────────────────────────────────────────────────────
-    if (route.page === 'admin') {
-        return (
-            <AdminLayout
-                profile={profile}
-                session={session}
-                theme={theme}
-                onToggleTheme={toggleTheme}
-                section={route.section ?? 'dashboard'}
-                onNavigate={(section) => setRoute({ page: 'admin', section })}
-                onLogout={logout}
-                onBackToLobby={() => setRoute({ page: 'lobby' })}
-            />
-        );
-    }
-
-    // ── Shell do Jogador (lobby / wallet) ──────────────────────────────────────
-    const isAdmin  = profile.role === 'admin' || profile.role === 'contract_admin'
-        || (import.meta.env.DEV && devAdminActors.has(session.actor.toString()));
-    const activeTab = route.page === 'wallet' ? 'wallet' : route.page === 'my_history' ? 'my_history' : 'lobby';
+    // ── activeTab derivado da URL (ADR-015) ───────────────────────────────────
+    const activeTab = location.pathname.startsWith('/wallet')  ? 'wallet'
+                    : location.pathname.startsWith('/history') ? 'my_history'
+                    : 'lobby';
 
     const NAV_TABS = [
-        { id: 'lobby',      label: t('nav.lobby')      ?? 'Salas'    },
-        { id: 'my_history', label: t('nav.my_history') ?? 'Histórico' },
-        { id: 'wallet',     label: t('nav.wallet')     ?? 'Carteira' },
+        { id: 'lobby',      path: '/lobby',   label: t('nav.lobby')      ?? 'Salas'    },
+        { id: 'my_history', path: '/history', label: t('nav.my_history') ?? 'Histórico' },
+        { id: 'wallet',     path: '/wallet',  label: t('nav.wallet')     ?? 'Carteira' },
     ];
 
-    return (
+    // Shell do jogador — nav + conteúdo (Lobby / History / Wallet)
+    const PlayerShell = () => (
         <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
-
-            {/* ── Navbar ── */}
             <header className="site-nav">
                 <div className="site-nav-left">
                     <Logo
                         variant="horizontal"
                         height={64}
-                        onClick={() => setRoute({ page: 'lobby' })}
+                        onClick={() => navigate('/lobby')}
                     />
-
                     <nav className="site-tabs" aria-label={t('nav.lobby') ?? 'Salas de Jogo'}>
                         {NAV_TABS.map(tab => (
                             <a
                                 key={tab.id}
-                                href={`#${tab.id}`}
+                                href={tab.path}
                                 className={`site-tab${activeTab === tab.id ? ' is-active' : ''}`}
                                 aria-current={activeTab === tab.id ? 'page' : undefined}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setRoute({ page: tab.id as 'lobby' | 'my_history' | 'wallet' });
-                                    }}
+                                onClick={(e) => { e.preventDefault(); navigate(tab.path); }}
                             >
                                 {tab.label}
                             </a>
@@ -313,30 +353,28 @@ export default function App() {
                 </div>
 
                 <div className="site-nav-right">
-                    {/* Wallet chip */}
                     <span className="cb-wallet-chip">
                         <span style={{ color: 'var(--cb-brand)' }} aria-hidden="true">◆</span>
                         <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.75rem' }}>
-                            {profile.wallet_address}
+                            {profile?.wallet_address}
                         </span>
                     </span>
 
-                    {/* Tier badge */}
-                    <span className={`cb-tier-${profile.progression.tier.toLowerCase() as 'bronze' | 'silver' | 'gold' | 'diamond'}`}>
-                        {profile.progression.tier}
-                    </span>
+                    {profile && (
+                        <span className={`cb-tier-${profile.progression.tier.toLowerCase() as 'bronze' | 'silver' | 'gold' | 'diamond'}`}>
+                            {profile.progression.tier}
+                        </span>
+                    )}
 
-                    {/* Acesso admin */}
                     {isAdmin && (
                         <button
                             className="cb-btn cb-btn-outline cb-btn-sm"
-                            onClick={() => setRoute({ page: 'admin' })}
+                            onClick={() => navigate('/admin/dashboard')}
                         >
                             Admin
                         </button>
                     )}
 
-                    {/* Seletor de idioma */}
                     <select
                         value={i18n.language}
                         onChange={(e) => handleLanguageChange(e.target.value)}
@@ -349,7 +387,6 @@ export default function App() {
                         <option value="zh-CN">中</option>
                     </select>
 
-                    {/* Theme toggle */}
                     <button
                         className="cb-theme-toggle"
                         onClick={toggleTheme}
@@ -359,17 +396,12 @@ export default function App() {
                         {theme === 'dark' ? '☾' : '☀'}
                     </button>
 
-                    {/* Logout */}
-                    <button
-                        className="cb-btn cb-btn-ghost cb-btn-sm"
-                        onClick={logout}
-                    >
+                    <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={logout}>
                         {t('nav.logout') ?? 'Desconectar'}
                     </button>
                 </div>
             </header>
 
-            {/* ── Conteúdo ── */}
             <div className="site-content">
                 <main className="site-main">
                     {error && (
@@ -377,9 +409,7 @@ export default function App() {
                             {error}
                         </div>
                     )}
-
-                    {/* DEV: login rápido */}
-                    {import.meta.env.DEV && createDevSession && route.page === 'lobby' && (
+                    {import.meta.env.DEV && createDevSession && activeTab === 'lobby' && (
                         <div style={{ padding: '0.5rem 1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid var(--cb-border-subtle)', background: 'var(--cb-bg-sunken)', fontSize: '0.7rem' }}>
                             <span style={{ color: 'var(--cb-text-tertiary)', alignSelf: 'center' }}>DEV:</span>
                             <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={loginDev}>
@@ -387,27 +417,117 @@ export default function App() {
                             </button>
                         </div>
                     )}
-
-                    {route.page === 'lobby' && (
-                        <Lobby
-                            session={session}
-                            onEnterRoom={(roomId, gameId) => setRoute({ page: 'game', roomId, gameId })}
-                            onReplayGame={(gameId) => setRoute({ page: 'replay', gameId })}
-                        />
-                    )}
-
-                    {route.page === 'my_history' && (
-                        <MyHistoryPage
-                            session={session}
-                            onViewReplay={(gameId) => setRoute({ page: 'replay', gameId })}
-                        />
-                    )}
-
-                    {route.page === 'wallet' && (
-                        <WalletPage session={session} />
-                    )}
+                    <Outlet />
                 </main>
             </div>
         </div>
+    );
+
+    const isLoading = loading || isAuthenticating;
+
+    return (
+        <Routes>
+            {/* ── Raiz: redireciona autenticado → /lobby, else Landing ── */}
+            <Route
+                path="/"
+                element={
+                    restoringSession ? (
+                        <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+                            <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+                        </div>
+                    ) : session && profile ? (
+                        <Navigate to="/lobby" replace />
+                    ) : (
+                        <LandingPage
+                            theme={theme}
+                            onToggleTheme={toggleTheme}
+                            onConnect={login}
+                            devAccounts={import.meta.env.DEV ? devAccounts : null}
+                            onDevLogin={import.meta.env.DEV ? ((actor, key) => {
+                                if (createCustomSession) handleLogin(createCustomSession(actor, key));
+                            }) : null}
+                        />
+                    )
+                }
+            />
+
+            {/* ── Rotas protegidas por autenticação ── */}
+            <Route element={
+                <AuthGuard
+                    session={session}
+                    profile={profile}
+                    restoringSession={restoringSession}
+                />
+            }>
+                {/* ── Shell do jogador (Lobby / History / Wallet) ── */}
+                <Route element={<PlayerShell />}>
+                    <Route path="/lobby" element={
+                        <Lobby
+                            session={session!}
+                            onEnterRoom={(roomId, gameId) => navigate(`/room/${roomId}/${gameId}`)}
+                            onReplayGame={(gameId) => navigate(`/replay/${gameId}`)}
+                        />
+                    } />
+                    <Route path="/history" element={
+                        <MyHistoryPage
+                            session={session!}
+                            onViewReplay={(gameId) => navigate(`/replay/${gameId}`)}
+                        />
+                    } />
+                    <Route path="/wallet" element={<WalletPage session={session!} />} />
+                </Route>
+
+                {/* ── Telas full-screen ── */}
+                <Route path="/room/:roomId/:gameId" element={<GameRoomPage {...pageProps} />} />
+                <Route path="/replay/:gameId"       element={<ReplayPage session={session!} />} />
+                <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session!} />} />
+
+                {/* ── Admin (requer role admin) ── */}
+                <Route element={<AdminGuard isAdmin={isAdmin} />}>
+                    <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+                    <Route path="/admin/:section" element={
+                        <AdminPage
+                            session={session!}
+                            profile={profile!}
+                            theme={theme}
+                            onToggleTheme={toggleTheme}
+                            onLogout={logout}
+                        />
+                    } />
+                </Route>
+            </Route>
+
+            {/* ── Loading global (perfil ainda carregando) ── */}
+            {isLoading && !restoringSession && (
+                <Route path="*" element={
+                    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+                        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+                            <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+                            <p style={{ color: 'var(--cb-text-secondary)', fontSize: '0.875rem' }}>
+                                {t('common.loading') ?? 'Carregando...'}
+                            </p>
+                            {(error ?? authError) && (
+                                <p style={{ color: 'var(--cb-danger)', fontSize: '0.875rem' }}>
+                                    {error ?? authError}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                } />
+            )}
+
+            {/* ── Fallback: qualquer rota inválida → / ── */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+    );
+}
+
+// ── APP (BrowserRouter wrapper — thin) ───────────────────────────────────────
+
+export default function App() {
+    return (
+        <BrowserRouter>
+            <AppRoot />
+        </BrowserRouter>
     );
 }

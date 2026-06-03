@@ -72,7 +72,7 @@
       "closed": "已关闭"
     }
   },
-    "game_room": {
+  "game_room": {
     "real_time_drawing": "实时抽奖",
     "waiting_start": "等待开奖开始...",
     "draw_cancelled": "抽奖已取消",
@@ -131,7 +131,8 @@
     "cell_marked_aria": "{{col}}-{{val}} 已标记",
     "cell_aria": "{{col}}-{{val}}",
     "ticket_footer_pattern": "{{count}} 个模式",
-    "ticket_footer_marked": "已标记 {{marked}}/{{total}}"
+    "ticket_footer_marked": "已标记 {{marked}}/{{total}}",
+    "next_game_soon": "下一局约 {{time}} 后"
   },
   "lobby": {
     "title": "游戏大厅",
@@ -170,7 +171,18 @@
     "view_results": "查看结果",
     "enter_room_aria": "进入房间 {{id}}",
     "closes_in": "{{time}}后结束",
-    "starts_soon": "抽奖即将开始"
+    "starts_soon": "抽奖即将开始",
+    "my_tickets": "我的票: {{count}}",
+    "buy_tickets": "购买票",
+    "watch_live": "直播观看",
+    "history": "历史",
+    "closes_in_urgent": "⚠ {{time}}后关闭",
+    "price_range": "{{min}} – {{max}}",
+    "price_from": "起价 {{min}}",
+    "tickets_sold": "{{count}} 张票",
+    "next_game_soon": "下一局即将开始",
+    "room_idle": "等待中",
+    "max_prize_label": "最高/票"
   },
   "wallet_page": {
     "balance": "可用余额",
@@ -239,7 +251,10 @@
     "total_tickets": "总票券数",
     "generate_more": "生成更多",
     "confirm_buy_count": "购买 {{count}} 张票券",
-    "cost_preview": "费用：{{total}}"
+    "cost_preview": "费用：{{total}}",
+    "closes_in": "销售在 {{time}} 后结束",
+    "closes_soon": "销售即将结束！",
+    "sales_closed": "🔒 销售已结束"
   },
   "admin": {
     "dashboard": "仪表盘",
@@ -495,7 +510,32 @@
     "col_tickets": "彩票",
     "col_spent": "总花费",
     "col_won": "总奖金",
-    "col_action": ""
+    "col_action": "操作",
+    "summary_games": "{{count}} 局",
+    "summary_spent": "已花费",
+    "summary_won": "已赢得",
+    "summary_balance": "余额",
+    "badge_won": "获胜",
+    "badge_lost": "未获奖",
+    "badge_aborted": "已取消",
+    "tickets_label": "{{count}} 张票",
+    "replay_summary_title": "游戏结束",
+    "replay_summary_balls": "已抽取 {{count}} 球",
+    "replay_summary_winners": "{{count}} 名获胜者",
+    "replay_summary_no_winners": "无获胜者",
+    "replay_summary_won": "您赢得",
+    "replay_summary_spent": "已投入",
+    "seek_aria": "跳转到回放位置",
+    "show_patterns": "模式",
+    "btn_play": "播放",
+    "btn_pause": "暂停",
+    "btn_restart": "重新开始",
+    "btn_end": "跳至结尾",
+    "col_players": "玩家",
+    "col_tickets_sold": "票",
+    "col_pool": "总奖池",
+    "participated": "我参与了",
+    "all_games": "全部游戏"
   },
   "errors": {
     "network": "连接错误。请检查您的网络。",

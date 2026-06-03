@@ -57,7 +57,11 @@
 - [x] Cartelas marcadas em tempo real conforme bolas são sorteadas.
 - [x] LandingPage.tsx — página pública para visitantes não autenticados.
 - [x] GameRoom.tsx — tela de sala ao vivo (gr-*, bola hero, cartelas, padrões, chat).
-- [x] App.tsx — roteamento state-based: landing/lobby/game/wallet/admin + roomId.
+- [x] ReplayRoom.tsx — replay de partidas encerradas com slow reveal simulado, TicketCard, painel padrões, banners, sort agnóstico de fase.
+- [x] TicketCard.tsx — componente compartilhado (GameRoom + ReplayRoom) com helpers de sort/group por fase (GamePhase) e constantes.
+- [x] Sort/Group System — `sortTickets`/`groupTicketsByCategory`/`sortPatterns` com `combinedScore` (Σ completionPct × prizeValue), multi-pattern priority, `winnerMap` com `patternCount`/`totalPrize`.
+- [x] Combination Stats — Histograma de combinações no painel "PADRÕES VENCEDORES" (GameRoom + ReplayRoom).
+- [x] App.tsx — roteamento URL-based via React Router DOM v6 (ADR-015): BrowserRouter + Routes + AuthGuard + AdminGuard + deep links em todas as rotas.
 - [x] AdminLayout.tsx — shell admin com site-*, sidebar com grupos + seção Rooms.
 - [x] Painel Administrativo (ADR-009): Dashboard, Patterns, Gametypes, Sponsors, Compliance, Users, Player, Rooms.
 - [x] Multi-role dev login: 5 perfis (Jogador 1/2, Game Admin, Contract Admin, Sponsor).
@@ -71,7 +75,7 @@
 - [ ] PWA (Lighthouse > 90).
 
 ## Épico 5: Documentação
-- [x] ADR-001 a ADR-011 criados e documentados.
+- [x] ADR-001 a ADR-015 criados e documentados.
 - [x] `openapi.yaml` v1.4.0, `asyncapi.yaml` v1.0.0.
 - [x] `CLAUDE_DESIGN.md` — Design System completo para Claude Design.
 - [ ] `openapi.yaml` — endpoints de rooms e drop vault.

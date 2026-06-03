@@ -297,6 +297,31 @@ export async function getGametypeMetadata(req: Request, res: Response): Promise<
 }
 
 /**
+ * GET /api/v1/gametypes/:gametypeId/metadata  (público)
+ * Retorna apenas as combinações e regras estendidas de um gametype — sem auth.
+ */
+export async function getGametypeMetadataPublic(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+    try {
+        const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId })
+            .select('gametype_id rules combinations')
+            .lean();
+        if (!metadata) {
+            res.status(200).json({ gametype_id: gametypeId, rules: [], combinations: [] });
+            return;
+        }
+        res.status(200).json({
+            gametype_id:  metadata.gametype_id,
+            rules:        (metadata as any).rules        ?? [],
+            combinations: (metadata as any).combinations ?? [],
+        });
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao buscar metadados públicos do gametype:', err);
+        res.status(500).json({ error: 'Erro ao buscar metadados.' });
+    }
+}
+
+/**
  * PUT /api/v1/admin/gametypes/:gametypeId/metadata
  * Cria ou atualiza metadados off-chain de um gametype.
  *

@@ -28,7 +28,7 @@ import { generateTickets }                           from './controllers/ticketC
 import {
     listPatterns, upsertPattern, deletePattern,
     listGametypes, upsertGametype, deleteGametype,
-    getGametypeMetadata, upsertGametypeMetadata,
+    getGametypeMetadata, upsertGametypeMetadata, getGametypeMetadataPublic,
 } from './controllers/patternController';
 import { simulateWeights, calibrateWeights }         from './controllers/monteCarloController';
 import { getRtpStatistics, getGamesHistory, syncGameToLedger } from './controllers/statisticsController';
@@ -187,6 +187,10 @@ function registerRoutes(): void {
     app.delete(
         '/api/v1/admin/gametypes/:gametypeId',
         adminLimiter, requireAuth, requireRole('admin'), deleteGametype
+    );
+    app.get(
+        '/api/v1/gametypes/:gametypeId/metadata',
+        playerLimiter, getGametypeMetadataPublic
     );
     app.get(
         '/api/v1/admin/gametypes/:gametypeId/metadata',

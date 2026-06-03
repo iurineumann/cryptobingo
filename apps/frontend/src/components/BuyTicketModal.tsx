@@ -34,7 +34,15 @@ interface TicketBatch {
     tickets: SignedTicket[];
 }
 
-const EXPLORER_BASE = import.meta.env.VITE_EXPLORER_URL ?? 'https://wax.bloks.io';
+const EXPLORER_BASE  = import.meta.env.VITE_EXPLORER_URL ?? 'https://wax.bloks.io';
+const AUTO_LOCK_SEC  = 60; // deve coincidir com AUTO_LOCK_DELAY_SEC do worker
+
+function fmtCountdown(ms: number): string {
+    if (ms <= 0) return '0s';
+    const s = Math.ceil(ms / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
+}
 
 type Step = 'form' | 'preview';
 
@@ -47,6 +55,18 @@ export default function BuyTicketModal({
 
     const { t } = useTranslation();
     const { isPurchasing, purchaseError, lastPurchase, generateForPreview, purchaseTickets, clearError } = useTicketPurchase();
+
+    // ── Countdown do funding ──────────────────────────────────────────────────
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1_000);
+        return () => clearInterval(id);
+    }, []);
+
+    const closesAt   = Number(gameId) + AUTO_LOCK_SEC * 1_000;
+    const remaining  = closesAt - now;
+    const isUrgent   = remaining > 0 && remaining < 15_000;
+    const isClosed   = remaining <= 0;
 
     const defaultQuantity = roomPriceDefault?.quantity ?? ticketPrice.quantity;
     const [customPrice, setCustomPrice] = useState(defaultQuantity);
@@ -260,15 +280,26 @@ export default function BuyTicketModal({
                     </button>
                 </div>
 
-                <p className="text-sm text-[--cb-text-secondary] mb-5">
-                    {t('game_room.breadcrumb_room')} <span className="font-bold text-[--cb-text-primary]">#{gameId}</span>
-                    <span className="cb-badge cb-badge-success ml-2">🟢 {t('lobby.sales_open')}</span>
+                <div className="flex items-center gap-2 flex-wrap mb-5">
+                    <span className="text-sm text-[--cb-text-secondary]">
+                        {t('game_room.breadcrumb_room')} <span className="font-bold text-[--cb-text-primary]">#{gameId}</span>
+                    </span>
+                    {!isClosed && (
+                        <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`}>
+                            ⏱ {t('buy_ticket.closes_in', { time: fmtCountdown(remaining) })}
+                        </span>
+                    )}
+                    {isClosed && (
+                        <span className="lobby-card-ticker is-urgent">
+                            {t('buy_ticket.sales_closed')}
+                        </span>
+                    )}
                     {maxTicketsPerPlayer && maxTicketsPerPlayer > 0 && (
-                        <span className="text-xs text-[--cb-text-tertiary] ml-2">
+                        <span className="text-xs text-[--cb-text-tertiary]">
                             {t('buy_ticket.room_limit_info', { max: maxTicketsPerPlayer })}
                         </span>
                     )}
-                </p>
+                </div>
 
                 {/* ── Step: FORM ──────────────────────────────────────────── */}
                 {step === 'form' && (
