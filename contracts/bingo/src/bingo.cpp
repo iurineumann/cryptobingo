@@ -261,12 +261,15 @@ namespace bingo {
         }
         check(stage_weight > 0, "stage_num nao encontrado nos stages do gametype.");
 
-        // Calcula payout: ticket_price × base_multiplier × stage_weight / 100
+        // Calcula payout: ticket.price × base_multiplier × stage_weight / 100
+        // Usa o preço efetivo gravado no ticket para respeitar preços variáveis (ADR-010).
         tickets_table tickets(get_self(), game_id);
         auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
         name winner = ticket_itr->owner;
 
-        extended_asset payout = game_itr->ticket_price;
+        extended_asset payout = ticket_itr->price.quantity.amount > 0
+            ? ticket_itr->price
+            : game_itr->ticket_price;  // fallback para tickets legados sem price
         payout.quantity.amount =
             payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)stage_weight / 100;
 
@@ -498,6 +501,7 @@ namespace bingo {
                 t.matrix    = matrices[i];
                 t.state     = 0x00001000;
                 t.game_id   = game_id;
+                t.price     = effective_price;
             });
         }
     }
@@ -589,7 +593,10 @@ namespace bingo {
                 }
             }
             check(win_weight > 0, "win_pattern_mask nao corresponde a nenhum padrao do gametype.");
-            payout = game_itr->ticket_price;
+            // Usa o preço efetivo do ticket para respeitar preços variáveis (ADR-010).
+            payout = ticket_itr->price.quantity.amount > 0
+                ? ticket_itr->price
+                : game_itr->ticket_price;  // fallback para tickets legados sem price
             payout.quantity.amount =
                 payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
 
@@ -700,13 +707,17 @@ namespace bingo {
         auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
         name owner = ticket_itr->owner;
 
-        if (game_itr->ticket_price.quantity.amount > 0) {
+        // Reembolsa pelo preço efetivo do ticket; fallback para o preço do jogo em tickets legados.
+        const extended_asset& refund_price = ticket_itr->price.quantity.amount > 0
+            ? ticket_itr->price
+            : game_itr->ticket_price;
+        if (refund_price.quantity.amount > 0) {
             balances_table balances(get_self(), owner.value);
-            auto bal_itr = balances.find(game_itr->ticket_price.quantity.symbol.code().raw());
+            auto bal_itr = balances.find(refund_price.quantity.symbol.code().raw());
             if (bal_itr == balances.end()) {
-                balances.emplace(get_self(), [&](auto& b) { b.balance = game_itr->ticket_price; });
+                balances.emplace(get_self(), [&](auto& b) { b.balance = refund_price; });
             } else {
-                balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += game_itr->ticket_price; });
+                balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += refund_price; });
             }
         }
         tickets.erase(ticket_itr);

@@ -68,11 +68,12 @@ export interface ExtendedAsset {
  * Scope: game_id. Primary Key: ticket_id.
  */
 export interface BlockchainTicketRecord {
-    ticket_id: string;    // uint64
-    owner:     string;    // name
-    matrix:    number[];  // 24 posições coluna-maior [B0-B4,I0-I4,N0,N1,N3,N4,G0-G4,O0-O4]
-    state:     number;    // uint32 bitmask; inicia em 0x00001000 (bit 12 = FREE SPACE)
-    game_id:   string;    // uint64
+    ticket_id: string;         // uint64
+    owner:     string;         // name
+    matrix:    number[];       // 24 posições coluna-maior [B0-B4,I0-I4,N0,N1,N3,N4,G0-G4,O0-O4]
+    state:     number;         // uint32 bitmask; inicia em 0x00001000 (bit 12 = FREE SPACE)
+    game_id:   string;         // uint64
+    price?:    ExtendedAsset;  // preço efetivo pago — preenchido desde ADR-010 variable pricing
 }
 
 /**

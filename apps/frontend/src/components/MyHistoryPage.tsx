@@ -1,3 +1,7 @@
+// apps/frontend/src/components/MyHistoryPage.tsx
+// Histórico pessoal de partidas do jogador.
+// Design: classes hist-* definidas em globals.design.css
+
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
@@ -6,6 +10,24 @@ import { useGamesHistory } from '../hooks/useGamesHistory';
 interface MyHistoryPageProps {
   session: Session;
   onViewReplay: (gameId: string) => void;
+}
+
+function formatDate(endTime: number): string {
+  if (endTime <= 0) return '—';
+  const d = new Date(endTime * 1000);
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit' })
+    + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function parseAmount(str: string): number {
+  if (!str || str === '—') return 0;
+  return parseFloat(str.split(' ')[0]) || 0;
+}
+
+function extractSymbol(str: string): string {
+  if (!str || str === '—') return '';
+  const parts = str.trim().split(' ');
+  return parts.length > 1 ? parts[parts.length - 1] : '';
 }
 
 export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPageProps) {
@@ -28,21 +50,39 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
     return rows.filter(r => r.roomId === roomFilter);
   }, [rows, roomFilter]);
 
-  const handleLoadMore = () => loadMore();
+  const symbol = useMemo(() => {
+    for (const r of rows) {
+      const s = extractSymbol(r.totalSpent);
+      if (s) return s;
+    }
+    return 'BINGO';
+  }, [rows]);
+
+  const summary = useMemo(() => {
+    const src = roomFilter ? filtered : rows;
+    let spent = 0, won = 0, winGames = 0;
+    for (const r of src) {
+      spent += parseAmount(r.totalSpent);
+      const w = parseAmount(r.totalWon);
+      won += w;
+      if (w > 0) winGames++;
+    }
+    return { games: src.length, spent, won, balance: won - spent, winGames };
+  }, [rows, filtered, roomFilter]);
 
   return (
-    <section>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <h2 className="text-lg font-bold text-[--cb-text-primary]" style={{ margin: 0 }}>
+    <div className="hist-shell">
+      {/* ── Cabeçalho ── */}
+      <div className="hist-header">
+        <h2 className="hist-title">
           📋 {t('replay.my_history_title')}
         </h2>
-
         {roomIds.length > 1 && (
           <select
-            className="cb-input cb-select"
+            className="cb-input"
             value={roomFilter}
             onChange={e => setRoomFilter(e.target.value)}
-            style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.8rem', width: 'auto' }}
+            style={{ padding: '0.3rem 2rem 0.3rem 0.75rem', fontSize: '0.8rem', width: 'auto' }}
             aria-label={t('replay.filter_room')}
           >
             <option value="">{t('replay.filter_all')}</option>
@@ -53,75 +93,120 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
         )}
       </div>
 
+      {/* ── Barra de resumo ── */}
+      {summary.games > 0 && (
+        <div className="hist-summary" style={{ marginBottom: '0.875rem' }}>
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_games', { count: summary.games, plural: summary.games !== 1 ? 's' : '' })}</span>
+            <span className="value">{summary.winGames} vitória{summary.winGames !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_spent')}</span>
+            <span className="value">{summary.spent.toFixed(4)} {symbol}</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_won')}</span>
+            <span className={`value${summary.won > 0 ? ' gain' : ''}`}>{summary.won.toFixed(4)} {symbol}</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_balance')}</span>
+            <span className={`value ${summary.balance >= 0 ? 'gain' : 'loss'}`}>
+              {summary.balance >= 0 ? '+' : ''}{summary.balance.toFixed(4)} {symbol}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Lista de partidas ── */}
       {filtered.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--cb-text-tertiary)' }}>
-          <p>{t('replay.no_history')}</p>
+        <div className="hist-empty">
+          <span className="hist-empty-icon">📋</span>
+          <span className="hist-empty-text">{t('replay.no_history')}</span>
         </div>
       )}
 
       {filtered.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="cb-table" style={{ width: '100%', minWidth: '48rem' }}>
-            <thead>
-              <tr>
-                <th>{t('replay.col_date')}</th>
-                <th>{t('replay.col_room')}</th>
-                <th>{t('replay.col_game')}</th>
-                <th>{t('replay.col_tickets')}</th>
-                <th>{t('replay.col_spent')}</th>
-                <th>{t('replay.col_won')}</th>
-                <th>{t('replay.col_action')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => (
-                <tr key={r.gameId}>
-                  <td style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
-                    {r.endTime > 0
-                      ? new Date(r.endTime * 1000).toLocaleString()
-                      : '—'}
-                  </td>
-                  <td style={{ fontSize: '0.8rem' }}>
-                    {r.roomId && r.roomId !== '0' ? `#${r.roomId}` : '—'}
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
-                    #{r.gameId}
-                  </td>
-                  <td>{r.ticketsCount}</td>
-                  <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
-                    {r.totalSpent}
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.8rem' }}>
-                    {r.totalWon}
-                  </td>
-                  <td>
-                    <button
-                      className="cb-btn cb-btn-ghost cb-btn-sm"
-                      onClick={() => onViewReplay(r.gameId)}
-                    >
-                      📽 {t('replay.view_replay')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="hist-list">
+          {filtered.map(r => {
+            const wonAmt = parseAmount(r.totalWon);
+            const isWinner = wonAmt > 0;
+            const isAborted = r.status === 'aborted';
+            return (
+              <div
+                key={r.gameId}
+                className={`hist-row${isWinner ? ' is-winner' : ''}${isAborted ? ' is-aborted' : ''}`}
+              >
+                {/* Col 1: badge */}
+                <div>
+                  {isAborted ? (
+                    <span className="hist-badge aborted">✕ {t('replay.badge_aborted')}</span>
+                  ) : isWinner ? (
+                    <span className="hist-badge won">🏆 {t('replay.badge_won')}</span>
+                  ) : (
+                    <span className="hist-badge lost">{t('replay.badge_lost')}</span>
+                  )}
+                </div>
+
+                {/* Col 2: info */}
+                <div className="hist-row-info">
+                  <div className="hist-row-meta">
+                    <span className="hist-row-game">#{r.gameId}</span>
+                    {r.roomId && r.roomId !== '0' && (
+                      <span className="hist-row-room">Sala #{r.roomId}</span>
+                    )}
+                    <span className="hist-row-date">{formatDate(r.endTime)}</span>
+                  </div>
+                  <div className="hist-row-amounts">
+                    <div className="hist-row-amount">
+                      <span className="alabel">{t('replay.col_tickets')}</span>
+                      <span className="avalue">{r.ticketsCount}</span>
+                    </div>
+                    <div className="hist-row-amount">
+                      <span className="alabel">{t('replay.col_spent')}</span>
+                      <span className="avalue">{r.totalSpent}</span>
+                    </div>
+                    {r.totalWon && r.totalWon !== '—' && (
+                      <div className="hist-row-amount">
+                        <span className="alabel">{t('replay.col_won')}</span>
+                        <span className={`avalue${isWinner ? ' won-amount' : ''}`}>{r.totalWon}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Col 3: CTA */}
+                <div className="hist-row-action">
+                  <button
+                    className="cb-btn cb-btn-primary cb-btn-sm"
+                    onClick={() => onViewReplay(r.gameId)}
+                    style={{ gap: '0.375rem' }}
+                  >
+                    ▶ {t('replay.view_replay')}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
+      {/* ── Loading / Load more ── */}
       {loading && (
-        <div style={{ textAlign: 'center', padding: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '1.25rem' }}>
           <span className="cb-spinner" style={{ width: '1.5rem', height: '1.5rem', borderWidth: '2px' }} />
         </div>
       )}
 
-      {!allLoaded && !loading && (
-        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={handleLoadMore}>
+      {!allLoaded && !loading && rows.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={() => loadMore()}>
             {t('common.load_more')}
           </button>
         </div>
       )}
-    </section>
+    </div>
   );
 }

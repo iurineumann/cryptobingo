@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
             }),
         ],
         server: {
+            historyApiFallback: true, // serve index.html para todas as rotas SPA (ADR-015)
             proxy: {
                 '/v1': {
                     target:       rpcUrl,

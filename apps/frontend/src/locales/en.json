@@ -72,7 +72,7 @@
       "closed": "Closed"
     }
   },
-    "game_room": {
+  "game_room": {
     "real_time_drawing": "Real Time Drawing",
     "waiting_start": "Waiting for draw to start...",
     "draw_cancelled": "Draw Cancelled",
@@ -131,7 +131,8 @@
     "cell_marked_aria": "{{col}}-{{val}} marked",
     "cell_aria": "{{col}}-{{val}}",
     "ticket_footer_pattern": "{{count}} patterns",
-    "ticket_footer_marked": "{{marked}}/{{total}} marked"
+    "ticket_footer_marked": "{{marked}}/{{total}} marked",
+    "next_game_soon": "Next game in ~{{time}}"
   },
   "lobby": {
     "title": "Game Lobby",
@@ -170,7 +171,18 @@
     "view_results": "View results",
     "enter_room_aria": "Enter room {{id}}",
     "closes_in": "Closes in {{time}}",
-    "starts_soon": "Draw starting soon"
+    "starts_soon": "Draw starting soon",
+    "my_tickets": "My tickets: {{count}}",
+    "buy_tickets": "Buy Tickets",
+    "watch_live": "Watch Live",
+    "history": "History",
+    "closes_in_urgent": "⚠ Closes in {{time}}",
+    "price_range": "{{min}} – {{max}}",
+    "price_from": "From {{min}}",
+    "tickets_sold": "{{count}} tickets",
+    "next_game_soon": "Next game soon",
+    "room_idle": "Waiting",
+    "max_prize_label": "Max/ticket"
   },
   "wallet_page": {
     "balance": "Available Balance",
@@ -239,7 +251,10 @@
     "total_tickets": "Total tickets",
     "generate_more": "Generate More",
     "confirm_buy_count": "Buy {{count}} ticket(s)",
-    "cost_preview": "Cost: {{total}}"
+    "cost_preview": "Cost: {{total}}",
+    "closes_in": "Sales close in {{time}}",
+    "closes_soon": "Sales closing soon!",
+    "sales_closed": "🔒 Sales closed"
   },
   "admin": {
     "dashboard": "Dashboard",
@@ -495,7 +510,32 @@
     "col_tickets": "Tickets",
     "col_spent": "Total Spent",
     "col_won": "Total Won",
-    "col_action": ""
+    "col_action": "Action",
+    "summary_games": "{{count}} game{{plural}}",
+    "summary_spent": "Spent",
+    "summary_won": "Won",
+    "summary_balance": "Balance",
+    "badge_won": "Winner",
+    "badge_lost": "No prize",
+    "badge_aborted": "Cancelled",
+    "tickets_label": "{{count}} ticket{{plural}}",
+    "replay_summary_title": "Game over",
+    "replay_summary_balls": "{{count}} balls drawn",
+    "replay_summary_winners": "{{count}} winner{{plural}}",
+    "replay_summary_no_winners": "No winners",
+    "replay_summary_won": "You won",
+    "replay_summary_spent": "Invested",
+    "seek_aria": "Seek to position in replay",
+    "show_patterns": "Patterns",
+    "btn_play": "Play",
+    "btn_pause": "Pause",
+    "btn_restart": "Restart",
+    "btn_end": "Skip to end",
+    "col_players": "Players",
+    "col_tickets_sold": "Tickets",
+    "col_pool": "Total pool",
+    "participated": "I played",
+    "all_games": "All games"
   },
   "errors": {
     "network": "Connection error. Check your internet.",

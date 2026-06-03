@@ -81,6 +81,13 @@
 [DONE] Weight decimal (2 casas) — `pattern_rule.weight` uint8_t→uint16_t (hundredths). Payout claimwin divide por 100. Frontend step=0.01 + conversão parseFloat×100. Backend validations 100-25500. ABI atualizado.
 [DONE] Metadata upsert — Corrigido patternController.ts para persistir `rules` e `combinations` (antes ignorados).
 [DONE] Suggest com calibração RTP — 3 fases: (1) sugere pesos individuais inversos ao hit_rate, (2) gera combinações, (3) calibra pesos via re-simulação até RTP ≈ 85%. Backend MC engine suporta combinações (findBestWinner + evaluateCombinations).
+[DONE] Components — `TicketCard.tsx` extraído de `GameRoom.tsx` como componente compartilhado com helpers de sort/group (`sortTickets`, `groupTicketsByCategory`, `sortPatterns`, `computePatternUserProximity`) e constantes (`BINGO_COLORS`, `getCol`, `fetchGamePatterns`, `maskToCells`).
+[DONE] Sort/Group System — Sistema de ordenação por fase (`GamePhase = 'during' | 'after'`). During: vencedores multi-pattern → single-pattern → afinidade combinacional (`combinedScore` = Σ completionPct × prizeValue de todos os padrões). After: vencedores por prize DESC → proximity DESC → marked DESC. Grouping com seções por afinidade de padrão.
+[DONE] Combination Stats — Painel de padrões exibe histograma de combinações (quantas cartelas completaram exatamente N padrões). `winnerMap` extendido com `patternCount`/`totalPrize` em GameRoom e ReplayRoom.
+[DONE] CSS — `.gr-tickets-group*` (cabeçalhos de seção), `.gr-patterns-combos`/`.gr-pattern-combo`/`.gr-patterns-combos-head` (histograma).
+[DONE] Pattern Mask Fix — `maskToCells` corrigido para converter de column-major (contrato) para row-major (display).
+[DONE] ReplayRoom rewrite — ReplayRoom.tsx reescrito com TicketCard, painel de padrões, banners, sort/group. useReplay.ts estendido com patterns, winners, goldenBall, gameEnded, combinationCount.
+[DONE] ADR-015 + URL Routing — App.tsx refatorado com React Router DOM v6: BrowserRouter + Routes + AuthGuard + AdminGuard + wrappers de rota (GameRoomPage, ReplayPage, RoomHistoryPage, AdminPage). Deep links funcionais em todas as rotas. historyApiFallback no Vite. restoringSession evita flash em deep links autenticados.
 [ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta) + campo room_drop_chance_bps.
 [ ] contracts/bingo — implementar actions de drop vault: deposittoken/depositnft (on_notify), allocatedrop, deallocatedrop, reclaimasset, execdrop + tabelas drop_deposits, drop_allocations, dropstate.
 [ ] dropWorker.ts — Fases 0 + 1A + 1B + 2 conforme ADR-011 §7.

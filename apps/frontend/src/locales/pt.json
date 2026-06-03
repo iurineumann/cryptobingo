@@ -72,7 +72,7 @@
       "closed": "Fechada"
     }
   },
-    "game_room": {
+  "game_room": {
     "real_time_drawing": "Sorteio em Tempo Real",
     "waiting_start": "Aguardando início do sorteio...",
     "draw_cancelled": "Sorteio Cancelado",
@@ -131,7 +131,8 @@
     "cell_marked_aria": "{{col}}-{{val}} marcado",
     "cell_aria": "{{col}}-{{val}}",
     "ticket_footer_pattern": "{{count}} padrões",
-    "ticket_footer_marked": "{{marked}}/{{total}} marcados"
+    "ticket_footer_marked": "{{marked}}/{{total}} marcados",
+    "next_game_soon": "Próxima partida em ~{{time}}"
   },
   "lobby": {
     "title": "Lobby de Jogos",
@@ -170,7 +171,18 @@
     "view_results": "Ver resultado",
     "enter_room_aria": "Entrar na sala {{id}}",
     "closes_in": "Encerra em {{time}}",
-    "starts_soon": "Sorteio em breve"
+    "starts_soon": "Sorteio em breve",
+    "my_tickets": "Minhas cartelas: {{count}}",
+    "buy_tickets": "Comprar Cartelas",
+    "watch_live": "Assistir ao Vivo",
+    "history": "Histórico",
+    "closes_in_urgent": "⚠ Encerra em {{time}}",
+    "price_range": "{{min}} – {{max}}",
+    "price_from": "A partir de {{min}}",
+    "tickets_sold": "{{count}} bilhetes",
+    "next_game_soon": "Próximo jogo em breve",
+    "room_idle": "Aguardando",
+    "max_prize_label": "Máx/cartela"
   },
   "wallet_page": {
     "balance": "Saldo Disponível",
@@ -239,7 +251,10 @@
     "total_tickets": "Total de cartelas",
     "generate_more": "Gerar Mais",
     "confirm_buy_count": "Comprar {{count}} cartela(s)",
-    "cost_preview": "Custo: {{total}}"
+    "cost_preview": "Custo: {{total}}",
+    "closes_in": "Vendas encerram em {{time}}",
+    "closes_soon": "Vendas encerram em breve!",
+    "sales_closed": "🔒 Vendas encerradas"
   },
   "admin": {
     "dashboard": "Dashboard",
@@ -495,7 +510,32 @@
     "col_tickets": "Bilhetes",
     "col_spent": "Total Gasto",
     "col_won": "Total Ganho",
-    "col_action": ""
+    "col_action": "Ação",
+    "summary_games": "{{count}} partida{{plural}}",
+    "summary_spent": "Gasto",
+    "summary_won": "Ganho",
+    "summary_balance": "Saldo",
+    "badge_won": "Vencedor",
+    "badge_lost": "Não premiado",
+    "badge_aborted": "Cancelada",
+    "tickets_label": "{{count}} bilhete{{plural}}",
+    "replay_summary_title": "Partida encerrada",
+    "replay_summary_balls": "{{count}} bolas sorteadas",
+    "replay_summary_winners": "{{count}} vencedor{{plural}}",
+    "replay_summary_no_winners": "Sem vencedores",
+    "replay_summary_won": "Você ganhou",
+    "replay_summary_spent": "Investido",
+    "seek_aria": "Avançar para posição no replay",
+    "show_patterns": "Padrões",
+    "btn_play": "Play",
+    "btn_pause": "Pause",
+    "btn_restart": "Reiniciar",
+    "btn_end": "Ir ao final",
+    "col_players": "Jogadores",
+    "col_tickets_sold": "Cartelas",
+    "col_pool": "Pool coletado",
+    "participated": "Participei",
+    "all_games": "Todas as partidas"
   },
   "errors": {
     "network": "Erro de conexão. Verifique sua internet.",

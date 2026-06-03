@@ -8,12 +8,28 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
-import { UInt64 } from '@wharfkit/antelope';
-import type { MongoUserProfile, BlockchainGameState, ExtendedAsset } from '@cryptobingo/shared-types';
+import { Name, UInt64 } from '@wharfkit/antelope';
+import type { MongoUserProfile, BlockchainGameState, BlockchainBalance, ExtendedAsset } from '@cryptobingo/shared-types';
 import type { EnrichedRoom } from '../services/api';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
 import ChatPanel from './chat/ChatPanel';
+import Logo from './Logo';
+import { TicketCard } from './TicketCard';
+import {
+  Pattern, BINGO_COLORS, getCol,
+  fetchGamePatterns, sortTickets, sortPatterns,
+  groupTicketsByCategory, isCombinationSatisfied,
+  type CombinationRuleInput, type ExtendedRule,
+} from './ticketUtils';
+import { fetchPublicGametypeMetadata } from '../services/api';
+
+function fmtCountdown(ms: number): string {
+  if (ms <= 0) return '0s';
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
+}
 
 function parseHexMatrix(hex: string): number[] {
   const bytes: number[] = [];
@@ -29,248 +45,33 @@ function parseHexMatrix(hex: string): number[] {
 // ==========================================
 
 interface GameRoomProps {
-  gameId:  string;
-  roomId?: string;
-  session: Session;
-  profile: MongoUserProfile;
-  onLeave: () => void;
-}
-
-const BINGO_COLORS: Record<string, string> = {
-  B: 'var(--color-bingo-b)',
-  I: 'var(--color-bingo-i)',
-  N: 'var(--color-bingo-n)',
-  G: 'var(--color-bingo-g)',
-  O: 'var(--color-bingo-o)',
-};
-
-function getCol(n: number): string {
-  if (n <= 15) return 'B';
-  if (n <= 30) return 'I';
-  if (n <= 45) return 'N';
-  if (n <= 60) return 'G';
-  return 'O';
+  gameId:            string;
+  roomId?:           string;
+  session:           Session;
+  profile:           MongoUserProfile;
+  onLeave:           () => void;
+  onGoToHistory?:    () => void;
+  onGoToWallet?:     () => void;
+  onGoToAdmin?:      () => void;
+  isAdmin?:          boolean;
+  onLogout?:         () => void;
+  theme?:            'dark' | 'light';
+  onToggleTheme?:    () => void;
+  onLanguageChange?: (locale: string) => void;
 }
 
 const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
-const COLS     = ['B', 'I', 'N', 'G', 'O'];
-
-function maskToCells(mask: number): number[] {
-  return Array.from({ length: 25 }, (_, i) => (mask >> i) & 1);
-}
-
-function weightToPrize(weight: number): string {
-  return (weight / 100).toFixed(2);
-}
-
-function computeProximityScore(matrix: number[], drawnSet: Set<number>, patterns: Pattern[]): number {
-  const B    = matrix.slice(0, 5);
-  const I    = matrix.slice(5, 10);
-  const Nraw = matrix.slice(10, 14);
-  const G    = matrix.slice(14, 19);
-  const O    = matrix.slice(19, 24);
-  const N    = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
-  const flat: (number | null)[] = [];
-  for (let r = 0; r < 5; r++) flat.push(B[r], I[r], N[r], G[r], O[r]);
-
-  let score = 0;
-  for (const p of patterns) {
-    const totalReq = p.cells.filter(Boolean).length;
-    if (totalReq === 0) continue;
-    const markedReq = p.cells.filter((req, i) => {
-      if (!req) return false;
-      return flat[i] === null || drawnSet.has(flat[i] as number);
-    }).length;
-    const prizeVal = parseFloat(p.prize) || 0;
-    score += (markedReq / totalReq) * prizeVal;
-  }
-  return score;
-}
-
-async function fetchGamePatterns(session: Session, gametypeId: string): Promise<Pattern[]> {
-  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
-  try {
-    const gtRes = await session.client.v1.chain.get_table_rows({
-      code: c, scope: c, table: 'gametypes',
-      lower_bound: UInt64.from(gametypeId),
-      upper_bound: UInt64.from(gametypeId),
-      limit: 1, json: true,
-    });
-    if (!gtRes.rows.length) return [];
-    const gametype = gtRes.rows[0] as any;
-    const rules: Array<{ pattern_id: string | number; weight: number }> = gametype.rules ?? [];
-    if (!rules.length) return [];
-
-    const results: Pattern[] = [];
-    for (const rule of rules) {
-      const patRes = await session.client.v1.chain.get_table_rows({
-        code: c, scope: c, table: 'patterns',
-        lower_bound: UInt64.from(String(rule.pattern_id)),
-        upper_bound: UInt64.from(String(rule.pattern_id)),
-        limit: 1, json: true,
-      });
-      if (patRes.rows.length) {
-        const pat = patRes.rows[0] as any;
-        results.push({
-          name: pat.name,
-          prize: weightToPrize(rule.weight),
-          cells: maskToCells(Number(pat.mask)),
-        });
-      }
-    }
-    return results;
-  } catch {
-    return [];
-  }
-}
-
-interface Pattern {
-  name:  string;
-  prize: string;
-  cells: number[]; // 25 elementos row-major (0|1); índice 12 = FREE SPACE
-}
-
-// ==========================================
-// SUB-COMPONENTE: Cartela 5×5
-// ==========================================
-
-interface TicketCardProps {
-  ticketId:    string;
-  matrix:      number[];
-  drawnSet:    Set<number>;
-  lastDrawn:   number | null;
-  winPattern:  Set<number> | null;
-  prize:       string | null;
-  density:     'comfortable' | 'compact';
-  patterns:    Pattern[];
-}
-
-function TicketCard({ ticketId, matrix, drawnSet, lastDrawn, winPattern, prize, density, patterns }: TicketCardProps) {
-  const { t } = useTranslation();
-  // Constrói grid 5×5 coluna-maior → linha-maior (layout: bits 0-24, bit12=FREE)
-  const grid = useMemo(() => {
-    const B    = matrix.slice(0, 5);
-    const I    = matrix.slice(5, 10);
-    const Nraw = matrix.slice(10, 14);
-    const G    = matrix.slice(14, 19);
-    const O    = matrix.slice(19, 24);
-    const N    = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
-    return Array.from({ length: 5 }, (_, r) => [B[r], I[r], N[r], G[r], O[r]]);
-  }, [matrix]);
-
-  const markedCount = useMemo(
-    () => matrix.filter(n => drawnSet.has(n)).length + 1, // +1 FREE
-    [matrix, drawnSet],
-  );
-
-  // Detecção de padrões completados via cells[25] row-major
-  const { completedPatterns, winningCells } = useMemo(() => {
-    const isCellMarked = (i: number) => {
-      const val = grid[Math.floor(i / 5)][i % 5];
-      return val === null || drawnSet.has(val as number);
-    };
-    const completed = patterns.filter(p =>
-      p.cells.every((req, i) => !req || isCellMarked(i))
-    );
-    const winning = new Set<number>();
-    completed.forEach(p => p.cells.forEach((req, i) => { if (req) winning.add(i); }));
-    return { completedPatterns: completed, winningCells: winning };
-  }, [grid, drawnSet, patterns]);
-
-  const isWinner = winPattern !== null || completedPatterns.length > 0;
-  const isClose  = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
-
-  return (
-    <article
-      className={[
-        'gr-ticket',
-        isWinner ? 'is-winner' : '',
-        isClose  ? 'is-close'  : '',
-        !isWinner && !isClose && markedCount < 3 ? 'is-dimmed' : '',
-      ].filter(Boolean).join(' ')}
-      aria-label={isWinner ? t('game_room.ticket_winner_aria', { ticketId }) : t('game_room.ticket_aria', { ticketId })}
-    >
-      <div className="gr-ticket-header">
-        <div className="gr-ticket-id">
-          <span className="label">{t('game_room.ticket_label')}</span>
-          <span className="id">#{ticketId}</span>
-        </div>
-        <span className={`gr-ticket-marks${isWinner ? ' is-winner' : isClose ? ' is-close' : ''}`}>
-          {isWinner ? t('game_room.winner_badge') : `${markedCount}/25`}
-        </span>
-      </div>
-
-      <div className="gr-bingo-grid" role="grid" aria-label={t('game_room.ticket_aria', { ticketId })}>
-        <div className="gr-bingo-grid-head" role="row">
-          {COLS.map(c => (
-            <div key={c} className="gr-bingo-head" role="columnheader" style={{ background: BINGO_COLORS[c] }}>
-              {c}
-            </div>
-          ))}
-        </div>
-        <div className="gr-bingo-grid-body">
-          {grid.map((row, ri) => (
-            <div key={ri} className="gr-bingo-row" role="row">
-              {row.map((val, ci) => {
-                const gridIdx   = ri * 5 + ci;
-                const isFree    = val === null;
-                const isMarked  = isFree || drawnSet.has(val as number);
-                const isJustHit = !isFree && val === lastDrawn;
-                const inWin     = (winPattern?.has(gridIdx) ?? false) || winningCells.has(gridIdx);
-                const color     = BINGO_COLORS[COLS[ci]];
-
-                return (
-                  <div
-                    key={ci}
-                    role="gridcell"
-                    aria-selected={isMarked}
-                    aria-label={isFree ? t('game_room.free_space_aria') : isMarked ? t('game_room.cell_marked_aria', { col: COLS[ci], val }) : t('game_room.cell_aria', { col: COLS[ci], val })}
-                    className={[
-                      'gr-bingo-cell',
-                      isFree               ? 'is-free'            : '',
-                      isMarked && !isFree  ? 'is-marked'          : '',
-                      isJustHit            ? 'is-just-hit'        : '',
-                      inWin                ? 'in-winning-pattern' : '',
-                    ].filter(Boolean).join(' ')}
-                    style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
-                  >
-                    {isFree ? '⭐' : val}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {completedPatterns.length > 0 && (
-        <div className="gr-ticket-patterns">
-          {completedPatterns.map(p => (
-            <span key={p.name} className="gr-ticket-pattern-badge">
-              <span>⭐</span>{p.name}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="gr-ticket-foot">
-        <span className="best">
-          {isWinner
-            ? t('game_room.ticket_footer_pattern', { count: completedPatterns.length || 1 })
-            : t('game_room.ticket_footer_marked', { marked: markedCount, total: 25 })}
-        </span>
-        {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
-      </div>
-    </article>
-  );
-}
 
 // ==========================================
 // COMPONENTE PRINCIPAL
 // ==========================================
 
-export default function GameRoom({ gameId, roomId, session, profile, onLeave }: GameRoomProps) {
-  const { t } = useTranslation();
+export default function GameRoom({
+  gameId, roomId, session, profile, onLeave,
+  onGoToHistory, onGoToWallet, onGoToAdmin, isAdmin,
+  onLogout, theme, onToggleTheme, onLanguageChange,
+}: GameRoomProps) {
+  const { t, i18n } = useTranslation();
 
   // ── Estado local ──────────────────────────────────────────────────────────
   const [game,         setGame]         = useState<BlockchainGameState | null>(null);
@@ -282,11 +83,32 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
   const [showChat,     setShowChat]     = useState(false);
   const [loadingGame,  setLoadingGame]  = useState(true);
   const [now,          setNow]          = useState(Date.now());
-  const [maxBalls,     setMaxBalls]     = useState(75);
-  const [gamePatterns, setGamePatterns] = useState<Pattern[]>([]);
+  const [maxBalls,          setMaxBalls]          = useState(75);
+  const [gamePatterns,      setGamePatterns]      = useState<Pattern[]>([]);
+  const [gameCombinations,  setGameCombinations]  = useState<CombinationRuleInput[]>([]);
+  const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
+  const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
+  const [showMenu,          setShowMenu]          = useState(false);
   const density                         = 'comfortable' as const;
 
   const AUTO_LOCK_SEC = 60;
+
+  // Limpa estado obsoleto imediatamente quando o gameId muda.
+  // Defesa em profundidade: o `key={gameId}` no App.tsx já causa remount,
+  // mas este reset garante comportamento correto em qualquer contexto de uso.
+  useEffect(() => {
+    setGame(null);
+    setNextGame(null);
+    setPlayerTickets([]);
+    setRoom(null);
+    setMaxBalls(75);
+    setGamePatterns([]);
+    setGameCombinations([]);
+    setExtendedRules([]);
+    setIngameBalances([]);
+    setShowMenu(false);
+    setLoadingGame(true);
+  }, [gameId]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -316,11 +138,6 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
     return `${Math.floor(s / 60)}m ${s % 60}s`;
   }, [nextGame, now]);
 
-  const gameStatusText = useMemo(() => {
-    if (!game) return '';
-    const emoji: Record<string, string> = { created: '🕐', funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌' };
-    return `${emoji[game.status] ?? ''} ${game.status}`;
-  }, [game]);
 
   // ── WebSocket (Slow Reveal) ───────────────────────────────────────────────
   const {
@@ -328,27 +145,103 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
     isGameEnded, goldenBall, clearedStages, drawMode,
   } = useSlowReveal(gameId);
 
-  // drawnBalls é DrawnBall[] → extraímos os números
-  const drawnNumbers = useMemo(
-    () => drawnBalls.map(b => b.number),
-    [drawnBalls],
+  // ── Fallback para jogos archived/drawn sem eventos do WebSocket ───────────
+  // O WS só envia eventos ao vivo; quando o jogo já encerrou, drawnBalls
+  // permanece vazio. Populamos a partir de game.drawn_balls (blockchain).
+  const isStaticFinalState = useMemo(() =>
+    ['archived', 'drawn', 'paying'].includes(game?.status ?? '') && drawnBalls.length === 0,
+    [game?.status, drawnBalls.length],
   );
-  const drawnSet   = useMemo(() => new Set(drawnNumbers), [drawnNumbers]);
-  const lastDrawn  = lastBall?.number ?? null;
 
-  // constrói mapa ticket_id → prize + patternName a partir dos eventos winner_found
+  const fallbackBalls = useMemo((): typeof drawnBalls => {
+    if (!isStaticFinalState || !game) return [];
+    const raw = game.drawn_balls;
+    const arr: number[] = Array.isArray(raw) ? raw : parseHexMatrix(raw as unknown as string);
+    return arr
+      .slice(0, maxBalls)
+      .filter(b => b !== 0)
+      .map((num, idx) => ({ order: idx + 1, number: num, timestamp: '' }));
+  }, [isStaticFinalState, game, maxBalls]);
+
+  const effectiveBalls = drawnBalls.length > 0 ? drawnBalls : fallbackBalls;
+
+  const drawnNumbers = useMemo(
+    () => effectiveBalls.map(b => b.number),
+    [effectiveBalls],
+  );
+  const drawnSet  = useMemo(() => new Set(drawnNumbers), [drawnNumbers]);
+  const lastDrawn = (lastBall?.number ?? effectiveBalls[effectiveBalls.length - 1]?.number) ?? null;
+
+  // Jogo efetivamente encerrado: via WS ou por status archived/drawn
+  const isEffectiveGameEnded = isGameEnded || isStaticFinalState;
+
+  // Status efetivo para exibição: enquanto o slow reveal estiver ativo (bolas chegando
+  // via WS mas jogo ainda não encerrado), mostra "drawing" independentemente do status
+  // blockchain — que pode já ser "drawn" enquanto o frontend ainda revela as bolas.
+  // Status efetivo para exibição: mostra "drawing" enquanto o slow reveal ainda está
+  // ativo, mesmo que o blockchain já marque o jogo como "drawn".
+  const effectiveDisplayStatus = useMemo(() => {
+    if (!game) return '';
+    if (drawnBalls.length > 0 && !isGameEnded) return 'drawing';
+    return game.status;
+  }, [game, drawnBalls.length, isGameEnded]);
+
+  const gameStatusText = useMemo(() => {
+    if (!effectiveDisplayStatus) return '';
+    const emoji: Record<string, string> = { created: '🕐', funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌', paying: '💸' };
+    return `${emoji[effectiveDisplayStatus] ?? ''} ${effectiveDisplayStatus}`;
+  }, [effectiveDisplayStatus]);
+
+  // ── Vencedores locais para estado archived sem WS ─────────────────────────
+  // Quando o WS não tem vencedores (jogo já encerrou), calcula localmente
+  // cruzando as cartelas do jogador com os padrões e as bolas sorteadas.
+  const localWinners = useMemo(() => {
+    if (winners.length > 0 || !isStaticFinalState) return winners;
+    if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
+
+    const result: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
+    for (const ticket of playerTickets) {
+      const B    = ticket.matrix.slice(0, 5);
+      const I    = ticket.matrix.slice(5, 10);
+      const Nraw = ticket.matrix.slice(10, 14);
+      const G    = ticket.matrix.slice(14, 19);
+      const O    = ticket.matrix.slice(19, 24);
+      const N    = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
+      const flat: (number | null)[] = [];
+      for (let r = 0; r < 5; r++) flat.push(B[r], I[r], N[r], G[r], O[r]);
+
+      for (const p of gamePatterns) {
+        const done = p.cells.every((req, i) => {
+          if (!req) return true;
+          const val = flat[i];
+          return val === null || drawnSet.has(val as number);
+        });
+        if (done) result.push({ ticket_id: ticket.id, win_pattern: p.name, payouts: [] });
+      }
+    }
+    return result;
+  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet]);
+
+  // constrói mapa ticket_id → prize + patternName + patternCount + totalPrize
   const winnerMap = useMemo(() => {
-    const map = new Map<string, { prize: string; patternName: string }>();
-    for (const w of winners) {
-      if (!map.has(w.ticket_id)) {
+    const map = new Map<string, { prize: string; patternName: string; totalPrize: number; patternCount: number }>();
+    for (const w of localWinners) {
+      const existing = map.get(w.ticket_id);
+      const prizeVal = parseFloat(w.payouts[0]) || 0;
+      if (existing) {
+        existing.patternCount++;
+        existing.totalPrize += prizeVal;
+      } else {
         map.set(w.ticket_id, {
-          prize: w.payouts.join(', '),
+          prize: w.payouts.join(', ') || null!,
           patternName: w.win_pattern,
+          totalPrize: prizeVal,
+          patternCount: 1,
         });
       }
     }
     return map;
-  }, [winners]);
+  }, [localWinners]);
 
   // lookup de Pattern pelo nome
   const patternByName = useMemo(() => {
@@ -357,42 +250,92 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
     return map;
   }, [gamePatterns]);
 
+  // mapa patternId → nome  e  nome → tipo — usados para resolver cláusulas de combinação
+  // Usa p.id (ID blockchain) para mapear corretamente, sem depender de ordem de listas.
+  const { patternNameById, patternTypeByName } = useMemo(() => {
+    const byId   = new Map<string, string>();
+    const byType = new Map<string, string>();
+    for (const p of gamePatterns) {
+      if (p.id) byId.set(p.id, p.name);
+      const r = extendedRules.find(r => r.pattern_id === p.id);
+      if (r) byType.set(p.name, r.type);
+    }
+    return { patternNameById: byId, patternTypeByName: byType };
+  }, [gamePatterns, extendedRules]);
+
+  // Combinações vencidas — win_pattern pode ser nome de combinação
+  const combinationWinCount = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const w of localWinners) {
+      if (gameCombinations.some(c => c.name === w.win_pattern)) {
+        count.set(w.win_pattern, (count.get(w.win_pattern) || 0) + 1);
+      }
+    }
+    return count;
+  }, [localWinners, gameCombinations]);
+
+  // Combinações completadas nas cartelas do jogador (ao vivo)
+  const completedCombinationsPerTicket = useMemo(() => {
+    if (!gameCombinations.length) return new Map<string, string[]>();
+    const result = new Map<string, string[]>();
+    for (const ticket of playerTickets) {
+      const flat = (() => {
+        const B    = ticket.matrix.slice(0, 5);
+        const I    = ticket.matrix.slice(5, 10);
+        const Nraw = ticket.matrix.slice(10, 14);
+        const G    = ticket.matrix.slice(14, 19);
+        const O    = ticket.matrix.slice(19, 24);
+        const N    = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
+        const f: (number | null)[] = [];
+        for (let r = 0; r < 5; r++) f.push(B[r], I[r], N[r], G[r], O[r]);
+        return f;
+      })();
+
+      // Padrões completados nesta cartela
+      const doneNames = new Set<string>(
+        gamePatterns
+          .filter(p => p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number)))
+          .map(p => p.name),
+      );
+
+      // Resolve cláusulas all_of/any_of por nome (via patternNameById)
+      const doneNamesResolved = new Set<string>();
+      for (const name of doneNames) doneNamesResolved.add(name);
+      // também aceita resolução por id (para compatibilidade com cláusulas que guardam id)
+      for (const [id, name] of patternNameById) {
+        if (doneNames.has(name)) doneNamesResolved.add(id);
+      }
+
+      const combos = gameCombinations
+        .filter(c => isCombinationSatisfied(c, doneNamesResolved, patternTypeByName))
+        .map(c => c.name);
+
+      if (combos.length) result.set(ticket.id, combos);
+    }
+    return result;
+  }, [gameCombinations, playerTickets, gamePatterns, drawnSet, patternNameById, patternTypeByName]);
+
   // contagem de cartelas que completaram cada padrão
   const patternWinCount = useMemo(() => {
     const count = new Map<string, number>();
-    for (const w of winners) {
+    for (const w of localWinners) {
       count.set(w.win_pattern, (count.get(w.win_pattern) || 0) + 1);
     }
     return count;
-  }, [winners]);
+  }, [localWinners]);
 
   // patterns ordenados por nº de cartelas que completaram (decrescente)
 
-  // ── Cartelas ordenadas ──────────────────────────────────────────────────
-  const sortedTickets = useMemo(() => {
-    if (playerTickets.length === 0) return playerTickets;
-    return [...playerTickets].sort((a, b) => {
-      const wA = winnerMap.get(a.id);
-      const wB = winnerMap.get(b.id);
-
-      // Vencedores primeiro, ordenados por prêmio decrescente
-      if (wA && !wB) return -1;
-      if (!wA && wB) return 1;
-      if (wA && wB) {
-        const pA = parseFloat(wA.prize) || 0;
-        const pB = parseFloat(wB.prize) || 0;
-        return pB - pA;
-      }
-
-      // Demais: proximidade ponderada + células marcadas
-      const proxA = computeProximityScore(a.matrix, drawnSet, gamePatterns);
-      const proxB = computeProximityScore(b.matrix, drawnSet, gamePatterns);
-      if (proxA !== proxB) return proxB - proxA;
-      const marksA = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-      const marksB = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-      return marksB - marksA;
-    });
-  }, [playerTickets, drawnSet, winnerMap, gamePatterns]);
+  // ── Cartelas ordenadas + agrupadas ─────────────────────────────────────
+  const gamePhase = isEffectiveGameEnded ? 'after' : 'during';
+  const sortedTickets = useMemo(
+    () => sortTickets(playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase),
+    [playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase],
+  );
+  const groupedTickets = useMemo(
+    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase),
+    [playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase],
+  );
 
   // ── Refs para animação ────────────────────────────────────────────────────
   const heroRef     = useRef<HTMLDivElement>(null);
@@ -444,13 +387,18 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
         return rows;
       }
 
-      const [gameRes, allTickets] = await Promise.all([
+      const actorScope = Name.from(session.actor).value.toString();
+      const [gameRes, allTickets, balRes] = await Promise.all([
         session.client.v1.chain.get_table_rows({
           code: CONTRACT, scope: CONTRACT, table: 'games',
           lower_bound: UInt64.from(gameId), upper_bound: UInt64.from(gameId), limit: 1, json: true,
         }),
         fetchAllTickets(),
+        session.client.v1.chain.get_table_rows({
+          code: CONTRACT, scope: actorScope, table: 'balances', limit: 10, json: true,
+        }).catch(() => ({ rows: [] })),
       ]);
+      setIngameBalances(balRes.rows as BlockchainBalance[]);
       if (gameRes.rows.length) setGame(gameRes.rows[0] as BlockchainGameState);
 
       const loadedGame = gameRes.rows[0] as BlockchainGameState | undefined;
@@ -470,11 +418,16 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             setMaxBalls(gt.max_balls > 0 ? Number(gt.max_balls) : 75);
           }
         } catch { /* mantém default 75 */ }
-        // Busca os patterns deste gametype
+        // Busca patterns e combinações deste gametype
         try {
-          const patterns = await fetchGamePatterns(session, String(gametypeId));
+          const [patterns, meta] = await Promise.all([
+            fetchGamePatterns(session, String(gametypeId)),
+            fetchPublicGametypeMetadata(String(gametypeId)),
+          ]);
           if (patterns.length) setGamePatterns(patterns);
-        } catch { /* patterns indisponíveis */ }
+          if (meta.combinations?.length) setGameCombinations(meta.combinations);
+          if (meta.rules?.length) setExtendedRules(meta.rules);
+        } catch { /* patterns/combos indisponíveis */ }
       }
       if (loadedGame && loadedGame.room_id && loadedGame.room_id !== '0') {
         try {
@@ -541,37 +494,32 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
 
   const ticketPrice  = game?.ticket_price as ExtendedAsset | undefined;
   const roomPatterns: Pattern[] = gamePatterns;
-  // patterns ordenados por nº de cartelas que completaram (decrescente)
-  const sortedPatterns = useMemo(() => {
-    return [...roomPatterns].sort((a, b) => {
-      const aWins = patternWinCount.get(a.name) || 0;
-      const bWins = patternWinCount.get(b.name) || 0;
-      return bWins - aWins;
-    });
-  }, [roomPatterns, patternWinCount]);
+  const sortedPatterns = useMemo(
+    () => sortPatterns(roomPatterns, playerTickets, drawnSet, patternWinCount),
+    [roomPatterns, playerTickets, drawnSet, patternWinCount],
+  );
 
-  const hasBanners   = !!goldenBall || clearedStages.length > 0 || isGameEnded;
+  const currencySymbol = (() => {
+    const q = game?.ticket_price?.quantity ?? room?.currency?.quantity ?? '';
+    return q.trim().split(' ').pop() || 'WAX';
+  })();
+
+  const hasBanners   = !!goldenBall || clearedStages.length > 0 || isEffectiveGameEnded;
 
   return (
     <div className="gr-shell">
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <header className="gr-navbar">
+
+        {/* ── Esquerda: logo + crumb ── */}
         <div className="gr-nav-left">
-          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onLeave}>
-            {t('game_room.back_to_lobby')}
-          </button>
+          <Logo variant="icon" height={28} onClick={onLeave} alt="Voltar ao Lobby" />
           <div className="gr-nav-crumb">
             <span className="sep">/</span>
-            <span style={{ color: 'var(--cb-text-tertiary)' }}>{t('game_room.breadcrumb_room')}</span>
-            <span className="room">
+            <span style={{ color: 'var(--cb-text-tertiary)', fontSize: '0.75rem' }}>
               {room?.metadata?.name ?? (room ? `Sala ${room.room_id}` : `#${gameId}`)}
             </span>
-            {game && (
-              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
-                #{gameId}
-              </span>
-            )}
             {game && (
               <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
                 {gameStatusText}
@@ -586,27 +534,161 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
           </div>
         </div>
+
+        {/* ── Direita: saldo + chat + status WS + idioma + menu ── */}
         <div className="gr-nav-right">
+
+          {/* Saldo in-game */}
+          {ingameBalances.length > 0 && (
+            <span
+              className="lobby-wallet-chip"
+              title={t('lobby.balance_aria')}
+              style={{ fontSize: '0.72rem' }}
+            >
+              <span className="symbol" aria-hidden="true">◆</span>
+              {ingameBalances.map((b, i) => (
+                <span key={i} style={i > 0 ? { borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.4rem', marginLeft: '0.2rem' } : {}}>
+                  {b.balance.quantity}
+                </span>
+              ))}
+            </span>
+          )}
+
+          {/* Chat */}
           {room?.metadata?.chat_enabled !== false && (
             <button
               className={`cb-btn cb-btn-sm ${showChat ? 'cb-btn-primary' : 'cb-btn-ghost'}`}
               onClick={() => setShowChat(s => !s)}
               aria-label="Chat da sala"
             >
-              💬 Chat
+              💬
             </button>
           )}
-          <span className="cb-wallet-chip">
-            <span style={{ color: 'var(--cb-brand)' }} aria-hidden="true">◆</span>
-            <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.7rem' }}>
-              {profile.wallet_address}
-            </span>
-          </span>
+
+          {/* Seletor de idioma */}
+          <select
+            value={i18n.language}
+            onChange={e => { i18n.changeLanguage(e.target.value); onLanguageChange?.(e.target.value); }}
+            className="cb-input cb-select"
+            style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '0.72rem', height: '2rem', width: 'auto' }}
+            aria-label={t('common.language') ?? 'Idioma'}
+          >
+            <option value="pt-BR">PT</option>
+            <option value="en-US">EN</option>
+            <option value="zh-CN">中</option>
+          </select>
+
+          {/* Status WS */}
           <span
             className={`cb-status-dot ${wsStatusClass[wsStatus] ?? 'cb-status-dot-offline'}`}
             title={t('game_room.ws_title', { status: wsStatus })}
             aria-label={t('game_room.ws_aria', { status: wsStatus })}
           />
+
+          {/* Menu dropdown ⋮ */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className="cb-btn cb-btn-ghost cb-btn-sm"
+              style={{ width: '2rem', padding: 0, fontSize: '1.1rem' }}
+              onClick={() => setShowMenu(s => !s)}
+              aria-label="Menu"
+              aria-expanded={showMenu}
+              aria-haspopup="menu"
+            >
+              ⋮
+            </button>
+            {showMenu && (
+              <>
+                {/* Overlay para fechar ao clicar fora */}
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+                  onClick={() => setShowMenu(false)}
+                  aria-hidden="true"
+                />
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 0.375rem)',
+                    zIndex: 50, minWidth: '11rem',
+                    background: 'var(--cb-bg-elevated)',
+                    border: '1px solid var(--cb-border-default)',
+                    borderRadius: '0.75rem',
+                    boxShadow: 'var(--shadow-card-hover)',
+                    padding: '0.375rem',
+                    display: 'flex', flexDirection: 'column', gap: '0.125rem',
+                  }}
+                >
+                  <button
+                    role="menuitem"
+                    className="cb-btn cb-btn-ghost cb-btn-sm"
+                    style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
+                    onClick={() => { setShowMenu(false); onLeave(); }}
+                  >
+                    🏠 {t('game_room.back_to_lobby')}
+                  </button>
+
+                  {onGoToHistory && (
+                    <button
+                      role="menuitem"
+                      className="cb-btn cb-btn-ghost cb-btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
+                      onClick={() => { setShowMenu(false); onGoToHistory(); }}
+                    >
+                      📋 {t('nav.my_history') ?? 'Histórico'}
+                    </button>
+                  )}
+
+                  {onGoToWallet && (
+                    <button
+                      role="menuitem"
+                      className="cb-btn cb-btn-ghost cb-btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
+                      onClick={() => { setShowMenu(false); onGoToWallet(); }}
+                    >
+                      💳 {t('nav.wallet') ?? 'Carteira'}
+                    </button>
+                  )}
+
+                  {isAdmin && onGoToAdmin && (
+                    <button
+                      role="menuitem"
+                      className="cb-btn cb-btn-ghost cb-btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
+                      onClick={() => { setShowMenu(false); onGoToAdmin(); }}
+                    >
+                      ⚙ Admin
+                    </button>
+                  )}
+
+                  {onToggleTheme && (
+                    <button
+                      role="menuitem"
+                      className="cb-btn cb-btn-ghost cb-btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
+                      onClick={() => { setShowMenu(false); onToggleTheme(); }}
+                    >
+                      {theme === 'dark' ? '☾' : '☀'} {theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+                    </button>
+                  )}
+
+                  {onLogout && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--cb-border-subtle)', margin: '0.25rem 0.375rem' }} />
+                      <button
+                        role="menuitem"
+                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                        style={{ justifyContent: 'flex-start', gap: '0.5rem', color: 'var(--cb-danger)' }}
+                        onClick={() => { setShowMenu(false); onLogout(); }}
+                      >
+                        ⏻ {t('nav.logout') ?? 'Desconectar'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
       </header>
 
@@ -664,7 +746,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
               {/* Footer: histórico + progress */}
               <div className="gr-stage-footer">
                 <div ref={seqRef} className="gr-sequence" aria-label={t('game_room.history_aria')}>
-                  {[...drawnBalls].reverse().map((ball, idx) => {
+                  {[...effectiveBalls].reverse().map((ball, idx) => {
                     const c   = getCol(ball.number);
                     const clr = BINGO_COLORS[c];
                     return (
@@ -714,7 +796,7 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
                   </div>
                 ) : (
                   sortedPatterns.map(p => {
-                    const patternWon = winners.some(w => w.win_pattern === p.name);
+                    const patternWon = localWinners.some(w => w.win_pattern === p.name);
                     const winCount = patternWinCount.get(p.name) || 0;
                     return (
                       <div key={p.name} className={`gr-pattern${patternWon ? ' is-close' : ''}`}>
@@ -735,12 +817,34 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
                           </span>
                         </div>
                         <div className="gr-pattern-prize">
-                          <span className="amt">{p.prize}</span>
-                          <span className="hits">WAX</span>
+                          <span className="amt">{p.prize}x</span>
+                          <span className="hits">{currencySymbol}</span>
                         </div>
                       </div>
                     );
                   })
+                )}
+                {gameCombinations.length > 0 && (
+                  <div className="gr-patterns-combos">
+                    <span className="gr-patterns-combos-head">Combinações</span>
+                    {gameCombinations.map(c => {
+                      const won      = combinationWinCount.get(c.name);
+                      const myTicket = [...completedCombinationsPerTicket.values()].some(v => v.includes(c.name));
+                      return (
+                        <div key={c.name} className={`gr-pattern-combo${won ? ' is-close' : ''}`}>
+                          <span className="name">
+                            {myTicket && <span title="Sua cartela completou">⭐ </span>}
+                            {c.name}
+                          </span>
+                          <span className="amt">{(c.weight / 100).toFixed(2)}x</span>
+                          {won
+                            ? <span className="cnt">✅ {won} cartela{won > 1 ? 's' : ''}</span>
+                            : <span className="cnt">—</span>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </aside>
@@ -784,23 +888,37 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
             )}
 
             {/* ADR-014: Game Ended */}
-            {isGameEnded && (
+            {isEffectiveGameEnded && (
               <div className="gr-ended-banner" role="status" aria-live="polite">
                 <span className="gr-ended-icon">🏁</span>
                 <div className="gr-ended-text">
                   <strong>{t('game_room.game_ended_title')}</strong>
                   <span>
-                    {winners.length > 0
-                      ? t('game_room.game_ended_winners', { count: winners.length })
+                    {localWinners.length > 0
+                      ? t('game_room.game_ended_winners', { count: localWinners.length })
                       : t('game_room.game_ended_no_winners')}
                   </span>
                   {nextGame && nextGame.status === 'funding' ? (
                     <span className="gr-ended-next">
                       {t('game_room.next_game_funding', { time: nextGameTimer })}
                     </span>
-                  ) : (
-                    <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
-                  )}
+                  ) : (() => {
+                    // Estima quando a próxima partida inicia com base em
+                    // game.end_time + auto_start_delay_sec da sala
+                    const endMs   = (game?.end_time ?? 0) * 1000;
+                    const delayMs = ((room?.metadata as any)?.auto_start_delay_sec ?? 30) * 1000;
+                    const estMs   = endMs > 0 ? endMs + delayMs - now : 0;
+                    if (estMs > 0) {
+                      return (
+                        <span className="gr-ended-next">
+                          {t('game_room.next_game_soon', { time: fmtCountdown(estMs) })}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
+                    );
+                  })()}
                 </div>
                 {nextGame && nextGame.status === 'funding' && (
                   <button
@@ -842,30 +960,41 @@ export default function GameRoom({ gameId, roomId, session, profile, onLeave }: 
                   : t('game_room.tickets_empty_default')}
             </div>
           ) : (
-            <div className="gr-tickets-grid">
-              {sortedTickets.map(ticket => {
-                const w = winnerMap.get(ticket.id);
-                const pat = w ? patternByName.get(w.patternName) : undefined;
-                const winPatternSet = pat
-                  ? new Set(pat.cells.map((req, i) => (req ? i : -1)).filter(i => i !== -1))
-                  : null;
-                return (
-                  <TicketCard
-                    key={ticket.id}
-                    ticketId={ticket.id}
-                    matrix={ticket.matrix}
-                    drawnSet={drawnSet}
-                    lastDrawn={lastDrawn}
-                    winPattern={winPatternSet}
-                    prize={w?.prize ?? null}
-                    density={density}
-                    patterns={roomPatterns}
-                  />
-                );
-              })}
-            </div>
+            groupedTickets.map(group => (
+              <div key={group.category} className="gr-tickets-group">
+                <div className="gr-tickets-group-label">
+                  <span className="gr-tickets-group-icon">{group.icon}</span>
+                  <span className="gr-tickets-group-title">{group.label}</span>
+                  <span className="gr-tickets-group-count">{group.tickets.length}</span>
+                </div>
+                <div className="gr-tickets-grid">
+                  {group.tickets.map(ticket => {
+                    const w = winnerMap.get(ticket.id);
+                    const pat = w ? patternByName.get(w.patternName) : undefined;
+                    const winPatternSet = pat
+                      ? new Set(pat.cells.map((req, i) => (req ? i : -1)).filter(i => i !== -1))
+                      : null;
+                    return (
+                      <TicketCard
+                        key={ticket.id}
+                        ticketId={ticket.id}
+                        matrix={ticket.matrix}
+                        drawnSet={drawnSet}
+                        lastDrawn={lastDrawn}
+                        winPattern={winPatternSet}
+                        prize={w?.prize ?? null}
+                        density={density}
+                        patterns={roomPatterns}
+                        completedCombinations={completedCombinationsPerTicket.get(ticket.id)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))
           )}
         </div>
+
       </div>
 
       {/* ── Chat Panel ─────────────────────────────────────────────────────── */}
