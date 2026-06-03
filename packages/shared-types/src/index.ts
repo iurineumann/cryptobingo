@@ -269,3 +269,47 @@ export interface MongoNftCache {
     }>;
     last_synced: Date;
 }
+
+// ── Drop Vault — Tipos On-Chain (ADR-011) ─────────────────────────────────────
+// Correspondem às tabelas dropdeposits, dropallocs e singleton dropstate
+// definidas em bingo.hpp. Usados pelo dropWorker, dropController e frontend.
+
+export interface BlockchainDropDeposit {
+    deposit_id:          string;
+    owner:               string;
+    asset_type:          'token' | 'nft';
+    token_contract:      string;
+    token_symbol:        string;
+    quantity_original:   ExtendedAsset;
+    quantity_remaining:  ExtendedAsset;
+    nft_asset_id:        string;
+    nft_template_id:     number;
+    nft_collection:      string;
+    status:              'deposited' | 'active' | 'draining' | 'exhausted' | 'reclaimed';
+    deposited_at:        number; // Unix timestamp (seconds)
+}
+
+export interface BlockchainDropAllocation {
+    alloc_id:              string;
+    deposit_id:            string;
+    owner:                 string;
+    room_id:               string;
+    asset_type:            'token' | 'nft';
+    token_contract:        string;
+    token_symbol:          string;
+    quantity_per_drop:     ExtendedAsset;
+    quantity_distributed:  ExtendedAsset;
+    nft_asset_id:          string;
+    nft_template_id:       number;
+    nft_collection:        string;
+    drop_chance_bps:       number; // 1–10000 (100 = 1%)
+    drops_executed:        number;
+    status:                'active' | 'deallocated' | 'exhausted';
+    allocated_at:          number; // Unix timestamp (seconds)
+}
+
+export interface BlockchainDropState {
+    next_deposit_id:       string;
+    next_alloc_id:         string;
+    player_base_chance_bps: number; // Chance base por jogador (default 5000 = 50%)
+}

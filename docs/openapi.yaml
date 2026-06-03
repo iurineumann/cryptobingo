@@ -2,179 +2,136 @@ openapi: 3.0.3
 info:
   title: CryptoBingo Gateway API
   description: |
-    Especificação das rotas REST do ecossistema off-chain CryptoBingo.
-    Cobre autenticação por assinatura de carteira (ADR-006), geração de cartelas (ADR-001),
-    perfis, lobbies, compliance e administração. Implementado via Express no `apps/api-gateway`.
-
-    Princípio Spec-Driven: toda rota deve existir aqui ANTES de ser implementada.
-  version: 1.3.0
+    API REST do api-gateway. Autenticação por assinatura de carteira (ADR-006),
+    geração de cartelas (ADR-001), salas (ADR-010), drop vault (ADR-011),
+    compliance (Lei 14.790/2023, ADR-005) e administração (ADR-009).
+  version: 2.0.0
 
 servers:
   - url: http://localhost:8083/api/v1
     description: Desenvolvimento Local (api-gateway porta 8083)
 
+tags:
+  - name: Auth
+  - name: Profile
+  - name: Tickets
+  - name: Rooms
+  - name: Statistics
+  - name: Drop Vault
+  - name: Player
+  - name: NFTs
+  - name: Admin
+  - name: Sponsors
+
 paths:
-  # ==========================================
+
+  # ══════════════════════════════════════════
   # HEALTH
-  # ==========================================
+  # ══════════════════════════════════════════
   /health:
     get:
-      summary: Verifica se o gateway está operacional
+      summary: Gateway operacional
+      tags: [Auth]
       responses:
         '200':
-          description: Gateway online
+          description: Online
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: "Gateway Online"
-                  timestamp:
-                    type: string
-                    format: date-time
+                  status: { type: string, example: "Gateway Online" }
+                  timestamp: { type: string, format: date-time }
 
-  # ==========================================
+  # ══════════════════════════════════════════
   # AUTENTICAÇÃO — Challenge-Response (ADR-006)
-  # Fluxo: /auth/challenge → (assinar nonce) → /auth/verify → JWT
-  # ==========================================
+  # ══════════════════════════════════════════
   /auth/challenge:
     post:
-      summary: Solicita nonce para assinatura — Passo 1 do login
+      summary: Solicita nonce para assinatura (passo 1 do login)
+      tags: [Auth]
       description: |
-        Gera um nonce efêmero de 256 bits (`crypto.randomBytes(32)`) persistido no
-        PostgreSQL com TTL de 5 minutos e chave composta (wallet, nonce).
-        O cliente deve assinar `SHA256(nonce)` com a chave Antelope (permissão `active`)
-        e enviar a assinatura para `/auth/verify`. Ref: ADR-006.
+        Gera nonce efêmero (256 bits) com TTL 5min no PostgreSQL.
+        O cliente assina SHA256(nonce) com a chave Antelope (permissão active).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - wallet
+              required: [wallet]
               properties:
-                wallet:
-                  type: string
-                  pattern: '^[a-z1-5.]{1,13}$'
-                  description: Account name Antelope (ex. "jogador1")
-                  example: "jogador1"
+                wallet: { type: string, example: "jogador1" }
       responses:
         '200':
-          description: Nonce gerado com sucesso
+          description: Nonce gerado
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ChallengeResponse'
+              schema: { $ref: '#/components/schemas/ChallengeResponse' }
         '400':
-          description: Wallet ausente ou com formato inválido
+          description: Wallet ausente ou inválida
 
   /auth/verify:
     post:
-      summary: Verifica assinatura do nonce e emite JWT — Passo 2 do login
-      description: |
-        Valida a assinatura Antelope usando `Signature.recoverDigest(SHA256(nonce))`.
-        Se a chave pública recuperada coincidir com a enviada: invalida o nonce (uso
-        único — previne replay attacks) e emite um JWT de 24h com `jti` único.
-        Ref: ADR-006.
+      summary: Verifica assinatura e emite JWT (passo 2 do login)
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - wallet
-                - nonce
-                - signature
-                - public_key
+              required: [wallet, nonce, signature]
               properties:
-                wallet:
-                  type: string
-                  example: "jogador1"
-                nonce:
-                  type: string
-                  description: O mesmo nonce retornado por /auth/challenge
-                  example: "a3f9c2d1b4e8f27c..."
-                signature:
-                  type: string
-                  description: Assinatura Antelope de SHA256(nonce) com chave active
-                  example: "SIG_K1_K7pXn..."
-                public_key:
-                  type: string
-                  description: Chave pública correspondente à permissão active do wallet
-                  example: "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV"
+                wallet: { type: string }
+                nonce: { type: string }
+                signature: { type: string, description: "SIG_K1_..." }
       responses:
         '200':
-          description: Autenticação bem-sucedida — JWT emitido
+          description: JWT emitido (24h de validade)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  token:
-                    type: string
-                    description: JWT de 24h a ser enviado no header Authorization Bearer
-                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-        '400':
-          description: Campos obrigatórios ausentes
+                  token: { type: string }
+                  wallet: { type: string }
         '401':
-          description: Challenge inválido, expirado ou assinatura incorreta
+          description: Assinatura inválida
 
   /auth/logout:
     post:
-      summary: Encerra a sessão e revoga o JWT na blacklist Redis (ADR-006)
-      description: |
-        Adiciona o `jti` do token atual ao Redis com TTL igual ao tempo restante
-        de expiração. Tokens sem `jti` (emitidos por versões anteriores) fazem
-        logout sem revogação efetiva.
-      security:
-        - BearerAuth: []
+      summary: Revoga token atual (blacklist Redis)
+      tags: [Auth]
+      security: [{ BearerAuth: [] }]
       responses:
         '200':
-          description: Sessão encerrada com sucesso
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Sessão encerrada com sucesso."
+          description: Token revogado
         '401':
-          description: Token ausente ou inválido
+          description: Token ausente
 
-  # ==========================================
-  # PERFIL (protegido por JWT — ADR-006)
-  # ==========================================
+  # ══════════════════════════════════════════
+  # PERFIL
+  # ══════════════════════════════════════════
   /profile:
     get:
-      summary: Retorna o perfil completo e dados de gamificação do usuário autenticado
-      description: |
-        Lê o wallet de `req.user.wallet` (injetado pelo middleware JWT).
-        Cria o perfil automaticamente se for o primeiro acesso (upsert implícito).
-        Fonte: MongoDB (`profiles` collection).
-      security:
-        - BearerAuth: []
+      summary: Retorna perfil do jogador autenticado
+      tags: [Profile]
+      security: [{ BearerAuth: [] }]
       responses:
         '200':
-          description: Perfil obtido com sucesso
+          description: Perfil completo
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/UserProfile'
+              schema: { $ref: '#/components/schemas/UserProfile' }
         '401':
-          description: Token ausente ou inválido
-
+          description: Token inválido
+        '404':
+          description: Perfil não encontrado
     put:
-      summary: Atualiza as preferências do usuário autenticado
-      description: |
-        Aceita apenas `nickname` e `locale`. O wallet_address não pode ser alterado
-        via body — é sempre lido do JWT (prevenção de privilege escalation).
-      security:
-        - BearerAuth: []
+      summary: Atualiza preferências do jogador (locale, avatar, etc.)
+      tags: [Profile]
+      security: [{ BearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -182,209 +139,149 @@ paths:
             schema:
               type: object
               properties:
-                nickname:
-                  type: string
-                  example: "CryptoBingoKing"
                 locale:
                   type: string
                   enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP]
-                  example: "zh-CN"
       responses:
         '200':
-          description: Preferências salvas com sucesso
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserProfile'
-        '400':
-          description: Nenhum campo válido para atualizar
+          description: Preferências atualizadas
         '401':
-          description: Token ausente ou inválido
-        '404':
-          description: Perfil não encontrado
+          description: Token inválido
 
-  # ==========================================
-  # CARTELAS — Geração e Assinatura (ADR-001)
-  # ==========================================
+  # ══════════════════════════════════════════
+  # CARTELAS (ADR-001)
+  # ══════════════════════════════════════════
   /games/{gameId}/tickets/generate:
     post:
-      summary: Gera N cartelas assinadas pelo microserviço para compra no contrato
+      summary: Gera N cartelas assinadas para buytickets() on-chain
+      tags: [Tickets]
       description: |
-        Gera matrizes 5x5 via Fisher-Yates Shuffle por coluna BINGO (SPEC.md §3.1).
-        Valida unicidade de cada matriz por rodada via Redis SET NX (atômico, TTL 24h).
-        Assina cada cartela com SHA256(matrix + game_id + account_name) usando a
-        MICROSERVICE_PRIVATE_KEY (Antelope ECDSA K1). Ref: ADR-001.
-
-        O Frontend recebe o array `tickets` e envia diretamente para `buytickets()`
-        no Smart Contract via Wharfkit — sem persistir a assinatura no servidor.
-
-        Serialização do hash (determinística, equivalente ao eosio::datastream C++):
-          [ matrix(24 bytes uint8) ][ game_id(8 bytes uint64-LE) ][ account_name(utf-8) ]
-      security:
-        - BearerAuth: []
+        Fisher-Yates por coluna BINGO, dedupe via Redis, assinatura ECDSA K1.
+        Ref: ADR-001, SPEC.md §3.1.
+      security: [{ BearerAuth: [] }]
       parameters:
         - name: gameId
           in: path
           required: true
-          schema:
-            type: string
-          description: ID do jogo (uint64 como string decimal)
-          example: "1"
+          schema: { type: string }
+          example: "1780000000000"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - count
+              required: [count]
               properties:
                 count:
                   type: integer
                   minimum: 1
                   maximum: 50
-                  description: Quantidade de cartelas a gerar (1–50 por requisição)
                   example: 3
       responses:
         '200':
-          description: Cartelas geradas e assinadas com sucesso
+          description: Cartelas geradas e assinadas
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/GenerateTicketsResponse'
+              schema: { $ref: '#/components/schemas/GenerateTicketsResponse' }
         '400':
-          description: Parâmetros inválidos (count fora do range, game_id malformado)
+          description: Parâmetros inválidos
         '401':
-          description: Token ausente ou inválido
+          description: Token inválido
         '404':
-          description: Jogo não encontrado na blockchain
+          description: Jogo não encontrado
         '409':
-          description: Jogo não está em estado "funding" — vendas encerradas
-        '503':
-          description: Nó blockchain indisponível temporariamente
+          description: Jogo não está em funding
 
-  # ==========================================
-  # LOBBIES E JOGOS
-  # ==========================================
-  /lobbies:
+  # ══════════════════════════════════════════
+  # SALAS (ADR-010)
+  # ══════════════════════════════════════════
+  /rooms:
     get:
-      summary: Lista as salas de jogos ativas e agendadas
-      description: |
-        Retorna a lista de lobbies alimentada pelo indexador da blockchain e cache MongoDB.
-        Futuro: substituir polling por WebSocket subscription (AsyncAPI).
-      parameters:
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [funding, locked, drawing, drawn, archived, aborted]
+      summary: Lista todas as salas ativas (on-chain + metadata MongoDB)
+      tags: [Rooms]
       responses:
         '200':
-          description: Lista de Lobbies
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Lobby'
-
-  /lobbies/{lobbyId}/chat:
-    get:
-      summary: Recupera o histórico de mensagens do chat da sala
-      parameters:
-        - name: lobbyId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Histórico de chat (MongoDB com TTL de 7 dias)
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ChatMessage'
-
-  # ==========================================
-  # COMPLIANCE E AUDITORIA
-  # ==========================================
-  /statistics/rtp:
-    get:
-      summary: Relatórios de auditoria e métricas de RTP
-      description: |
-        Dados agregados de transparência sobre o retorno ao jogador.
-        Conformidade com Lei 14.790/2023 (ADR-005).
-      responses:
-        '200':
-          description: Relatório de RTP e métricas de auditoria
+          description: Lista de salas enriquecidas
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  total_distributed:
-                    type: number
-                    example: 850043.25
-                  rtp_percentage:
-                    type: number
-                    example: 85.0
-                  auditable_games_count:
-                    type: integer
-                    example: 1420
-
-  # ==========================================
-  # ADMINISTRAÇÃO (RBAC — pendente de implementação)
-  # ==========================================
-  /admin/users:
-    get:
-      summary: Gerenciamento de usuários (Moderadores/Admin)
-      security:
-        - BearerAuth: []
+                  rooms:
+                    type: array
+                    items: { $ref: '#/components/schemas/EnrichedRoom' }
+    post:
+      summary: Cria uma nova sala (admin)
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRoomRequest' }
       responses:
-        '200':
-          description: Lista administrativa de usuários
+        '201':
+          description: Sala criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrichedRoom' }
         '401':
           description: Token inválido
         '403':
-          description: Acesso negado por falta de privilégios
+          description: Sem permissão (requer admin)
 
-  /admin/patterns:
+  /rooms/{roomId}:
     get:
-      summary: Lista padrões de vitória configurados (ADR-004)
-      description: Pendente de implementação — aguarda tabela `patterns` on-chain (ADR-004 Fase 2).
-      security:
-        - BearerAuth: []
+      summary: Detalhes de uma sala específica
+      tags: [Rooms]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         '200':
-          description: Lista de padrões de vitória
-        '401':
-          description: Token inválido
+          description: Sala encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrichedRoom' }
+        '404':
+          description: Sala não encontrada
 
-    post:
-      summary: Cria novo padrão de vitória (ADR-004)
-      security:
-        - BearerAuth: []
+  /rooms/{roomId}/metadata:
+    put:
+      summary: Atualiza metadados off-chain da sala (nome, descrição, drops)
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/PatternInput'
+            schema: { $ref: '#/components/schemas/RoomMetadataInput' }
       responses:
-        '201':
-          description: Padrão criado com sucesso
+        '200':
+          description: Metadados atualizados
         '401':
           description: Token inválido
+        '403':
+          description: Sem permissão
 
-  /admin/simulate-weights:
-    post:
-      summary: Motor de simulação Monte Carlo para validação de pesos (ADR-005)
-      description: Pendente de implementação — valida sustentabilidade econômica antes de ativar gametypes.
-      security:
-        - BearerAuth: []
+  /rooms/{roomId}/settings:
+    put:
+      summary: Atualiza configurações on-chain da sala (max_tickets, etc.)
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -392,107 +289,629 @@ paths:
             schema:
               type: object
               properties:
-                gametype_id:
-                  type: integer
-                simulations:
-                  type: integer
-                  default: 10000
+                max_tickets_per_player: { type: integer }
+                room_drop_chance_bps: { type: integer, minimum: 0, maximum: 10000 }
       responses:
         '200':
-          description: Resultado da simulação Monte Carlo
+          description: Configurações atualizadas
 
-  # ==========================================
-  # SPONSORS (B2B)
-  # ==========================================
-  /sponsors/campaigns:
+  /rooms/{roomId}/activate:
     post:
-      summary: Criação de campanhas de patrocínio B2B
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - campaign_name
-                - sponsor_pool_amount
-              properties:
-                campaign_name:
-                  type: string
-                  example: "Campanha Especial de Sexta"
-                sponsor_pool_amount:
-                  type: string
-                  example: "5000.0000 WAX"
-      responses:
-        '201':
-          description: Campanha registrada e aguardando transferência on-chain
-        '401':
-          description: Token inválido
-
-  /admin/simulate-weights:
-    post:
-      summary: Executa simulação Monte Carlo para validar sustentabilidade econômica de um gametype
-      description: |
-        Roda N rodadas simuladas de bingo (Fisher-Yates shuffle + cartelas aleatórias por coluna BINGO).
-        Para cada rodada, avalia cada cartela contra os padrões do gametype e aplica a regra
-        max_weight (ADR-005): paga exclusivamente o padrão de maior multiplicador.
-
-        Métricas retornadas:
-          - RTP (Return to Player): proporção do total wagered devolvida em prêmios
-          - GGR (Gross Gaming Revenue): margem da casa (1 - RTP)
-          - Distribuição de hits por padrão: quantas cartelas venceram com cada padrão
-          - Média de bolas necessárias por padrão
-          - Alertas: RTP < 75% (risco de rejeição) ou RTP > 98% (risco de insol vência)
-
-        Execução: rodadas <= 5.000 rodam inline; acima disso, worker_threads.
-        Limite: máximo 100.000 simulações por request.
-        Ref: ADR-005 §3
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SimulateWeightsRequest'
-            example:
-              gametype_name: "Standard Bingo"
-              base_multiplier: 1
-              patterns:
-                - pattern_id: 1
-                  name: "ROW_0"
-                  mask: 1082401
-                  weight: 5
-                - pattern_id: 2
-                  name: "COL_B"
-                  mask: 31
-                  weight: 5
-                - pattern_id: 11
-                  name: "DIAG_TL_BR"
-                  mask: 18809857
-                  weight: 10
-                - pattern_id: 12
-                  name: "FULL_HOUSE"
-                  mask: 33554431
-                  weight: 50
-              simulations: 10000
-              tickets_per_game: 100
-              ticket_price: 10
+      summary: Ativa a sala (inactive/paused → active)
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         '200':
-          description: Simulação concluída com sucesso
+          description: Sala ativada
+        '400':
+          description: Estado inválido para ativação
+
+  /rooms/{roomId}/pause:
+    post:
+      summary: Pausa a sala (active → paused)
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Sala pausada
+
+  /rooms/{roomId}/close:
+    post:
+      summary: Fecha a sala permanentemente
+      tags: [Rooms]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Sala fechada
+        '400':
+          description: Sala possui jogo ativo — não pode fechar
+
+  # ══════════════════════════════════════════
+  # SPONSOR
+  # ══════════════════════════════════════════
+  /sponsor/rooms:
+    get:
+      summary: Lista as salas do sponsor autenticado
+      tags: [Sponsors]
+      security: [{ BearerAuth: [] }]
+      description: Filtrado server-side pelo campo `sponsor` da conta autenticada.
+      responses:
+        '200':
+          description: Salas do sponsor
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimulationResult'
-        '400':
-          description: Parâmetros inválidos ou simulação muito longa
+                type: object
+                properties:
+                  rooms:
+                    type: array
+                    items: { $ref: '#/components/schemas/EnrichedRoom' }
         '401':
-          description: Token ausente ou inválido
-        '500':
-          description: Erro interno durante a simulação
+          description: Token inválido
+
+  /sponsors/campaigns:
+    get:
+      summary: Lista campanhas B2B ativas
+      tags: [Sponsors]
+      responses:
+        '200':
+          description: Lista de campanhas
+    post:
+      summary: Cria campanha de patrocínio
+      tags: [Sponsors]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campaign_name, sponsor_pool_amount]
+              properties:
+                campaign_name: { type: string }
+                sponsor_pool_amount: { type: string, example: "5000.0000 WAX" }
+      responses:
+        '201':
+          description: Campanha registrada
+
+  # ══════════════════════════════════════════
+  # STATISTICS / COMPLIANCE (Lei 14.790/2023)
+  # ══════════════════════════════════════════
+  /statistics/rtp:
+    get:
+      summary: Relatório de RTP/GGR agregado (compliance)
+      tags: [Statistics]
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+        - name: currency
+          in: query
+          schema: { type: string, default: "WAX" }
+      responses:
+        '200':
+          description: Relatório de compliance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period: { type: string }
+                  total_games: { type: integer }
+                  total_wagered: { type: number }
+                  total_paid_out: { type: number }
+                  avg_rtp_display: { type: string, example: "85.00%" }
+                  avg_ggr_display: { type: string, example: "15.00%" }
+                  currency: { type: string }
+                  generated_at: { type: string, format: date-time }
+
+  /statistics/games:
+    get:
+      summary: Lista jogos recentes com RTPs individuais (auditores)
+      tags: [Statistics]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: Jogos recentes com dados de compliance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  games:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        game_id: { type: string }
+                        status: { type: string }
+                        total_wagered: { type: number }
+                        total_paid_out: { type: number }
+                        rtp_pct: { type: number }
+                        resolved_at: { type: string, format: date-time }
+                  count: { type: integer }
+
+  /statistics/games/batch:
+    get:
+      summary: Estatísticas de compliance para um conjunto de game_ids (público)
+      tags: [Statistics]
+      description: |
+        Best-effort — retorna apenas jogos sincronizados no ledger PostgreSQL.
+        Jogos não sincronizados são omitidos da resposta.
+      parameters:
+        - name: gameIds
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Comma-separated list of game IDs
+            example: "1780000000001,1780000000002"
+      responses:
+        '200':
+          description: Stats por game_id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        totalTickets: { type: integer }
+                        totalWagered: { type: number }
+                        totalPaidOut: { type: number }
+                        rtpPct: { type: number }
+
+  # ══════════════════════════════════════════
+  # PLAYER — Winnings
+  # ══════════════════════════════════════════
+  /player/winnings/{gameId}:
+    get:
+      summary: Total ganho pelo jogador autenticado em um jogo específico
+      tags: [Player]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ganhos do jogador
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  game_id: { type: string }
+                  wallet: { type: string }
+                  total_won: { type: number }
+                  currency: { type: string }
+        '401':
+          description: Token inválido
+
+  /player/winnings/batch:
+    post:
+      summary: Ganhos do jogador em múltiplos jogos
+      tags: [Player]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameIds]
+              properties:
+                gameIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Mapa gameId → total ganho
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  winnings:
+                    type: object
+                    additionalProperties: { type: number }
+        '401':
+          description: Token inválido
+
+  # ══════════════════════════════════════════
+  # NFTs
+  # ══════════════════════════════════════════
+  /nfts/my-assets:
+    get:
+      summary: Lista NFTs AtomicAssets do jogador autenticado (cache MongoDB 5min)
+      tags: [NFTs]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: NFTs do jogador
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet: { type: string }
+                  assets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        asset_id: { type: string }
+                        schema_name: { type: string }
+                        name: { type: string }
+                        backed_tokens: { type: string, example: "10000.0000 BINGO" }
+        '401':
+          description: Token inválido
+
+  # ══════════════════════════════════════════
+  # ADMINISTRAÇÃO (ADR-009)
+  # ══════════════════════════════════════════
+  /admin/users:
+    get:
+      summary: Lista usuários (admin)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de usuários
+        '403':
+          description: Sem permissão
+
+  /admin/patterns:
+    get:
+      summary: Lista padrões de vitória on-chain (ADR-004)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de padrões
+    post:
+      summary: Cria ou atualiza padrão de vitória
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatternInput' }
+      responses:
+        '201':
+          description: Padrão criado
+
+  /admin/patterns/{patternId}:
+    delete:
+      summary: Remove padrão de vitória
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: patternId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Padrão removido
+
+  /admin/gametypes:
+    get:
+      summary: Lista game types configurados (ADR-004)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de game types
+    post:
+      summary: Cria novo game type
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, base_multiplier]
+              properties:
+                name: { type: string }
+                base_multiplier: { type: integer, minimum: 1 }
+                max_balls: { type: integer, default: 75 }
+                draw_mode:
+                  type: string
+                  enum: [standard, fixed, firstfull, goldenball, multimatch]
+                rules:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      pattern_id: { type: string }
+                      weight: { type: integer, description: "Hundredths (200 = 2.00×)" }
+      responses:
+        '201':
+          description: Game type criado
+
+  /admin/gametypes/{gametypeId}:
+    delete:
+      summary: Remove game type
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gametypeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Game type removido
+
+  /admin/gametypes/{gametypeId}/metadata:
+    get:
+      summary: Retorna metadata off-chain do game type (combinações, regras estendidas)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gametypeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Metadata do game type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  combinations:
+                    type: array
+                    items: { type: object }
+                  rules:
+                    type: array
+                    items: { type: object }
+    put:
+      summary: Persiste metadata off-chain do game type (combinações, regras estendidas)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gametypeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                combinations:
+                  type: array
+                  items: { type: object }
+                rules:
+                  type: array
+                  items: { type: object }
+      responses:
+        '200':
+          description: Metadata salva
+
+  /admin/simulate-weights:
+    post:
+      summary: Simulação Monte Carlo para validação de pesos (ADR-005)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulateWeightsRequest' }
+      responses:
+        '200':
+          description: Resultado da simulação
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimulationResult' }
+        '400':
+          description: Parâmetros inválidos
+
+  /admin/calibrate-weights:
+    post:
+      summary: Calibração iterativa de pesos até atingir RTP alvo (ADR-005)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gametypeId: { type: string }
+                targetRtp: { type: number, example: 0.85 }
+                simulations: { type: integer, default: 10000 }
+      responses:
+        '200':
+          description: Pesos calibrados com RTP atingido
+
+  /admin/ledger/sync:
+    post:
+      summary: Sincroniza um jogo on-chain com o ledger PostgreSQL (admin)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      description: |
+        Útil para reprocessar jogos ou popular o ledger retroativamente.
+        O ledger é a fonte de verdade para compliance (Lei 14.790/2023).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameId]
+              properties:
+                gameId: { type: string }
+      responses:
+        '200':
+          description: Jogo sincronizado
+        '404':
+          description: Jogo não encontrado on-chain
+
+  # ══════════════════════════════════════════
+  # DROP VAULT (ADR-011)
+  # ══════════════════════════════════════════
+  /vault/deposits:
+    get:
+      summary: Lista depósitos do vault do usuário autenticado
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de depósitos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deposits:
+                    type: array
+                    items: { $ref: '#/components/schemas/DropDeposit' }
+
+  /vault/deposits/{depositId}:
+    get:
+      summary: Detalhe de um depósito
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: depositId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Depósito encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DropDeposit' }
+        '404':
+          description: Depósito não encontrado
+
+  /vault/allocations:
+    get:
+      summary: Lista alocações ativas
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: query
+          schema: { type: string }
+          description: Filtrar por sala
+      responses:
+        '200':
+          description: Lista de alocações
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allocations:
+                    type: array
+                    items: { $ref: '#/components/schemas/DropAllocation' }
+
+  /vault/allocate:
+    post:
+      summary: Aloca ativo do vault a uma sala
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deposit_id, room_id, drop_chance_bps]
+              properties:
+                deposit_id: { type: string }
+                room_id: { type: string }
+                quantity_per_drop: { type: string, example: "10.0000 WAX" }
+                nft_asset_id: { type: string }
+                drop_chance_bps: { type: integer, minimum: 1, maximum: 10000 }
+      responses:
+        '200':
+          description: Alocação criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  transaction_id: { type: string }
+
+  /vault/deallocate:
+    post:
+      summary: Remove alocação de uma sala
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alloc_id]
+              properties:
+                alloc_id: { type: string }
+      responses:
+        '200':
+          description: Alocação removida
+
+  /vault/reclaim:
+    post:
+      summary: Reclama ativo não alocado do vault (saque)
+      tags: [Drop Vault]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deposit_id]
+              properties:
+                deposit_id: { type: string }
+      responses:
+        '200':
+          description: Ativo reclaimado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  transaction_id: { type: string }
 
 components:
   securitySchemes:
@@ -500,9 +919,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT emitido pelo endpoint /auth/verify. Prazo de 24h. Payload contém { wallet }.
+      description: JWT emitido por /auth/verify. Prazo 24h. Payload contém { wallet }.
 
   schemas:
+
     ChallengeResponse:
       type: object
       properties:
@@ -513,291 +933,218 @@ components:
         expires_at:
           type: string
           format: date-time
-          description: TTL de 5 minutos a partir da geração
+          description: TTL de 5 minutos
         message:
           type: string
-          example: "Assine este nonce com a permissão active da carteira jogador1."
+          example: "Assine este nonce com a permissão active."
 
     GenerateTicketsResponse:
       type: object
-      description: Resposta da geração de cartelas — array pronto para buytickets() on-chain
       properties:
-        game_id:
-          type: string
-          example: "1"
-        account:
-          type: string
-          description: Wallet do comprador autenticado (lido do JWT — não do body)
-          example: "jogador1"
-        count:
-          type: integer
-          description: Quantidade efetivamente gerada
-          example: 3
+        game_id: { type: string }
+        account: { type: string }
+        count: { type: integer }
         tickets:
           type: array
-          items:
-            $ref: '#/components/schemas/SignedTicket'
+          items: { $ref: '#/components/schemas/SignedTicket' }
 
     SignedTicket:
       type: object
-      description: Cartela gerada e assinada pelo microserviço — pronta para buytickets()
       properties:
         matrix:
           type: array
-          items:
-            type: integer
-            minimum: 1
-            maximum: 75
+          items: { type: integer, minimum: 1, maximum: 75 }
           minItems: 24
           maxItems: 24
           description: |
-            24 números em ordem coluna-maior: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4].
-            A posição 12 (FREE SPACE do layout de bits) é omitida da serialização.
-            Ref: SPEC.md §1.3.
-          example: [7,3,14,1,11, 22,18,28,19,25, 35,40,42,43, 55,49,53,58,47, 63,70,66,71,74]
+            24 números coluna-major: [B0-B4, I0-I4, N0,N1,N3,N4, G0-G4, O0-O4].
+            Posição 12 (FREE SPACE) omitida. Ref: SPEC.md §1.3.
         signature:
           type: string
-          description: |
-            Assinatura Antelope ECDSA K1 de SHA256(matrix_bytes + game_id_uint64LE + account_utf8).
-            Formato: "SIG_K1_...". Passada diretamente para buytickets() no contrato.
-          example: "SIG_K1_KZmWHzh8..."
+          description: "SIG_K1_... — ECDSA K1 de SHA256(matrix+game_id+account)."
 
     UserProfile:
       type: object
       properties:
-        wallet_address:
-          type: string
-          example: "jogador1"
-        nickname:
-          type: string
-          example: "CryptoKing"
-        avatar_nft_asset_id:
-          type: string
-          nullable: true
-          example: "1099511627776"
+        wallet_address: { type: string }
+        nickname: { type: string }
+        avatar_nft_asset_id: { type: string, nullable: true }
         preferences:
           type: object
           properties:
-            locale:
-              type: string
-              enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP]
-            currency_display:
-              type: string
-            sound_enabled:
-              type: boolean
+            locale: { type: string, enum: [en-US, pt-BR, es-ES, fr-FR, ru-RU, zh-CN, ja-JP] }
+            sound_enabled: { type: boolean }
         progression:
           type: object
           properties:
-            xp:
-              type: integer
-            tier:
-              type: string
-              enum: [Bronze, Silver, Gold, Diamond]
-            games_played:
-              type: integer
-
-    Lobby:
-      type: object
-      description: Espelho da tabela `games` on-chain (BlockchainGameState)
-      properties:
-        game_id:
-          type: string
-          description: uint64 serializado como string para evitar perda de precisão no JS
-          example: "1"
-        status:
-          type: string
-          enum: [funding, locked, drawing, drawn, archived, aborted]
-        ticket_price:
-          $ref: '#/components/schemas/ExtendedAsset'
-        prize_pool:
-          $ref: '#/components/schemas/ExtendedAsset'
-        sponsor_pool:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExtendedAsset'
-        drawn_balls:
-          type: array
-          items:
-            type: integer
-          description: Vazio até o evento receiverand do oráculo; 75 posições após
-        campaign_id:
-          type: string
-          example: "0"
+            xp: { type: integer }
+            tier: { type: string, enum: [Bronze, Silver, Gold, Diamond] }
+            games_played: { type: integer }
 
     ExtendedAsset:
       type: object
-      description: extended_asset serializado pelo nó Antelope
+      description: extended_asset on-chain serializado pelo nó Antelope
       properties:
-        quantity:
-          type: string
-          example: "10.0000 WAX"
-        contract:
-          type: string
-          example: "eosio.token"
+        quantity: { type: string, example: "10.0000 WAX" }
+        contract: { type: string, example: "eosio.token" }
 
-    ChatMessage:
+    EnrichedRoom:
+      type: object
+      description: Sala on-chain enriquecida com metadata MongoDB (ADR-010)
+      properties:
+        room_id: { type: string }
+        sponsor: { type: string }
+        gametype_id: { type: string }
+        currency: { $ref: '#/components/schemas/ExtendedAsset' }
+        ticket_price_min: { $ref: '#/components/schemas/ExtendedAsset' }
+        ticket_price_max: { $ref: '#/components/schemas/ExtendedAsset' }
+        ticket_price_default: { $ref: '#/components/schemas/ExtendedAsset' }
+        weight: { type: integer }
+        max_tickets_per_player: { type: integer }
+        current_game_id: { type: string }
+        room_drop_chance_bps: { type: integer }
+        status: { type: string, enum: [inactive, active, paused, closed] }
+        metadata:
+          type: object
+          nullable: true
+          properties:
+            name: { type: string }
+            description: { type: string }
+            chat_enabled: { type: boolean }
+            auto_start_delay_sec: { type: integer }
+            drops:
+              type: array
+              items: { $ref: '#/components/schemas/RoomDropConfig' }
+
+    CreateRoomRequest:
+      type: object
+      required: [room_id, gametype_id, currency_quantity, currency_contract]
+      properties:
+        room_id: { type: string }
+        sponsor: { type: string }
+        gametype_id: { type: string }
+        currency_quantity: { type: string, example: "0.0000 WAX" }
+        currency_contract: { type: string, example: "eosio.token" }
+        ticket_price_min: { type: string }
+        ticket_price_max: { type: string }
+        ticket_price_default: { type: string }
+        max_tickets_per_player: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        auto_start_delay_sec: { type: integer, default: 30 }
+        chat_enabled: { type: boolean, default: true }
+
+    RoomMetadataInput:
       type: object
       properties:
-        lobby_id:
-          type: string
-        wallet_address:
-          type: string
-        message:
-          type: string
-        is_sponsor_drop:
-          type: boolean
-        timestamp:
-          type: string
-          format: date-time
+        name: { type: string }
+        description: { type: string }
+        cover_image_url: { type: string }
+        rules_summary: { type: string }
+        chat_enabled: { type: boolean }
+        auto_start_delay_sec: { type: integer }
+        drops:
+          type: array
+          items: { $ref: '#/components/schemas/RoomDropConfig' }
+
+    RoomDropConfig:
+      type: object
+      properties:
+        token_contract: { type: string }
+        symbol: { type: string }
+        amount: { type: string }
+        template_id: { type: integer }
+        collection_name: { type: string }
+        drop_chance_pct: { type: number, minimum: 0, maximum: 100 }
+        max_drops_per_game: { type: integer }
 
     PatternInput:
       type: object
-      description: Padrão de vitória para tabela `patterns` on-chain (ADR-004)
-      required:
-        - name
-        - mask
-        - weight
+      required: [name, mask]
       properties:
-        name:
-          type: string
-          example: "full_house"
-        mask:
-          type: integer
-          description: Bitmask pré-calculado representando as posições do padrão
-          example: 33554431
-        weight:
-          type: integer
-          minimum: 1
-          maximum: 255
-          description: Multiplicador de prêmio relativo (ADR-005)
-          example: 10
+        name: { type: string, example: "full_house" }
+        mask: { type: integer, description: "uint64 bitmask (25 bits usados)", example: 33554431 }
+        weight: { type: integer, description: "Hundredths — 200 = 2.00×", example: 1000 }
 
-    # ==========================================
-    # MONTE CARLO
-    # ==========================================
+    DropDeposit:
+      type: object
+      description: Depósito de ativo no vault on-chain (ADR-011)
+      properties:
+        deposit_id: { type: string }
+        owner: { type: string }
+        asset_type: { type: string, enum: [token, nft] }
+        token_contract: { type: string }
+        token_symbol: { type: string }
+        quantity_original: { $ref: '#/components/schemas/ExtendedAsset' }
+        quantity_remaining: { $ref: '#/components/schemas/ExtendedAsset' }
+        nft_asset_id: { type: string }
+        nft_template_id: { type: integer }
+        nft_collection: { type: string }
+        status: { type: string, enum: [deposited, active, draining, exhausted, reclaimed] }
+        deposited_at: { type: integer, description: "Unix timestamp (seconds)" }
+
+    DropAllocation:
+      type: object
+      description: Alocação de ativo de uma sala específica (ADR-011)
+      properties:
+        alloc_id: { type: string }
+        deposit_id: { type: string }
+        owner: { type: string }
+        room_id: { type: string }
+        asset_type: { type: string, enum: [token, nft] }
+        token_contract: { type: string }
+        token_symbol: { type: string }
+        quantity_per_drop: { $ref: '#/components/schemas/ExtendedAsset' }
+        quantity_distributed: { $ref: '#/components/schemas/ExtendedAsset' }
+        nft_asset_id: { type: string }
+        nft_template_id: { type: integer }
+        nft_collection: { type: string }
+        drop_chance_bps: { type: integer, description: "1–10000 (100 = 1%)" }
+        drops_executed: { type: integer }
+        status: { type: string, enum: [active, deallocated, exhausted] }
+        allocated_at: { type: integer, description: "Unix timestamp (seconds)" }
+
     SimulateWeightsRequest:
       type: object
-      required:
-        - gametype_name
-        - base_multiplier
-        - patterns
+      required: [gametype_name, base_multiplier, patterns]
       properties:
-        gametype_name:
-          type: string
-          example: "Standard Bingo"
-        base_multiplier:
-          type: integer
-          minimum: 1
-          maximum: 255
-          description: Multiplicador base aplicado sobre o ticket_price
-          example: 1
+        gametype_name: { type: string }
+        base_multiplier: { type: integer, minimum: 1 }
         patterns:
           type: array
-          minItems: 1
-          maxItems: 12
           items:
             type: object
             required: [name, mask, weight]
             properties:
-              pattern_id:
-                type: integer
-                example: 1
-              name:
-                type: string
-                example: "ROW_0"
-              mask:
-                type: integer
-                description: uint32 bitmask (máx 25 bits)
-                example: 1082401
-              weight:
-                type: integer
-                minimum: 1
-                maximum: 255
-                example: 5
-        simulations:
-          type: integer
-          minimum: 1
-          maximum: 100000
-          default: 10000
-          description: Número de rodadas simuladas
-        tickets_per_game:
-          type: integer
-          minimum: 1
-          maximum: 500
-          default: 100
-          description: Tickets por rodada simulada
-        ticket_price:
-          type: number
-          default: 10
-          description: Preço do ticket em unidades abstratas (sem símbolo)
+              pattern_id: { type: integer }
+              name: { type: string }
+              mask: { type: integer }
+              weight: { type: integer, minimum: 1 }
+        simulations: { type: integer, minimum: 1, maximum: 100000, default: 10000 }
+        tickets_per_game: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        ticket_price: { type: number, default: 10 }
 
     SimulationResult:
       type: object
-      description: Resultado completo da simulação Monte Carlo
       properties:
-        gametype_name:
-          type: string
-        simulations:
-          type: integer
-        tickets_per_game:
-          type: integer
-        ticket_price:
-          type: number
-        base_multiplier:
-          type: integer
-        rtp:
-          type: number
-          description: Return to Player (0.0 – 1.0)
-          example: 0.8532
-        rtp_pct:
-          type: string
-          example: "85.3200%"
-        ggr:
-          type: number
-          description: Gross Gaming Revenue (1 - rtp)
-          example: 0.1468
-        ggr_pct:
-          type: string
-          example: "14.6800%"
-        total_wagered:
-          type: number
-        total_paid_out:
-          type: number
-        avg_payout_per_game:
-          type: number
-        avg_winners_per_game:
-          type: number
+        gametype_name: { type: string }
+        simulations: { type: integer }
+        rtp: { type: number, example: 0.8532 }
+        rtp_pct: { type: string, example: "85.3200%" }
+        ggr: { type: number, example: 0.1468 }
+        ggr_pct: { type: string, example: "14.6800%" }
+        total_wagered: { type: number }
+        total_paid_out: { type: number }
+        is_viable: { type: boolean }
+        alerts: { type: array, items: { type: string } }
         pattern_stats:
           type: array
           items:
             type: object
             properties:
-              name:
-                type: string
-              mask:
-                type: integer
-              weight:
-                type: integer
-              hit_count:
-                type: integer
-                description: Cartelas que venceram com este padrão como max_weight
-              hit_rate:
-                type: number
-                description: hit_count / total_tickets_simulados
-              avg_balls_needed:
-                type: number
-                description: Média de bolas necessárias para atingir o padrão
-        alerts:
-          type: array
-          items:
-            type: string
-          description: Alertas de sustentabilidade (RTP fora dos thresholds)
-        is_viable:
-          type: boolean
-          description: true se RTP está entre 75% e 98%
-        duration_ms:
-          type: integer
-          description: Tempo de execução da simulação em milissegundos
-        computed_at:
-          type: string
-          format: date-time
+              name: { type: string }
+              hit_count: { type: integer }
+              hit_rate: { type: number }
+              avg_balls_needed: { type: number }
+        duration_ms: { type: integer }
+        computed_at: { type: string, format: date-time }

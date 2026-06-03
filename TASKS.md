@@ -2,83 +2,93 @@
 
 > Fonte de verdade do backlog. Sincronizado com `TRACE.md`.
 > Status: [x] Done | [ ] Pendente
+> Última auditoria: 2026-06-03
 
 ## Épico 1: Core de Blockchain & Tokenomics
 - [x] Contrato C++ completo (buytickets, lockgame, startdraw, claimwin, receiverand).
 - [x] Token dedicado `bingo.token`, Utility NFT via `nftconfigs`.
-- [x] ADR-001 a ADR-011 definidos e documentados.
+- [x] ADR-001 a ADR-015 definidos e documentados.
 - [x] Tabelas `patterns` e `gametypes` on-chain (ADR-004 Fase 2).
 - [x] Fórmula `max_weight` no claimwin (ADR-005 Fase 2).
-- [x] Tabela `rooms` on-chain + campo `room_id` em `game_state` (ADR-010 — shared-types OK, contrato C++ em andamento).
-- [x] Tabelas `drop_deposits`, `drop_allocations`, `dropstate` (ADR-011 — shared-types OK, contrato C++ pendente).
-- [ ] Actions de rooms no contrato C++ (createroom, activateroom, pauseroom, closeroom, setroommeta).
-- [ ] Actions de drop vault no contrato C++ (deposittoken, depositnft, allocatedrop, reclaimasset, execdrop).
+- [x] Tabela `rooms` on-chain + campo `room_id` em `game_state` (ADR-010).
+- [x] Tabelas `drop_deposits`, `drop_allocations`, `dropstate` on-chain (ADR-011).
+- [x] Actions de rooms no contrato C++: `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta` + campo `room_drop_chance_bps`.
+- [x] Actions de drop vault no contrato C++: `allocatedrop`, `deallocdrop`, `reclaimasset`, `execdrop` + `on_notify` para token deposits (memo 'vault') e NFT transfers (atomicassets).
+- [x] ABI v2.0 completo e sincronizado — 31 actions, 12 tabelas, 14 structs.
+- [ ] Action `sweepggr` no contrato C++ (auto-sweep GGR para tesouraria — ADR-005).
 - [ ] Contrato `bingo.swap` (DEX x*y=k).
 
 ## Épico 2: API Gateway & Infraestrutura Off-Chain
 - [x] Express + MongoDB + PostgreSQL + Redis.
 - [x] Auth JWT challenge-response (ADR-006).
 - [x] `ticketController.ts` — geração Fisher-Yates + ECDSA + dedupe Redis.
-- [x] `openapi.yaml` v1.4.0 (endpoints completos: admin, statistics, sponsors, nfts).
 - [x] Docker Compose com Redis, RabbitMQ, PostgreSQL, MongoDB, Prometheus, Grafana.
 - [x] Rotas `/admin/patterns`, `/admin/gametypes`, `/admin/gametypes/:id/metadata`.
-- [x] Rotas `/statistics/rtp`, `/statistics/games`, `/admin/ledger/sync`.
+- [x] Rotas `/statistics/rtp`, `/statistics/games`, `/statistics/games/batch`, `/admin/ledger/sync`.
 - [x] Rotas `/sponsors/campaigns`, `/nfts/my-assets`.
 - [x] Rotas `/rooms/*`, `/sponsor/rooms` (ADR-010).
+- [x] Rotas `/vault/*` — `dropController.ts` com 6 endpoints (deposits, allocations, allocate, deallocate, reclaim).
+- [x] Rotas `/player/winnings/:gameId`, `/player/winnings/batch` — `winningsController.ts`.
 - [x] Rate limiting lazy init + Helmet + CORS restrito.
-- [x] Motor de Simulação Monte Carlo (simulateWeights).
+- [x] Motor de Simulação Monte Carlo (simulateWeights + calibrateWeights).
 - [x] Compliance Ledger PostgreSQL (games_history + transactions_ledger).
-- [x] roomController.ts — CRUD de salas + metadados.
-- [ ] Rotas de Drop Vault (ADR-011) — deposittoken, allocatedrop, reclaimasset.
-- [ ] openapi.yaml atualizado com rooms e drop vault.
+- [x] `roomController.ts` — CRUD de salas + metadados.
+- [x] `openapi.yaml v2.0` — 36 endpoints documentados (rooms, vault, player/winnings, statistics/batch, admin gametypes, nfts).
 
 ## Épico 3: Game Loop Worker & Motor de Resolução
-- [x] RabbitMQ consumidor resiliente (at-least-once delivery).
-- [x] `lockgame`, `startdraw`, `claimwin` on-chain.
-- [x] Motor de Bitmasking O(1) com 12 padrões (ADR-004).
-- [x] Índice Invertido Redis O(1) (invertedIndex.ts + integração evaluator + rabbitmq).
+- [x] RabbitMQ consumidor resiliente (at-least-once delivery + DLQ).
+- [x] `lockgame`, `startdraw`, `claimwin`, `closegame` on-chain.
+- [x] Motor de Bitmasking O(1) + padrões dinâmicos (ADR-004).
+- [x] Índice Invertido Redis O(1) (`invertedIndex.ts`).
 - [x] Varredura paginada de tickets (100/página).
 - [x] Pipeline claimwin completo → evaluator → blockchain.
-- [x] **Dead Letter Queue** — DLX + DLQ + guard `x-death.count >= MAX_RETRIES`.
-- [x] **Métricas Prometheus** — `metrics.ts` com 8 métricas customizadas + Node.js defaults.
-- [x] **WebSocket Broadcaster** — Socket.io, auth JWT, rooms, Slow Reveal 3s/bola, reconciliação.
-- [x] **Grafana** — dashboard provisionado automaticamente com 9 painéis.
+- [x] Dead Letter Queue (DLX + DLQ + guard `x-death.count >= MAX_RETRIES`).
+- [x] Métricas Prometheus — 8 métricas customizadas + Node.js defaults.
+- [x] WebSocket Broadcaster — Socket.io, auth JWT, Slow Reveal 3s/bola, reconciliação.
+- [x] Grafana — dashboard provisionado automaticamente com 9 painéis.
 - [x] `roomManager.ts` — auto-criação de partidas após game resolved (ADR-010).
-- [x] `rabbitmq.ts` — hooks `onGameResolved` em `claimwin` e `abortgame` (ADR-010).
-- [ ] `dropWorker.ts` — processamento de drops on-chain ao final de cada partida (ADR-011).
-- [ ] asyncapi.yaml atualizado com eventos de chat e sponsor_drop.
+- [x] `rabbitmq.ts` — 7 handlers + 3 funções de auto-avanço (autoLock, autoStart, autoClaim).
+- [x] `dropWorker.ts` — 3 fases de drop: Fase 0 (room chance), Fase 1A/1B (seleção NFT/token), Fase 2 (seleção vencedor Fisher-Yates). Integrado ao `onGameResolved`.
+- [x] ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration) — implementados.
+- [x] `asyncapi.yaml v2.0` — canais game.{id} + room.{id}; eventos: golden_ball, stage_cleared, game_ended, chat:message, chat:sponsor_drop.
 
 ## Épico 4: Frontend & Experiência Web3
 - [x] Wharfkit (Anchor + Cloud Wallet).
-- [x] Auth JWT integrado (useAuth.ts).
-- [x] Compra de cartelas (useTicketPurchase.ts + BuyTicketModal.tsx).
-- [x] Visualização de cartelas (TicketGrid.tsx).
-- [x] Slow Reveal ao vivo (useSlowReveal.ts + BallDisplay.tsx).
-- [x] Cartelas marcadas em tempo real conforme bolas são sorteadas.
-- [x] LandingPage.tsx — página pública para visitantes não autenticados.
-- [x] GameRoom.tsx — tela de sala ao vivo (gr-*, bola hero, cartelas, padrões, chat).
-- [x] ReplayRoom.tsx — replay de partidas encerradas com slow reveal simulado, TicketCard, painel padrões, banners, sort agnóstico de fase.
-- [x] TicketCard.tsx — componente compartilhado (GameRoom + ReplayRoom) com helpers de sort/group por fase (GamePhase) e constantes.
-- [x] Sort/Group System — `sortTickets`/`groupTicketsByCategory`/`sortPatterns` com `combinedScore` (Σ completionPct × prizeValue), multi-pattern priority, `winnerMap` com `patternCount`/`totalPrize`.
-- [x] Combination Stats — Histograma de combinações no painel "PADRÕES VENCEDORES" (GameRoom + ReplayRoom).
-- [x] App.tsx — roteamento URL-based via React Router DOM v6 (ADR-015): BrowserRouter + Routes + AuthGuard + AdminGuard + deep links em todas as rotas.
-- [x] AdminLayout.tsx — shell admin com site-*, sidebar com grupos + seção Rooms.
-- [x] Painel Administrativo (ADR-009): Dashboard, Patterns, Gametypes, Sponsors, Compliance, Users, Player, Rooms.
-- [x] Multi-role dev login: 5 perfis (Jogador 1/2, Game Admin, Contract Admin, Sponsor).
-- [x] globals.design.css — classes gr-*, site-*, lobby-*, admin-* (Claude Design).
-- [x] Locales pt/en/zh — chaves aninhadas completas.
-- [x] ChatPanel.tsx — chat por sala via Socket.io (ADR-010).
-- [x] Lobby.tsx — refatorar para listar salas (rooms) em vez de games (ADR-010).
-- [ ] SponsorRooms.tsx — painel do sponsor para gerenciar suas salas.
-- [ ] useChat.ts — hook WebSocket separado para chat.
-- [x] GametypesAdmin — Suggest Combinations helper (Monte Carlo + dificuldade + calibração RTP).
-- [ ] PWA (Lighthouse > 90).
+- [x] Auth JWT integrado (`useAuth.ts`).
+- [x] Compra de cartelas (`useTicketPurchase.ts` + `BuyTicketModal.tsx`).
+- [x] Slow Reveal ao vivo (`useSlowReveal.ts`).
+- [x] Cartelas marcadas em tempo real (`TicketCard.tsx` com sort/group por fase).
+- [x] `LandingPage.tsx` — pública, stats live de salas, status slow-reveal, botão Histórico por sala.
+- [x] `GameRoom.tsx` — sala ao vivo completa (hero ball, cartelas, padrões, chat, navbar com menu).
+- [x] `ReplayRoom.tsx` — replay com slow reveal simulado, TicketCard, padrões, banners.
+- [x] `App.tsx` — roteamento URL-based via React Router DOM v6 (ADR-015), AuthGuard, AdminGuard, deep links.
+- [x] `AdminLayout.tsx` + Painel Admin completo (Dashboard, Patterns, Gametypes, Sponsors, Compliance, Users, Player, Rooms, Vault).
+- [x] `VaultAdmin.tsx` — painel admin de vault: depósitos, alocações, reclaim.
+- [x] `RoomsAdmin.tsx` — admin de salas com seção Drops.
+- [x] `RoomHistoryPanel.tsx` — histórico público de sala (session opcional), barra de resumo lifetime, totalPaidOut.
+- [x] `MyHistoryPage.tsx` — histórico pessoal com ROI%, win rate, stats globais da partida.
+- [x] Multi-role dev login: 5 perfis.
+- [x] i18n pt/en/zh — chaves aninhadas completas.
+- [x] `ChatPanel.tsx` — chat por sala via Socket.io (inline).
+- [x] `Lobby.tsx` — salas com slow-reveal status, tickets vendidos, botão Histórico para todas as salas.
+- [x] `utils/rpc.ts` — fetchTableRows público (sem sessão via proxy Vite).
+- [x] `GametypesAdmin` — Suggest Combinations (Monte Carlo + calibração RTP 85%).
+- [x] `SponsorRooms.tsx` — painel do sponsor (`/sponsor/rooms`): lista salas próprias, badges de drop, edição de metadata inline.
+- [x] `SponsorVault.tsx` — painel vault do sponsor (`/sponsor/vault`): depósitos, alocações, form com dropdown de salas próprias.
+- [x] `SponsorLayout.tsx` — shell dedicado `/sponsor/*` com header + sidebar + SponsorGuard.
+- [x] Badges "🎁 NFT Drop" / "💰 Token Drop" no Lobby e LandingPage.
+- [x] `AdminLayout.tsx` auto-contido — usa `useParams`/`useNavigate` internamente; props `section`/`onNavigate`/`onBackToLobby` removidas.
+- [ ] `useChat.ts` — hook WebSocket separado (atualmente inline no ChatPanel).
+- [ ] PWA (manifest + service worker; Lighthouse > 90).
 
-## Épico 5: Documentação
-- [x] ADR-001 a ADR-015 criados e documentados.
-- [x] `openapi.yaml` v1.4.0, `asyncapi.yaml` v1.0.0.
-- [x] `CLAUDE_DESIGN.md` — Design System completo para Claude Design.
-- [ ] `openapi.yaml` — endpoints de rooms e drop vault.
-- [ ] `asyncapi.yaml` — eventos de chat e sponsor_drop.
-- [ ] `docs/SPEC.md` — atualizar com rooms (ADR-010).
-- [ ] `docs/architecture.md` — FSM da sala, diagramas.
+## Épico 5: Qualidade & Documentação
+- [x] ADR-001 a ADR-015 documentados.
+- [x] `CLAUDE_DESIGN.md` — Design System completo.
+- [x] `architecture.md` — topologia CQRS, Kubernetes, blockchain interaction (atualizado).
+- [x] Testes backend: `fsm.test.ts`, `dropWorker.test.ts`, `evaluator.test.ts`, `dropController.test.ts`, `ticketController.test.ts`.
+- [x] `openapi.yaml v2.0` — 36 endpoints documentados.
+- [x] `asyncapi.yaml v2.0` — canais game + room; todos os eventos reais do broadcaster.
+- [x] Testes frontend (Vitest) — 31 testes: ticketUtils, rpc, useGamesHistory.
+- [x] `BlockchainDropDeposit`, `BlockchainDropAllocation`, `BlockchainDropState` exportados de `shared-types`.
+- [x] PWA — `vite-plugin-pwa` + manifest + Workbox cache-first.
+- [x] `docs/SPEC.md` — reescrito com ADR-010 (Rooms), ADR-011 (Drop Vault), ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration), ADR-015 (Routing). 6 seções novas/expandidas.

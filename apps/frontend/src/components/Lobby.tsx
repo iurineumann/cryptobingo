@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation }                from 'react-i18next';
+import { useNavigate }                   from 'react-router-dom';
 import { Name, Session }                 from '@wharfkit/session';
 import { UInt64 }                        from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
@@ -45,7 +46,8 @@ function splitAmount(quantity: string): { amount: string; symbol: string } {
 }
 
 export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps) {
-    const { t } = useTranslation();
+    const { t }  = useTranslation();
+    const navigate = useNavigate();
 
     const [balances,         setBalances]         = useState<BlockchainBalance[]>([]);
     const [games,            setGames]            = useState<BlockchainGameState[]>([]);
@@ -283,9 +285,18 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         const isIdle    = !currentGame;
                         const canBuy    = isFunding && !!onEnterRoom;
                         const canWatch  = isDrawing && !!onEnterRoom;
-                        const hasHistory = playerRoomIds.has(String(room.room_id));
                         const myCount   = myTickets.get(String(room.room_id)) ?? 0;
                         const hasMyTickets = myCount > 0;
+                        const hasNftDrop   = room.metadata?.drops?.some(d => d.template_id != null) ?? false;
+                        const hasTokenDrop = room.metadata?.drops?.some(d => d.amount != null)       ?? false;
+
+                        // Cartelas vendidas na partida atual (prize_pool / ticket_price)
+                        const ticketsSold = (() => {
+                            if (!currentGame) return null;
+                            const pool  = parseFloat(currentGame.prize_pool?.quantity?.split(' ')[0] ?? '0');
+                            const price = parseFloat(currentGame.ticket_price?.quantity?.split(' ')[0] ?? '0');
+                            return pool > 0 && price > 0 ? Math.round(pool / price) : null;
+                        })();
 
                         const lastGameId = currentGame?.game_id
                             ?? (String(room.current_game_id) !== '0' ? String(room.current_game_id) : null);
@@ -371,6 +382,16 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                                 🎫 {t('lobby.my_tickets', { count: myCount })}
                                             </span>
                                         )}
+                                        {hasNftDrop && (
+                                            <span className="cb-badge text-xs" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
+                                                🎁 {t('lobby.drop_nft')}
+                                            </span>
+                                        )}
+                                        {hasTokenDrop && (
+                                            <span className="cb-badge text-xs" style={{ background: 'rgb(234 179 8 / 0.12)', color: 'rgb(253 224 71)', border: '1px solid rgb(234 179 8 / 0.3)' }}>
+                                                💰 {t('lobby.drop_token')}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -393,6 +414,12 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                             {hasMyTickets ? myCount : '—'}
                                         </dd>
                                     </div>
+                                    {ticketsSold != null && ticketsSold > 0 && (
+                                        <div>
+                                            <dt>🎫 {t('replay.col_tickets_sold')}</dt>
+                                            <dd>{ticketsSold}</dd>
+                                        </div>
+                                    )}
                                 </dl>
 
                                 {/* ── Countdown / status info ── */}
@@ -449,16 +476,17 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         )}
                                     </div>
 
-                                    {hasHistory && (
-                                        <button
-                                            className="cb-btn cb-btn-ghost cb-btn-sm"
-                                            style={{ justifyContent: 'flex-start', gap: '0.4rem', fontSize: '0.75rem' }}
-                                            onClick={e => { e.stopPropagation(); setHistoryRoomId(room.room_id); }}
-                                            aria-label={t('lobby.replay_aria', { id: room.room_id })}
-                                        >
-                                            📽 {t('lobby.history')}
-                                        </button>
-                                    )}
+                                    <button
+                                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                                        style={{ justifyContent: 'flex-start', gap: '0.4rem', fontSize: '0.75rem' }}
+                                        onClick={e => { e.stopPropagation(); navigate(`/room/${room.room_id}/history`); }}
+                                        aria-label={t('lobby.replay_aria', { id: room.room_id })}
+                                    >
+                                        📋 {t('lobby.history')}
+                                        {playerRoomIds.has(String(room.room_id)) && (
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
+                                        )}
+                                    </button>
                                 </div>
                             </article>
                         );

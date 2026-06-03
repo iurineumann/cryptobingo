@@ -1,55 +1,44 @@
 // apps/frontend/src/components/admin/AdminLayout.tsx
 // Shell do painel administrativo — sidebar + conteúdo.
-// Refatorado com as classes site-* do Claude Design (globals.design.css).
-//
-// Roteamento: state-based, prop onNavigate(section).
+// Auto-contido: usa useNavigate/useParams diretamente (ADR-015).
 // Role gate: apenas roles admin/contract_admin chegam aqui (garantido em App.tsx).
-// Ref: ADR-009 (Admin Panel), CLAUDE_DESIGN.md §18.5
+// Ref: ADR-009 (Admin Panel), ADR-015 (Routing), CLAUDE_DESIGN.md §18.5
 
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import Logo from '../Logo';
-import AdminDashboard  from './AdminDashboard';
-import PatternsAdmin   from './PatternsAdmin';
-import GametypesAdmin  from './GametypesAdmin';
+import AdminDashboard   from './AdminDashboard';
+import PatternsAdmin    from './PatternsAdmin';
+import GametypesAdmin   from './GametypesAdmin';
 import SponsorDashboard from './SponsorDashboard';
-import ComplianceAdmin from './ComplianceAdmin';
-import UsersAdmin      from './UsersAdmin';
-import PlayerDashboard from './PlayerDashboard';
-import RoomsAdmin      from './RoomsAdmin';
-
-// ==========================================
-// TIPOS
-// ==========================================
+import ComplianceAdmin  from './ComplianceAdmin';
+import UsersAdmin       from './UsersAdmin';
+import PlayerDashboard  from './PlayerDashboard';
+import RoomsAdmin       from './RoomsAdmin';
+import VaultAdmin       from './VaultAdmin';
 
 interface AdminLayoutProps {
   profile:        MongoUserProfile;
   session?:       Session;
   theme:          string;
   onToggleTheme:  () => void;
-  section:        string;
-  onNavigate:     (section: string) => void;
   onLogout:       () => void;
-  onBackToLobby?: () => void;
 }
 
-// Itens da sidebar — mapeados da especificação do layout.jsx do Claude Design
-
-
-// ==========================================
-// COMPONENTE
-// ==========================================
-
 export default function AdminLayout({
-  profile, session, theme, onToggleTheme, section, onNavigate, onLogout, onBackToLobby,
+  profile, session, theme, onToggleTheme, onLogout,
 }: AdminLayoutProps) {
   const { t, i18n } = useTranslation();
-  const handleAdminLangChange = async (locale: string) => {
+  const navigate     = useNavigate();
+  const { section = 'dashboard' } = useParams<{ section: string }>();
+
+  const handleLangChange = async (locale: string) => {
     i18n.changeLanguage(locale);
     if (session) {
-      try { await updateUserLocale(locale); } catch { }
+      try { await updateUserLocale(locale); } catch { /* silencioso */ }
     }
   };
 
@@ -59,12 +48,12 @@ export default function AdminLayout({
     { id: 'patterns',   label: t('admin.patterns'),   icon: '▦', group: 'operation' },
     { id: 'gametypes',  label: t('admin.gametypes'),  icon: '◇', group: 'operation' },
     { id: 'campaigns',  label: t('admin.campaigns'),  icon: '▲', group: 'operation' },
+    { id: 'vault',      label: t('admin.vault'),      icon: '◈', group: 'operation' },
     { id: 'compliance', label: t('admin.compliance'), icon: '◉', group: 'compliance' },
     { id: 'users',      label: t('admin.users'),      icon: '◍', group: 'compliance' },
-    { id: 'mypanel',    label: t('admin.my_panel'),   icon: '●', group: 'personal' },
+    { id: 'mypanel',    label: t('admin.my_panel'),   icon: '●', group: 'personal'  },
   ];
 
-  // Renderiza a seção ativa
   function renderContent() {
     switch (section) {
       case 'dashboard':  return <AdminDashboard session={session} />;
@@ -72,6 +61,7 @@ export default function AdminLayout({
       case 'patterns':   return <PatternsAdmin />;
       case 'gametypes':  return <GametypesAdmin />;
       case 'campaigns':  return <SponsorDashboard />;
+      case 'vault':      return <VaultAdmin />;
       case 'compliance': return <ComplianceAdmin />;
       case 'users':      return <UsersAdmin />;
       case 'mypanel':    return session ? <PlayerDashboard session={session} /> : null;
@@ -80,6 +70,24 @@ export default function AdminLayout({
   }
 
   const currentNav = ADMIN_NAV.find(n => n.id === section);
+
+  const SidebarGroup = ({ group, title }: { group: string; title: string }) => (
+    <div className="site-sidebar-section">
+      <span className="site-sidebar-title">{title}</span>
+      {ADMIN_NAV.filter(n => n.group === group).map(item => (
+        <a
+          key={item.id}
+          href={`/admin/${item.id}`}
+          className={`site-sidebar-item${section === item.id ? ' is-active' : ''}`}
+          aria-current={section === item.id ? 'page' : undefined}
+          onClick={e => { e.preventDefault(); navigate(`/admin/${item.id}`); }}
+        >
+          <span className="icon" aria-hidden="true">{item.icon}</span>
+          <span className="label">{item.label}</span>
+        </a>
+      ))}
+    </div>
+  );
 
   return (
     <div className="site-shell mode-admin" style={{ height: '100dvh' }}>
@@ -90,11 +98,11 @@ export default function AdminLayout({
           <Logo
             variant="horizontal"
             height={64}
-            onClick={() => onNavigate('dashboard')}
+            onClick={() => navigate('/admin/dashboard')}
           />
           <span className="site-mode-pill">
             <span aria-hidden="true">●</span>
-            {t('admin.dashboard')}
+            {t('nav.admin')}
           </span>
         </div>
 
@@ -108,7 +116,7 @@ export default function AdminLayout({
 
           <select
             value={i18n.language}
-            onChange={(e) => handleAdminLangChange(e.target.value)}
+            onChange={e => handleLangChange(e.target.value)}
             className="cb-input cb-select"
             style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.75rem', height: '2.25rem', width: 'auto' }}
             aria-label={t('common.language') ?? 'Idioma'}
@@ -126,17 +134,11 @@ export default function AdminLayout({
             {theme === 'dark' ? '☾' : '☀'}
           </button>
 
-          <button
-            className="cb-btn cb-btn-ghost cb-btn-sm"
-            onClick={() => onBackToLobby?.()}
-          >
+          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => navigate('/lobby')}>
             {t('game_room.back_to_lobby')}
           </button>
 
-          <button
-            className="cb-btn cb-btn-ghost cb-btn-sm"
-            onClick={onLogout}
-          >
+          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onLogout}>
             {t('nav.logout')}
           </button>
         </div>
@@ -145,58 +147,11 @@ export default function AdminLayout({
       {/* ── Admin layout: sidebar + content ── */}
       <div className="site-admin-layout">
 
-        {/* ── Sidebar ── */}
         <aside className="site-sidebar" aria-label={t('admin.nav_aria')}>
+          <SidebarGroup group="operation"  title={t('admin.section_operations')} />
+          <SidebarGroup group="compliance" title={t('admin.section_compliance')} />
+          <SidebarGroup group="personal"   title={t('admin.section_personal')} />
 
-          <div className="site-sidebar-section">
-            <span className="site-sidebar-title">{t('admin.section_operations')}</span>
-            {ADMIN_NAV.filter(n => n.group === 'operation').map(item => (
-              <a
-                key={item.id}
-                href={`#/admin/${item.id}`}
-                className={`site-sidebar-item${section === item.id ? ' is-active' : ''}`}
-                aria-current={section === item.id ? 'page' : undefined}
-                onClick={(e) => { e.preventDefault(); onNavigate(item.id); }}
-              >
-                <span className="icon" aria-hidden="true">{item.icon}</span>
-                <span className="label">{item.label}</span>
-              </a>
-            ))}
-          </div>
-
-          <div className="site-sidebar-section">
-            <span className="site-sidebar-title">{t('admin.section_compliance')}</span>
-            {ADMIN_NAV.filter(n => n.group === 'compliance').map(item => (
-              <a
-                key={item.id}
-                href={`#/admin/${item.id}`}
-                className={`site-sidebar-item${section === item.id ? ' is-active' : ''}`}
-                aria-current={section === item.id ? 'page' : undefined}
-                onClick={(e) => { e.preventDefault(); onNavigate(item.id); }}
-              >
-                <span className="icon" aria-hidden="true">{item.icon}</span>
-                <span className="label">{item.label}</span>
-              </a>
-            ))}
-          </div>
-
-          <div className="site-sidebar-section">
-            <span className="site-sidebar-title">{t('admin.section_personal')}</span>
-            {ADMIN_NAV.filter(n => n.group === 'personal').map(item => (
-              <a
-                key={item.id}
-                href={`#/admin/${item.id}`}
-                className={`site-sidebar-item${section === item.id ? ' is-active' : ''}`}
-                aria-current={section === item.id ? 'page' : undefined}
-                onClick={(e) => { e.preventDefault(); onNavigate(item.id); }}
-              >
-                <span className="icon" aria-hidden="true">{item.icon}</span>
-                <span className="label">{item.label}</span>
-              </a>
-            ))}
-          </div>
-
-          {/* Footer da sidebar */}
           <div className="site-sidebar-foot">
             <div className="site-sidebar-tier">
               <span className="medal" aria-hidden="true">◆</span>
@@ -210,7 +165,6 @@ export default function AdminLayout({
 
         {/* ── Conteúdo ── */}
         <div className="site-admin-content">
-          {/* Page header */}
           <div className="site-page-header">
             <div className="site-page-header-left">
               <span className="eyebrow">{t('nav.admin')}</span>

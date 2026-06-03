@@ -3,6 +3,7 @@ import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { contractSession, microserviceSession } from './blockchain';
 import { connectRedis } from './redis';
+import { processRoomDrops } from './dropWorker';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 const REDIS_ROOM_PREFIX = 'room:';
@@ -233,4 +234,8 @@ export async function onGameResolved(gameId: string): Promise<void> {
     }
 
     await createNextGameForRoom(room);
+
+    processRoomDrops(gameId, roomId).catch(err =>
+        console.error(`[RoomManager] Erro no dropWorker para jogo ${gameId}:`, err)
+    );
 }

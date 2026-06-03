@@ -60,14 +60,16 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
   const summary = useMemo(() => {
     const src = roomFilter ? filtered : rows;
-    let spent = 0, won = 0, winGames = 0;
+    let spent = 0, won = 0, winGames = 0, bestWon = 0;
     for (const r of src) {
       spent += parseAmount(r.totalSpent);
       const w = parseAmount(r.totalWon);
       won += w;
       if (w > 0) winGames++;
+      if (w > bestWon) bestWon = w;
     }
-    return { games: src.length, spent, won, balance: won - spent, winGames };
+    const winRate = src.length > 0 ? (winGames / src.length) * 100 : 0;
+    return { games: src.length, spent, won, balance: won - spent, winGames, winRate, bestWon };
   }, [rows, filtered, roomFilter]);
 
   return (
@@ -102,6 +104,11 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
           </div>
           <div className="hist-summary-sep" />
           <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_win_rate')}</span>
+            <span className={`value${summary.winRate > 0 ? ' gain' : ''}`}>{summary.winRate.toFixed(1)}%</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
             <span className="label">{t('replay.summary_spent')}</span>
             <span className="value">{summary.spent.toFixed(4)} {symbol}</span>
           </div>
@@ -131,9 +138,13 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
       {filtered.length > 0 && (
         <div className="hist-list">
           {filtered.map(r => {
-            const wonAmt = parseAmount(r.totalWon);
+            const wonAmt   = parseAmount(r.totalWon);
+            const spentAmt = parseAmount(r.totalSpent);
             const isWinner = wonAmt > 0;
             const isAborted = r.status === 'aborted';
+            const roi = spentAmt > 0 ? ((wonAmt - spentAmt) / spentAmt) * 100 : null;
+            const sym = r.symbol ?? extractSymbol(r.totalSpent);
+
             return (
               <div
                 key={r.gameId}
@@ -148,6 +159,12 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                   ) : (
                     <span className="hist-badge lost">{t('replay.badge_lost')}</span>
                   )}
+                  {/* ROI% do jogador nesta partida */}
+                  {roi != null && !isAborted && (
+                    <span style={{ display: 'block', fontSize: '0.65rem', marginTop: '0.25rem', fontWeight: 700, color: roi >= 0 ? 'var(--cb-success)' : 'var(--cb-danger)' }}>
+                      {roi >= 0 ? '+' : ''}{roi.toFixed(0)}% ROI
+                    </span>
+                  )}
                 </div>
 
                 {/* Col 2: info */}
@@ -160,6 +177,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                     <span className="hist-row-date">{formatDate(r.endTime)}</span>
                   </div>
                   <div className="hist-row-amounts">
+                    {/* ── Dados do jogador ── */}
                     <div className="hist-row-amount">
                       <span className="alabel">{t('replay.col_tickets')}</span>
                       <span className="avalue">{r.ticketsCount}</span>
@@ -172,6 +190,25 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                       <div className="hist-row-amount">
                         <span className="alabel">{t('replay.col_won')}</span>
                         <span className={`avalue${isWinner ? ' won-amount' : ''}`}>{r.totalWon}</span>
+                      </div>
+                    )}
+                    {/* ── Dados globais da partida (best-effort) ── */}
+                    {r.allTickets != null && (
+                      <div className="hist-row-amount" style={{ borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.5rem', marginLeft: '0.25rem' }}>
+                        <span className="alabel">🎫 {t('replay.col_all_tickets')}</span>
+                        <span className="avalue">{r.allTickets}</span>
+                      </div>
+                    )}
+                    {r.totalWagered != null && (
+                      <div className="hist-row-amount">
+                        <span className="alabel">{t('replay.col_total_wagered')}</span>
+                        <span className="avalue">{r.totalWagered.toFixed(4)} {sym}</span>
+                      </div>
+                    )}
+                    {r.totalPaidOut != null && (
+                      <div className="hist-row-amount">
+                        <span className="alabel">{t('replay.col_total_paid')}</span>
+                        <span className="avalue gain">{r.totalPaidOut.toFixed(4)} {sym}</span>
                       </div>
                     )}
                   </div>

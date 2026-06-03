@@ -1,19 +1,21 @@
 // apps/frontend/src/components/RoomHistoryPanel.tsx
-// Histórico GERAL da sala — todas as partidas, visão pública.
-// Exibe: data, status, pool coletado, jogadores, cartelas, participação do usuário, CTA Replay.
+// Histórico GERAL da sala — visão pública (session opcional para visitantes).
+// Exibe: barra de resumo lifetime + por partida: data, status, pool, jogadores,
+//        cartelas, prêmios pagos (best-effort) e CTA Replay.
 //
-// Design: classes hist-* definidas em globals.design.css
+// Ref: ADR-015 (rota pública /room/:roomId/history)
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { useRoomHistory } from '../hooks/useRoomHistory';
 
 interface RoomHistoryPanelProps {
-  roomId:        string;
-  session:       Session;
-  onViewReplay:  (gameId: string) => void;
-  onBack:        () => void;
+  roomId:       string;
+  session?:     Session | null;
+  onViewReplay: (gameId: string) => void;
+  onBack:       () => void;
+  roomName?:    string;
 }
 
 const STATUS_EMOJI: Record<string, string> = {
@@ -27,13 +29,13 @@ function formatDate(endTime: number): string {
     + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-function splitAmount(quantity: string): { amount: string; symbol: string } {
-  const parts = quantity.trim().split(' ');
-  return { amount: parts[0] ?? '0', symbol: parts.slice(1).join(' ') };
+function parseQty(qty: string): { amount: number; symbol: string } {
+  const parts = qty.trim().split(' ');
+  return { amount: parseFloat(parts[0] ?? '0') || 0, symbol: parts.slice(1).join(' ') };
 }
 
 export default function RoomHistoryPanel({
-  roomId, session, onViewReplay, onBack,
+  roomId, session, onViewReplay, onBack, roomName,
 }: RoomHistoryPanelProps) {
   const { t } = useTranslation();
   const { rows, loading, allLoaded, loadMore, reset } = useRoomHistory(session, roomId);
@@ -42,6 +44,21 @@ export default function RoomHistoryPanel({
     reset();
     loadMore();
   }, [roomId]);
+
+  // Totais lifetime calculados sobre as rows já carregadas
+  const summary = useMemo(() => {
+    let totalTickets = 0, totalWagered = 0, totalPaid = 0;
+    let sym = 'BINGO';
+    for (const r of rows) {
+      totalTickets += r.totalTickets;
+      const { amount, symbol } = parseQty(r.prizePool);
+      totalWagered += amount;
+      if (symbol) sym = symbol;
+      if (r.totalPaidOut != null) totalPaid += r.totalPaidOut;
+    }
+    const hasPaid = rows.some(r => r.totalPaidOut != null);
+    return { games: rows.length, totalTickets, totalWagered, totalPaid, hasPaid, sym };
+  }, [rows]);
 
   return (
     <div className="hist-shell">
@@ -52,9 +69,38 @@ export default function RoomHistoryPanel({
           ← {t('replay.back_to_lobby')}
         </button>
         <h2 className="hist-title">
-          📋 {t('replay.room_history_title')} #{roomId}
+          📋 {roomName ? roomName : `${t('replay.room_history_title')} #${roomId}`}
         </h2>
       </div>
+
+      {/* ── Barra de resumo lifetime ── */}
+      {summary.games > 0 && (
+        <div className="hist-summary" style={{ marginBottom: '0.875rem' }}>
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_games', { count: summary.games, plural: summary.games !== 1 ? 's' : '' })}</span>
+            <span className="value">{summary.games}</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.col_tickets_sold')}</span>
+            <span className="value">{summary.totalTickets.toLocaleString()}</span>
+          </div>
+          <div className="hist-summary-sep" />
+          <div className="hist-summary-stat">
+            <span className="label">{t('replay.summary_wagered')}</span>
+            <span className="value">{summary.totalWagered.toFixed(4)} {summary.sym}</span>
+          </div>
+          {summary.hasPaid && (
+            <>
+              <div className="hist-summary-sep" />
+              <div className="hist-summary-stat">
+                <span className="label">{t('replay.summary_paid_out')}</span>
+                <span className="value gain">{summary.totalPaid.toFixed(4)} {summary.sym}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── Estado vazio ── */}
       {rows.length === 0 && !loading && (
@@ -68,7 +114,7 @@ export default function RoomHistoryPanel({
       {rows.length > 0 && (
         <div className="hist-list">
           {rows.map(r => {
-            const pool    = splitAmount(r.prizePool);
+            const pool      = parseQty(r.prizePool);
             const isAborted = r.status === 'aborted';
 
             return (
@@ -97,12 +143,22 @@ export default function RoomHistoryPanel({
                 {/* Col 2: stats da partida */}
                 <div className="hist-row-info">
                   <div className="hist-row-amounts">
-                    {/* Pool coletado */}
+                    {/* Pool coletado (= total arrecadado) */}
                     <div className="hist-row-amount">
                       <span className="alabel">{t('replay.col_pool')}</span>
                       <span className="avalue" style={{ color: 'var(--cb-accent)', fontWeight: 700 }}>
-                        {pool.amount}
+                        {pool.amount.toFixed(4)}
                         <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '0.2rem' }}>{pool.symbol}</span>
+                      </span>
+                    </div>
+
+                    {/* Total pago aos vencedores (best-effort do ledger) */}
+                    <div className="hist-row-amount">
+                      <span className="alabel">{t('replay.col_paid_out')}</span>
+                      <span className={`avalue${r.totalPaidOut != null ? ' gain' : ''}`}>
+                        {r.totalPaidOut != null
+                          ? `${r.totalPaidOut.toFixed(4)} ${r.symbol}`
+                          : '—'}
                       </span>
                     </div>
 
@@ -115,15 +171,7 @@ export default function RoomHistoryPanel({
                     {/* Cartelas */}
                     <div className="hist-row-amount">
                       <span className="alabel">{t('replay.col_tickets_sold')}</span>
-                      <span className="avalue">
-                        {r.totalTickets > 0 ? r.totalTickets : '—'}
-                      </span>
-                    </div>
-
-                    {/* Preço do ticket */}
-                    <div className="hist-row-amount">
-                      <span className="alabel">{t('replay.col_spent')}</span>
-                      <span className="avalue">{r.ticketPrice}</span>
+                      <span className="avalue">{r.totalTickets > 0 ? r.totalTickets : '—'}</span>
                     </div>
                   </div>
                 </div>

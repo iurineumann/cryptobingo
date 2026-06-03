@@ -504,6 +504,36 @@ export async function fetchBatchWinnings(gameIds: string[]): Promise<BatchWinnin
 }
 
 // ==========================================
+// GAME STATS BATCH (público — ADR-015, compliance)
+// ==========================================
+
+export interface GameStat {
+    totalTickets:  number;
+    totalWagered:  number;
+    totalPaidOut:  number;
+    rtpPct:        number;
+}
+
+/**
+ * Retorna estatísticas de compliance (total tickets, wagered, paid out) para
+ * uma lista de game_ids. Público, best-effort (só jogos sincronizados no ledger).
+ */
+export async function fetchBatchGameStats(
+    gameIds: string[],
+): Promise<Record<string, GameStat>> {
+    if (gameIds.length === 0) return {};
+    try {
+        const params = new URLSearchParams({ gameIds: gameIds.join(',') });
+        const res = await fetch(`${API_BASE}/statistics/games/batch?${params}`);
+        if (!res.ok) return {};
+        const data = await res.json() as { stats: Record<string, GameStat> };
+        return data.stats ?? {};
+    } catch {
+        return {};
+    }
+}
+
+// ==========================================
 // ROOMS (ADR-010)
 // ==========================================
 
@@ -631,5 +661,89 @@ export async function closeRoom(roomId: string): Promise<{ transaction_id: strin
 
 export async function fetchSponsorRooms(): Promise<{ rooms: EnrichedRoom[] }> {
     const res = await fetch(`${API_BASE}/sponsor/rooms`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+// ==========================================
+// DROP VAULT (ADR-011)
+// ==========================================
+
+export interface DropDeposit {
+    deposit_id: string;
+    owner: string;
+    asset_type: 'token' | 'nft';
+    token_contract: string;
+    token_symbol: string;
+    quantity_original: { quantity: string; contract: string };
+    quantity_remaining: { quantity: string; contract: string };
+    nft_asset_id: string;
+    nft_template_id: number;
+    nft_collection: string;
+    status: string;
+    deposited_at: number;
+}
+
+export interface DropAllocation {
+    alloc_id: string;
+    deposit_id: string;
+    owner: string;
+    room_id: string;
+    asset_type: 'token' | 'nft';
+    token_contract: string;
+    token_symbol: string;
+    quantity_per_drop: { quantity: string; contract: string };
+    quantity_distributed: { quantity: string; contract: string };
+    nft_asset_id: string;
+    nft_template_id: number;
+    nft_collection: string;
+    drop_chance_bps: number;
+    drops_executed: number;
+    status: string;
+    allocated_at: number;
+}
+
+export async function fetchVaultDeposits(): Promise<{ deposits: DropDeposit[] }> {
+    const res = await fetch(`${API_BASE}/vault/deposits`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function fetchVaultDeposit(depositId: string): Promise<DropDeposit> {
+    const res = await fetch(`${API_BASE}/vault/deposits/${depositId}`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function fetchVaultAllocations(roomId?: string): Promise<{ allocations: DropAllocation[] }> {
+    const params = roomId ? `?roomId=${roomId}` : '';
+    const res = await fetch(`${API_BASE}/vault/allocations${params}`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function allocateDropToRoom(data: {
+    deposit_id: string;
+    room_id: string;
+    quantity_per_drop?: string;
+    nft_asset_id?: string;
+    drop_chance_bps: number;
+}): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/vault/allocate`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function deallocateFromRoom(allocId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/vault/deallocate`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ alloc_id: allocId }),
+    });
+    return handleResponse(res);
+}
+
+export async function reclaimVaultDeposit(depositId: string): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/vault/reclaim`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ deposit_id: depositId }),
+    });
     return handleResponse(res);
 }
