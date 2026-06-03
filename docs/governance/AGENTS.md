@@ -241,6 +241,26 @@
 - `contracts/bingo/bingo.abi` — ABI corrigido (6 campos em `buytickets`, `config` table adicionada)
 - `contracts/bingo/src/bingo.cpp:402` — assinatura `buytickets` com 6 params
 - `apps/frontend/src/components/Lobby.tsx` — slow-reveal status mapping, room cards, timers
-- `apps/frontend/src/components/GameRoom.tsx` — ball display reverso, sortedTickets, next-game banner, header badge+timer
-- `apps/frontend/src/styles/globals.design.css` — grid layout, stage/tickets overflow
+- `apps/frontend/src/components/GameRoom.tsx` — ball display reverso, sortedTickets, next-game banner, header badge+timer, pattern fetching, winnerMap, sidebar pattern list, game ID display
+- `apps/frontend/src/styles/globals.design.css` — grid layout, stage/tickets overflow, pattern sidebar scroll
+- `apps/frontend/src/locales/en.json`, `pt.json`, `zh.json` — i18n keys `pattern_completed`
 - `apps/worker-game-loop/src/services/rabbitmq.ts:428` — `AUTO_LOCK_DELAY_SEC` default `'60'`
+
+---
+
+## Sessão Atual — Rounds 6 (Jul 2026)
+
+### Problemas Resolvidos
+
+10. **Padrões de vitória (patterns) não apareciam no GameRoom** — raiz: `EnrichedRoom` não inclui `patterns`, então `(room as any)?.patterns` retornava sempre `[]`. Com patterns vazio, o `TicketCard` não detectava células vencedoras, o sidebar mostrava "Nenhum padrão vencedor ainda", e os badges de padrão no footer nunca renderizavam. **Fix:** `fetchGamePatterns()` busca patterns diretamente da blockchain via RPC (`gametypes` → `patterns` tables), converte `uint32 mask` em `cells[25]` via `maskToCells()`, e armazena em estado `gamePatterns`. Disparado durante `loadGame` quando `gametype_id` está disponível. `winPattern` e `prize` agora são derivados do WebSocket `winners` via `winnerMap` + `patternByName`.
+
+11. **Ordenação de cartelas por proximidade a padrões** — `sortedTickets` agora considera: vencedores primeiro (ordenados por prêmio decrescente), depois por `computeProximityScore` (markedRatio × prizeValue somado sobre todos os patterns), e finalmente por células marcadas.
+
+12. **Patterns sidebar sem scroll vertical** — `ResizeObserver` no `stageRef` sincroniza `maxHeight` do `.gr-patterns` com a altura do `.gr-stage`. `.gr-patterns-list` (com `flex: 1; overflow-y: auto`) scrolla quando o conteúdo excede. `.gr-patterns` com `overflow: hidden`. Lista ordenada por número de cartelas que completaram cada padrão (decrescente). Padrões completados exibem `"Completado (X)"` com contagem de cartelas.
+
+13. **Exibição do gameId na navbar** — chip `#gameId` exibido no breadcrumb ao lado do nome da sala quando `game` está carregado.
+
+### Pendências / Next Steps
+
+- Verificar se patterns carregam corretamente quando o gametype tem combinations (all_of / any_of / n_of_type)
+- Avaliar cache de patterns para evitar refetch a cada 15s poll

@@ -121,6 +121,7 @@
     "patterns_hide_aria": "隐藏模式",
     "patterns_loading": "加载模式中...",
     "patterns_empty": "暂无获胜模式",
+    "pattern_completed": "已完成",
     "my_tickets_heading": "我的卡",
     "ticket_winner_aria": "获胜卡",
     "ticket_aria": "卡 {{id}}",

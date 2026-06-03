@@ -121,6 +121,7 @@
     "patterns_hide_aria": "Hide patterns",
     "patterns_loading": "Loading patterns...",
     "patterns_empty": "No winning patterns yet",
+    "pattern_completed": "Completed",
     "my_tickets_heading": "My Tickets",
     "ticket_winner_aria": "Winning ticket",
     "ticket_aria": "Ticket {{id}}",

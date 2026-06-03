@@ -121,6 +121,7 @@
     "patterns_hide_aria": "Ocultar padrões",
     "patterns_loading": "Carregando padrões...",
     "patterns_empty": "Nenhum padrão vencedor ainda",
+    "pattern_completed": "Completado",
     "my_tickets_heading": "Minhas Cartelas",
     "ticket_winner_aria": "Cartela vencedora",
     "ticket_aria": "Cartela {{id}}",
