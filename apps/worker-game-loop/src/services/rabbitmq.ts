@@ -43,9 +43,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const RABBITMQ_URL       = process.env.RABBITMQ_URL       || 'amqp://localhost:5672';
-const CONTRACT_ACCOUNT   = process.env.CONTRACT_ACCOUNT   || 'bingo.game';
-const RETRY_DELAY_MS     = 5_000;
+const RABBITMQ_URL         = process.env.RABBITMQ_URL         || 'amqp://localhost:5672';
+const CONTRACT_ACCOUNT     = process.env.CONTRACT_ACCOUNT     || 'bingo.game';
+const RETRY_DELAY_MS       = 5_000;
+const CONNECT_TIMEOUT_MS   = 10_000; // amqp.connect() não tem timeout nativo — forçamos 10s
 const QUEUE_NAME         = 'game_loop_events';
 const DLX_NAME           = 'game_loop_dlx';
 const DLQ_NAME           = 'game_loop_dead';
@@ -136,7 +137,14 @@ async function setupQueues(): Promise<void> {
 export async function connectRabbitMQ(): Promise<void> {
     try {
         console.log('🐇 [RabbitMQ] Conectando ao Message Broker...');
-        connection = await amqp.connect(RABBITMQ_URL);
+
+        // amqp.connect() pode travar indefinidamente em TCP half-open — timeout explícito
+        connection = await Promise.race([
+            amqp.connect(RABBITMQ_URL),
+            new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error(`timeout após ${CONNECT_TIMEOUT_MS / 1000}s`)), CONNECT_TIMEOUT_MS)
+            ),
+        ]);
 
         connection.on('error', (err) => {
             console.error('❌ [RabbitMQ] Erro na conexão:', err.message);
@@ -433,11 +441,12 @@ export async function autoLockFundingGames(): Promise<void> {
 
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
-            code:  CONTRACT_ACCOUNT,
-            scope: CONTRACT_ACCOUNT,
-            table: 'games',
-            limit: 100,
-            json:  true,
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   20,
+            reverse: true,  // jogos mais recentes primeiro — evita miss com limit fixo
+            json:    true,
         });
 
         const games = response.rows as BlockchainGameState[];
@@ -460,9 +469,11 @@ export async function autoLockFundingGames(): Promise<void> {
                 );
 
                 // Inicia o sorteio imediatamente após o lock
-                autoStartDraw(gameId).catch(err =>
-                    console.error(`[AutoAdvance] Erro startdraw (jogo ${gameId}):`, err)
-                );
+                // Remove do Set em caso de falha para permitir retry no próximo ciclo
+                autoStartDraw(gameId).catch(err => {
+                    console.error(`[AutoAdvance] Erro startdraw (jogo ${gameId}):`, err);
+                    processedGames.delete(gameId);
+                });
             } catch (err) {
                 console.error(`[AutoAdvance] Erro ao travar jogo ${gameId}:`, err);
                 processedGames.delete(gameId);
@@ -484,11 +495,12 @@ export async function autoLockFundingGames(): Promise<void> {
 export async function autoClaimDrawnGames(): Promise<void> {
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
-            code:  CONTRACT_ACCOUNT,
-            scope: CONTRACT_ACCOUNT,
-            table: 'games',
-            limit: 100,
-            json:  true,
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   20,
+            reverse: true,
+            json:    true,
         });
 
         const games = response.rows as BlockchainGameState[];
@@ -499,9 +511,11 @@ export async function autoClaimDrawnGames(): Promise<void> {
 
             processedGames.add(gameId);
             console.log(`[AutoAdvance] 🏁 Jogo ${gameId} em DRAWN. Orquestrando conclusão...`);
-            orchestrateGame(gameId).catch(err =>
-                console.error(`[AutoAdvance] Erro orquestrando jogo ${gameId}:`, err)
-            );
+            // Remove do Set em caso de falha para permitir retry no próximo ciclo (15s)
+            orchestrateGame(gameId).catch(err => {
+                console.error(`[AutoAdvance] Erro orquestrando jogo ${gameId}:`, err);
+                processedGames.delete(gameId);
+            });
         }
     } catch (err) {
         console.error('[AutoAdvance] Erro no polling drawn:', err);
@@ -511,11 +525,12 @@ export async function autoClaimDrawnGames(): Promise<void> {
 export async function autoStartLockedGames(): Promise<void> {
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
-            code:  CONTRACT_ACCOUNT,
-            scope: CONTRACT_ACCOUNT,
-            table: 'games',
-            limit: 100,
-            json:  true,
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   20,
+            reverse: true,
+            json:    true,
         });
 
         const games = response.rows as BlockchainGameState[];
@@ -525,9 +540,11 @@ export async function autoStartLockedGames(): Promise<void> {
             if (processedGames.has(gameId)) continue;
 
             processedGames.add(gameId);
-            autoStartDraw(gameId).catch(err =>
-                console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err)
-            );
+            // Remove do Set em caso de falha para permitir retry no próximo ciclo (30s)
+            autoStartDraw(gameId).catch(err => {
+                console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err);
+                processedGames.delete(gameId);
+            });
         }
     } catch (err) {
         console.error('[AutoAdvance] Erro no polling locked:', err);

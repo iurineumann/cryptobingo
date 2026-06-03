@@ -32,27 +32,25 @@ async function bootstrap(): Promise<void> {
     await connectRedis();
 
     // ── 3. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
-    // Iniciado antes do RabbitMQ para estar pronto para conexões de clientes
-    // quando o primeiro evento 'startdraw' chegar.
     startBroadcaster();
 
-    // ── 4. Consumidor RabbitMQ ────────────────────────────────────────────────
-    await connectRabbitMQ();
-
-    // ── 5. Polling de primeiro jogo para salas ativas ─────────────────────────
-    // Verifica a cada 30s se há salas ativas sem jogo atual e cria o primeiro.
+    // ── 4. Auto-advance do ciclo de vida (independente do RabbitMQ) ───────────
+    // Roda via RPC direto na blockchain — não depende do Message Broker.
+    // Iniciado ANTES do connectRabbitMQ para garantir que os timers rodem mesmo
+    // que a conexão AMQP demore ou falhe na primeira tentativa.
     ensureFirstGameForActiveRooms();
     setInterval(ensureFirstGameForActiveRooms, 30_000);
 
-    // ── 6. Auto-advance do ciclo de vida ──────────────────────────────────────
-    // A cada 15s, verifica jogos em FUNDING → lock + startdraw.
-    // A cada 15s, verifica jogos em DRAWN → orquestra conclusão.
-    // A cada 30s, verifica jogos em LOCKED esquecidos (startdraw).
     autoLockFundingGames();
     autoClaimDrawnGames();
-    setInterval(autoLockFundingGames, 15_000);
-    setInterval(autoClaimDrawnGames, 15_000);
-    setInterval(autoStartLockedGames, 30_000);
+    autoStartLockedGames();  // processa jogos em LOCKED que existiam antes do worker iniciar
+    setInterval(autoLockFundingGames,  15_000);
+    setInterval(autoClaimDrawnGames,   15_000);
+    setInterval(autoStartLockedGames,  30_000);
+
+    // ── 5. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
+    // Não await: a conexão pode demorar ou precisar de retry sem bloquear o worker.
+    connectRabbitMQ();
 }
 
 bootstrap().catch((err) => {
