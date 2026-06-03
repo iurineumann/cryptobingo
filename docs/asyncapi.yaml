@@ -1,41 +1,84 @@
 asyncapi: 2.6.0
 info:
-  title: Bingo GameFi - Event Stream API
-  version: 1.0.0
+  title: CryptoBingo — WebSocket Event Stream API
+  version: 2.0.0
   description: |
-    Barramento de eventos de alta performance para sincronização de estado (Slow Reveal) e multiplexing de salas.
-    Implementa resiliência de rede via sequenciamento de pacotes (Idempotência) e isolamento de escopo por `game_id`.
+    Barramento de eventos em tempo real via Socket.io (ADR-007).
+    Suporta Slow Reveal (3s/bola), reconciliação de estado, chat de sala,
+    modos de sorteio (ADR-012/013/014) e notificações de drops (ADR-011).
+
+    **Autenticação:** JWT no handshake inicial (header Authorization ou query token).
+    **Namespace:** raiz `/` com rooms nomeadas por game_id e room_id.
+
 servers:
   production:
-    url: wss://ws.seubingo.com/v1/stream
+    url: wss://ws.seubingo.com
     protocol: wss
-    description: Cluster Kubernetes com balanceamento de carga (HPA) e roteamento via NGINX Ingress.
+    description: Broadcaster Worker com Socket.io (at-least-once via reconciliação)
     security:
       - jwtAuth: []
+  development:
+    url: ws://localhost:8085
+    protocol: ws
+    description: Instância local via Docker Compose
 
 channels:
+
+  # ─────────────────────────────────────────────────────────────────
+  # CANAL DE JOGO — eventos de sorteio ao vivo (Slow Reveal)
+  # ─────────────────────────────────────────────────────────────────
   game.{game_id}:
-    description: Canal dinâmico para multiplexing. O cliente escuta múltiplas salas isolando o estado no Frontend.
+    description: |
+      Canal por partida. O cliente entra via socket.join(`game:${game_id}`).
+      Todos os eventos de sorteio, resultado e estado são emitidos aqui.
     parameters:
       game_id:
-        description: Identificador unívoco da rodada on-chain.
+        description: Identificador único da partida on-chain (uint64 como string).
         schema:
-          type: integer
-          minimum: 1
+          type: string
+          pattern: '^\d+$'
     subscribe:
-      description: Eventos emitidos pelo Broadcaster Worker (Servidor -> Cliente).
+      description: Eventos emitidos pelo Broadcaster (Servidor → Cliente).
       message:
         oneOf:
           - $ref: '#/components/messages/GameLocked'
           - $ref: '#/components/messages/BallDrawn'
           - $ref: '#/components/messages/WinnerFound'
           - $ref: '#/components/messages/GameAborted'
+          - $ref: '#/components/messages/GameEnded'
+          - $ref: '#/components/messages/GoldenBall'
+          - $ref: '#/components/messages/StageCleared'
+          - $ref: '#/components/messages/SyncResponse'
     publish:
-      description: Comandos de controle de presença emitidos pelo cliente (Cliente -> Servidor).
+      description: Comandos de controle enviados pelo cliente (Cliente → Servidor).
       message:
         oneOf:
-          - $ref: '#/components/messages/SubscribeRoom'
-          - $ref: '#/components/messages/SyncState'
+          - $ref: '#/components/messages/SubscribeGame'
+          - $ref: '#/components/messages/SyncRequest'
+
+  # ─────────────────────────────────────────────────────────────────
+  # CANAL DE SALA — chat e drops (ADR-010 / ADR-011)
+  # ─────────────────────────────────────────────────────────────────
+  room.{room_id}:
+    description: |
+      Canal por sala. Usado para mensagens de chat e notificações de drops.
+      O cliente entra via socket.join(`room:${room_id}`) ao conectar à sala.
+    parameters:
+      room_id:
+        description: Identificador único da sala on-chain (uint64 como string).
+        schema:
+          type: string
+          pattern: '^\d+$'
+    subscribe:
+      description: Eventos de sala emitidos pelo Servidor (Servidor → Cliente).
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ChatMessage'
+          - $ref: '#/components/messages/SponsorDrop'
+    publish:
+      description: Mensagens enviadas pelo cliente para a sala (Cliente → Servidor).
+      message:
+        $ref: '#/components/messages/SendChatMessage'
 
 components:
   securitySchemes:
@@ -43,16 +86,18 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Handshake inicial exige token WharfKit validado para evitar exaustão de conexões abertas (DDoS).
+      description: Token JWT emitido pelo /auth/verify (ADR-006). Enviado no handshake.
 
   messages:
-    # --------------------------------------------------------
-    # MENSAGENS: SERVIDOR -> CLIENTE (DOWNSTREAM)
-    # --------------------------------------------------------
+
+    # ──────────────────────────────────────────────────────────────
+    # JOGO: SERVIDOR → CLIENTE
+    # ──────────────────────────────────────────────────────────────
+
     GameLocked:
       name: game_locked
-      title: Rodada Fechada
-      summary: Emitido quando a FSM on-chain transita para LOCKED e bloqueia novas compras.
+      title: Partida Bloqueada
+      summary: FSM transitou FUNDING → LOCKED. Novas compras bloqueadas.
       payload:
         type: object
         required: [event, game_id, timestamp]
@@ -61,15 +106,17 @@ components:
             type: string
             const: game_locked
           game_id:
-            type: integer
+            type: string
           timestamp:
             type: string
             format: date-time
 
     BallDrawn:
       name: ball_drawn
-      title: Bola Sorteada (Slow Reveal)
-      summary: Emitido a cada ciclo de animação (aprox. 3s). Carrega ID de ordem para reconciliação de rede.
+      title: Bola Sorteada (Slow Reveal — ADR-007)
+      summary: |
+        Emitido a cada ~3s durante o sorteio.
+        O campo `order` é usado para detecção de perda de pacotes e reconciliação.
       payload:
         type: object
         required: [event, game_id, payload]
@@ -78,14 +125,14 @@ components:
             type: string
             const: ball_drawn
           game_id:
-            type: integer
+            type: string
           payload:
             type: object
             required: [order, number, timestamp]
             properties:
               order:
                 type: integer
-                description: Posição ordinal do sorteio (1 a 75). Vital para detecção de perda de pacotes (Packet Loss).
+                description: Posição ordinal (1..max_balls). Vital para reconciliação.
               number:
                 type: integer
                 minimum: 1
@@ -97,7 +144,7 @@ components:
     WinnerFound:
       name: winner_found
       title: Vencedores Detectados
-      summary: Clímax do jogo. Contém cálculos de resolução algébrica e pagamentos fracionados (Multidrop).
+      summary: Emitido após identificação de vencedores pelo evaluator.
       payload:
         type: object
         required: [event, game_id, payload]
@@ -106,14 +153,18 @@ components:
             type: string
             const: winner_found
           game_id:
-            type: integer
+            type: string
           payload:
             type: object
-            required: [winning_ball, winners]
+            required: [winners]
             properties:
               winning_ball:
                 type: integer
-                description: A dezena exata que cruzou o threshold do Bitmasking.
+                description: Bola que completou o padrão (pode ser null em multi-match).
+                nullable: true
+              mode:
+                type: string
+                enum: [fixed, firstfull, goldenball, multimatch, standard]
               winners:
                 type: array
                 items:
@@ -121,8 +172,10 @@ components:
 
     GameAborted:
       name: game_aborted
-      title: Fail-Safe Acionado
-      summary: Cancela animações do UI e libera fallback visual para estorno O(1).
+      title: Partida Abortada (Fail-Safe)
+      summary: |
+        FSM transitou para ABORTED. Cartelas serão reembolsadas automaticamente.
+        O cliente deve cancelar animações e exibir tela de estorno.
       payload:
         type: object
         required: [event, game_id, payload]
@@ -131,7 +184,7 @@ components:
             type: string
             const: game_aborted
           game_id:
-            type: integer
+            type: string
           payload:
             type: object
             required: [reason]
@@ -140,12 +193,196 @@ components:
                 type: string
                 enum: [ORACLE_TIMEOUT, LOW_QUORUM, ADMIN_HALT]
 
-    # --------------------------------------------------------
-    # MENSAGENS: CLIENTE -> SERVIDOR (UPSTREAM)
-    # --------------------------------------------------------
-    SubscribeRoom:
-      name: subscribe_room
-      title: Entrar na Sala
+    GameEnded:
+      name: game_ended
+      title: Partida Encerrada (ADR-014)
+      summary: |
+        Emitido após processamento completo de claimwin + closegame.
+        Indica que o Slow Reveal pode ser finalizado e o UI de resultado exibido.
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: game_ended
+          game_id:
+            type: string
+          payload:
+            type: object
+            required: [mode, total_winners]
+            properties:
+              mode:
+                type: string
+                enum: [fixed, firstfull, goldenball, multimatch, standard]
+              total_winners:
+                type: integer
+              total_paid_out:
+                type: string
+                description: Total pago em formato "X.XXXX SYMBOL" (opcional).
+                nullable: true
+
+    GoldenBall:
+      name: golden_ball
+      title: Bola Dourada Ativada (ADR-012)
+      summary: |
+        Exclusivo do modo goldenball. Emitido quando a bola extra com multiplicador
+        é sorteada além das N bolas padrão.
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: golden_ball
+          game_id:
+            type: string
+          payload:
+            type: object
+            required: [ball_num, multiplier]
+            properties:
+              ball_num:
+                type: integer
+                description: Número da bola dourada (1–75).
+              multiplier:
+                type: integer
+                description: Multiplicador de prêmio (ex. 2 = 2×).
+
+    StageCleared:
+      name: stage_cleared
+      title: Estágio Completado (ADR-013)
+      summary: |
+        Exclusivo do modo multimatch. Emitido quando um conjunto de padrões
+        é completado, liberando o prêmio do estágio.
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: stage_cleared
+          game_id:
+            type: string
+          payload:
+            type: object
+            required: [stage, winners]
+            properties:
+              stage:
+                type: integer
+                description: Número do estágio (1-based).
+              winners:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WinnerObject'
+
+    SyncResponse:
+      name: sync_response
+      title: Resposta de Reconciliação
+      summary: |
+        Resposta ao SyncRequest do cliente. Contém todas as bolas já emitidas
+        desde o início (ou desde last_order) para reconstrução do estado.
+      payload:
+        type: object
+        required: [event, game_id, balls, current_index]
+        properties:
+          event:
+            type: string
+            const: sync_response
+          game_id:
+            type: string
+          balls:
+            type: array
+            items:
+              type: object
+              required: [order, number, timestamp]
+              properties:
+                order:
+                  type: integer
+                number:
+                  type: integer
+                timestamp:
+                  type: string
+                  format: date-time
+          current_index:
+            type: integer
+            description: Índice atual do Slow Reveal (quantas bolas já foram reveladas).
+
+    # ──────────────────────────────────────────────────────────────
+    # SALA: SERVIDOR → CLIENTE
+    # ──────────────────────────────────────────────────────────────
+
+    ChatMessage:
+      name: chat:message
+      title: Mensagem de Chat da Sala (ADR-010)
+      summary: Mensagem de texto enviada por um jogador na sala.
+      payload:
+        type: object
+        required: [event, room_id, payload]
+        properties:
+          event:
+            type: string
+            const: 'chat:message'
+          room_id:
+            type: string
+          payload:
+            type: object
+            required: [wallet, message, timestamp]
+            properties:
+              wallet:
+                type: string
+                description: Endereço WAX do remetente.
+              message:
+                type: string
+                maxLength: 500
+              timestamp:
+                type: string
+                format: date-time
+
+    SponsorDrop:
+      name: chat:sponsor_drop
+      title: Notificação de Drop do Sponsor (ADR-011)
+      summary: |
+        Emitido pelo dropWorker após executar um drop ao final de uma partida.
+        Exibido no chat da sala como anúncio especial.
+      payload:
+        type: object
+        required: [event, room_id, payload]
+        properties:
+          event:
+            type: string
+            const: 'chat:sponsor_drop'
+          room_id:
+            type: string
+          payload:
+            type: object
+            required: [winner, asset_type]
+            properties:
+              winner:
+                type: string
+                description: Endereço WAX do vencedor do drop.
+              asset_type:
+                type: string
+                enum: [token, nft]
+              amount:
+                type: string
+                description: Quantidade entregue — "X.XXXX SYMBOL" (apenas tokens).
+                nullable: true
+              nft_asset_id:
+                type: string
+                description: ID do NFT entregue (apenas NFTs).
+                nullable: true
+              collection:
+                type: string
+                nullable: true
+
+    # ──────────────────────────────────────────────────────────────
+    # CLIENTE → SERVIDOR
+    # ──────────────────────────────────────────────────────────────
+
+    SubscribeGame:
+      name: subscribe_game
+      title: Entrar no Canal da Partida
+      summary: O cliente solicita entrada no canal de um game_id específico.
       payload:
         type: object
         required: [action, game_id]
@@ -154,12 +391,14 @@ components:
             type: string
             const: subscribe
           game_id:
-            type: integer
+            type: string
 
-    SyncState:
-      name: sync_state
-      title: Sincronização de Estado (Reconciliação)
-      summary: Se o cliente detectar salto no `order` (ex. rede celular oscilou), pede payload de correção.
+    SyncRequest:
+      name: sync_request
+      title: Solicitação de Reconciliação
+      summary: |
+        Enviado quando o cliente detecta lacuna no campo `order` (pacote perdido).
+        O servidor responde com SyncResponse contendo o histórico completo.
       payload:
         type: object
         required: [action, game_id, last_order]
@@ -168,10 +407,27 @@ components:
             type: string
             const: sync
           game_id:
-            type: integer
+            type: string
           last_order:
             type: integer
-            description: O último identificador ordinal recebido com sucesso pelo cliente.
+            description: Último order recebido com sucesso pelo cliente.
+
+    SendChatMessage:
+      name: send_chat_message
+      title: Enviar Mensagem de Chat
+      summary: O cliente envia uma mensagem de texto para a sala.
+      payload:
+        type: object
+        required: [action, room_id, message]
+        properties:
+          action:
+            type: string
+            const: chat
+          room_id:
+            type: string
+          message:
+            type: string
+            maxLength: 500
 
   schemas:
     WinnerObject:
@@ -180,15 +436,15 @@ components:
       properties:
         account:
           type: string
-          description: Conta WAX validada (ex. iuri.wax).
+          description: Conta WAX do vencedor (ex. iuri.wax).
         ticket_id:
-          type: integer
+          type: string
         win_pattern:
           type: string
-          enum: [ROW_1, COL_1, DIAGONAL, FULL_HOUSE]
+          description: Nome do padrão vencido (ex. "ROW_1", "FULL_HOUSE", etc.).
         payouts:
           type: array
-          description: Vetor de extended_assets creditados na wallet interna (Suporta Multidrop Sponsorship).
+          description: Prêmios creditados na wallet interna do jogador.
           items:
             type: string
             pattern: '^[0-9]+\.[0-9]+ [A-Z]+$'

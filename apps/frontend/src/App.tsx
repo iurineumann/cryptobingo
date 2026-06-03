@@ -6,17 +6,21 @@
 //   AppRoot      → estado de sessão/tema + useNavigate + <Routes>
 //   AuthGuard    → layout route; redireciona para / se não autenticado
 //   AdminGuard   → layout route; redireciona para /lobby se não admin
+//   SponsorGuard → layout route; redireciona para /lobby se não sponsor
 //
 // Rotas:
-//   /                    → RootRedirect (sessão → /lobby, sem sessão → Landing)
-//   /lobby               → PlayerShell > Lobby
-//   /history             → PlayerShell > MyHistoryPage
-//   /wallet              → PlayerShell > WalletPage
+//   /                     → RootRedirect (sessão → /lobby, sem sessão → Landing)
+//   /lobby                → PlayerShell > Lobby
+//   /history              → PlayerShell > MyHistoryPage
+//   /wallet               → PlayerShell > WalletPage
 //   /room/:roomId/:gameId → GameRoom (full-screen)
-//   /replay/:gameId      → ReplayRoom (full-screen)
-//   /room/:roomId/history → RoomHistoryPanel (full-screen)
-//   /admin               → redirect /admin/dashboard
-//   /admin/:section      → AdminLayout (full-screen)
+//   /replay/:gameId       → ReplayRoom (full-screen)
+//   /room/:roomId/history → RoomHistoryPanel (público, sem auth)
+//   /admin                → redirect /admin/dashboard
+//   /admin/:section       → AdminLayout (full-screen, role admin)
+//   /sponsor              → redirect /sponsor/rooms
+//   /sponsor/rooms        → SponsorLayout > SponsorRooms (role sponsor)
+//   /sponsor/vault        → SponsorLayout > SponsorVault  (role sponsor)
 //
 // Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms), ADR-015 (Routing)
 
@@ -49,6 +53,9 @@ import RoomHistoryPanel  from './components/RoomHistoryPanel';
 import MyHistoryPage     from './components/MyHistoryPage';
 import WalletPage        from './components/WalletPage';
 import AdminLayout       from './components/admin/AdminLayout';
+import SponsorLayout    from './components/sponsor/SponsorLayout';
+import SponsorRooms     from './components/sponsor/SponsorRooms';
+import SponsorVault     from './components/sponsor/SponsorVault';
 import Logo             from './components/Logo';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
@@ -129,6 +136,11 @@ function AdminGuard({ isAdmin }: { isAdmin: boolean }) {
     return <Outlet />;
 }
 
+function SponsorGuard({ isSponsor }: { isSponsor: boolean }) {
+    if (!isSponsor) return <Navigate to="/lobby" replace />;
+    return <Outlet />;
+}
+
 // ── WRAPPERS DE ROTA (extraem useParams e delegam props) ─────────────────────
 
 interface PageProps {
@@ -176,9 +188,11 @@ function ReplayPage({ session }: { session: Session }) {
     );
 }
 
-function RoomHistoryPage({ session }: { session: Session }) {
+// Rota pública — sem session required (ADR-015); visitantes podem ver histórico de sala
+function RoomHistoryPage({ session }: { session?: Session | null }) {
     const { roomId } = useParams<{ roomId: string }>();
     const navigate = useNavigate();
+    const destination = session ? '/lobby' : '/';
     return (
         <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
             <div className="site-content">
@@ -187,7 +201,7 @@ function RoomHistoryPage({ session }: { session: Session }) {
                         roomId={roomId!}
                         session={session}
                         onViewReplay={(gid) => navigate(`/replay/${gid}`)}
-                        onBack={() => navigate('/lobby')}
+                        onBack={() => navigate(destination)}
                     />
                 </main>
             </div>
@@ -195,22 +209,7 @@ function RoomHistoryPage({ session }: { session: Session }) {
     );
 }
 
-function AdminPage({ session, profile, theme, onToggleTheme, onLogout }: Omit<PageProps, 'isAdmin' | 'onLanguageChange'>) {
-    const { section } = useParams<{ section: string }>();
-    const navigate = useNavigate();
-    return (
-        <AdminLayout
-            profile={profile}
-            session={session}
-            theme={theme}
-            onToggleTheme={onToggleTheme}
-            section={section ?? 'dashboard'}
-            onNavigate={(s) => navigate(`/admin/${s}`)}
-            onLogout={onLogout}
-            onBackToLobby={() => navigate('/lobby')}
-        />
-    );
-}
+// AdminLayout é auto-contido — lê useParams/useNavigate internamente (ADR-015)
 
 // ── APP ROOT (dentro do BrowserRouter — pode usar hooks de router) ────────────
 
@@ -234,6 +233,7 @@ function AppRoot() {
             (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
         )
     );
+    const isSponsor = profile?.role === 'sponsor';
 
     // ── Restore de sessão ao recarregar (suporta deep links) ─────────────────
     useEffect(() => {
@@ -374,6 +374,14 @@ function AppRoot() {
                             Admin
                         </button>
                     )}
+                    {isSponsor && (
+                        <button
+                            className="cb-btn cb-btn-outline cb-btn-sm"
+                            onClick={() => navigate('/sponsor/rooms')}
+                        >
+                            ▲ {t('sponsor.panel_title')}
+                        </button>
+                    )}
 
                     <select
                         value={i18n.language}
@@ -451,6 +459,9 @@ function AppRoot() {
                 }
             />
 
+            {/* ── Rota pública: histórico de sala (sem auth — ADR-015) ── */}
+            <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session} />} />
+
             {/* ── Rotas protegidas por autenticação ── */}
             <Route element={
                 <AuthGuard
@@ -480,20 +491,36 @@ function AppRoot() {
                 {/* ── Telas full-screen ── */}
                 <Route path="/room/:roomId/:gameId" element={<GameRoomPage {...pageProps} />} />
                 <Route path="/replay/:gameId"       element={<ReplayPage session={session!} />} />
-                <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session!} />} />
 
                 {/* ── Admin (requer role admin) ── */}
                 <Route element={<AdminGuard isAdmin={isAdmin} />}>
                     <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="/admin/:section" element={
-                        <AdminPage
+                        <AdminLayout
+                            profile={profile!}
+                            session={session!}
+                            theme={theme}
+                            onToggleTheme={toggleTheme}
+                            onLogout={logout}
+                        />
+                    } />
+                </Route>
+
+                {/* ── Sponsor (requer role sponsor) ── */}
+                <Route element={<SponsorGuard isSponsor={isSponsor} />}>
+                    <Route element={
+                        <SponsorLayout
                             session={session!}
                             profile={profile!}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
                         />
-                    } />
+                    }>
+                        <Route path="/sponsor" element={<Navigate to="/sponsor/rooms" replace />} />
+                        <Route path="/sponsor/rooms" element={<SponsorRooms />} />
+                        <Route path="/sponsor/vault" element={<SponsorVault />} />
+                    </Route>
                 </Route>
             </Route>
 

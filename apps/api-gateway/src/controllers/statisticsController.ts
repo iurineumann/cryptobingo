@@ -3,7 +3,7 @@
 // Ref: COMPLIANCE.md §2.2, openapi.yaml /statistics/rtp
 
 import { Request, Response } from 'express';
-import { getRtpReport, getRecentGames, upsertGameHistory } from '../database/ledger';
+import { getRtpReport, getRecentGames, upsertGameHistory, getGameStatsBatch } from '../database/ledger';
 import { UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
@@ -47,6 +47,46 @@ export async function getGamesHistory(req: Request, res: Response): Promise<void
     } catch (err) {
         console.error('[Statistics] Erro ao listar histórico de jogos:', err);
         res.status(500).json({ error: 'Erro ao buscar histórico de jogos.' });
+    }
+}
+
+// ==========================================
+// GET /api/v1/statistics/games/batch?gameIds=id1,id2,...
+// ==========================================
+
+/**
+ * Retorna estatísticas de compliance para um conjunto de game_ids.
+ * Público — dados de auditoria (Lei 14.790/2023).
+ * Best-effort: jogos não sincronizados no ledger são omitidos da resposta.
+ */
+export async function getGameStatsBatchHandler(req: Request, res: Response): Promise<void> {
+    try {
+        const raw = String(req.query.gameIds ?? '');
+        const gameIds = raw
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => /^\d+$/.test(s))
+            .slice(0, 200); // limite defensivo
+
+        if (gameIds.length === 0) {
+            res.status(200).json({ stats: {} });
+            return;
+        }
+
+        const rows = await getGameStatsBatch(gameIds);
+        const stats: Record<string, { totalTickets: number; totalWagered: number; totalPaidOut: number; rtpPct: number }> = {};
+        for (const r of rows) {
+            stats[r.game_id] = {
+                totalTickets:  r.total_tickets,
+                totalWagered:  r.total_wagered,
+                totalPaidOut:  r.total_paid_out,
+                rtpPct:        r.rtp_pct,
+            };
+        }
+        res.status(200).json({ stats });
+    } catch (err) {
+        console.error('[Statistics] Erro ao buscar batch de stats:', err);
+        res.status(500).json({ error: 'Erro ao buscar estatísticas de jogos.' });
     }
 }
 

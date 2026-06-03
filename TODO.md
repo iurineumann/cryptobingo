@@ -1,101 +1,99 @@
 # TODO.md — Tarefas Imediatas e Dívidas Técnicas
 
+> Última auditoria de estado real: 2026-06-03
+> Itens marcados como DEBT que já estavam implementados foram movidos para DONE.
+
+---
+
 ## [DONE] Sprint — ABI Manual + Ricardian + Tailwind v4 (2026-05-26)
 
-### Contrato — ABI Manual
-[DONE] bingo.abi reescrito manualmente e sincronizado com bingo.hpp sprint atual.
-[DONE] Todas as novas structs adicionadas: campaign_record, game_state com end_time/gametype_id.
-[DONE] Todas as novas actions documentadas: fundgame, abortgame, refundticket, cleargame, linkcampaign, closecampaign.
-[DONE] Tabela campaigns adicionada com secondary index bysponsor.
-[DONE] win_pattern_mask corrigido de uint32 para uint64 (alinhado ao bingo.hpp).
-[DONE] ricardian_clauses adicionadas: terms-of-service e dispute-resolution (inglês, padrão WAX Mainnet).
+[DONE] bingo.abi reescrito manualmente e sincronizado com bingo.hpp.
+[DONE] Contratos Ricardianos completos (17 actions, formato WAX, Lei 14.790/2023).
+[DONE] Frontend migrado para Tailwind CSS v4 (globals.css, globals.design.css, useTheme.ts).
 
-### Contrato — Ricardian Contracts (formato WAX)
-[DONE] bingo.contracts.md reescrito em inglês com formato WAX correto (<h1 class="contract">).
-[DONE] Todos os 17 actions documentados com Intent + Terms + variáveis {{campo}}.
-[DONE] Contratos Ricardianos inline no bingo.abi (campo ricardian_contract de cada action).
-[DONE] Referências à legislação brasileira (Lei 14.790/2023) nos contratos relevantes.
+## [DONE] Sprint — Admin + Multi-Role + B2B + Compliance (2026-05-26)
 
-### Frontend — Tailwind CSS v4
-[DONE] package.json — "type": "module" + tailwindcss@^4.0.0 + @tailwindcss/vite@^4.0.0 + vite@^5.0.0.
-[DONE] vite.config.ts — plugin tailwindcss() antes do react plugin.
-[DONE] globals.css — Design System completo com @theme CSS-first + @import globals.design.css.
-[DONE] globals.design.css — extensão com classes gr-*, site-*, lobby-*, admin-* (Claude Design).
-[DONE] Modo escuro (padrão) + modo claro via [data-theme="light"] na <html>.
-[DONE] useTheme.ts — hook com persistência localStorage + sync data-theme.
-[DONE] main.tsx — importa globals.css, inicializa tema anti-FOUC.
-[DONE] index.html — fontes Google, anti-FOUC script inline, meta theme-color.
-[DONE] App.tsx — roteamento state-based completo: landing/lobby/game/wallet/admin + roomId (ADR-010).
+[DONE] Painel Admin completo: Dashboard, Patterns, Gametypes, Sponsors, Compliance, Users, Player.
+[DONE] statisticsController.ts — RTP, games history, ledger sync.
+[DONE] Compliance Ledger PostgreSQL (games_history + transactions_ledger).
+[DONE] Multi-role dev login (5 perfis).
 
-## [DONE] Migração completa de componentes para Tailwind v4 + Claude Design (2026-05-26/27)
-[DONE] Lobby.tsx — classes lobby-*, prop onEnterRoom(roomId, gameId) para ADR-010.
-[DONE] BuyTicketModal.tsx — cb-overlay + cb-modal + cb-slide-up + quick-select + aria.
-[DONE] TicketGrid.tsx — cb-bingo-grid + cb-bingo-cell + animação cb-ball-drop.
-[DONE] BallDisplay.tsx — cb-ball + cb-ball-lg + cb-winner-glow + cb-status-dot-live.
-[DONE] GameRoom.tsx — classes gr-*, bola hero animada, sequência, cartelas, painel padrões + ChatPanel.
-[DONE] LandingPage.tsx — landing pública com bola animada, stats, B2B, footer compliance.
-[DONE] AdminLayout.tsx — site-shell mode-admin, sidebar com grupos + seção Rooms (ADR-010).
-[DONE] RoomsAdmin.tsx — admin de salas (ADR-010).
-[DONE] ChatPanel.tsx — chat por sala via Socket.io (ADR-010).
-[DONE] Locales pt/en/zh — chaves aninhadas: common, nav, auth, game, room, game_room, wallet_page, admin, errors.
+## [DONE] Sprint — ADR-010 Rooms + ADR-011 Drop Vault — Infra (2026-05-27)
 
-## [DONE] Sprint — Admin Screens + Multi-Role Dev Login + B2B + Compliance (2026-05-26)
-[DONE] AdminDashboard, PatternsAdmin, GametypesAdmin, SponsorDashboard, ComplianceAdmin, UsersAdmin, PlayerDashboard.
-[DONE] rateLimiter.ts — lazy init com passthrough (Redis closed bug resolvido).
-[DONE] api-gateway/index.ts — rotas: /admin/gametypes/:id/metadata, /rooms/*, /sponsor/rooms.
-[DONE] statisticsController.ts — getRtpStatistics, getGamesHistory, syncGameToLedger.
-[DONE] sponsorController.ts — listCampaigns, getCampaign, linkCampaignToGame, closeCampaign.
-[DONE] nftController.ts — getMyNfts com cache MongoDB TTL 5min.
-[DONE] database/ledger.ts — tabelas games_history + transactions_ledger + RTP report real.
-[DONE] init_dev_env.sh — 3 contas administrativas + .dev.env + 5 botões dev login.
-[DONE] ADR-009 — Admin Panel Architecture.
+[DONE] ADR-010 e ADR-011 documentados.
+[DONE] roomController.ts — CRUD rooms + sponsor endpoint.
+[DONE] roomManager.ts — onGameResolved + auto-criação de partidas.
+[DONE] rabbitmq.ts — hooks onGameResolved + 3 auto-advance polls.
+[DONE] invertedIndex.ts — buildInvertedIndex O(1).
+[DONE] ChatPanel.tsx — chat por sala via Socket.io.
 
-## [DONE] Sprint — ADR-010 Rooms + ADR-011 Drop Vault (2026-05-27)
-[DONE] ADR-010-rooms-salas.md — salas persistentes, auto-scheduling, chat, drops, weight por sala.
-[DONE] ADR-011-drop-vault.md — rastreamento on-chain de ativos para drops.
-[DONE] contracts/bingo — tabela rooms + campo room_id em game_state (bingo.hpp).
-[DONE] shared-types — BlockchainRoom, RoomMetadata, DropDeposit, DropAllocation, DropState.
-[DONE] api-gateway/models/RoomMetadata.ts — modelo MongoDB.
-[DONE] api-gateway/controllers/roomController.ts — CRUD rooms + sponsor endpoint.
-[DONE] worker/services/roomManager.ts — onGameResolved + auto-criação de partidas.
-[DONE] rabbitmq.ts — hooks onGameResolved em claimwin e abortgame.
-[DONE] invertedIndex.ts — buildInvertedIndex O(1) + integração no evaluator e rabbitmq.
-[DONE] CLAUDE_DESIGN.md — documento Design System (20 seções + 3 apêndices).
+## [DONE] Sprint — Contrato C++ v2 + Rooms + Drop Vault (2026-05-31)
 
-## [DEBT] Dívidas Técnicas Residuais
-[DEBT] ADR-005: auto-sweep de GGR para tesouraria não implementado.
-[DEBT] contracts/bingo: actions de rooms (createroom, activateroom, etc.) — apenas shared-types e API implementados. Contrato C++ ainda não compilado com tabela rooms.
-[DEBT] dropWorker.ts — processamento de drops on-chain (ADR-011) pendente.
-[DEBT] useChat.ts — hook WebSocket separado para chat (atualmente inline no ChatPanel).
-[DEBT] SponsorRooms.tsx — painel do sponsor para gerenciar suas salas.
-[DEBT] fsm.test.ts — testes atualizados para CREATED/FUNDING/abort.
+[DONE] bingo.hpp + bingo.cpp — tabela rooms completa (5 actions: createroom, activateroom, pauseroom, closeroom, setroommeta), room_drop_chance_bps.
+[DONE] bingo.hpp + bingo.cpp — Drop Vault completo: tabelas dropdeposits + dropallocs + singleton dropstate, actions allocatedrop + deallocdrop + reclaimasset + execdrop, on_notify atomicassets::transfer (onnfttransfer) e deposit() com memo 'vault'.
+[DONE] bingo.abi v2.0 — 31 actions, 12 tabelas, 14 structs, completo e sincronizado.
+[DONE] dropWorker.ts — 3 fases: Fase 0 (room chance BPS), Fase 1A/1B (seleção NFT/token com Fisher-Yates), Fase 2 (seleção vencedor). Integrado ao onGameResolved.
+[DONE] dropController.ts — 6 endpoints de vault (/vault/deposits, /vault/allocations, allocate, deallocate, reclaim).
+[DONE] VaultAdmin.tsx — painel admin com grid de depósitos, alocações e reclaim.
+[DONE] RoomsAdmin.tsx — admin de salas com seção Drops.
 
-## [NEXT] Próximos Passos
-[DONE] GametypesAdmin — Suggest Combinations helper (Monte Carlo + 3 estratégias: n-of-type, pares por hit rate, especial+simples).
-[DONE] ADR-011 v2 — Drop Vault revisado com algoritmo completo (dupla dificuldade, pool ponderado, pré-check global, tokens independentes).
-[DONE] init_dev_env.sh — Adicionado setconfig com BINGO_GAME_PUB (seção 8b). `docs/SPEC.md §2.1` atualizado com assinatura correta do buytickets e menção ao setconfig.
-[DONE] i18n BuyTicketModal — Chaves `buy_ticket.*` adicionadas nos 3 locales. Erros do hook migrados de strings hardcoded PT para `t()`.
-[DONE] BugFix buytickets — Campo `user` renomeado para `buyer` e `nft_id: 0` adicionado em `useTicketPurchase.ts`.
-[DONE] Remove 12-pattern limit — Restrição removida do frontend (GametypesAdmin.tsx), backend (monteCarloController.ts, patternController.ts) e chaves `gametypes_error_too_many_patterns` dos 3 locales.
-[DONE] Remove 12-rule limit do contrato — `rules.size() <= 12` removido de `addgametype` em `bingo.cpp:140`.
-[DONE] Weight decimal (2 casas) — `pattern_rule.weight` uint8_t→uint16_t (hundredths). Payout claimwin divide por 100. Frontend step=0.01 + conversão parseFloat×100. Backend validations 100-25500. ABI atualizado.
-[DONE] Metadata upsert — Corrigido patternController.ts para persistir `rules` e `combinations` (antes ignorados).
-[DONE] Suggest com calibração RTP — 3 fases: (1) sugere pesos individuais inversos ao hit_rate, (2) gera combinações, (3) calibra pesos via re-simulação até RTP ≈ 85%. Backend MC engine suporta combinações (findBestWinner + evaluateCombinations).
-[DONE] Components — `TicketCard.tsx` extraído de `GameRoom.tsx` como componente compartilhado com helpers de sort/group (`sortTickets`, `groupTicketsByCategory`, `sortPatterns`, `computePatternUserProximity`) e constantes (`BINGO_COLORS`, `getCol`, `fetchGamePatterns`, `maskToCells`).
-[DONE] Sort/Group System — Sistema de ordenação por fase (`GamePhase = 'during' | 'after'`). During: vencedores multi-pattern → single-pattern → afinidade combinacional (`combinedScore` = Σ completionPct × prizeValue de todos os padrões). After: vencedores por prize DESC → proximity DESC → marked DESC. Grouping com seções por afinidade de padrão.
-[DONE] Combination Stats — Painel de padrões exibe histograma de combinações (quantas cartelas completaram exatamente N padrões). `winnerMap` extendido com `patternCount`/`totalPrize` em GameRoom e ReplayRoom.
-[DONE] CSS — `.gr-tickets-group*` (cabeçalhos de seção), `.gr-patterns-combos`/`.gr-pattern-combo`/`.gr-patterns-combos-head` (histograma).
-[DONE] Pattern Mask Fix — `maskToCells` corrigido para converter de column-major (contrato) para row-major (display).
-[DONE] ReplayRoom rewrite — ReplayRoom.tsx reescrito com TicketCard, painel de padrões, banners, sort/group. useReplay.ts estendido com patterns, winners, goldenBall, gameEnded, combinationCount.
-[DONE] ADR-015 + URL Routing — App.tsx refatorado com React Router DOM v6: BrowserRouter + Routes + AuthGuard + AdminGuard + wrappers de rota (GameRoomPage, ReplayPage, RoomHistoryPage, AdminPage). Deep links funcionais em todas as rotas. historyApiFallback no Vite. restoringSession evita flash em deep links autenticados.
-[ ] contracts/bingo — implementar actions de rooms (createroom, activateroom, pauseroom, closeroom, setroommeta) + campo room_drop_chance_bps.
-[ ] contracts/bingo — implementar actions de drop vault: deposittoken/depositnft (on_notify), allocatedrop, deallocatedrop, reclaimasset, execdrop + tabelas drop_deposits, drop_allocations, dropstate.
-[ ] dropWorker.ts — Fases 0 + 1A + 1B + 2 conforme ADR-011 §7.
-[ ] dropController.ts — endpoints de vault (listar depósitos, alocar, desalocar, sacar).
-[ ] SponsorVault.tsx — painel vault completo (grid NFTs, grid tokens, histórico de drops).
-[ ] RoomsAdmin.tsx — seção Drops na edição de sala (NFTs disponíveis, NFTs vinculadas, tokens).
-[ ] Lobby.tsx — badges "🎁 NFT Drop" e "💰 Token Drop" em salas com drops ativos.
-[ ] PWA (Lighthouse > 90).
-[ ] Testes unitários adicionais (authController, monteCarloController, hooks React).
-[ ] Auto-sweep GGR (ADR-005): action sweepggr no contrato C++.
-[ ] openapi.yaml e asyncapi.yaml — documentar endpoints de rooms e drop vault.
+## [DONE] Sprint — Motor de Jogo + Calibração RTP (2026-05-31)
+
+[DONE] Weight decimal (2 casas) — pattern_rule.weight uint8→uint16 (hundredths).
+[DONE] Remove limite de 12 patterns/rules do contrato e frontend.
+[DONE] Suggest Combinations — 3 estratégias + calibração iterativa até RTP ≈ 85%.
+[DONE] Metadata upsert — patternController persiste rules + combinations.
+
+## [DONE] Sprint — ADR-012/013/014 + TicketCard + Replay (2026-06-02)
+
+[DONE] ADR-012 (Draw Modes: fixed/first_full/golden_ball), ADR-013 (Multi-Match), ADR-014 (Orchestration).
+[DONE] TicketCard.tsx — componente compartilhado com sort/group por fase (GamePhase).
+[DONE] Sort/Group System — combinedScore, multi-pattern priority, winnerMap com patternCount/totalPrize.
+[DONE] ReplayRoom.tsx — reescrito com TicketCard, padrões, banners, goldenBall, gameEnded.
+[DONE] useReplay.ts — patterns, patternWinCount, combinationCount, winners, goldenBall, gameEnded.
+[DONE] MyHistoryPage.tsx + useGamesHistory.ts — histórico pessoal com Load More, deduplicação.
+[DONE] RoomHistoryPanel.tsx + useRoomHistory.ts — histórico geral de sala.
+
+## [DONE] Sprint — ADR-015 URL Routing + Stats Públicas (2026-06-03)
+
+[DONE] ADR-015 — React Router DOM v6: BrowserRouter, AuthGuard, AdminGuard, deep links.
+[DONE] App.tsx — roteamento URL-based completo, /room/:roomId/history público.
+[DONE] utils/rpc.ts — fetchTableRows público (sem sessão via proxy Vite).
+[DONE] fetchBatchGameStats — endpoint GET /api/v1/statistics/games/batch (público).
+[DONE] useRoomHistory.ts — session opcional, enriquecimento com totalPaidOut do ledger.
+[DONE] RoomHistoryPanel.tsx — session opcional (visitantes), barra de resumo lifetime.
+[DONE] LandingPage.tsx — stats live por sala (tickets, status slow-reveal, countdown), botão Histórico.
+[DONE] Lobby.tsx — botão Histórico para todas as salas (★ = participou), chips de tickets vendidos.
+[DONE] MyHistoryPage.tsx — ROI% por partida, win rate, stats globais (allTickets, totalWagered, totalPaidOut).
+[DONE] GameRoom.tsx — navbar completa com menu, theme toggle, language change, onGoToHistory/Wallet/Admin.
+
+---
+
+## [DEBT] Dívidas Técnicas Reais (auditadas em 2026-06-03)
+
+[DEBT] `useChat.ts` — lógica de chat inline no ChatPanel.tsx; deveria ser hook separado para reutilização.
+[DEBT] `DropDeposit`, `DropAllocation`, `DropState` — tipos definidos apenas internamente no dropWorker.ts; não exportados do `shared-types`. Outros serviços não podem importá-los.
+[DEBT] `fsm.test.ts` — testes desatualizados para CREATED/FUNDING/abort (game loop mudou).
+[DEBT] `openapi.yaml` v1.4.0 desatualizado — faltam: /rooms/*, /vault/*, /player/winnings/*, /statistics/games/batch (10+ endpoints).
+[DEBT] `asyncapi.yaml` v1.0.0 desatualizado — faltam: canal `chat` e evento `sponsor_drop` (ChatPanel já os implementa off-spec).
+
+---
+
+[DONE] `SponsorLayout.tsx` + `SponsorRooms.tsx` + `SponsorVault.tsx` — painel sponsor em `/sponsor/*` com layout dedicado, sidebar, edição de metadata e gestão de vault com dropdown de salas próprias.
+[DONE] Badges 🎁 NFT Drop / 💰 Token Drop no Lobby e LandingPage via `room.metadata.drops`.
+[DONE] `AdminLayout.tsx` auto-contido — usa `useParams`/`useNavigate` diretamente; props `section`/`onNavigate`/`onBackToLobby` removidas; wrapper `AdminPage` eliminado.
+
+## [NEXT] Próximos Passos Reais
+
+[DONE] `openapi.yaml v2.0` — 36 paths: rooms, vault, player/winnings, statistics/batch, admin gametypes, nfts, patterns DELETE.
+[DONE] `asyncapi.yaml v2.0` — canal game.{id} + room.{id}; eventos: golden_ball, stage_cleared, game_ended, sync_response, chat:message, chat:sponsor_drop.
+[DONE] `shared-types` — `BlockchainDropDeposit`, `BlockchainDropAllocation`, `BlockchainDropState` exportados.
+[DONE] Vitest v1.6.1 — 31 testes: ticketUtils (21), rpc (4), useGamesHistory (6). Fix: `isCombinationSatisfied` usa `pattern_ids` (não `patterns`); `sortTickets` não deduplica (isso é do `setRows`).
+[DONE] PWA — `vite-plugin-pwa v1.3.0`: manifest CryptoBingo, Workbox cache-first, navigateFallbackDenylist para /v1|/api|/socket.io, runtime caching Google Fonts. `index.html` com `<link rel="manifest">`.
+
+[DONE] `docs/SPEC.md` — reescrito: §1.5 Rooms, §1.6 Drop Vault, §2.3-2.5 actions ADR-010/011/012/013, §3.4 orquestração ADR-014, §4 eventos WebSocket v2, §5 Frontend routing ADR-015, §6.3 Compliance.
+
+### Baixa prioridade / Futuro
+[ ] `useChat.ts` — extrair de ChatPanel para hook reutilizável.
+[ ] `sweepggr` — action no contrato C++ para auto-sweep GGR para tesouraria (ADR-005).
+[ ] `bingo.swap` — contrato DEX x*y=k (fora do escopo atual).

@@ -31,7 +31,7 @@ import {
     getGametypeMetadata, upsertGametypeMetadata, getGametypeMetadataPublic,
 } from './controllers/patternController';
 import { simulateWeights, calibrateWeights }         from './controllers/monteCarloController';
-import { getRtpStatistics, getGamesHistory, syncGameToLedger } from './controllers/statisticsController';
+import { getRtpStatistics, getGamesHistory, syncGameToLedger, getGameStatsBatchHandler } from './controllers/statisticsController';
 import { ensureLedgerTables }                         from './database/ledger';
 import {
     listCampaigns, getCampaign,
@@ -44,6 +44,11 @@ import {
     updateRoomSettings, activateRoom, pauseRoom, closeRoom,
     listSponsorRooms,
 }                                                    from './controllers/roomController';
+import {
+    listDeposits, getDeposit,
+    listAllocations,
+    allocateDrop, deallocateDrop, reclaimAsset,
+}                                                    from './controllers/dropController';
 
 dotenv.config();
 
@@ -223,8 +228,9 @@ function registerRoutes(): void {
     );
 
     // ── Statistics / Compliance (públicas) — Lei 14.790/2023 ─────────────────
-    app.get('/api/v1/statistics/rtp',   getRtpStatistics);
-    app.get('/api/v1/statistics/games', getGamesHistory);
+    app.get('/api/v1/statistics/rtp',          getRtpStatistics);
+    app.get('/api/v1/statistics/games',        getGamesHistory);
+    app.get('/api/v1/statistics/games/batch',  getGameStatsBatchHandler);
 
     // ── Admin: Ledger sync (JWT + admin) ──────────────────────────────────────
     app.post('/api/v1/admin/ledger/sync', adminLimiter, requireAuth, requireRole('admin'), syncGameToLedger);
@@ -244,6 +250,14 @@ function registerRoutes(): void {
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
     app.post('/api/v1/player/winnings/batch', playerLimiter, requireAuth, getPlayerWinningsBatch);
+
+    // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
+    app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);
+    app.get('/api/v1/vault/deposits/:depositId', playerLimiter, requireAuth, getDeposit);
+    app.get('/api/v1/vault/allocations',      playerLimiter, requireAuth, listAllocations);
+    app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin'), allocateDrop);
+    app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin'), deallocateDrop);
+    app.post('/api/v1/vault/reclaim',    playerLimiter, requireAuth, reclaimAsset);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {

@@ -10,6 +10,7 @@
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "ts-jest": "^29.4.11",
     "turbo": "latest",
     "typescript": "^5.0.0"
   },

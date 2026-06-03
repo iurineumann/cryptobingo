@@ -1,206 +1,407 @@
 # SPEC.md: Especificação Mestre de Arquitetura e Regras de Negócios
 
 **Domínio:** Plataforma Descentralizada de Bingo GameFi
-**Rede Alvo:** Antelope (WAX/EOS)
+**Rede Alvo:** Antelope (WAX)
 **Padrões Arquiteturais:** Spec-Driven Development (SDD), CQRS, Event-Driven Architecture (EDA), Bitmasking Algébrico.
+**Última revisão:** 2026-06-03 — ADR-010 (Rooms), ADR-011 (Drop Vault), ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration), ADR-015 (Routing).
 
 ---
 
 ## 1. Topologia de Dados On-Chain (Smart Contract RAM)
 
-A máquina de estados e o armazenamento financeiro devem utilizar os tipos primitivos estritos do C++ (CDT). O gerenciamento de múltiplas moedas exige obrigatoriamente o uso de `extended_asset` para proteção contra falsificação de contratos emissores.
+A máquina de estados e o armazenamento financeiro utilizam os tipos primitivos estritos do C++ (CDT). O gerenciamento de múltiplas moedas exige obrigatoriamente `extended_asset` para proteção contra falsificação de contratos emissores.
 
 ### 1.1. Tabela: `balances` (Wallet Interna)
 
-Gerencia a custódia fracionada e multimoeda dos jogadores com complexidade $O(1)$ para depósitos e saques.
+Gerencia custódia fracionada e multimoeda dos jogadores com complexidade $O(1)$.
 
-* **Scope:** `account_name` (A tabela é instanciada individualmente por usuário).
-* **Primary Key:** `symbol_code` (O ticker da moeda, ex: `WAX`, `TLM`).
+* **Scope:** `account_name` (instanciada individualmente por usuário).
+* **Primary Key:** `symbol_code` (ticker da moeda, ex: `WAX`, `BINGO`).
 
 | Campo | Tipo CDT | Restrições / Notas |
-| --- | --- | --- |
-| `balance` | `extended_asset` | Contém o valor (`int64_t`), o símbolo e a conta do contrato emissor (`name`). Rejeita assertivamente `amount < 0`. |
+|---|---|---|
+| `balance` | `extended_asset` | Valor, símbolo e conta emissora. Rejeita assertivamente `amount < 0`. |
 
-### 1.2. Tabela: `games` (Máquina de Estados)
+---
 
-Controla o ciclo de vida global de cada rodada e o armazenamento da entropia (RNG).
+### 1.2. Tabela: `games` (Máquina de Estados — FSM)
+
+Controla o ciclo de vida de cada rodada e o armazenamento da entropia (RNG).
 
 * **Scope:** `_self` (Global do Contrato).
-* **Primary Key:** `game_id` (`uint64_t`, auto-incremental).
+* **Primary Key:** `game_id` (`uint64_t`, auto-incremental, valor = timestamp Unix em ms).
+* **Secondary Index:** `byroom` — filtro por `room_id` para `roomManager`.
+
+**FSM de Estados (ADR-008, ADR-012):**
+
+```
+CREATED → FUNDING → LOCKED → DRAWING → DRAWN → PAYING → ARCHIVED
+                                              ↘ ABORTED (fail-safe)
+```
+
+* `PAYING` — estado intermediário introduzido em ADR-012 para suportar múltiplos vencedores sem race condition. `claimwin` aceita `DRAWN | PAYING`; na primeira chamada (`DRAWN`) transita para `PAYING`.
+* `closegame` (auth: `microservice`) — transita `PAYING | DRAWN → ARCHIVED`.
 
 | Campo | Tipo CDT | Restrições / Notas |
-| --- | --- | --- |
-| `game_id` | `uint64_t` | Identificador unívoco. |
-| `status` | `name` | FSM Enum: `CREATED`, `FUNDING`, `LOCKED`, `DRAWING`, `ARCHIVED`, `ABORTED`. |
-| `ticket_price` | `extended_asset` | Valor unitário de entrada. Permite `0` para rodadas "Free-to-Play". |
-| `prize_pool` | `extended_asset` | Arrecadação principal proveniente da venda de cartelas. |
-| `sponsor_pool` | `vector<extended_asset>` | Array dinâmico suportando $N$ tokens patrocinados pela mecânica B2B. |
-| `end_time` | `time_point_sec` | Timestamp de transição para `ARCHIVED` ou `ABORTED`. Base para o TTL de 24h do GC. |
-| `drawn_balls` | `vector<uint8_t>` | Array serializado de 75 posições. Permanece vazio até o evento `receiverand`. |
-| `room_id` | `uint64_t` | FK para a tabela `rooms`. `0` se jogo avulso sem sala (legado). |
-| `campaign_id` | `uint64_t` | Relacionamento (Foreign Key) com a tabela `campaigns`. `0` se não for patrocinado. |
+|---|---|---|
+| `game_id` | `uint64_t` | Identificador unívoco (timestamp ms). |
+| `status` | `name` | FSM: `created`, `funding`, `locked`, `drawing`, `drawn`, `paying`, `archived`, `aborted`. |
+| `ticket_price` | `extended_asset` | Valor unitário. Permite `0` para Free-to-Play. |
+| `prize_pool` | `extended_asset` | Arrecadação total da venda de cartelas. |
+| `sponsor_pool` | `vector<extended_asset>` | Array de N tokens patrocinados (B2B). |
+| `drawn_balls` | `vector<uint8_t>` | 75 posições. Vazio até `receiverand`. |
+| `end_time` | `time_point_sec` | Timestamp de encerramento. Base para TTL de 24h do GC. |
+| `room_id` | `uint64_t` | FK para tabela `rooms`. `0` = jogo avulso (legado). |
+| `gametype_id` | `uint64_t` | FK para tabela `gametypes`. `0` = legado RTP 85%. |
+| `campaign_id` | `uint64_t` | FK para tabela `campaigns`. `0` = sem patrocínio B2B. |
+| `golden_ball_num` | `uint8_t` | Número da bola dourada (modo `goldenball`, ADR-012). `0` = inativo. |
+| `golden_multiplier` | `uint16_t` | Multiplicador da bola dourada (hundredths). |
+
+---
 
 ### 1.3. Tabela: `tickets` (Índice de Cartelas)
 
-Armazena a matriz estática vendida aos usuários.
-
-* **Scope:** `game_id` (Isolamento de memória para facilitar o Garbage Collection em lote).
-* **Primary Key:** `ticket_id` (`uint64_t`, gerado pelo Backend off-chain e garantido como único).
-* **Secondary Index:** `owner` (`uint64_t` casted from `name`) - Permite a varredura $O(n)$ de *Refunds* e montagem do Painel do Jogador.
+* **Scope:** `game_id` (isolamento por rodada, facilita GC em lote).
+* **Primary Key:** `ticket_id` (`uint64_t`, gerado pelo Backend off-chain, único por rodada).
+* **Secondary Index:** `byowner` (`uint64_t` cast de `name`) — varredura $O(n)$ para refunds e histórico do jogador.
 
 | Campo | Tipo CDT | Restrições / Notas |
-| --- | --- | --- |
-| `ticket_id` | `uint64_t` | Hash/ID provido na submissão de compra. |
+|---|---|---|
+| `ticket_id` | `uint64_t` | Hash SHA-256 truncado — funciona como anti-replay. |
 | `owner` | `name` | Conta pagadora e beneficiária. |
-| `matrix` | `vector<uint8_t>` | Exatas 24 posições ordinais (índices 0 a 24, pulando o 12 correspondente ao *FREE SPACE*). Valores devem estar em `[1, 75]`. |
+| `matrix` | `vector<uint8_t>` | 24 posições (índices 0–24 pulando o 12 = FREE SPACE). Valores em `[1, 75]`. |
+| `price` | `extended_asset` | Preço real pago (ADR-010 — variable pricing por sala). |
 
-### 1.4. Tabela: `campaigns` (Motor de Patrocínio B2B)
+---
 
-Gerencia a liquidez provida por parceiros de forma *trustless*.
+### 1.4. Tabela: `campaigns` (Patrocínio B2B)
 
-* **Scope:** `_self` (Global do Contrato).
+* **Scope:** `_self`.
 * **Primary Key:** `campaign_id` (`uint64_t`).
+* **Secondary Index:** `bysponsor` — filtro por conta do sponsor.
 
 | Campo | Tipo CDT | Restrições / Notas |
-| --- | --- | --- |
-| `sponsor` | `name` | Autorizador e destino potencial de estornos. |
+|---|---|---|
+| `sponsor` | `name` | Autorizador e destino de estornos. |
 | `total_budget` | `extended_asset` | Liquidez travada total. |
-| `payout_per_game` | `extended_asset` | Fração a ser deduzida a cada execução de `linkgame()`. |
-| `leftover_policy` | `name` | Diretriz de liquidação residual: `REFUND` (Devolve ao sponsor) ou `HOUSE` (Tesouraria). |
+| `payout_per_game` | `extended_asset` | Fração deduzida por `linkgame()`. |
+| `leftover_policy` | `name` | `REFUND` (devolve ao sponsor) ou `HOUSE` (tesouraria). |
+
+---
+
+### 1.5. Tabela: `rooms` (Salas Persistentes — ADR-010)
+
+Sala persistente que mantém configuração estável e cria automaticamente novas partidas ao final de cada rodada.
+
+* **Scope:** `_self`.
+* **Primary Key:** `room_id` (`uint64_t`).
+* **Secondary Indexes:** `bysponsor`, `bystatus`, `bygametype`.
+
+**FSM de Sala:** `inactive → active ⇌ paused → closed`
+
+| Campo | Tipo CDT | Restrições / Notas |
+|---|---|---|
+| `room_id` | `uint64_t` | Identificador único. |
+| `sponsor` | `name` | Dono da sala (pode ser `_self` para salas do sistema). |
+| `gametype_id` | `uint64_t` | Regras de padrões e modos de sorteio. |
+| `currency` | `extended_asset` | Moeda base da sala. |
+| `ticket_price_min` | `extended_asset` | Preço mínimo de cartela. |
+| `ticket_price_max` | `extended_asset` | Preço máximo de cartela. |
+| `ticket_price_default` | `extended_asset` | Preço sugerido. |
+| `weight` | `uint64_t` | Multiplicador de prêmio da sala (×100). |
+| `max_tickets_per_player` | `uint32_t` | Limite por jogador por partida. |
+| `current_game_id` | `uint64_t` | Partida ativa. `0` = sem jogo. |
+| `nft_template_allowlist` | `vector<int32_t>` | Templates NFT com acesso à sala. |
+| `room_drop_chance_bps` | `uint16_t` | Pré-check global de drop por partida (0–10000). |
+| `status` | `name` | FSM: `inactive`, `active`, `paused`, `closed`. |
+| `created_at` | `time_point_sec` | Timestamp de criação. |
+
+**Metadata off-chain (MongoDB — `rooms_metadata`):** nome, descrição, `chat_enabled`, `auto_start_delay_sec`, `drops` (configuração de drops), `cover_image_url`.
+
+**Auto-scheduling (roomManager.ts):** ao final de cada partida (`ARCHIVED` ou `ABORTED`), o worker aguarda `auto_start_delay_sec` e cria automaticamente a próxima partida via `creategame + fundgame`.
+
+---
+
+### 1.6. Tabelas de Drop Vault (ADR-011)
+
+Sistema trustless para sponsors depositarem tokens/NFTs que são distribuídos como drops ao final de partidas.
+
+**Tabela `dropdeposits`** — Scope: `_self`.
+
+| Campo | Tipo CDT | Notas |
+|---|---|---|
+| `deposit_id` | `uint64_t` | PK auto-incremental (via `dropstate`). |
+| `owner` | `name` | Sponsor depositante. |
+| `asset_type` | `name` | `token` ou `nft`. |
+| `quantity_original` | `extended_asset` | Quantidade depositada inicialmente. |
+| `quantity_remaining` | `extended_asset` | Saldo disponível para drops. |
+| `nft_asset_id` | `uint64_t` | ID do NFT (apenas para `asset_type == nft`). |
+| `nft_template_id` | `int32_t` | Template do NFT. |
+| `nft_collection` | `name` | Coleção AtomicAssets. |
+| `status` | `name` | `deposited`, `active`, `draining`, `exhausted`, `reclaimed`. |
+| `deposited_at` | `time_point_sec` | Timestamp de depósito. |
+
+**Tabela `dropallocs`** — Scope: `_self`. Vincula depósitos a salas específicas.
+
+| Campo | Tipo CDT | Notas |
+|---|---|---|
+| `alloc_id` | `uint64_t` | PK auto-incremental. |
+| `deposit_id` | `uint64_t` | FK para `dropdeposits`. |
+| `owner` | `name` | Sponsor dono da alocação. |
+| `room_id` | `uint64_t` | FK para `rooms`. |
+| `quantity_per_drop` | `extended_asset` | Quantidade distribuída por drop (tokens). |
+| `drop_chance_bps` | `uint16_t` | Chance de drop por partida (1–10000, 100=1%). |
+| `drops_executed` | `uint32_t` | Contador de drops realizados. |
+| `status` | `name` | `active`, `deallocated`, `exhausted`. |
+
+**Singleton `dropstate`** — Scope: `_self`. Mantém contadores globais do vault.
+
+| Campo | Tipo CDT | Notas |
+|---|---|---|
+| `next_deposit_id` | `uint64_t` | Próximo ID de depósito. |
+| `next_alloc_id` | `uint64_t` | Próximo ID de alocação. |
+| `player_base_chance_bps` | `uint16_t` | Chance base por jogador (default 5000 = 50%). |
+
+**Fluxo de Drop (3 fases — `dropWorker.ts`):**
+1. **Fase 0:** verifica `room.room_drop_chance_bps` (sorteio aleatório por partida).
+2. **Fase 1A/1B:** seleciona NFT ou tokens elegíveis dentre as alocações ativas; Fisher-Yates para desempate.
+3. **Fase 2:** seleciona vencedor dentre os winners da partida ponderado por `player_base_chance_bps`; executa `execdrop` on-chain.
+
+---
+
+### 1.7. Tabelas de Gametypes e Padrões (ADR-004)
+
+**Tabela `patterns`** — Scope: `_self`. Padrões de vitória globais (bitmask 25 bits, column-major).
+
+**Tabela `gametypes`** — Scope: `_self`. Configura regras de padrões, draw mode e máximo de bolas.
+
+| Campo | Tipo CDT | Notas |
+|---|---|---|
+| `gametype_id` | `uint64_t` | PK. |
+| `name` | `string` | Nome do game type. |
+| `base_multiplier` | `uint64_t` | Multiplicador base de prêmio. |
+| `max_balls` | `uint8_t` | Número máximo de bolas a sortear. |
+| `draw_mode` | `name` | `standard`, `fixed`, `firstfull`, `goldenball`, `multimatch`. |
+| `rules` | `vector<pattern_rule>` | Array de `{pattern_id, weight}` (weight em hundredths). |
+
+**Modos de Sorteio (ADR-012):**
+
+| Modo | Comportamento |
+|---|---|
+| `standard` | Sorteia até `max_balls`; paga max-weight. |
+| `fixed` | Alias de `standard` com `max_balls` explicitamente configurado. |
+| `firstfull` | Sorteia até que 1+ cartelas completem o MASTER (cartela cheia). |
+| `goldenball` | `max_balls` normais + 1 bola extra com multiplicador aleatório. |
+| `multimatch` | Estágios progressivos por número de padrões cumpridos (ADR-013). |
 
 ---
 
 ## 2. Interface Binária de Aplicação (ABI) e Assinaturas
 
-A comunicação mutável com o contrato segue assinaturas rigorosas e delegação de autoridades (Auth).
-
-### 2.1. Ingestão de Compras (Batch Processing)
+### 2.1. Compra de Cartelas
 
 * **Assinatura:** `buytickets(name buyer, uint64_t game_id, bytes[] matrices, signature[] signatures, extended_asset requested_price, uint64_t nft_id)`
 * **Auth Exigido:** `buyer@active`
-* **Fluxo de Validação:**
-1. Valida `game.status == "funding"` e limites da sala.
-2. Verifica que `requested_price` == `game.ticket_price` (proteção anti-fraude — o frontend não pode manipular o valor).
-3. Se `nft_id != 0`, aplica desconto do NFT na tabela `nftconfigs`.
-4. Deduz `matrices.size() * requested_price` da tabela `balances` do `buyer`.
-4. Para cada cartela: serializa `matrix + game_id + buyer`, calcula SHA-256, e executa `assert_recover_key(hash, signature, config.signer_key)` — garantindo que foi assinada pelo microserviço.
-5. O hash é usado como `ticket_id` (anti-replay).
-6. Executa `emplace` em lote na tabela `tickets`.
+* **Fluxo:**
+  1. Valida `game.status == "funding"` e limites da sala (`max_tickets_per_player`).
+  2. Verifica `requested_price` dentro do range `[room.ticket_price_min, room.ticket_price_max]`.
+  3. Se `nft_id != 0`, aplica desconto via tabela `nftconfigs`.
+  4. Deduz `matrices.size() × requested_price` de `balances[buyer]`.
+  5. Para cada cartela: valida assinatura ECDSA K1 (`assert_recover_key`) contra `config.signer_key`.
+  6. Hash SHA-256 da cartela = `ticket_id` (anti-replay).
+  7. `emplace` em lote em `tickets` com o `price` real pago.
 
-**Pré-requisito:** O contrato precisa ter a configuração inicializada via `setconfig(public_key signer_key)` com a chave pública do microserviço. Executado pelo script `init_dev_env.sh` na seção 8b.
+**Pré-requisito:** `setconfig(public_key)` com a chave pública do microserviço — executado pelo `init_dev_env.sh §8b`.
 
-
+---
 
 ### 2.2. Liquidação de Prêmios (Max Weight Payout)
 
-* **Assinatura:** `claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask)`
+* **Assinatura:** `claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier)`
 * **Auth Exigido:** `microservice@active`
-* **Regra de Pagamento Único (Max Weight):** A cartela pode preencher múltiplos padrões. O worker off-chain seleciona o padrão/combinação de maior `weight` dentre todos os vencedores. O contrato recebe apenas o `win_pattern_mask` correspondente ao maior peso e paga exclusivamente aquele.
-* **Cálculo Matemático (modo gametype, `gametype_id > 0`):**
-O prêmio é calculado com base no weight do padrão vencedor (armazenado em hundredths — 1.50 → 150):
+* **Estados aceitos:** `drawn | paying` — na primeira chamada (`drawn`), transita para `paying`.
+* **Cálculo (gametype, `gametype_id > 0`):**
 
-$$Prize = ticket\_price \times base\_multiplier \times \frac{win\_weight}{100}$$
+$$Prize = ticket\_price \times base\_multiplier \times \frac{win\_weight}{100} \times golden\_multiplier$$
 
-* **Cálculo Matemático (modo legado, `gametype_id == 0`):**
-Para jogos sem gametype definido, mantém-se o RTP fixo de 85% do prize_pool (retrocompatível):
+* **Cálculo (legado, `gametype_id == 0`):**
 
-$$Valor\_RTP = \frac{(prize\_pool.amount \times 85)}{100}$$
+$$Prize = \frac{prize\_pool \times 85}{100}$$
 
-* **Distribuição:** credita o prêmio em `balances[owner]`; itera sobre `sponsor_pool` e credita integralmente cada `extended_asset` na mesma `balances[owner]` (multidrop).
+* **Distribuição:** credita em `balances[owner]`; itera `sponsor_pool` creditando integralmente cada `extended_asset` (multidrop B2B).
 
+---
 
+### 2.3. Encerramento e Estágios (ADR-012/013)
+
+* **`closegame(uint64_t game_id)`** — Auth: `microservice@active`. Transita `paying | drawn → archived`. Chamado após todos os `claimwin`.
+
+* **`setstages(uint64_t game_id, vector<stage_rule> stages)`** — Auth: `microservice@active`. Configura estágios para modo `multimatch`. Cada `stage_rule` define `{stage, patterns_required, weight}`.
+
+* **`claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint64_t win_pattern_mask)`** — Auth: `microservice@active`. Paga vencedor de estágio específico em modo `multimatch`. O jogo permanece em `paying` até `closegame`.
+
+---
+
+### 2.4. Salas (ADR-010)
+
+* `createroom(...)` — Auth: `admin@active`. Cria sala com configuração completa.
+* `activateroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. `inactive | paused → active`.
+* `pauseroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. `active → paused`.
+* `closeroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. Valida ausência de jogo ativo antes de fechar.
+* `setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player)` — Atualiza configurações on-chain da sala.
+
+---
+
+### 2.5. Drop Vault (ADR-011)
+
+Depósitos chegam via `on_notify` (sem action explícita do sponsor):
+
+* **Tokens:** `deposit()` intercepta `*::transfer` com memo `"vault"` — cria linha em `dropdeposits`.
+* **NFTs:** `onnfttransfer()` intercepta `atomicassets::transfer` com memo `"vault"` — cria linha por NFT.
+
+Actions explícitas:
+
+* `allocatedrop(name caller, uint64_t deposit_id, uint64_t room_id, extended_asset qty_per_drop, uint64_t nft_asset_id, uint16_t drop_chance_bps)` — Vincula depósito a uma sala.
+* `deallocdrop(name caller, uint64_t alloc_id)` — Remove alocação; devolve depósito a `deposited`.
+* `reclaimasset(name owner, uint64_t deposit_id)` — Saca ativo não alocado de volta ao owner via `eosio.token::transfer` ou `atomicassets::transfer`.
+* `execdrop(uint64_t alloc_id, name winner, extended_asset quantity)` — Auth: `microservice`. Executa o drop para um vencedor específico. Credita token em `balances[winner]` ou transfere NFT diretamente.
 
 ---
 
 ## 3. Motor de Resolução Backend (CQRS & Algometria)
 
-O microsserviço Node.js atua sob o padrão *Command Query Responsibility Segregation*. A varredura pesada ($O(n^2)$) é substituída por indexação invertida e Álgebra Booleana em espaço de $O(1)$.
+O microsserviço Node.js atua sob CQRS. A varredura $O(n^2)$ é substituída por indexação invertida e Álgebra Booleana em $O(1)$.
 
-### 3.1. Inteligência de Geração Aleatória (Cartel RNG)
+### 3.1. Inteligência de Geração Aleatória (RNG de Cartelas)
 
-Para ampliar a variância espectral das rodadas, as matrizes utilizam a lógica de **Permutação sem repetição** (Arranjos), abandonando a restrição de ordenação crescente clássica.
-A geração de entropia no Backend para a coluna "B" (range de 1 a 15, escolhendo 5 posições) gera exatas $P(15,5) = 360.360$ variações. O algoritmo de geração aplica o *Fisher-Yates Shuffle*.
-Para garantir unicidade por rodada, o hash serializado é validado atomicamente via comando `SADD` no Redis.
+Permutação sem repetição (Arranjos), abandonando ordenação crescente clássica. Para a coluna "B" (1–15, 5 posições): $P(15,5) = 360.360$ variações via Fisher-Yates criptográfico. Unicidade por rodada garantida via `SADD` atômico no Redis.
 
-### 3.2. Estruturação do Índice Invertido (Redis)
+### 3.2. Índice Invertido (Redis)
 
-No exato milissegundo de transição para o estado `LOCKED`, o *Resolution Engine Worker* processa a tabela on-chain `tickets` e constrói o índice reverso em RAM no Redis:
+No milissegundo de transição `LOCKED`, o worker processa `tickets` e constrói:
 
-* **Chave:** `game:{game_id}:ball:{numero_da_dezena}`
-* **Estrutura:** Lista de Tuplas `[{ticket_id, bit_index}]` onde `bit_index` $\in [0, 24]$.
+* **Chave:** `game:{game_id}:ball:{numero}`
+* **Valor:** Lista de tuplas `[{ticket_id, bit_index}]`, `bit_index ∈ [0, 24]`.
 
-### 3.3. Máscaras Algébricas de Validação (Bitmasking)
-
-Seja $P$ o conjunto matemático contendo os índices exatos (de 0 a 24) necessários para uma condição de vitória (ex: Linha, Coluna, Diagonal). A máscara constante inteira $M$ pré-compilada no TypeScript é definida pela fórmula:
-
+### 3.3. Máscaras Algébricas (Bitmasking — ADR-004)
 
 $$M = \sum_{p \in P} 2^p$$
 
-* **Estado Transitório:** O progresso de cada cartela é rastreado por um `uint32_t` que inicia com o bit 12 (*Free Space*) já computado: `estado = 0x00001000`.
-* **Processamento Atômico:** Ao receber o evento da dezena sorteada via `orng.wax`, o servidor recupera o índice invertido do Redis e executa a operação `Bitwise OR` seguida por um `Bitwise AND` contra a Máscara da rodada:
+* **Estado inicial:** `estado = 0x00001000` (bit 12 = FREE SPACE pré-marcado).
+* **Processamento atômico por bola:**
+
 ```typescript
 estado[ticket_id] |= (1 << bit_index);
-if ((estado[ticket_id] & MASK_CONDICAO) === MASK_CONDICAO) {
-   // Dispara evento de Winner Found
+if ((estado[ticket_id] & MASK_PATTERN) === MASK_PATTERN) {
+    // Winner Found — dispara claimwin
 }
+```
 
+### 3.4. Orquestração Automática (ADR-014)
 
-### 3.4. Motor de Simulação Monte Carlo (Weight Calibration)
+O worker-game-loop executa 3 funções de auto-avanço em polling (15–30s):
 
-Endpoint: `POST /api/v1/admin/simulate-weights`
+* `autoLockFundingGames()` — detecta jogos `funding` vencidos e executa `lockgame + buildInvertedIndex + startdraw`.
+* `autoStartLockedGames()` — detecta `locked` pendentes e inicia sorteio.
+* `autoClaimDrawnGames()` — detecta `drawn | paying`, executa pipeline `evaluator → claimwin → closegame → onGameResolved`.
 
-Simula N rodadas completas para calibrar os weights de um gametype antes do deploy on-chain:
+`onGameResolved()` (roomManager.ts) — após `ARCHIVED | ABORTED`: aguarda `auto_start_delay_sec`, cria próxima partida na sala, dispara `processRoomDrops()`.
 
-1. **Patterns individuais:** gera `n_cards` cartelas aleatórias, aplica bolas progressivas (Fisher-Yates criptográfico) até cada cartela atingir algum padrão. Acumula `hits` e `avg_balls_needed` por padrão, calcula `hit_rate`.
-2. **Combinações:** cláusulas `all_of` (cartela precisa acertar todos os patterns listados), `any_of` (pelo menos um), `n_of_type` (N patterns de um tipo, ex: 2 linhas). Avaliadas após os patterns individuais, aplicando a regra max_weight.
-3. **Payout:** `ticket_price * base_multiplier * max_win_weight / 100`. Retorna `rtp_pct`, `ggr_pct`, `pattern_stats`, `alerts` (RTP fora de 75%–98%) e `is_viable`.
+### 3.5. Motor de Simulação Monte Carlo (ADR-005)
 
-#### 3.4.1. Frontend: handleSuggest (3 fases)
+`POST /api/v1/admin/simulate-weights` + `POST /api/v1/admin/calibrate-weights`
 
-O botão "Suggest Standard Patterns" no `GametypesAdmin.tsx` executa:
-
-- **Fase 1 — Medição de hit_rates:** simula 5.000 rodadas com os padrões individuais selecionados. Hit_rates são probabilidades puras (independentes dos pesos), então 1 única simulação basta.
-- **Fase 2 — Cálculo analítico de pesos iniciais:** usa a fórmula de inverse hit_rate com escala direta ao RTP alvo: `w_i = (0.85 × 100) / (N × base_mul × hit_rate_i)`. Derivação: com `w_i = C / hit_rate_i`, a soma `Σ hit_rate_i × w_i / 100 × base_mul = C × N × base_mul / 100 = 85%` por construção. Esta fórmula distribui a contribuição ao RTP igualmente entre os padrões e fornece um ponto de partida próximo ao alvo — padrões raros recebem multiplicadores significativamente maiores (sem limite artificial de 5x).
-- **Fase 2b — Geração de combinações:** 3 estratégias — N-of-type (2..5 do mesmo tipo), pares top-5 hit_rate, especial+simples. Pesos das combinações baseados nos pesos individuais calculados na Fase 2 (corrige bug onde `McPatternStats.weight` era sempre 0).
-- **Fase 3 — Calibração iterativa de RTP:** re-simula com config completo (individuais + combos). Se RTP fora de 85% ± 2%, escala todos os pesos proporcionalmente (`scale = target/rtp`, clamped 0.4x–2.5x) e re-simula. Máximo 6 iterações com 5.000 rodadas cada. Partindo de pesos próximos ao alvo, converge em 1-3 iterações. Aplica os pesos finais calibrados (Fase 3) ao `selectedRules`, não os pesos iniciais da Fase 2.
-- **Suporte a 1 padrão único:** quando apenas 1 padrão está selecionado, o algoritmo funciona normalmente (single pattern = contribuição total ao RTP), sem geração de combinações.
-
----
-
-## 4. Comunicação de Eventos (AsyncAPI & Idempotência)
-
-O servidor não envia estados brutos para o Frontend; ele orquestra uma Máquina de Estados Reativa no cliente.
-
-### 4.1. Resiliência e Sequenciamento de Payload
-
-O evento central do jogo utiliza um *Sequence Identifier* (`order`) para tratar interrupções de conexão (ex: oscilação de rede 4G/5G do celular).
-
-* **Canal Base:** `wss://[ws.seubingo.com/v1/stream](https://ws.seubingo.com/v1/stream)`
-* **Suscrição:** `socket.emit('subscribe', { room: 'game_105' })`
-* **Idempotência:**
-O Payload de `ball_drawn` carrega o campo ordinal. O cliente React/Vue mantém a variável `last_order_received`. Se uma mensagem chegar com $\Delta > 1$ (ex: saltar da bola 14 para 16), o Frontend ignora a fila de animação momentaneamente e dispara um *Fallback Polling* REST para recuperar o estado faltante antes de prosseguir com a renderização visual.
-
-### 4.2. Desacoplamento Visual (Slow Reveal)
-
-O processamento On-chain e Backend resolvem a totalidade da rodada instantaneamente. O nó *Broadcaster Worker* atua como um barramento de *delay* proposital:
-
-1. Armazena o array processado em memória de *Buffer*.
-2. Dispara um evento de Socket.io a cada $\approx 3.000$ milissegundos.
-3. Orquestra o disparo do evento `winner_found` no tempo exato da animação visual da "Bola da Vitória" na interface do usuário, garantindo a sincronicidade psicológica (suspense e resolução).
+1. **Patterns individuais:** simula N rodadas, calcula `hit_rate` e `avg_balls_needed` por padrão.
+2. **Combinações:** cláusulas `all_of`, `any_of`, `n_of_type` avaliadas com max-weight.
+3. **Payout:** `ticket_price × base_multiplier × max_win_weight / 100`.
+4. **Calibração iterativa (handleSuggest — GametypesAdmin):** 3 fases — medição, cálculo analítico de pesos por inverse hit_rate, calibração iterativa (máx. 6 rounds) até RTP ≈ 85% ± 2%.
 
 ---
 
-## 5. Garbage Collection e Engenharia de Custos (DevOps e RAM)
+## 4. Comunicação de Eventos (WebSocket — Socket.io)
 
-A viabilidade econômica do contrato Antelope depende da alocação volátil (Time-To-Live).
+O servidor não envia estados brutos; orquestra uma Máquina de Estados Reativa no cliente via Slow Reveal (ADR-007).
 
-### 5.1. Ciclo de Limpeza Positiva (Happy Path)
+### 4.1. Canais e Eventos (asyncapi.yaml v2.0)
 
-1. Após o `claimwin()`, `end_time` é registrado.
-2. Início de Quarentena estrita de $24$ horas. Durante este período, o Frontend renderiza auditorias cruzando `games` e `tickets`.
-3. Após $T > end_time + 24h$, qualquer nó executa `cleargame()`. O comando `erase` na tabela `tickets` desaloca iterativamente a memória RAM e reembolsa o `WAX` para a tesouraria administrativa. O recibo imutável (Action Log) consolida o *Audit Trail*.
+**Canal `game.{game_id}`** — eventos de jogo ao vivo:
 
-### 5.2. Ciclo de Falha e Reembolso $O(1)$ (Fail-Safes)
+| Evento | Direção | Descrição |
+|---|---|---|
+| `game_locked` | S→C | FSM `FUNDING → LOCKED`. Vendas bloqueadas. |
+| `ball_drawn` | S→C | Bola revelada (intervalo ~3s). Campo `order` para reconciliação. |
+| `winner_found` | S→C | Vencedores detectados com payouts. |
+| `game_aborted` | S→C | Fail-safe acionado — estornos em curso. |
+| `game_ended` | S→C | Partida completamente encerrada (ADR-014). |
+| `golden_ball` | S→C | Bola dourada sorteada com multiplicador (ADR-012). |
+| `stage_cleared` | S→C | Estágio de multi-match completado (ADR-013). |
+| `sync_response` | S→C | Resposta a `sync_request` — histórico de bolas. |
+| `subscribe_game` | C→S | Entra no canal da partida. |
+| `sync_request` | C→S | Solicita reconciliação (pacote perdido). |
 
-Em casos de inatividade do `orng.wax` ou falta de quórum, transita-se o status para `ABORTED`.
-A ação `refundticket(game_id, ticket_id)` executa o estorno sem gargalos iterativos. O Backend processa o lote de devoluções no ritmo tolerado pelo limite de CPU do bloco da WAX (cerca de 30ms max execution time), removendo a linha e devolvendo os recursos financeiros para a conta `balances` simultaneamente. O usuário mantém a autonomia de acionar este *fail-safe* independentemente da plataforma.
+**Canal `room.{room_id}`** — chat e drops (ADR-010/011):
+
+| Evento | Direção | Descrição |
+|---|---|---|
+| `chat:message` | S→C | Mensagem de texto de um jogador. |
+| `chat:sponsor_drop` | S→C | Notificação de drop executado para um vencedor. |
+| `send_chat_message` | C→S | Jogador envia mensagem de chat. |
+
+### 4.2. Resiliência e Slow Reveal (ADR-007)
+
+* `ball_drawn.payload.order` — identificador ordinal. Se o cliente detectar $\Delta > 1$ (pacote perdido), emite `sync_request` e aguarda `sync_response` antes de prosseguir a animação.
+* O broadcaster emite 1 bola a cada ≈3.000ms a partir do array já resolvido em memória (`session.balls`). O `winner_found` é emitido sincronizado com a animação visual da bola vencedora — garantia psicológica de suspense.
+
+---
+
+## 5. Frontend (React + Vite — ADR-015)
+
+### 5.1. Roteamento URL-Based (ADR-015)
+
+React Router DOM v6 com `BrowserRouter`. Rotas principais:
+
+| URL | Componente | Auth |
+|---|---|---|
+| `/` | Landing / redirect | — |
+| `/lobby` | PlayerShell > Lobby | ✅ |
+| `/room/:roomId/:gameId` | GameRoom (full-screen) | ✅ |
+| `/replay/:gameId` | ReplayRoom | ✅ |
+| `/room/:roomId/history` | RoomHistoryPanel | **Público** |
+| `/admin/:section` | AdminLayout (auto-contido) | ✅ Admin |
+| `/sponsor/rooms` | SponsorLayout > SponsorRooms | ✅ Sponsor |
+| `/sponsor/vault` | SponsorLayout > SponsorVault | ✅ Sponsor |
+
+**Guards:** `AuthGuard` (session+profile obrigatórios), `AdminGuard` (role `admin|contract_admin`), `SponsorGuard` (role `sponsor`).
+
+### 5.2. Acesso Público sem Sessão
+
+`utils/rpc.ts` — `fetchTableRows(params, session?)`:
+- Com `session`: usa `session.client.v1.chain.get_table_rows`.
+- Sem `session` (visitante): `fetch('/v1/chain/get_table_rows', ...)` via proxy Vite.
+
+Usado por `useRoomHistory` e `RoomHistoryPanel` para acesso público ao histórico de salas.
+
+---
+
+## 6. Garbage Collection e Engenharia de Custos
+
+### 6.1. Ciclo de Limpeza Positiva (Happy Path)
+
+1. `closegame()` registra `end_time`.
+2. Quarentena de 24h — Frontend permite auditoria cruzando `games` e `tickets`.
+3. Após `T > end_time + 24h`: `cleargame()` desaloca `tickets` iterativamente, reembolsa RAM para a tesouraria. Action Log consolida o Audit Trail imutável.
+
+### 6.2. Ciclo de Falha e Reembolso $O(1)$ (Fail-Safes)
+
+Inatividade de `orng.wax` ou falta de quórum → `abortgame()` → status `ABORTED`.
+
+`refundticket(game_id, ticket_id)` — estorno sem gargalos iterativos. O worker processa lotes no ritmo tolerado pelo limite de CPU do bloco WAX (~30ms), removendo a linha e devolvendo o saldo para `balances[owner]`. O jogador mantém autonomia de acionar o fail-safe independentemente da plataforma.
+
+### 6.3. Compliance (Lei 14.790/2023)
+
+O ledger PostgreSQL (`games_history` + `transactions_ledger`) registra toda movimentação financeira para auditoria pública:
+
+* `GET /api/v1/statistics/rtp` — RTP/GGR agregado por período e moeda.
+* `GET /api/v1/statistics/games` — histórico individual de jogos.
+* `GET /api/v1/statistics/games/batch` — stats por game_id (público).
+* `POST /api/v1/admin/ledger/sync` — sincronização retroativa de jogo on-chain.

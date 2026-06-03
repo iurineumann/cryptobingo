@@ -215,3 +215,37 @@ export async function getRecentGames(limit: number = 20): Promise<RecentGame[]> 
     );
     return result.rows;
 }
+
+// ==========================================
+// BATCH STATS (para histórico público de jogos)
+// ==========================================
+
+export interface GameStatsBatch {
+    game_id:       string;
+    total_tickets: number;
+    total_wagered: number;
+    total_paid_out: number;
+    rtp_pct:       number;
+}
+
+/**
+ * Retorna estatísticas de compliance para uma lista de game_ids.
+ * Best-effort: retorna apenas jogos que foram sincronizados no ledger.
+ * Ref: ADR-015, Lei 14.790/2023 (transparência pública)
+ */
+export async function getGameStatsBatch(gameIds: string[]): Promise<GameStatsBatch[]> {
+    if (gameIds.length === 0) return [];
+    const result = await pgPool.query(
+        `SELECT game_id, total_tickets, total_wagered, total_paid_out, rtp_pct * 100 AS rtp_pct
+         FROM games_history
+         WHERE game_id = ANY($1::varchar[])`,
+        [gameIds]
+    );
+    return result.rows.map(r => ({
+        game_id:        r.game_id,
+        total_tickets:  Number(r.total_tickets),
+        total_wagered:  parseFloat(r.total_wagered),
+        total_paid_out: parseFloat(r.total_paid_out),
+        rtp_pct:        parseFloat(r.rtp_pct),
+    }));
+}

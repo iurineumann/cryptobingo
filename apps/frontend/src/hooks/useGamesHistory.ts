@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
-import { fetchBatchWinnings, getAuthToken } from '../services/api';
+import { fetchBatchWinnings, fetchBatchGameStats, getAuthToken } from '../services/api';
 
 const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
 
@@ -13,13 +13,18 @@ const PAGE_SIZE = 20;
 const FETCH_BATCH = 50;
 
 export interface GameHistoryRow {
-  gameId: string;
-  roomId: string;
-  status: string;
-  endTime: number;
-  ticketsCount: number;
-  totalSpent: string;
-  totalWon: string;
+  gameId:       string;
+  roomId:       string;
+  status:       string;
+  endTime:      number;
+  ticketsCount: number;  // tickets do jogador
+  totalSpent:   string;  // gasto pelo jogador
+  totalWon:     string;  // ganho pelo jogador (best-effort)
+  // Dados globais da partida (best-effort do ledger)
+  allTickets?:    number;
+  totalWagered?:  number;
+  totalPaidOut?:  number;
+  symbol?:        string;
 }
 
 const REPLAY_STATUSES = new Set(['archived', 'drawn', 'aborted']);
@@ -134,9 +139,10 @@ export function useGamesHistory(session: Session) {
           return merged.sort((a, b) => Number(BigInt(b.gameId) - BigInt(a.gameId)));
         });
 
-        // Busca prêmios do gateway (best-effort)
+        const gameIds = collected.map(r => r.gameId);
+
+        // Prêmios do jogador (best-effort, requer auth)
         if (getAuthToken()) {
-          const gameIds = collected.map(r => r.gameId);
           fetchBatchWinnings(gameIds).then(({ winnings }) => {
             setRows(prev => prev.map(r => ({
               ...r,
@@ -146,6 +152,23 @@ export function useGamesHistory(session: Session) {
             })));
           }).catch(() => {});
         }
+
+        // Stats globais da partida (best-effort, público — ledger)
+        fetchBatchGameStats(gameIds).then(stats => {
+          if (Object.keys(stats).length === 0) return;
+          setRows(prev => prev.map(r => {
+            const s = stats[r.gameId];
+            if (!s) return r;
+            const sym = r.totalSpent.trim().split(' ').slice(1).join(' ') || 'BINGO';
+            return {
+              ...r,
+              allTickets:   s.totalTickets,
+              totalWagered: s.totalWagered,
+              totalPaidOut: s.totalPaidOut,
+              symbol:       sym,
+            };
+          }));
+        }).catch(() => {});
       }
     } catch (err) {
       console.error('[useGamesHistory]', err);
