@@ -603,6 +603,15 @@ if docker network ls --format '{{.Name}}' | grep -qx 'cryptobingo-infra_bingo_ne
                 {wallet_address:{$in:["gameadmin11","contractad1"]}},
                 {$set:{role:"admin"}}
             )' 2>/dev/null || true
+
+        echo "[*] Promovendo conta sponsor no MongoDB..."
+        docker exec bingo_mongodb mongosh \
+            --username mongo_admin --password mongo_secure_pass_2026 \
+            --authenticationDatabase admin cryptobingo_edge \
+            --eval 'db.userprofiles.updateMany(
+                {wallet_address:{$in:["sponsor1111"]}},
+                {$set:{role:"sponsor"}}
+            )' 2>/dev/null || true
     fi
 fi
 

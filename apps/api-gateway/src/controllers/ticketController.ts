@@ -56,7 +56,7 @@ function fisherYatesShuffle(arr: number[]): number[] {
  *  Row3: [3]  [8]  [13] [18] [23]
  *  Row4: [4]  [9]  [14] [19] [24]
  */
-function generateBingoMatrix(): number[] {
+export function generateBingoMatrix(): number[] {
     const matrix: number[] = [];
 
     for (let col = 0; col < 5; col++) {
@@ -118,7 +118,7 @@ function encodeVaruint32(value: number): Buffer {
  *
  * Ref: ADR-001, contract: bingo.cpp buytickets()
  */
-function computeTicketHash(matrix: number[], gameId: string, accountName: string): Checksum256 {
+export function computeTicketHash(matrix: number[], gameId: string, accountName: string): Checksum256 {
     // 1. Matrix: unsigned_int(size) + raw bytes (pack_size = varuint32 + N)
     const rawMatrix = Buffer.from(new Uint8Array(matrix));
     const sizePrefix = encodeVaruint32(matrix.length);
@@ -141,7 +141,7 @@ function computeTicketHash(matrix: number[], gameId: string, accountName: string
  * Formato: game:{gameId}:matrix:{sha256_da_matrix}
  * Ref: SPEC.md §3.2 — estrutura de chaves Redis do sistema.
  */
-function matrixRedisKey(gameId: string, matrix: number[]): string {
+export function matrixRedisKey(gameId: string, matrix: number[]): string {
     const hash = crypto
         .createHash('sha256')
         .update(Buffer.from(new Uint8Array(matrix)))

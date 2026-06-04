@@ -1,14 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Session } from '@wharfkit/session';
-import { io, Socket } from 'socket.io-client';
-
-interface ChatMessage {
-    id:            string;
-    wallet_address: string;
-    message:        string;
-    is_sponsor_drop: boolean;
-    timestamp:      string;
-}
+import { useChat } from '../../hooks/useChat';
+import type { ChatMessage } from '../../hooks/useChat';
 
 interface ChatPanelProps {
     roomId:        string;
@@ -18,45 +11,10 @@ interface ChatPanelProps {
     onClose:       () => void;
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:8080';
-
 export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: ChatPanelProps) {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [input,    setInput]    = useState('');
-    const [socket,   setSocket]   = useState<Socket | null>(null);
-    const [loading,  setLoading]  = useState(true);
+    const { messages, loading, sendMessage } = useChat({ roomId, walletAddress });
+    const [input, setInput] = useState('');
     const listRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const s = io(`${WS_URL}/chat`, {
-            auth: { wallet: walletAddress },
-            transports: ['websocket'],
-        });
-
-        s.on('connect', () => {
-            s.emit('chat:join', { roomId });
-            setLoading(false);
-        });
-
-        s.on('chat:messages', (msgs: ChatMessage[]) => {
-            setMessages(msgs);
-        });
-
-        s.on('chat:message', (msg: ChatMessage) => {
-            setMessages(prev => [...prev, msg]);
-        });
-
-        s.on('chat:sponsor_drop', (msg: ChatMessage) => {
-            setMessages(prev => [...prev, msg]);
-        });
-
-        setSocket(s);
-
-        return () => {
-            s.emit('chat:leave', { roomId });
-            s.disconnect();
-        };
-    }, [roomId, walletAddress]);
 
     useEffect(() => {
         if (listRef.current) {
@@ -64,17 +22,16 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
         }
     }, [messages]);
 
-    const sendMessage = useCallback(() => {
-        const text = input.trim();
-        if (!text || !socket) return;
-        socket.emit('chat:send', { roomId, message: text });
+    const handleSend = () => {
+        if (!input.trim()) return;
+        sendMessage(input);
         setInput('');
-    }, [input, socket, roomId]);
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            handleSend();
         }
     };
 
@@ -171,7 +128,7 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                 />
                 <button
                     className="cb-btn cb-btn-primary cb-btn-sm"
-                    onClick={sendMessage}
+                    onClick={handleSend}
                     disabled={!input.trim()}
                 >
                     ➤
