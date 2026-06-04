@@ -38,6 +38,7 @@ import {
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
 import { getMyNfts }                                 from './controllers/nftController';
+import { livenessCheck, readinessCheck }             from './controllers/healthController';
 import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winningsController';
 import {
     listRooms, getRoom, createRoom, upsertRoomMetadata,
@@ -142,7 +143,10 @@ function registerMiddleware(): void {
 
 function registerRoutes(): void {
 
-    // ── Health (sem rate limit — monitoramento) ───────────────────────────────
+    // ── Health — Kubernetes probes (sem rate limit, sem auth, sem CORS) ─────────
+    app.get('/health/live',  livenessCheck);
+    app.get('/health/ready', readinessCheck);
+    // Mantido por compatibilidade com CI e smoke tests existentes
     app.get('/api/v1/health', (_req, res) => {
         res.status(200).json({ status: 'Gateway Online', timestamp: new Date() });
     });

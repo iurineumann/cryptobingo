@@ -31,7 +31,23 @@ namespace bingo {
     void bingo_contract::setconfig(public_key signer_key) {
         require_auth(get_self());
         config_singleton config_table(get_self(), get_self().value);
-        config_state config = { signer_key };
+        config_state config = config_table.exists() ? config_table.get() : config_state{};
+        config.signer_key = signer_key;
+        config_table.set(config, get_self());
+    }
+
+    // ==========================================
+    // SET TREASURY (ADR-005)
+    // Define a conta de destino do sweep de GGR.
+    // Por segurança, só o próprio contrato pode alterar.
+    // ==========================================
+
+    void bingo_contract::settreasury(name account) {
+        require_auth(get_self());
+        check(is_account(account), "treasury_account invalida ou inexistente.");
+        config_singleton config_table(get_self(), get_self().value);
+        config_state config = config_table.exists() ? config_table.get() : config_state{};
+        config.treasury_account = account;
         config_table.set(config, get_self());
     }
 
@@ -282,6 +298,8 @@ namespace bingo {
             } else {
                 balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
             }
+            // ADR-005: acumula payout do prize_pool para cálculo do GGR em closegame
+            games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
         }
         // Jogo permanece em "paying". Worker chama closegame() após todos os stages.
     }
@@ -613,6 +631,9 @@ namespace bingo {
             } else {
                 balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
             }
+            // ADR-005: acumula payout do prize_pool para cálculo do GGR em closegame
+            games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+            game_itr = games.find(game_id);
         }
 
         for (const auto& sponsor_asset : game_itr->sponsor_pool) {
@@ -655,6 +676,23 @@ namespace bingo {
         }
 
         if (needs_archive) {
+            // ADR-005: calcula GGR = prize_pool - total_paid e acumula no pool
+            int64_t ggr_amount = game_itr->prize_pool.quantity.amount - game_itr->total_paid;
+            if (ggr_amount > 0) {
+                ggr_pool_table ggr_pool(get_self(), get_self().value);
+                auto ggr_key = game_itr->prize_pool.quantity.symbol.code().raw();
+                auto ggr_itr = ggr_pool.find(ggr_key);
+                if (ggr_itr == ggr_pool.end()) {
+                    extended_asset ggr_entry = game_itr->prize_pool;
+                    ggr_entry.quantity.amount = ggr_amount;
+                    ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
+                } else {
+                    ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
+                        r.ggr.quantity.amount += ggr_amount;
+                    });
+                }
+            }
+
             games.modify(game_itr, same_payer, [&](auto& g) {
                 g.status   = "archived"_n;
                 g.end_time = time_point_sec(current_time_point().sec_since_epoch());
@@ -1159,6 +1197,45 @@ namespace bingo {
             permission_level{get_self(), "active"_n},
             amount.contract, "transfer"_n,
             std::make_tuple(get_self(), owner, amount.quantity, std::string("Saque via CryptoBingo"))
+        ).send();
+    }
+
+    // ==========================================
+    // SWEEP GGR (ADR-005)
+    // Transfere o GGR acumulado para o treasury_account configurado.
+    // Auth: apenas bingo.game (admin).
+    // Idempotente: se pool vazio, não faz nada.
+    // ==========================================
+
+    void bingo_contract::sweepggr(name token_contract, symbol_code sym) {
+        require_auth(get_self());
+
+        ggr_pool_table ggr_pool(get_self(), get_self().value);
+        auto ggr_itr = ggr_pool.find(sym.raw());
+        check(ggr_itr != ggr_pool.end(), "Nenhum GGR acumulado para este token.");
+        check(ggr_itr->ggr.quantity.amount > 0, "GGR acumulado e zero.");
+        check(ggr_itr->ggr.contract == token_contract, "token_contract nao corresponde ao registrado no pool.");
+
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Config nao inicializada. Execute setconfig primeiro.");
+        name treasury = config_table.get().treasury_account;
+        check(is_account(treasury), "treasury_account invalida.");
+        check(treasury != get_self(), "treasury nao pode ser o proprio contrato.");
+
+        extended_asset ggr_to_sweep = ggr_itr->ggr;
+
+        // Zera o pool antes do transfer (re-entrância prevention)
+        ggr_pool.erase(ggr_itr);
+
+        action(
+            permission_level{get_self(), "active"_n},
+            ggr_to_sweep.contract, "transfer"_n,
+            std::make_tuple(
+                get_self(),
+                treasury,
+                ggr_to_sweep.quantity,
+                std::string("CryptoBingo GGR sweep")
+            )
         ).send();
     }
 

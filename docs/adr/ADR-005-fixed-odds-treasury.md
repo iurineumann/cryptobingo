@@ -102,6 +102,27 @@ Limites: máx 100.000 simulações; worker_threads para > 5.000 rodadas.
 O campo `pattern_rule.weight` foi alterado de `uint8_t` (1–255) para `uint16_t` (100–25500, hundredths) para suportar 2 casas decimais sem ponto flutuante on-chain. A conversão no frontend usa `parseFloat(v) × 100` ao submeter e `(w / 100).toFixed(2)x` para exibição. O contrato divide por 100 no cálculo do payout.
 
 ### Dívidas Técnicas Atualizadas
-- `[DEBT]` Auto-sweep de GGR para tesouraria não implementado
+
 - `[DONE]` Motor Monte Carlo implementado
 - `[DONE]` Fórmula max_weight implementada
+- `[DONE]` Auto-sweep de GGR para tesouraria implementado (2026-06-04)
+
+### Fase 4 — sweepggr + ggrpool (2026-06-04)
+
+Action `settreasury(name account)`: configura `config.treasury_account` (auth: `bingo.game`).
+
+Action `sweepggr(name token_contract, symbol_code sym)` (auth: `bingo.game`):
+
+1. Lê `ggrpool` para o símbolo solicitado
+2. Valida `treasury_account` configurado e diferente do próprio contrato
+3. Apaga a entrada do pool (antes do transfer — re-entrância prevention)
+4. Emite `token_contract::transfer` para `treasury_account`
+
+Acumulação do GGR:
+
+- `game_state.total_paid` (int64, default 0): acumulado em `claimwin` e `claimstage`
+- `closegame`: calcula `ggr = prize_pool.amount - total_paid`; se `ggr > 0`, acumula em `ggrpool`
+- Jogos sem vencedor (`drawn → archived` direto): 100% do prize_pool vai para GGR
+- GGR de sponsor_pool não é capturado (sponsors contribuem 100% como prêmio)
+
+Tabela `ggrpool` (multi_index, chave: `symbol_code.raw()`): acumulador persistente, um row por token.

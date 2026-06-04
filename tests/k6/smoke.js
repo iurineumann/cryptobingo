@@ -15,10 +15,27 @@ export const options = {
 };
 
 export default function () {
-    const res = http.get(`${API_URL}/api/v1/health`);
-    check(res, {
-        'status 200':          (r) => r.status === 200,
-        'response time < 200ms': (r) => r.timings.duration < 200,
+    // Legacy health endpoint
+    const legacy = http.get(`${API_URL}/api/v1/health`);
+    check(legacy, {
+        '[legacy] status 200': (r) => r.status === 200,
     });
+
+    // Kubernetes liveness probe
+    const live = http.get(`${API_URL}/health/live`);
+    check(live, {
+        '[live] status 200':          (r) => r.status === 200,
+        '[live] status=alive':        (r) => r.json('status') === 'alive',
+        '[live] response time < 50ms': (r) => r.timings.duration < 50,
+    });
+
+    // Kubernetes readiness probe
+    const ready = http.get(`${API_URL}/health/ready`);
+    check(ready, {
+        '[ready] status 200':           (r) => r.status === 200,
+        '[ready] status=ready':         (r) => r.json('status') === 'ready',
+        '[ready] response time < 200ms': (r) => r.timings.duration < 200,
+    });
+
     sleep(1);
 }
