@@ -2,7 +2,7 @@
 
 > Fonte de verdade do backlog. Sincronizado com `TRACE.md`.
 > Status: [x] Done | [ ] Pendente
-> Última auditoria: 2026-06-03
+> Última auditoria: 2026-06-04
 
 ## Épico 1: Core de Blockchain & Tokenomics
 - [x] Contrato C++ completo (buytickets, lockgame, startdraw, claimwin, receiverand).
@@ -15,7 +15,7 @@
 - [x] Actions de rooms no contrato C++: `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta` + campo `room_drop_chance_bps`.
 - [x] Actions de drop vault no contrato C++: `allocatedrop`, `deallocdrop`, `reclaimasset`, `execdrop` + `on_notify` para token deposits (memo 'vault') e NFT transfers (atomicassets).
 - [x] ABI v2.0 completo e sincronizado — 31 actions, 12 tabelas, 14 structs.
-- [ ] Action `sweepggr` no contrato C++ (auto-sweep GGR para tesouraria — ADR-005).
+- [x] Action `sweepggr` no contrato C++ + tabela `ggrpool` + `settreasury` (ADR-005 Fase 4).
 - [ ] Contrato `bingo.swap` (DEX x*y=k).
 
 ## Épico 2: API Gateway & Infraestrutura Off-Chain
@@ -97,3 +97,6 @@
 - [x] CI/CD — `.github/workflows/ci.yml` (GitHub Actions: unit + frontend + E2E DUNE manual).
 - [x] Testes de carga k6 — `tests/k6/smoke.js` + `tests/k6/load.js`.
 - [x] `NftAdmin.tsx` + `TokenAdmin.tsx` — painéis de assets na seção 'assets' do AdminLayout.
+- [x] `healthController.ts` — probes Kubernetes `/health/live` e `/health/ready` (5 testes).
+- [x] `dropWorker.ts` — tipos internos substituídos por `BlockchainDrop*` de shared-types.
+- [x] `sweepggr` + `settreasury` — contrato C++ + ABI + ADR-005 Fase 4 documentada.
