@@ -24,6 +24,10 @@
         {
           "name": "signer_key",
           "type": "public_key"
+        },
+        {
+          "name": "treasury_account",
+          "type": "name"
         }
       ]
     },
@@ -102,6 +106,44 @@
         {
           "name": "golden_multiplier",
           "type": "uint16"
+        },
+        {
+          "name": "total_paid",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "ggr_pool_row",
+      "base": "",
+      "fields": [
+        {
+          "name": "ggr",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "settreasury",
+      "base": "",
+      "fields": [
+        {
+          "name": "account",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "sweepggr",
+      "base": "",
+      "fields": [
+        {
+          "name": "token_contract",
+          "type": "name"
+        },
+        {
+          "name": "sym",
+          "type": "symbol_code"
         }
       ]
     },
@@ -1158,6 +1200,16 @@
       "name": "claimstage",
       "type": "claimstage",
       "ricardian_contract": ""
+    },
+    {
+      "name": "settreasury",
+      "type": "settreasury",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "sweepggr",
+      "type": "sweepggr",
+      "ricardian_contract": ""
     }
   ],
   "tables": [
@@ -1288,6 +1340,17 @@
       "index_type": "i64",
       "key_names": [],
       "key_types": []
+    },
+    {
+      "name": "ggrpool",
+      "type": "ggr_pool_row",
+      "index_type": "i64",
+      "key_names": [
+        "sym_code"
+      ],
+      "key_types": [
+        "uint64"
+      ]
     }
   ],
   "ricardian_clauses": [],

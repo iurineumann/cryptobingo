@@ -17,6 +17,7 @@ namespace bingo {
 
     struct [[eosio::table("config")]] config_state {
         public_key signer_key;
+        name       treasury_account = "bingo.game"_n; // destino do sweep de GGR (ADR-005)
     };
     typedef singleton<"config"_n, config_state> config_singleton;
 
@@ -50,6 +51,7 @@ namespace bingo {
         time_point_sec              end_time          = time_point_sec(0);
         uint8_t                     golden_ball_num   = 0;  // ADR-012: número da bola dourada (1-75; 0=nenhuma)
         uint16_t                    golden_multiplier = 0;  // ADR-012: multiplicador derivado (0=nenhum)
+        int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts do prize_pool (para cálculo do GGR)
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }
@@ -279,6 +281,18 @@ namespace bingo {
     > drop_allocations_table;
 
     // ==========================================
+    // GGR POOL — Acumula margem retida por partida (ADR-005)
+    // Chave: symbol_code.raw() — um row por token.
+    // Alimentado por closegame; esvaziado por sweepggr.
+    // ==========================================
+
+    struct [[eosio::table("ggrpool")]] ggr_pool_row {
+        extended_asset ggr;  // quantity + contract do token
+        uint64_t primary_key() const { return ggr.quantity.symbol.code().raw(); }
+    };
+    typedef multi_index<"ggrpool"_n, ggr_pool_row> ggr_pool_table;
+
+    // ==========================================
     // ATOMIC ASSETS (leitura de posse)
     // ==========================================
 
@@ -305,6 +319,7 @@ namespace bingo {
 
         // ── Configuração ─────────────────────────────────────────────────────
         [[eosio::action]] void setconfig(public_key signer_key);
+        [[eosio::action]] void settreasury(name account); // ADR-005: define destino do sweep GGR
 
         // ── FSM de Jogos ──────────────────────────────────────────────────────
         [[eosio::action]] void creategame(uint64_t game_id, extended_asset ticket_price, uint64_t gametype_id, uint64_t room_id);
@@ -352,6 +367,8 @@ namespace bingo {
 
         // ── Economia ─────────────────────────────────────────────────────────
         [[eosio::action]] void withdraw(name owner, extended_asset amount);
+        // ADR-005: transfere GGR acumulado (ggrpool) para treasury_account
+        [[eosio::action]] void sweepggr(name token_contract, symbol_code sym);
 
         // ── on_notify ─────────────────────────────────────────────────────────
         [[eosio::on_notify("*::transfer")]]

@@ -1,4 +1,9 @@
 import { rpcClient } from '@cryptobingo/blockchain-core';
+import {
+    BlockchainDropAllocation,
+    BlockchainDropDeposit,
+    BlockchainDropState,
+} from '@cryptobingo/shared-types';
 import { UInt64 } from '@wharfkit/antelope';
 import crypto from 'crypto';
 import { Pool } from 'pg';
@@ -29,40 +34,13 @@ async function acquireDropLock(gameId: string): Promise<boolean> {
     }
 }
 
-interface DropAllocationRow {
-    alloc_id: string;
-    deposit_id: string;
-    owner: string;
-    room_id: string;
-    asset_type: string;
-    token_contract: string;
-    token_symbol: string;
-    quantity_per_drop: { quantity: string; contract: string };
-    quantity_distributed: { quantity: string; contract: string };
-    nft_asset_id: string;
-    nft_template_id: number;
-    nft_collection: string;
-    drop_chance_bps: number;
-    drops_executed: number;
-    status: string;
-    allocated_at: number;
-}
+type DropAllocationRow = BlockchainDropAllocation;
+type DropDepositRow    = BlockchainDropDeposit;
+type DropStateRow      = Pick<BlockchainDropState, 'player_base_chance_bps'>;
 
 interface RoomRow {
     room_id: string;
     room_drop_chance_bps: number;
-}
-
-interface DropStateRow {
-    player_base_chance_bps: number;
-}
-
-interface DropDepositRow {
-    deposit_id: string;
-    owner: string;
-    asset_type: string;
-    quantity_remaining: { quantity: string; contract: string };
-    status: string;
 }
 
 export function randomInt(max: number): number {

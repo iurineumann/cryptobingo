@@ -95,7 +95,7 @@ function createLimiter(options: {
                 retry_after: Math.ceil(windowMs / 1000),
             });
         },
-        skip: (req) => req.path === '/api/v1/health',
+        skip: (req) => req.path.startsWith('/health') || req.path === '/api/v1/health',
     });
 }
 
