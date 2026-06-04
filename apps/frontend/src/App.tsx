@@ -67,8 +67,9 @@ interface DevAccount {
 
 let   createDevSession: (() => Promise<Session>) | null = null;
 let   createCustomSession: ((actor: string, key: string) => Promise<Session>) | null = null;
-const devAccounts: DevAccount[] = [];
-const devAdminActors = new Set<string>();
+const devAccounts:      DevAccount[] = [];
+const devAdminActors   = new Set<string>();
+const devSponsorActors = new Set<string>();
 
 if (import.meta.env.DEV) {
     const { WalletPluginPrivateKey } = await import('@wharfkit/wallet-plugin-privatekey');
@@ -90,6 +91,9 @@ if (import.meta.env.DEV) {
             devAccounts.push({ actor, key, label });
             if (label === 'Admin' || label === 'Game Admin' || label === 'Contract Admin') {
                 devAdminActors.add(actor);
+            }
+            if (label === 'Sponsor') {
+                devSponsorActors.add(actor);
             }
         }
     }
@@ -233,7 +237,10 @@ function AppRoot() {
             (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
         )
     );
-    const isSponsor = profile?.role === 'sponsor';
+    const isSponsor = !!(
+        profile?.role === 'sponsor' ||
+        (import.meta.env.DEV && session && devSponsorActors.has(session.actor.toString()))
+    );
 
     // ── Restore de sessão ao recarregar (suporta deep links) ─────────────────
     useEffect(() => {

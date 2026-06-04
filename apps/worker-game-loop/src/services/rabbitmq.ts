@@ -141,9 +141,13 @@ export async function connectRabbitMQ(): Promise<void> {
         // amqp.connect() pode travar indefinidamente em TCP half-open — timeout explícito
         connection = await Promise.race([
             amqp.connect(RABBITMQ_URL),
-            new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(`timeout após ${CONNECT_TIMEOUT_MS / 1000}s`)), CONNECT_TIMEOUT_MS)
-            ),
+            new Promise<never>((_, reject) => {
+                const t = setTimeout(
+                    () => reject(new Error(`timeout após ${CONNECT_TIMEOUT_MS / 1000}s`)),
+                    CONNECT_TIMEOUT_MS,
+                );
+                t.unref(); // não impede o processo de sair em testes
+            }),
         ]);
 
         connection.on('error', (err) => {

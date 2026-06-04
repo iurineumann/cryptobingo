@@ -19,6 +19,8 @@ import UsersAdmin       from './UsersAdmin';
 import PlayerDashboard  from './PlayerDashboard';
 import RoomsAdmin       from './RoomsAdmin';
 import VaultAdmin       from './VaultAdmin';
+import NftAdmin         from './NftAdmin';
+import TokenAdmin       from './TokenAdmin';
 
 interface AdminLayoutProps {
   profile:        MongoUserProfile;
@@ -49,7 +51,9 @@ export default function AdminLayout({
     { id: 'gametypes',  label: t('admin.gametypes'),  icon: '◇', group: 'operation' },
     { id: 'campaigns',  label: t('admin.campaigns'),  icon: '▲', group: 'operation' },
     { id: 'vault',      label: t('admin.vault'),      icon: '◈', group: 'operation' },
-    { id: 'compliance', label: t('admin.compliance'), icon: '◉', group: 'compliance' },
+    { id: 'nfts',       label: t('admin.nfts'),       icon: '🖼', group: 'assets'    },
+    { id: 'token',      label: t('admin.token'),      icon: '◉', group: 'assets'    },
+    { id: 'compliance', label: t('admin.compliance'), icon: '⚖', group: 'compliance' },
     { id: 'users',      label: t('admin.users'),      icon: '◍', group: 'compliance' },
     { id: 'mypanel',    label: t('admin.my_panel'),   icon: '●', group: 'personal'  },
   ];
@@ -62,6 +66,8 @@ export default function AdminLayout({
       case 'gametypes':  return <GametypesAdmin />;
       case 'campaigns':  return <SponsorDashboard />;
       case 'vault':      return <VaultAdmin />;
+      case 'nfts':       return <NftAdmin session={session} />;
+      case 'token':      return <TokenAdmin session={session} />;
       case 'compliance': return <ComplianceAdmin />;
       case 'users':      return <UsersAdmin />;
       case 'mypanel':    return session ? <PlayerDashboard session={session} /> : null;
@@ -149,6 +155,7 @@ export default function AdminLayout({
 
         <aside className="site-sidebar" aria-label={t('admin.nav_aria')}>
           <SidebarGroup group="operation"  title={t('admin.section_operations')} />
+          <SidebarGroup group="assets"     title={t('admin.section_assets')} />
           <SidebarGroup group="compliance" title={t('admin.section_compliance')} />
           <SidebarGroup group="personal"   title={t('admin.section_personal')} />
 

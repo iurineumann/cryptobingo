@@ -1129,7 +1129,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
             `Viável: ${finalResult.is_viable}`
         );
 
-        res.status(200).json(finalResult);
+        res.status(200).json({ ...finalResult, total_games: finalResult.simulations });
 
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

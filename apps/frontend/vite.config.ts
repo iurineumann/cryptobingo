@@ -65,9 +65,16 @@ export default defineConfig(({ mode }) => {
             }),
         ],
         test: {
-            environment: 'jsdom',
-            globals:     true,
-            include:     ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+            environment:  'jsdom',
+            globals:      true,
+            include:      ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+            setupFiles:   ['./src/vitest.setup.ts'],
+            coverage: {
+                provider:   'v8',
+                include:    ['src/**/*.ts', 'src/**/*.tsx'],
+                exclude:    ['src/main.tsx', 'src/i18n.ts', 'src/**/*.d.ts', 'src/vitest.setup.ts'],
+                thresholds: { branches: 50, functions: 60, lines: 60, statements: 60 },
+            },
         },
         server: {
             historyApiFallback: true, // serve index.html para todas as rotas SPA (ADR-015)
