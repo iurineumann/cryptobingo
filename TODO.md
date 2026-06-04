@@ -72,8 +72,8 @@
 ## [DEBT] Dívidas Técnicas Reais (auditadas em 2026-06-04)
 
 [DONE] `useChat.ts` — extraído de ChatPanel.tsx; 12 testes Vitest (2026-06-04).
-[DEBT] `DropDeposit`, `DropAllocation`, `DropState` — tipos definidos apenas internamente no dropWorker.ts; não exportados do `shared-types`. Outros serviços não podem importá-los.
-[DEBT] `fsm.test.ts` — testes desatualizados para CREATED/FUNDING/abort (game loop mudou).
+[DONE] `dropWorker.ts` — tipos internos substituídos por `BlockchainDrop*` de shared-types (2026-06-04).
+[DONE] `fsm.test.ts` — verificado em dia; ADR-012/013 já cobertos desde sprint ADR-013.
 
 ---
 
@@ -103,8 +103,10 @@
 [DONE] k6 — `tests/k6/smoke.js` + `tests/k6/load.js`.
 [DONE] i18n — 75 novas chaves (`nft_` + `token_`) em pt/en/zh.
 
+[DONE] `sweepggr` + `settreasury` — ADR-005 Fase 4: ggrpool, total_paid, closegame acumula GGR (2026-06-04).
+[DONE] `healthController.ts` — /health/live + /health/ready + 5 testes, skip rate limiter (2026-06-04).
+[DONE] `dropWorker.ts` — BlockchainDrop* de shared-types, sem interfaces locais redundantes (2026-06-04).
+
 ### Baixa prioridade / Futuro
-[ ] `DropDeposit/DropAllocation/DropState` — exportar de shared-types (atualmente só em dropWorker.ts).
-[ ] `fsm.test.ts` — atualizar para FSM atual (FUNDING/LOCKED/DRAWING/DRAWN).
-[ ] `sweepggr` — action no contrato C++ para auto-sweep GGR para tesouraria (ADR-005).
+
 [ ] `bingo.swap` — contrato DEX x*y=k (fora do escopo atual).
