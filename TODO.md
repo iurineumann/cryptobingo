@@ -69,13 +69,11 @@
 
 ---
 
-## [DEBT] Dívidas Técnicas Reais (auditadas em 2026-06-03)
+## [DEBT] Dívidas Técnicas Reais (auditadas em 2026-06-04)
 
-[DEBT] `useChat.ts` — lógica de chat inline no ChatPanel.tsx; deveria ser hook separado para reutilização.
+[DONE] `useChat.ts` — extraído de ChatPanel.tsx; 12 testes Vitest (2026-06-04).
 [DEBT] `DropDeposit`, `DropAllocation`, `DropState` — tipos definidos apenas internamente no dropWorker.ts; não exportados do `shared-types`. Outros serviços não podem importá-los.
 [DEBT] `fsm.test.ts` — testes desatualizados para CREATED/FUNDING/abort (game loop mudou).
-[DEBT] `openapi.yaml` v1.4.0 desatualizado — faltam: /rooms/*, /vault/*, /player/winnings/*, /statistics/games/batch (10+ endpoints).
-[DEBT] `asyncapi.yaml` v1.0.0 desatualizado — faltam: canal `chat` e evento `sponsor_drop` (ChatPanel já os implementa off-spec).
 
 ---
 
@@ -93,7 +91,20 @@
 
 [DONE] `docs/SPEC.md` — reescrito: §1.5 Rooms, §1.6 Drop Vault, §2.3-2.5 actions ADR-010/011/012/013, §3.4 orquestração ADR-014, §4 eventos WebSocket v2, §5 Frontend routing ADR-015, §6.3 Compliance.
 
+## [DONE] Sprint — game-admin-assets (2026-06-04)
+
+[DONE] `NftAdmin.tsx` — painel AtomicAssets: coleções, schemas, templates, assets (mint/burn/transfer).
+[DONE] `TokenAdmin.tsx` — painel bingo.token: supply, saldos internos/externos, issue/retire/transfer.
+[DONE] `AdminLayout.tsx` — integra NftAdmin + TokenAdmin na seção 'assets' (ADR-015 routing).
+[DONE] `useChat.ts` — hook extraído do ChatPanel; 12 testes Vitest.
+[DONE] Testes api-gateway — 105 passing (authController func+security+onchain, roomController, monteCarlo, statistics func+security, winnings, drop.security, auth.security, rateLimiter.security, helmet.security).
+[DONE] Testes worker-game-loop — 92 passing (evaluator.drawmodes, gameOrchestrator, rabbitmq, roomManager, invertedIndex).
+[DONE] CI/CD — `.github/workflows/ci.yml` (GitHub Actions: unit + frontend + E2E DUNE manual).
+[DONE] k6 — `tests/k6/smoke.js` + `tests/k6/load.js`.
+[DONE] i18n — 75 novas chaves (`nft_` + `token_`) em pt/en/zh.
+
 ### Baixa prioridade / Futuro
-[ ] `useChat.ts` — extrair de ChatPanel para hook reutilizável.
+[ ] `DropDeposit/DropAllocation/DropState` — exportar de shared-types (atualmente só em dropWorker.ts).
+[ ] `fsm.test.ts` — atualizar para FSM atual (FUNDING/LOCKED/DRAWING/DRAWN).
 [ ] `sweepggr` — action no contrato C++ para auto-sweep GGR para tesouraria (ADR-005).
 [ ] `bingo.swap` — contrato DEX x*y=k (fora do escopo atual).
