@@ -78,8 +78,8 @@
 - [x] `SponsorLayout.tsx` — shell dedicado `/sponsor/*` com header + sidebar + SponsorGuard.
 - [x] Badges "🎁 NFT Drop" / "💰 Token Drop" no Lobby e LandingPage.
 - [x] `AdminLayout.tsx` auto-contido — usa `useParams`/`useNavigate` internamente; props `section`/`onNavigate`/`onBackToLobby` removidas.
-- [ ] `useChat.ts` — hook WebSocket separado (atualmente inline no ChatPanel).
-- [ ] PWA (manifest + service worker; Lighthouse > 90).
+- [x] `useChat.ts` — hook WebSocket separado extraído do ChatPanel; 12 testes Vitest.
+- [x] PWA (manifest + service worker; Lighthouse > 90).
 
 ## Épico 5: Qualidade & Documentação
 - [x] ADR-001 a ADR-015 documentados.
@@ -88,7 +88,12 @@
 - [x] Testes backend: `fsm.test.ts`, `dropWorker.test.ts`, `evaluator.test.ts`, `dropController.test.ts`, `ticketController.test.ts`.
 - [x] `openapi.yaml v2.0` — 36 endpoints documentados.
 - [x] `asyncapi.yaml v2.0` — canais game + room; todos os eventos reais do broadcaster.
-- [x] Testes frontend (Vitest) — 31 testes: ticketUtils, rpc, useGamesHistory.
+- [x] Testes frontend (Vitest) — 43 testes: ticketUtils, rpc, useGamesHistory, useChat.
 - [x] `BlockchainDropDeposit`, `BlockchainDropAllocation`, `BlockchainDropState` exportados de `shared-types`.
 - [x] PWA — `vite-plugin-pwa` + manifest + Workbox cache-first.
 - [x] `docs/SPEC.md` — reescrito com ADR-010 (Rooms), ADR-011 (Drop Vault), ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration), ADR-015 (Routing). 6 seções novas/expandidas.
+- [x] Testes api-gateway (Jest) — 105 testes: authController (func + security + onchain), roomController, monteCarloController, statisticsController (func + security), winningsController, dropController.security, auth.security, rateLimiter.security, helmet.security.
+- [x] Testes worker-game-loop (Jest) — 92 testes: evaluator.drawmodes, gameOrchestrator, rabbitmq, roomManager, invertedIndex.
+- [x] CI/CD — `.github/workflows/ci.yml` (GitHub Actions: unit + frontend + E2E DUNE manual).
+- [x] Testes de carga k6 — `tests/k6/smoke.js` + `tests/k6/load.js`.
+- [x] `NftAdmin.tsx` + `TokenAdmin.tsx` — painéis de assets na seção 'assets' do AdminLayout.
