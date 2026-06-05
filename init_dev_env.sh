@@ -129,6 +129,17 @@ if [[ "${1:-}" == "--reset" ]]; then
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm   "$CONTAINER_NAME" 2>/dev/null || true
     rm -f .waxdev.env
+
+    # Para o daemon oracle se estiver rodando
+    if [ -f ".orng-oracle.pid" ]; then
+        ORACLE_PID=$(cat .orng-oracle.pid 2>/dev/null || true)
+        if [ -n "$ORACLE_PID" ] && kill -0 "$ORACLE_PID" 2>/dev/null; then
+            echo "[*] Parando oracle daemon (PID $ORACLE_PID)..."
+            kill "$ORACLE_PID" 2>/dev/null || true
+        fi
+        rm -f .orng-oracle.pid
+    fi
+
     echo "[*] Container removido. Recriando..."
 fi
 
@@ -462,18 +473,77 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8b. DEPLOY DO ORÁCULO MOCK (orng.wax)
+# 8b. ORNG REAL — Geração de chaves RSA, compilação, deploy e configuração
+#
+# Segue a mesma arquitetura do contrato orng.wax de produção (WAX mainnet):
+#   - RSA-PKCS1v15-SHA256 para geração de aleatoriedade verificável
+#   - Interface: requestrand / setrand / regkey / setver
+#   - Legacy callback: bingo.game::receiverand(assoc_id, checksum256)
+#
+# Ref: https://github.com/worldwide-asset-exchange/wax-orng (branch develop)
 # ──────────────────────────────────────────────────────────────────────────────
-echo "[*] Deploy do oráculo mock (orng.wax)..."
-if [ -f "$(pwd)/contracts/orng_mock.wasm" ] && [ -f "$(pwd)/contracts/orng_mock.abi" ]; then
-    cleos set code orng.wax /app/contracts/orng_mock.wasm -p orng.wax@active
-    cleos set abi orng.wax /app/contracts/orng_mock.abi -p orng.wax@active
-    cleos set account permission orng.wax active --add-code -p orng.wax@active 2>/dev/null || true
-    echo "[✓] orng_mock deployado em orng.wax."
+
+ORNG_RSA_DIR="$(pwd)/contracts/orng"
+ORNG_RSA_PRIV="$ORNG_RSA_DIR/dev-rsa-private.pem"
+ORNG_RSA_PUB="$ORNG_RSA_DIR/dev-rsa-public.pem"
+ORNG_WASM="$ORNG_RSA_DIR/orng.wasm"
+ORNG_ABI="$ORNG_RSA_DIR/orng.abi"
+
+# ── 8b-1. Gera keypair RSA 2048-bit (dev) se não existir ────────────────────
+# Produção usa 4096-bit; 2048-bit é suficiente para dev (geração mais rápida).
+if [ ! -f "$ORNG_RSA_PRIV" ]; then
+    echo "[*] Gerando keypair RSA 2048-bit para oracle ORNG..."
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+        -out "$ORNG_RSA_PRIV" 2>/dev/null
+    openssl rsa -in "$ORNG_RSA_PRIV" -pubout -out "$ORNG_RSA_PUB" 2>/dev/null
+    echo "[✓] RSA keypair gerado em $ORNG_RSA_DIR/"
 else
-    echo "[!] orng_mock.wasm/orng_mock.abi não encontrados em contracts/"
-    echo "    Compile o mock: cdt-cpp contracts/bingo/src/orng_mock.cpp -o contracts/orng_mock.wasm"
+    echo "[✓] RSA keypair já existe em $ORNG_RSA_DIR/ — reusando."
 fi
+
+# ── 8b-2. Extrai exponent e modulus como hex strings ────────────────────────
+ORNG_RSA_JSON=$(node scripts/extract-rsa-key.cjs "$ORNG_RSA_PUB" 2>/dev/null || echo "")
+if [ -z "$ORNG_RSA_JSON" ]; then
+    echo "[!] ERRO: falha ao extrair chave pública RSA."
+    echo "    Verifique se Node.js está instalado e $ORNG_RSA_PUB existe."
+    exit 1
+fi
+ORNG_RSA_EXPONENT=$(echo "$ORNG_RSA_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['exponent'])")
+ORNG_RSA_MODULUS=$(echo  "$ORNG_RSA_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['modulus'])")
+echo "[✓] RSA exponent: ${ORNG_RSA_EXPONENT}, modulus: ${ORNG_RSA_MODULUS:0:32}... (${#ORNG_RSA_MODULUS} chars)"
+
+# ── 8b-3. Compila contrato ORNG dentro do container ─────────────────────────
+echo "[*] Compilando contrato ORNG (WAX CDT / cdt-cpp)..."
+docker exec "$CONTAINER_NAME" bash -c \
+    "cdt-cpp -abigen \
+        -I /app/contracts/orng/include \
+        /app/contracts/orng/src/orng.cpp \
+        -o /app/contracts/orng/orng.wasm \
+        --contract orng \
+        -O2 2>&1" && \
+    echo "[✓] orng.wasm compilado." || {
+        echo "[!] ERRO: falha na compilação do ORNG."
+        echo "    Verifique se o container tem WAX CDT com suporte a crypto_ext.hpp."
+        exit 1
+    }
+
+# ── 8b-4. Deploy do contrato ORNG em orng.wax ───────────────────────────────
+echo "[*] Deploy do contrato ORNG em orng.wax..."
+cleos set contract orng.wax /app/contracts/orng -p orng.wax@active
+cleos set account permission orng.wax active --add-code -p orng.wax@active 2>/dev/null || true
+echo "[✓] ORNG deployado em orng.wax."
+
+# ── 8b-5. Registra chave pública RSA no contrato ───────────────────────────
+echo "[*] Registrando chave RSA no contrato orng.wax..."
+cleos push action orng.wax regkey \
+    "[1, \"${ORNG_RSA_EXPONENT}\", \"${ORNG_RSA_MODULUS}\"]" \
+    -p orng.wax@active
+cleos push action orng.wax setver '[1]' -p orng.wax@active
+echo "[✓] Chave RSA v1 registrada e ativada."
+
+# ── 8b-6. Grava variáveis RSA no .waxdev.env ───────────────────────────────
+echo "ORNG_RSA_PRIVATE_KEY_PATH=$(realpath "$ORNG_RSA_PRIV")" >> .waxdev.env
+echo "ORNG_RSA_EXPONENT=${ORNG_RSA_EXPONENT}"                 >> .waxdev.env
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 8c. CONFIGURA signer_key DO CONTRATO
@@ -504,6 +574,43 @@ echo "CONTAINER_NAME=$CONTAINER_NAME" >> .waxdev.env
 echo "[✓] Chain ID: $CHAIN_ID"
 
 fi # fim SKIP_BLOCKCHAIN
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8d. START DO DAEMON ORACLE ORNG
+# Iniciado fora do bloco SKIP_BLOCKCHAIN para ser reiniciado mesmo em --envs.
+# ──────────────────────────────────────────────────────────────────────────────
+source .waxdev.env 2>/dev/null || true
+
+# Para daemon anterior se existir
+if [ -f ".orng-oracle.pid" ]; then
+    OLD_PID=$(cat .orng-oracle.pid 2>/dev/null || true)
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "[*] Parando oracle daemon anterior (PID $OLD_PID)..."
+        kill "$OLD_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    rm -f .orng-oracle.pid
+fi
+
+ORACLE_LOG="$(pwd)/logs/orng-oracle.log"
+mkdir -p "$(pwd)/logs"
+
+echo "[*] Iniciando oracle daemon ORNG em background..."
+if command -v npx &>/dev/null && [ -f "$(pwd)/scripts/orng-oracle.ts" ]; then
+    RPC_URL="http://127.0.0.1:8888" \
+    CHAIN_ID="${CHAIN_ID:-8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f}" \
+    ORNG_WAX_KEY="${ORNG_WAX_KEY:-}" \
+    ORNG_RSA_PRIVATE_KEY_PATH="${ORNG_RSA_PRIVATE_KEY_PATH:-$(pwd)/contracts/orng/dev-rsa-private.pem}" \
+    ORNG_POLL_INTERVAL_MS="2000" \
+    npx ts-node --project tsconfig.json "$(pwd)/scripts/orng-oracle.ts" \
+        >> "$ORACLE_LOG" 2>&1 &
+    ORACLE_PID=$!
+    echo "$ORACLE_PID" > .orng-oracle.pid
+    echo "[✓] Oracle daemon iniciado (PID $ORACLE_PID). Log: $ORACLE_LOG"
+else
+    echo "[!] Aviso: npx não encontrado ou scripts/orng-oracle.ts ausente."
+    echo "    Inicie manualmente: npx ts-node scripts/orng-oracle.ts"
+fi
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 10. PROPAGA .waxdev.env → .env DOS APPS
@@ -552,22 +659,25 @@ _upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localh
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
 
 F="apps/worker-game-loop/.env"
-_upsert_env "$F" "CHAIN_ID"                 "$CHAIN_ID"
-_upsert_env "$F" "RPC_URL"                  "http://127.0.0.1:8888"
-_upsert_env "$F" "CONTRACT_ACCOUNT"         "bingo.game"
-_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${MICROSERVICE_KEY:-}"
-_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGO_GAME_KEY:-}"
-_upsert_env "$F" "POSTGRES_URL"             "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
-_upsert_env "$F" "REDIS_URL"                "redis://localhost:6379"
-_upsert_env "$F" "RABBITMQ_URL"             "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"
-_upsert_env "$F" "RABBITMQ_MAX_RETRIES"     "3"
-_upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
-_upsert_env "$F" "WS_PORT"                  "8085"
-_upsert_env "$F" "REVEAL_INTERVAL"          "3000"
-_upsert_env "$F" "WS_MAX_CONNECTIONS_PER_IP" "10"
-_upsert_env "$F" "ALLOWED_ORIGIN"           "http://localhost:5173"
-_upsert_env "$F" "METRICS_PORT"             "9091"
-_upsert_env "$F" "INDEXER_INTERVAL_MS"      "15000"
+_upsert_env "$F" "CHAIN_ID"                    "$CHAIN_ID"
+_upsert_env "$F" "RPC_URL"                     "http://127.0.0.1:8888"
+_upsert_env "$F" "CONTRACT_ACCOUNT"            "bingo.game"
+_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY"    "${MICROSERVICE_KEY:-}"
+_upsert_env "$F" "CONTRACT_PRIVATE_KEY"        "${BINGO_GAME_KEY:-}"
+_upsert_env "$F" "POSTGRES_URL"                "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
+_upsert_env "$F" "REDIS_URL"                   "redis://localhost:6379"
+_upsert_env "$F" "RABBITMQ_URL"                "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"
+_upsert_env "$F" "RABBITMQ_MAX_RETRIES"        "3"
+_upsert_env "$F" "JWT_SECRET"                  "$JWT_SECRET"
+_upsert_env "$F" "WS_PORT"                     "8085"
+_upsert_env "$F" "REVEAL_INTERVAL"             "3000"
+_upsert_env "$F" "WS_MAX_CONNECTIONS_PER_IP"   "10"
+_upsert_env "$F" "ALLOWED_ORIGIN"              "http://localhost:5173"
+_upsert_env "$F" "METRICS_PORT"                "9091"
+_upsert_env "$F" "INDEXER_INTERVAL_MS"         "15000"
+_upsert_env "$F" "ORNG_RSA_PRIVATE_KEY_PATH"   "${ORNG_RSA_PRIVATE_KEY_PATH:-$(pwd)/contracts/orng/dev-rsa-private.pem}"
+_upsert_env "$F" "ORNG_WAX_KEY"                "${ORNG_WAX_KEY:-}"
+_upsert_env "$F" "ORNG_POLL_INTERVAL_MS"       "2000"
 
 _upsert_env ".env" "EOSIO_KEY"              "$EOSIO_PRIV"
 _upsert_env ".env" "CHAIN_ID"               "$CHAIN_ID"
@@ -641,22 +751,26 @@ echo "[*] Gerando .dev.env..."
     grep -v '^#' "apps/worker-game-loop/.env" 2>/dev/null | grep -v '^$' || true
 } > .dev.env
 
+ORACLE_PID_DISPLAY=$(cat .orng-oracle.pid 2>/dev/null || echo "não iniciado")
 echo ""
 echo "════════════════════════════════════════════════"
 echo "✅ Ambiente CryptoBingo pronto!"
 echo "════════════════════════════════════════════════"
 echo ""
-echo "  Container : $CONTAINER_NAME"
-echo "  RPC       : http://127.0.0.1:${NODEOS_PORT}"
-echo "  Chain ID  : ${CHAIN_ID:-desconhecido}"
+echo "  Container    : $CONTAINER_NAME"
+echo "  RPC          : http://127.0.0.1:${NODEOS_PORT}"
+echo "  Chain ID     : ${CHAIN_ID:-desconhecido}"
+echo "  ORNG oracle  : PID $ORACLE_PID_DISPLAY | Log: logs/orng-oracle.log"
+echo "  RSA keypair  : contracts/orng/dev-rsa-private.pem"
 echo ""
 echo "  Próximos passos:"
 echo "    docker compose up -d"
 echo "    pnpm dev"
 echo ""
 echo "  Úteis:"
-echo "    Logs nodeos : docker exec $CONTAINER_NAME tail -f /root/nodeos.log"
-echo "    Shell       : docker exec -it $CONTAINER_NAME bash"
-echo "    Reset       : bash init_dev_env.sh --reset"
-echo "    Só .env     : bash init_dev_env.sh --envs"
+echo "    Logs nodeos  : docker exec $CONTAINER_NAME tail -f /root/nodeos.log"
+echo "    Logs oracle  : tail -f logs/orng-oracle.log"
+echo "    Shell        : docker exec -it $CONTAINER_NAME bash"
+echo "    Reset        : bash init_dev_env.sh --reset"
+echo "    Só .env      : bash init_dev_env.sh --envs"
 echo ""

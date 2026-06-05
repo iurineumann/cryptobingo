@@ -9,7 +9,7 @@
 //   Passo 3   — buytickets (ADR-001, assinatura contextual)
 //   Passo 4   — lockgame   → FUNDING → LOCKED
 //   Passo 5   — startdraw  → LOCKED → DRAWING
-//   Passo 5.5 — fulfillrand (oráculo mock) → DRAWING → DRAWN
+//   Passo 5   — startdraw + waitForDrawn → oracle daemon assina via RSA → DRAWN
 //   Passo 6   — claimwin → DRAWN → PAYING (ADR-012: multi-winner support)
 //   Passo 6.5 — closegame → PAYING → ARCHIVED (ADR-012)
 //   Passo 7   — withdraw
@@ -39,7 +39,6 @@ const client  = new APIClient({ url });
 const eosioKey  = PrivateKey.from(process.env.EOSIO_KEY!);
 const playerKey = PrivateKey.from(process.env.JOGADOR1_KEY!);
 const bingoKey  = PrivateKey.from(process.env.BINGO_GAME_KEY!);
-const orngKey   = PrivateKey.from(process.env.ORNG_WAX_KEY!);
 
 function makeSession(actor: string, key: PrivateKey) {
     return new Session({
@@ -54,7 +53,6 @@ const rootSession   = makeSession('eosio',        eosioKey);
 const bingoSession  = makeSession('bingo.game',   bingoKey);
 const playerSession = makeSession('jogador1',     playerKey);
 const microSession  = makeSession('microservice', eosioKey);
-const orngSession   = makeSession('orng.wax',     orngKey);
 
 const PATTERN_ID_ROW0 = UInt64.from(1);
 const PATTERN_ID_ROW1 = UInt64.from(2);
@@ -107,6 +105,19 @@ async function getGameStatus(gameIdStr: string): Promise<string> {
         limit: 1, json: true,
     });
     return res.rows[0]?.status ?? 'not_found';
+}
+
+// Aguarda o oracle daemon ORNG responder e o jogo transitar para 'drawn'.
+// O daemon polela a tabela reqs de orng.wax, assina com RSA e chama setrand.
+// Timeout configurável (padrão: 30 tentativas × 2s = 60s).
+async function waitForDrawn(gameIdStr: string, attempts = 30): Promise<void> {
+    for (let i = 0; i < attempts; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const status = await getGameStatus(gameIdStr);
+        if (status === 'drawn') return;
+        if (status !== 'drawing') throw new Error(`Estado inesperado: ${status}`);
+    }
+    throw new Error(`Timeout: jogo ${gameIdStr} ainda em 'drawing' após ${attempts * 2}s. Oracle daemon rodando?`);
 }
 
 // ==========================================
@@ -219,16 +230,16 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         console.log('   ✅ status: locked');
     });
 
-    test('Passo 5: startdraw → LOCKED → DRAWING', async () => {
+    test('Passo 5: startdraw → LOCKED → DRAWING → DRAWN (oracle ORNG real)', async () => {
+        // startdraw transita para DRAWING e emite requestrand para orng.wax.
+        // O daemon oracle detecta o pedido, assina com RSA e chama setrand.
+        // O contrato verifica, deriva as bolas e chama receiverand → DRAWN.
         await transact(microSession, 'bingo.game', 'startdraw', { game_id: mainGameId });
-        console.log('   ✅ status: drawing');
-    });
-
-    test('Passo 5.5: fulfillrand → DRAWING → DRAWN', async () => {
-        await transact(orngSession, 'orng.wax', 'fulfillrand', { assoc_id: mainGameId });
-        expect(await getGameStatus(mainGameIdStr)).toBe('drawn');
-        console.log('   ✅ status: drawn');
-    });
+        expect(await getGameStatus(mainGameIdStr)).toBe('drawing');
+        console.log('   ✅ status: drawing — aguardando daemon oracle...');
+        await waitForDrawn(mainGameIdStr);
+        console.log('   ✅ status: drawn (oracle ORNG respondeu)');
+    }, 90_000); // 90s timeout — daemon polela a cada 2s
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 6: claimwin → DRAWN → PAYING (ADR-012: multi-winner)', async () => {
@@ -410,13 +421,13 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         await transact(playerSession, 'bingo.game', 'buytickets', {
             buyer: owner, game_id: mmGameId, matrices: [matrixBytes], signatures: [sig], nft_id: 0,
         });
-        await transact(microSession, 'bingo.game', 'lockgame',   { game_id: mmGameId });
-        await transact(microSession, 'bingo.game', 'startdraw',  { game_id: mmGameId });
-        await transact(orngSession,  'orng.wax',   'fulfillrand', { assoc_id: mmGameId });
+        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: mmGameId });
+        await transact(microSession, 'bingo.game', 'startdraw', { game_id: mmGameId });
+        await waitForDrawn(mmGameIdStr);
 
         expect(await getGameStatus(mmGameIdStr)).toBe('drawn');
-        console.log('   ✅ Jogo MULTI_MATCH sorteado → status: drawn');
-    });
+        console.log('   ✅ Jogo MULTI_MATCH sorteado → status: drawn (oracle ORNG)');
+    }, 90_000);
 
     test('MM-2: claimstage stage 1 → DRAWN → PAYING', async () => {
         const ticketRes = await client.v1.chain.get_table_rows({
@@ -487,9 +498,9 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         await transact(playerSession, 'bingo.game', 'buytickets', {
             buyer: owner, game_id: payingGameId, matrices: [matrixBytes], signatures: [sig], nft_id: 0,
         });
-        await transact(microSession, 'bingo.game', 'lockgame',   { game_id: payingGameId });
-        await transact(microSession, 'bingo.game', 'startdraw',  { game_id: payingGameId });
-        await transact(orngSession,  'orng.wax',   'fulfillrand', { assoc_id: payingGameId });
+        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: payingGameId });
+        await transact(microSession, 'bingo.game', 'startdraw', { game_id: payingGameId });
+        await waitForDrawn(payingGameStr);
 
         const ticketRes = await client.v1.chain.get_table_rows({
             code: 'bingo.game', scope: payingGameStr, table: 'tickets', limit: 1, json: true,
@@ -508,5 +519,5 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         });
         expect(await getGameStatus(payingGameStr)).toBe('aborted');
         console.log('   ✅ abortgame aceita status paying → aborted');
-    });
+    }, 90_000);
 });
