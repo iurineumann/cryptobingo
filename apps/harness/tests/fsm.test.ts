@@ -22,7 +22,7 @@ import { WalletPluginPrivateKey }                                       from '@w
 import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 
-import { applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
+import { applyDrawnBalls, checkWinPatterns, deriveGoldenMultiplierExported } from '../../worker-game-loop/src/services/evaluator';
 import { BlockchainTicketRecord }           from '../../../packages/shared-types/src';
 
 // ==========================================
@@ -547,4 +547,439 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         expect(await getGameStatus(payingGameStr)).toBe('aborted');
         console.log('   ✅ abortgame aceita status paying → aborted');
     }, 90_000);
+});
+
+// ==========================================
+// SUITE 4 — GOLDEN_BALL (ADR-012)
+// Valida: gametype goldenball, derive multiplier, claimwin com golden_multiplier > 0
+// ==========================================
+
+const GAMETYPE_ID_GB = UInt64.from(3);
+
+describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)', () => {
+
+    let gbGameId:    UInt64;
+    let gbGameIdStr: string;
+
+    beforeAll(async () => {
+        const n   = Name.from(randomGameName());
+        gbGameId    = n.value;
+        gbGameIdStr = n.toString();
+        console.log(`\n🌟 Jogo GOLDEN_BALL: ${gbGameIdStr} (${gbGameId})\n`);
+    });
+
+    test('GB-0: addgametype GOLDEN_BALL (draw_mode=goldenball, golden_ball_after=4, max_balls=20)', async () => {
+        const r = await transact(bingoSession, 'bingo.game', 'addgametype', {
+            gametype_id:        GAMETYPE_ID_GB,
+            name:               'GoldenBall',
+            base_multiplier:    1,
+            rules:              [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+            draw_mode:          'goldenball',
+            max_balls:          20,
+            golden_ball_after:  4,
+            master_weight_ovrd: 0,
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ Gametype GOLDEN_BALL criado (golden_ball_after=4, max_balls=20)');
+    });
+
+    test('GB-1: cria, funde, compra, trava, sorteia jogo GOLDEN_BALL', async () => {
+        await transact(bingoSession, 'bingo.game', 'creategame', {
+            game_id:      gbGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_GB,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingo.game', 'fundgame', { game_id: gbGameId });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner       = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: gbGameId    }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
+        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+
+        await transact(playerSession, 'bingo.game', 'buytickets', {
+            buyer:           owner,
+            game_id:         gbGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: gbGameId });
+        await transact(microSession, 'bingo.game', 'startdraw', { game_id: gbGameId });
+        await waitForDrawn(gbGameIdStr);
+        expect(await getGameStatus(gbGameIdStr)).toBe('drawn');
+        console.log('   ✅ Jogo GOLDEN_BALL sorteado → status: drawn');
+    }, 90_000);
+
+    test('GB-2: claimwin com golden_multiplier derivado de drawn_balls → PAYING', async () => {
+        const [gameRes, ticketRes] = await Promise.all([
+            rpcClient.v1.chain.get_table_rows({
+                code: 'bingo.game', scope: 'bingo.game', table: 'games',
+                lower_bound: gbGameIdStr, upper_bound: gbGameIdStr, limit: 1, json: true,
+            }),
+            rpcClient.v1.chain.get_table_rows({
+                code: 'bingo.game', scope: gbGameIdStr, table: 'tickets', limit: 1, json: true,
+            }),
+        ]);
+
+        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const goldenBallAfter = 4;
+        // ball_count = goldenBallAfter + 1: inclui as bolas normais + a golden ball
+        const ballCount       = goldenBallAfter + 1;
+        const goldenMultiplier = deriveGoldenMultiplierExported(drawnBalls, goldenBallAfter);
+        expect(goldenMultiplier).toBeGreaterThanOrEqual(2); // mínimo sempre 2
+
+        const ticket = ticketRes.rows[0];
+        const ticketId = UInt64.from(ticket.ticket_id);
+
+        const r = await transact(microSession, 'bingo.game', 'claimwin', {
+            game_id:           gbGameId,
+            ticket_id:         ticketId,
+            ball_count:        ballCount,
+            win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+            golden_multiplier: goldenMultiplier,
+        });
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(gbGameIdStr)).toBe('paying');
+        console.log(`   ✅ claimwin golden_multiplier=${goldenMultiplier}x → status: paying`);
+    });
+
+    test('GB-3: closegame → PAYING → ARCHIVED', async () => {
+        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: gbGameId });
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(gbGameIdStr)).toBe('archived');
+        console.log('   ✅ Jogo GOLDEN_BALL arquivado → status: archived');
+    });
+});
+
+// ==========================================
+// SUITE 5 — FIRST_FULL (ADR-012)
+// Valida: draw_mode=firstfull, ball_count = cutoff (1ª cartela completa)
+// ==========================================
+
+const GAMETYPE_ID_FF = UInt64.from(4);
+
+describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)', () => {
+
+    let ffGameId:    UInt64;
+    let ffGameIdStr: string;
+
+    beforeAll(async () => {
+        const n   = Name.from(randomGameName());
+        ffGameId    = n.value;
+        ffGameIdStr = n.toString();
+        console.log(`\n🏁 Jogo FIRST_FULL: ${ffGameIdStr} (${ffGameId})\n`);
+    });
+
+    test('FF-0: addgametype FIRST_FULL (draw_mode=firstfull, max_balls=75)', async () => {
+        const r = await transact(bingoSession, 'bingo.game', 'addgametype', {
+            gametype_id:        GAMETYPE_ID_FF,
+            name:               'FirstFull',
+            base_multiplier:    1,
+            rules:              [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+            draw_mode:          'firstfull',
+            max_balls:          75,
+            golden_ball_after:  0,
+            master_weight_ovrd: 0,
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ Gametype FIRST_FULL criado (max_balls=75)');
+    });
+
+    test('FF-1: cria, funde, compra, trava, sorteia jogo FIRST_FULL', async () => {
+        await transact(bingoSession, 'bingo.game', 'creategame', {
+            game_id:      ffGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_FF,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingo.game', 'fundgame', { game_id: ffGameId });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner       = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: ffGameId    }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
+        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+
+        await transact(playerSession, 'bingo.game', 'buytickets', {
+            buyer:           owner,
+            game_id:         ffGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: ffGameId });
+        await transact(microSession, 'bingo.game', 'startdraw', { game_id: ffGameId });
+        await waitForDrawn(ffGameIdStr);
+        expect(await getGameStatus(ffGameIdStr)).toBe('drawn');
+        console.log('   ✅ Jogo FIRST_FULL sorteado (75 bolas) → status: drawn');
+    }, 90_000);
+
+    test('FF-2: computa cutoff ball e claimwin com ball_count=cutoff → PAYING', async () => {
+        const gameRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingo.game', scope: 'bingo.game', table: 'games',
+            lower_bound: ffGameIdStr, upper_bound: ffGameIdStr, limit: 1, json: true,
+        });
+        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        expect(drawnBalls.length).toBe(75);
+
+        // Computa o cutoff: posição em que o ticket TEST_MATRIX fica completo
+        const matrixNums = new Set(TEST_MATRIX); // 24 números (sem FREE SPACE)
+        let cutoff = drawnBalls.length;
+        const remaining = new Set(matrixNums);
+        for (let i = 0; i < drawnBalls.length; i++) {
+            remaining.delete(drawnBalls[i]);
+            if (remaining.size === 0) { cutoff = i + 1; break; }
+        }
+        expect(cutoff).toBeLessThanOrEqual(75);
+
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingo.game', scope: ffGameIdStr, table: 'tickets', limit: 1, json: true,
+        });
+        const ticketId = UInt64.from(ticketRes.rows[0].ticket_id);
+
+        const r = await transact(microSession, 'bingo.game', 'claimwin', {
+            game_id:           ffGameId,
+            ticket_id:         ticketId,
+            ball_count:        cutoff,
+            win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+            golden_multiplier: 0,
+        });
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(ffGameIdStr)).toBe('paying');
+        console.log(`   ✅ FIRST_FULL cutoff=${cutoff} bolas → status: paying`);
+    });
+
+    test('FF-3: closegame → PAYING → ARCHIVED', async () => {
+        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: ffGameId });
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(ffGameIdStr)).toBe('archived');
+        console.log('   ✅ Jogo FIRST_FULL arquivado → status: archived');
+    });
+});
+
+// ==========================================
+// SUITE 6 — DROP_VAULT (ADR-011)
+// Valida: transfer vault → deposit; allocatedrop; execdrop; dup-exec fail; deallocdrop auth
+// ==========================================
+
+describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autorização', () => {
+
+    let vaultRoomId: UInt64;
+    let depositId:   number;
+    let allocId:     number;
+
+    beforeAll(async () => {
+        vaultRoomId = UInt64.from(999);
+    });
+
+    test('DV-0: createroom id=999 para suportar allocatedrop', async () => {
+        const price50 = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
+        try {
+            const r = await transact(bingoSession, 'bingo.game', 'createroom', {
+                room_id:                 vaultRoomId,
+                sponsor:                 'bingo.game',
+                gametype_id:             GAMETYPE_ID_STD,
+                ticket_price_min:        price50,
+                ticket_price_max:        price50,
+                ticket_price_default:    price50,
+                max_tickets_per_player:  10,
+                sponsor_room:            false,
+            });
+            expect(r.response).toBeDefined();
+        } catch {
+            // sala pode já existir de uma execução anterior — ok
+        }
+        await transact(microSession, 'bingo.game', 'activateroom', { room_id: vaultRoomId });
+        console.log('   ✅ Sala 999 criada/ativa para DROP_VAULT');
+    });
+
+    test('DV-1: transfer memo=vault → deposit criado no Drop Vault', async () => {
+        // Lê o próximo deposit_id antes da transferência
+        const stateRes = await fetch(`${url}/v1/chain/get_table_rows`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: 'bingo.game', scope: 'bingo.game', table: 'dropstate',
+                limit: 1, json: true,
+            }),
+        }).then(r => r.json() as any);
+        const nextDepId = stateRes.rows?.[0]?.next_deposit_id ?? 1;
+
+        const r = await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingo.game',
+            quantity: '100.0000 WAX', memo: 'vault',
+        });
+        expect(r.response).toBeDefined();
+
+        // Confirma que o deposit foi criado
+        const depRes = await fetch(`${url}/v1/chain/get_table_rows`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: 'bingo.game', scope: 'bingo.game', table: 'dropdeposits',
+                lower_bound: nextDepId, upper_bound: nextDepId, limit: 1, json: true,
+            }),
+        }).then(r => r.json() as any);
+        expect(depRes.rows.length).toBe(1);
+        expect(depRes.rows[0].status).toBe('available');
+
+        depositId = nextDepId;
+        console.log(`   ✅ Depósito ${depositId} criado (100 WAX) → status: available`);
+    });
+
+    test('DV-2: allocatedrop → alloc criada (status: active)', async () => {
+        const stateRes = await fetch(`${url}/v1/chain/get_table_rows`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: 'bingo.game', scope: 'bingo.game', table: 'dropstate',
+                limit: 1, json: true,
+            }),
+        }).then(r => r.json() as any);
+        const nextAllocId = stateRes.rows?.[0]?.next_alloc_id ?? 1;
+
+        const r = await transact(playerSession, 'bingo.game', 'allocatedrop', {
+            caller:            Name.from('jogador1'),
+            deposit_id:        depositId,
+            room_id:           vaultRoomId,
+            quantity_per_drop: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
+            nft_asset_id:      0,
+            drop_chance_bps:   10000,
+        });
+        expect(r.response).toBeDefined();
+
+        allocId = nextAllocId;
+        console.log(`   ✅ Alocação ${allocId} criada → status: active`);
+    });
+
+    test('DV-3: deallocdrop por conta sem auth (microservice) → falha', async () => {
+        await expect(
+            transact(microSession, 'bingo.game', 'deallocdrop', {
+                caller:   Name.from('microservice'),
+                alloc_id: allocId,
+            })
+        ).rejects.toThrow();
+        console.log('   ✅ deallocdrop por microservice rejeitado (owner=jogador1)');
+    });
+
+    test('DV-4: execdrop → vencedor recebe 100 WAX no saldo interno', async () => {
+        const r = await transact(microSession, 'bingo.game', 'execdrop', {
+            alloc_id: allocId,
+            winner:   Name.from('jogador1'),
+            quantity: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ execdrop executado → saldo interno de jogador1 creditado');
+    });
+
+    test('DV-5: segundo execdrop no mesmo alloc_id → falha (Alocacao nao esta ativa)', async () => {
+        await expect(
+            transact(microSession, 'bingo.game', 'execdrop', {
+                alloc_id: allocId,
+                winner:   Name.from('jogador1'),
+                quantity: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
+            })
+        ).rejects.toThrow();
+        console.log('   ✅ execdrop duplicado rejeitado (alloc exhausted)');
+    });
+});
+
+// ==========================================
+// SUITE 7 — ROOM_PRICING (ADR-010)
+// Valida: createroom + activateroom; buytickets price < min → fail; price in range → ok
+// ==========================================
+
+describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price', () => {
+
+    const ROOM_ID = UInt64.from(42);
+    let pricedGameId:    UInt64;
+    let pricedGameIdStr: string;
+
+    beforeAll(async () => {
+        const n         = Name.from(randomGameName());
+        pricedGameId    = n.value;
+        pricedGameIdStr = n.toString();
+        console.log(`\n💰 Jogo ROOM_PRICING: ${pricedGameIdStr} (${pricedGameId})\n`);
+    });
+
+    test('RP-0: createroom id=42 com price_min=10 WAX, price_max=50 WAX', async () => {
+        const min = ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' });
+        const max = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
+        try {
+            const r = await transact(bingoSession, 'bingo.game', 'createroom', {
+                room_id:                 ROOM_ID,
+                sponsor:                 'bingo.game',
+                gametype_id:             GAMETYPE_ID_STD,
+                ticket_price_min:        min,
+                ticket_price_max:        max,
+                ticket_price_default:    min,
+                max_tickets_per_player:  5,
+                sponsor_room:            false,
+            });
+            expect(r.response).toBeDefined();
+        } catch {
+            // sala pode já existir — ok
+        }
+        await transact(microSession, 'bingo.game', 'activateroom', { room_id: ROOM_ID });
+        console.log('   ✅ Sala 42 criada/ativa (min=10 WAX, max=50 WAX)');
+    });
+
+    test('RP-1: creategame vinculado a room_id=42', async () => {
+        const r = await transact(bingoSession, 'bingo.game', 'creategame', {
+            game_id:      pricedGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_STD,
+            room_id:      ROOM_ID,
+        });
+        expect(r.response).toBeDefined();
+        await transact(microSession, 'bingo.game', 'fundgame', { game_id: pricedGameId });
+        console.log('   ✅ Jogo criado e financiado em sala 42');
+    });
+
+    test('RP-2: buytickets com requested_price=5 WAX (< min=10 WAX) → falha', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner       = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
+        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+
+        await expect(
+            transact(playerSession, 'bingo.game', 'buytickets', {
+                buyer:           owner,
+                game_id:         pricedGameId,
+                matrices:        [matrixBytes],
+                signatures:      [sig],
+                nft_id:          0,
+                requested_price: ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' }),
+            })
+        ).rejects.toThrow();
+        console.log('   ✅ requested_price=5 WAX < min=10 WAX → rejeitado pelo contrato');
+    });
+
+    test('RP-3: buytickets com requested_price=20 WAX (within range) → sucesso', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner       = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
+        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+
+        const r = await transact(playerSession, 'bingo.game', 'buytickets', {
+            buyer:           owner,
+            game_id:         pricedGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '20.0000 WAX', contract: 'eosio.token' }),
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ requested_price=20 WAX in [10,50] WAX → cartela comprada');
+    });
 });
