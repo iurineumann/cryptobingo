@@ -72,7 +72,7 @@
           "type": "extended_asset"
         },
         {
-          "name": "prize_pool",
+          "name": "total_wagered",
           "type": "extended_asset"
         },
         {

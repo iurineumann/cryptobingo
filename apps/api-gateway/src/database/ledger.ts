@@ -18,7 +18,6 @@ export async function ensureLedgerTables(): Promise<void> {
             campaign_id     VARCHAR(32)    NOT NULL DEFAULT '0',
             ticket_price    NUMERIC(18,4)  NOT NULL DEFAULT 0,
             ticket_symbol   VARCHAR(12)    NOT NULL DEFAULT 'WAX',
-            prize_pool      NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_tickets   INTEGER        NOT NULL DEFAULT 0,
             total_wagered   NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_paid_out  NUMERIC(18,4)  NOT NULL DEFAULT 0,
@@ -102,7 +101,6 @@ export async function upsertGameHistory(data: {
     campaign_id:   string;
     ticket_price:  number;
     ticket_symbol: string;
-    prize_pool:    number;
     total_tickets: number;
     total_wagered: number;
     total_paid_out: number;
@@ -116,11 +114,10 @@ export async function upsertGameHistory(data: {
     await pgPool.query(
         `INSERT INTO games_history
             (game_id, status, gametype_id, campaign_id, ticket_price, ticket_symbol,
-             prize_pool, total_tickets, total_wagered, total_paid_out, ggr, rtp_pct, resolved_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             total_tickets, total_wagered, total_paid_out, ggr, rtp_pct, resolved_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          ON CONFLICT (game_id) DO UPDATE SET
             status         = EXCLUDED.status,
-            prize_pool     = EXCLUDED.prize_pool,
             total_tickets  = EXCLUDED.total_tickets,
             total_wagered  = EXCLUDED.total_wagered,
             total_paid_out = EXCLUDED.total_paid_out,
@@ -129,7 +126,7 @@ export async function upsertGameHistory(data: {
             resolved_at    = EXCLUDED.resolved_at`,
         [
             data.game_id, data.status, data.gametype_id, data.campaign_id,
-            data.ticket_price, data.ticket_symbol, data.prize_pool,
+            data.ticket_price, data.ticket_symbol,
             data.total_tickets, data.total_wagered, data.total_paid_out,
             ggr, rtp_pct, data.resolved_at ?? null,
         ]

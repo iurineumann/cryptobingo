@@ -112,7 +112,7 @@ describe('sortTickets — ordenação', () => {
             { id: 'B', matrix: makeMatrix() },
             { id: 'C', matrix: makeMatrix() },
         ];
-        const result = sortTickets(tickets, new Set(), [], new Map(), 0, 75, 'during');
+        const result = sortTickets(tickets, new Set(), [], new Map());
         expect(result.length).toBe(3);
     });
 
@@ -121,7 +121,7 @@ describe('sortTickets — ordenação', () => {
         const t2 = { id: 'many', matrix: makeMatrix() };  // com bolas sorteadas
         const drawnSet = new Set<number>([1, 2, 3, 4, 5, 16, 17]);
 
-        const result = sortTickets([t1, t2], drawnSet, [], new Map(), drawnSet.size, 75, 'during');
+        const result = sortTickets([t1, t2], drawnSet, [], new Map());
         // Ambos têm a mesma matriz — resultado é estável, só verifica que retorna os dois
         expect(result.length).toBe(2);
     });
@@ -136,7 +136,7 @@ describe('sortTickets — ordenação por fase', () => {
         const winnerMap = new Map<string, WinnerInfo>([
             ['winner', { prize: '10.00', patternName: 'TestLine', totalPrize: 10, patternCount: 1 }],
         ]);
-        const result = sortTickets(tickets, new Set(), [SIMPLE_PATTERN], winnerMap, 0, 75, 'after');
+        const result = sortTickets(tickets, new Set(), [SIMPLE_PATTERN], winnerMap);
         expect(result[0].id).toBe('winner');
     });
 });
@@ -146,7 +146,7 @@ describe('sortTickets — ordenação por fase', () => {
 describe('groupTicketsByCategory', () => {
     it('retorna grupos não-vazios', () => {
         const tickets = [{ id: 'T1', matrix: makeMatrix() }];
-        const groups = groupTicketsByCategory(tickets, new Set(), [], new Map(), 0, 75, 'during');
+        const groups = groupTicketsByCategory(tickets, new Set(), [], new Map());
         const total = groups.reduce((sum, g) => sum + g.tickets.length, 0);
         expect(total).toBe(1);
     });
@@ -156,7 +156,7 @@ describe('groupTicketsByCategory', () => {
             { id: 'A', matrix: makeMatrix() },
             { id: 'B', matrix: makeMatrix() },
         ];
-        const groups = groupTicketsByCategory(tickets, new Set(), [], new Map(), 0, 75, 'during');
+        const groups = groupTicketsByCategory(tickets, new Set(), [], new Map());
         const allIds = groups.flatMap(g => g.tickets.map(t => t.id));
         const unique = [...new Set(allIds)];
         expect(allIds.length).toBe(unique.length);

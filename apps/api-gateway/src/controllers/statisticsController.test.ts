@@ -143,7 +143,7 @@ describe('syncGameToLedger', () => {
             rows: [{
                 game_id: '1', status: 'archived', gametype_id: '0',
                 ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-                prize_pool:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
+                total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
                 drawn_balls: [],
             }],
             more: false,

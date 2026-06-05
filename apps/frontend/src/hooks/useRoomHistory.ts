@@ -23,7 +23,7 @@ export interface RoomGameRow {
   gameId:          string;
   status:          string;
   endTime:         number;
-  prizePool:       string;
+  totalWagered:       string;
   ticketPrice:     string;
   totalTickets:    number;
   totalPlayers:    number;
@@ -97,13 +97,13 @@ export function useRoomHistory(session: Session | null | undefined, roomId: stri
             : [];
 
           const owners         = new Set(tickets.map(t => t.owner));
-          const sym            = (game.prize_pool?.quantity ?? '').trim().split(' ').slice(1).join(' ') || 'BINGO';
+          const sym            = (game.total_wagered?.quantity ?? '').trim().split(' ').slice(1).join(' ') || 'BINGO';
 
           collected.push({
             gameId:          game.game_id,
             status:          game.status,
             endTime:         game.end_time,
-            prizePool:       game.prize_pool?.quantity ?? '—',
+            totalWagered:       game.total_wagered?.quantity ?? '—',
             ticketPrice:     game.ticket_price?.quantity ?? '—',
             totalTickets:    tickets.length,
             totalPlayers:    owners.size,

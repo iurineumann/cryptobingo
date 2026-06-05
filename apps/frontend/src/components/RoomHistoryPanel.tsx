@@ -51,7 +51,7 @@ export default function RoomHistoryPanel({
     let sym = 'BINGO';
     for (const r of rows) {
       totalTickets += r.totalTickets;
-      const { amount, symbol } = parseQty(r.prizePool);
+      const { amount, symbol } = parseQty(r.totalWagered);
       totalWagered += amount;
       if (symbol) sym = symbol;
       if (r.totalPaidOut != null) totalPaid += r.totalPaidOut;
@@ -114,7 +114,7 @@ export default function RoomHistoryPanel({
       {rows.length > 0 && (
         <div className="hist-list">
           {rows.map(r => {
-            const pool      = parseQty(r.prizePool);
+            const pool      = parseQty(r.totalWagered);
             const isAborted = r.status === 'aborted';
 
             return (

@@ -85,7 +85,7 @@ function makeGame(overrides: Partial<any> = {}) {
         game_id: '1', status: 'drawn', gametype_id: '0',
         drawn_balls: DRAWN_BALLS,
         ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-        prize_pool:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
+        total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
         room_id: '1',
         ...overrides,
     };

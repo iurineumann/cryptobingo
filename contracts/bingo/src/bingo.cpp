@@ -81,7 +81,7 @@ namespace bingo {
             g.game_id      = game_id;
             g.status       = "created"_n;
             g.ticket_price = ticket_price;
-            g.prize_pool   = extended_asset(asset(0, ticket_price.quantity.symbol), ticket_price.contract);
+            g.total_wagered = extended_asset(asset(0, ticket_price.quantity.symbol), ticket_price.contract);
             g.gametype_id  = gametype_id;
             g.room_id      = room_id;
             g.end_time     = time_point_sec(0);
@@ -298,7 +298,7 @@ namespace bingo {
             } else {
                 balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
             }
-            // ADR-005: acumula payout do prize_pool para cálculo do GGR em closegame
+            // ADR-005: acumula payout para cálculo do GGR em closegame
             games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
         }
         // Jogo permanece em "paying". Worker chama closegame() após todos os stages.
@@ -497,7 +497,7 @@ namespace bingo {
                 "Saldo insuficiente: Token nao registrado.");
             check(bal_itr->balance >= total_cost, "Saldo insuficiente.");
             balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance -= total_cost; });
-            games.modify(game_itr, get_self(), [&](auto& g) { g.prize_pool += total_cost; });
+            games.modify(game_itr, get_self(), [&](auto& g) { g.total_wagered += total_cost; });
         }
 
         for (size_t i = 0; i < matrices.size(); ++i) {
@@ -627,33 +627,26 @@ namespace bingo {
         balances_table balances(get_self(), winner.value);
         extended_asset payout;
 
-        if (game_itr->gametype_id == 0) {
-            payout = game_itr->prize_pool;
-            payout.quantity.amount = (payout.quantity.amount * 85) / 100;
-        } else {
-            gametypes_table gametypes(get_self(), get_self().value);
-            auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
-            uint16_t win_weight = 0;
-            for (const auto& rule : gt_itr->rules) {
-                patterns_table patterns(get_self(), get_self().value);
-                auto pat_itr = patterns.find(rule.pattern_id);
-                if (pat_itr != patterns.end() && (uint64_t)pat_itr->mask == win_pattern_mask) {
-                    win_weight = rule.weight;
-                    break;
-                }
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
+        uint16_t win_weight = 0;
+        for (const auto& rule : gt_itr->rules) {
+            patterns_table patterns(get_self(), get_self().value);
+            auto pat_itr = patterns.find(rule.pattern_id);
+            if (pat_itr != patterns.end() && (uint64_t)pat_itr->mask == win_pattern_mask) {
+                win_weight = rule.weight;
+                break;
             }
-            check(win_weight > 0, "win_pattern_mask nao corresponde a nenhum padrao do gametype.");
-            // Usa o preço efetivo do ticket para respeitar preços variáveis (ADR-010).
-            payout = ticket_itr->price.quantity.amount > 0
-                ? ticket_itr->price
-                : game_itr->ticket_price;  // fallback para tickets legados sem price
-            payout.quantity.amount =
-                payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
+        }
+        check(win_weight > 0, "win_pattern_mask nao corresponde a nenhum padrao do gametype.");
+        payout = ticket_itr->price.quantity.amount > 0
+            ? ticket_itr->price
+            : game_itr->ticket_price;
+        payout.quantity.amount =
+            payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
 
-            // ADR-012: aplica golden_multiplier se > 1 (GOLDEN_BALL mode)
-            if (golden_multiplier > 1) {
-                payout.quantity.amount *= (int64_t)golden_multiplier;
-            }
+        if (golden_multiplier > 1) {
+            payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
         if (payout.quantity.amount > 0) {
@@ -663,7 +656,7 @@ namespace bingo {
             } else {
                 balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
             }
-            // ADR-005: acumula payout do prize_pool para cálculo do GGR em closegame
+            // ADR-005: acumula payout do total_wagered para cálculo do GGR em closegame
             games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
             game_itr = games.find(game_id);
         }
@@ -708,14 +701,14 @@ namespace bingo {
         }
 
         if (needs_archive) {
-            // ADR-005: calcula GGR = prize_pool - total_paid e acumula no pool
-            int64_t ggr_amount = game_itr->prize_pool.quantity.amount - game_itr->total_paid;
+            // ADR-005: calcula GGR = total_wagered - total_paid e acumula no pool
+            int64_t ggr_amount = game_itr->total_wagered.quantity.amount - game_itr->total_paid;
             if (ggr_amount > 0) {
                 ggr_pool_table ggr_pool(get_self(), get_self().value);
-                auto ggr_key = game_itr->prize_pool.quantity.symbol.code().raw();
+                auto ggr_key = game_itr->total_wagered.quantity.symbol.code().raw();
                 auto ggr_itr = ggr_pool.find(ggr_key);
                 if (ggr_itr == ggr_pool.end()) {
-                    extended_asset ggr_entry = game_itr->prize_pool;
+                    extended_asset ggr_entry = game_itr->total_wagered;
                     ggr_entry.quantity.amount = ggr_amount;
                     ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
                 } else {

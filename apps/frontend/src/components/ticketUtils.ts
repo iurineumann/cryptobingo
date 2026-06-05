@@ -59,35 +59,9 @@ export function weightToPrize(weight: number): string {
   return (weight / 100).toFixed(2);
 }
 
-export function computeProximityScore(matrix: number[], drawnSet: Set<number>, patterns: Pattern[]): number {
-  const B    = matrix.slice(0, 5);
-  const I    = matrix.slice(5, 10);
-  const Nraw = matrix.slice(10, 14);
-  const G    = matrix.slice(14, 19);
-  const O    = matrix.slice(19, 24);
-  const N    = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
-  const flat: (number | null)[] = [];
-  for (let r = 0; r < 5; r++) flat.push(B[r], I[r], N[r], G[r], O[r]);
-
-  let score = 0;
-  for (const p of patterns) {
-    const totalReq = p.cells.filter(Boolean).length;
-    if (totalReq === 0) continue;
-    const markedReq = p.cells.filter((req, i) => {
-      if (!req) return false;
-      return flat[i] === null || drawnSet.has(flat[i] as number);
-    }).length;
-    const prizeVal = parseFloat(p.prize) || 0;
-    score += (markedReq / totalReq) * prizeVal;
-  }
-  return score;
-}
-
 // ==========================================
-// SORT / GROUP UTILITIES
+// COMPOSITE SCORE FOR TICKET SORTING
 // ==========================================
-
-export type GamePhase = 'during' | 'after';
 
 export interface WinnerInfo {
   prize: string;
@@ -101,8 +75,6 @@ export interface TicketEntry {
   matrix: number[];
 }
 
-// ── Ticket flat helper ──
-
 function ticketFlat(matrix: number[]): (number | null)[] {
   const B    = matrix.slice(0, 5);
   const I    = matrix.slice(5, 10);
@@ -115,157 +87,51 @@ function ticketFlat(matrix: number[]): (number | null)[] {
   return flat;
 }
 
-// ── Metrics ──
-
-interface PatternMetrics {
-  completionPct: number;
-  weightedScore: number;
-  cellsRemaining: number;
+export interface TicketScore {
+  completedScore: number;
+  proximityScore: number;
+  markedCells: number;
 }
 
-function computePatternMetrics(matrix: number[], drawnSet: Set<number>, pattern: Pattern): PatternMetrics {
+export function computeTicketCompositeScore(
+  matrix: number[],
+  drawnSet: Set<number>,
+  patterns: Pattern[],
+): TicketScore {
   const flat = ticketFlat(matrix);
-  const totalReq = pattern.cells.filter(Boolean).length;
-  const cellsMissing = pattern.cells
-    .map((req, i) => ({ req, val: flat[i] }))
-    .filter(c => c.req && c.val !== null && !drawnSet.has(c.val as number));
-  const marked = totalReq - cellsMissing.length;
-  const pct = totalReq > 0 ? marked / totalReq : 0;
-  const prizeVal = parseFloat(pattern.prize) || 0;
-  return { completionPct: pct, weightedScore: pct * prizeVal, cellsRemaining: cellsMissing.length };
-}
+  let completedScore = 0;
+  let proximityScore = 0;
+  let markedCells = 0;
 
-interface TicketCombinationMetrics {
-  bestPattern: string;
-  combinedScore: number;
-  nearCompleteCount: number;
-  patternAffinities: Map<string, PatternMetrics>;
-}
-
-function computeCombinationMetrics(matrix: number[], drawnSet: Set<number>, patterns: Pattern[]): TicketCombinationMetrics {
-  const affinities = new Map<string, PatternMetrics>();
-  let combinedScore = 0;
-  let nearCompleteCount = 0;
-  let bestPattern = '';
-  let bestWeighted = -1;
+  for (let i = 0; i < 24; i++) {
+    if (drawnSet.has(matrix[i])) markedCells++;
+  }
 
   for (const p of patterns) {
-    const m = computePatternMetrics(matrix, drawnSet, p);
-    affinities.set(p.name, m);
-    combinedScore += m.weightedScore;
-    if (m.cellsRemaining <= 2 && m.cellsRemaining > 0) nearCompleteCount++;
-    if (m.weightedScore > bestWeighted) {
-      bestWeighted = m.weightedScore;
-      bestPattern = m.weightedScore > 0 || m.completionPct >= 1 / 25 ? p.name : '';
+    const prizeVal = parseFloat(p.prize) || 0;
+    const totalReq = p.cells.filter(Boolean).length;
+    if (totalReq === 0) continue;
+
+    let marked = 0;
+    for (let i = 0; i < 25; i++) {
+      if (!p.cells[i]) continue;
+      if (i === 12 || (flat[i] !== null && drawnSet.has(flat[i] as number))) {
+        marked++;
+      }
+    }
+
+    if (marked >= totalReq) {
+      completedScore += prizeVal;
+    } else {
+      proximityScore += (marked / totalReq) * prizeVal;
     }
   }
-  return { bestPattern, combinedScore, nearCompleteCount, patternAffinities: affinities };
+
+  return { completedScore, proximityScore, markedCells };
 }
 
-// ── Sort durante a partida ──
-
-function sortDuringGame(
-  tickets: TicketEntry[],
-  drawnSet: Set<number>,
-  patterns: Pattern[],
-  winnerMap: Map<string, WinnerInfo>,
-): TicketEntry[] {
-  const multiWinners: TicketEntry[] = [];
-  const singleWinners: TicketEntry[] = [];
-  const others: TicketEntry[] = [];
-  for (const t of tickets) {
-    const w = winnerMap.get(t.id);
-    if (!w) others.push(t);
-    else if (w.patternCount > 1) multiWinners.push(t);
-    else singleWinners.push(t);
-  }
-  multiWinners.sort((a, b) => {
-    const pA = winnerMap.get(a.id)?.totalPrize ?? 0;
-    const pB = winnerMap.get(b.id)?.totalPrize ?? 0;
-    if (pA !== pB) return pB - pA;
-    const cA = winnerMap.get(a.id)?.patternCount ?? 0;
-    const cB = winnerMap.get(b.id)?.patternCount ?? 0;
-    return cB - cA;
-  });
-  singleWinners.sort((a, b) => {
-    const pA = parseFloat(winnerMap.get(a.id)?.prize || '0') || 0;
-    const pB = parseFloat(winnerMap.get(b.id)?.prize || '0') || 0;
-    return pB - pA;
-  });
-
-  const metricsCache = new Map<string, TicketCombinationMetrics>();
-  for (const t of others) {
-    metricsCache.set(t.id, computeCombinationMetrics(t.matrix, drawnSet, patterns));
-  }
-
-  const patternGroups = new Map<string, { tickets: TicketEntry[]; bestCombined: number }>();
-  for (const t of others) {
-    const m = metricsCache.get(t.id)!;
-    const key = m.bestPattern || '__none__';
-    let g = patternGroups.get(key);
-    if (!g) { g = { tickets: [], bestCombined: 0 }; patternGroups.set(key, g); }
-    g.tickets.push(t);
-    if (m.combinedScore > g.bestCombined) g.bestCombined = m.combinedScore;
-  }
-
-  const sortedGroups = [...patternGroups.entries()]
-    .filter(([key]) => key !== '__none__')
-    .sort(([, a], [, b]) => b.bestCombined - a.bestCombined);
-
-  const noneGroup = patternGroups.get('__none__');
-  const result = [...multiWinners, ...singleWinners];
-  for (const [, group] of sortedGroups) {
-    group.tickets.sort((a, b) => {
-      const mA = metricsCache.get(a.id)!;
-      const mB = metricsCache.get(b.id)!;
-      if (mA.combinedScore !== mB.combinedScore) return mB.combinedScore - mA.combinedScore;
-      if (mA.nearCompleteCount !== mB.nearCompleteCount) return mB.nearCompleteCount - mA.nearCompleteCount;
-      const mAcount = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-      const mBcount = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-      return mBcount - mAcount;
-    });
-    result.push(...group.tickets);
-  }
-  if (noneGroup) {
-    noneGroup.tickets.sort((a, b) => {
-      const m = metricsCache.get(a.id)!;
-      const n = metricsCache.get(b.id)!;
-      if (m.combinedScore !== n.combinedScore) return n.combinedScore - m.combinedScore;
-      const mAcount = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-      const mBcount = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-      return mBcount - mAcount;
-    });
-    result.push(...noneGroup.tickets);
-  }
-  return result;
-}
-
-// ── Sort após o encerramento ──
-
-function sortAfterGame(
-  tickets: TicketEntry[],
-  drawnSet: Set<number>,
-  patterns: Pattern[],
-  winnerMap: Map<string, WinnerInfo>,
-): TicketEntry[] {
-  if (tickets.length === 0) return tickets;
-  return [...tickets].sort((a, b) => {
-    const wA = winnerMap.get(a.id);
-    const wB = winnerMap.get(b.id);
-    if (wA && !wB) return -1;
-    if (!wA && wB) return 1;
-    if (wA && wB) {
-      if (wA.patternCount !== wB.patternCount) return wB.patternCount - wA.patternCount;
-      if (wA.totalPrize !== wB.totalPrize) return wB.totalPrize - wA.totalPrize;
-    }
-    const proxA = computeProximityScore(a.matrix, drawnSet, patterns);
-    const proxB = computeProximityScore(b.matrix, drawnSet, patterns);
-    if (proxA !== proxB) return proxB - proxA;
-    const mA = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-    const mB = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-    if (mA !== mB) return mB - mA;
-    return a.id.localeCompare(b.id);
-  });
+function ticketCompositeSortKey(score: TicketScore): number {
+  return score.completedScore * 1_000_000_000 + score.proximityScore * 1_000_000 + score.markedCells;
 }
 
 export function sortTickets(
@@ -273,13 +139,31 @@ export function sortTickets(
   drawnSet: Set<number>,
   patterns: Pattern[],
   winnerMap: Map<string, WinnerInfo>,
-  _drawnCount: number,
-  _maxBalls: number,
-  phase: GamePhase = 'after',
+  _drawnCount?: number,
+  _maxBalls?: number,
 ): TicketEntry[] {
   if (tickets.length === 0) return tickets;
-  if (phase === 'during') return sortDuringGame(tickets, drawnSet, patterns, winnerMap);
-  return sortAfterGame(tickets, drawnSet, patterns, winnerMap);
+
+  const scoreCache = new Map<string, number>();
+  for (const t of tickets) {
+    const score = computeTicketCompositeScore(t.matrix, drawnSet, patterns);
+    scoreCache.set(t.id, ticketCompositeSortKey(score));
+  }
+
+  return [...tickets].sort((a, b) => {
+    const wA = winnerMap.get(a.id);
+    const wB = winnerMap.get(b.id);
+    if (wA && !wB) return -1;
+    if (!wA && wB) return 1;
+    if (wA && wB) {
+      if (wA.totalPrize !== wB.totalPrize) return wB.totalPrize - wA.totalPrize;
+      if (wA.patternCount !== wB.patternCount) return wB.patternCount - wA.patternCount;
+    }
+    const kA = scoreCache.get(a.id)!;
+    const kB = scoreCache.get(b.id)!;
+    if (kA !== kB) return kB - kA;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 export interface GroupedTickets {
@@ -294,16 +178,7 @@ export function groupTicketsByCategory(
   drawnSet: Set<number>,
   patterns: Pattern[],
   winnerMap: Map<string, WinnerInfo>,
-  _drawnCount: number,
-  _maxBalls: number,
-  phase: GamePhase = 'after',
 ): GroupedTickets[] {
-  if (phase !== 'during') {
-    if (tickets.length === 0) return [];
-    const sorted = sortAfterGame(tickets, drawnSet, patterns, winnerMap);
-    return [{ category: 'all', label: 'Tickets', icon: '🎯', tickets: sorted }];
-  }
-
   const multiWinners: TicketEntry[] = [];
   const singleWinners: TicketEntry[] = [];
   const others: TicketEntry[] = [];
@@ -313,19 +188,23 @@ export function groupTicketsByCategory(
     else if (w.patternCount > 1) multiWinners.push(t);
     else singleWinners.push(t);
   }
-  multiWinners.sort((a, b) => {
-    const pA = winnerMap.get(a.id)?.totalPrize ?? 0;
-    const pB = winnerMap.get(b.id)?.totalPrize ?? 0;
-    if (pA !== pB) return pB - pA;
-    const cA = winnerMap.get(a.id)?.patternCount ?? 0;
-    const cB = winnerMap.get(b.id)?.patternCount ?? 0;
-    return cB - cA;
-  });
-  singleWinners.sort((a, b) => {
-    const pA = parseFloat(winnerMap.get(a.id)?.prize || '0') || 0;
-    const pB = parseFloat(winnerMap.get(b.id)?.prize || '0') || 0;
-    return pB - pA;
-  });
+
+  const sortByComposite = (ts: TicketEntry[]) => {
+    const cache = new Map<string, number>();
+    for (const t of ts) {
+      const score = computeTicketCompositeScore(t.matrix, drawnSet, patterns);
+      cache.set(t.id, ticketCompositeSortKey(score));
+    }
+    ts.sort((a, b) => {
+      const kA = cache.get(a.id)!;
+      const kB = cache.get(b.id)!;
+      if (kA !== kB) return kB - kA;
+      return a.id.localeCompare(b.id);
+    });
+  };
+
+  sortByComposite(multiWinners);
+  sortByComposite(singleWinners);
 
   const groups: GroupedTickets[] = [];
   if (multiWinners.length > 0)
@@ -333,33 +212,52 @@ export function groupTicketsByCategory(
   if (singleWinners.length > 0)
     groups.push({ category: 'single-winner', label: 'Winners', icon: '🥇', tickets: singleWinners });
 
-  const metricsCache = new Map<string, TicketCombinationMetrics>();
-  for (const t of others) metricsCache.set(t.id, computeCombinationMetrics(t.matrix, drawnSet, patterns));
+  const scoreCache = new Map<string, { key: number; bestPattern: string }>();
+  for (const t of others) {
+    const score = computeTicketCompositeScore(t.matrix, drawnSet, patterns);
+    const key = ticketCompositeSortKey(score);
+
+    let bestPattern = '';
+    let bestProximity = 0;
+    for (const p of patterns) {
+      const prizeVal = parseFloat(p.prize) || 0;
+      const totalReq = p.cells.filter(Boolean).length;
+      if (totalReq === 0) continue;
+      const flat = ticketFlat(t.matrix);
+      let marked = 0;
+      for (let i = 0; i < 25; i++) {
+        if (!p.cells[i]) continue;
+        if (i === 12 || (flat[i] !== null && drawnSet.has(flat[i] as number))) marked++;
+      }
+      const prox = marked < totalReq ? (marked / totalReq) * prizeVal : 0;
+      if (prox > bestProximity) {
+        bestProximity = prox;
+        bestPattern = p.name;
+      }
+    }
+    scoreCache.set(t.id, { key, bestPattern: bestPattern || '__none__' });
+  }
 
   const patternGroups = new Map<string, TicketEntry[]>();
   for (const t of others) {
-    const m = metricsCache.get(t.id)!;
-    const key = m.bestPattern || '__none__';
-    if (!patternGroups.has(key)) patternGroups.set(key, []);
-    patternGroups.get(key)!.push(t);
+    const entry = scoreCache.get(t.id)!;
+    if (!patternGroups.has(entry.bestPattern)) patternGroups.set(entry.bestPattern, []);
+    patternGroups.get(entry.bestPattern)!.push(t);
   }
 
   const groupEntries = [...patternGroups.entries()]
     .filter(([k]) => k !== '__none__')
     .sort(([, aTickets], [, bTickets]) => {
-      const aBest = aTickets.reduce((max, t) => Math.max(max, metricsCache.get(t.id)!.combinedScore), 0);
-      const bBest = bTickets.reduce((max, t) => Math.max(max, metricsCache.get(t.id)!.combinedScore), 0);
+      const aBest = aTickets.reduce((max, t) => Math.max(max, scoreCache.get(t.id)!.key), 0);
+      const bBest = bTickets.reduce((max, t) => Math.max(max, scoreCache.get(t.id)!.key), 0);
       return bBest - aBest;
     })
     .map(([name, ts]) => {
       ts.sort((a, b) => {
-        const mA = metricsCache.get(a.id)!;
-        const mB = metricsCache.get(b.id)!;
-        if (mA.combinedScore !== mB.combinedScore) return mB.combinedScore - mA.combinedScore;
-        if (mA.nearCompleteCount !== mB.nearCompleteCount) return mB.nearCompleteCount - mA.nearCompleteCount;
-        const aMarked = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-        const bMarked = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-        return bMarked - aMarked;
+        const kA = scoreCache.get(a.id)!.key;
+        const kB = scoreCache.get(b.id)!.key;
+        if (kA !== kB) return kB - kA;
+        return a.id.localeCompare(b.id);
       });
       return { category: `pattern:${name}`, label: name, icon: '🎲', tickets: ts };
     });
@@ -368,12 +266,10 @@ export function groupTicketsByCategory(
   const noneTickets = patternGroups.get('__none__');
   if (noneTickets && noneTickets.length > 0) {
     noneTickets.sort((a, b) => {
-      const mA = metricsCache.get(a.id)!;
-      const mB = metricsCache.get(b.id)!;
-      if (mA.combinedScore !== mB.combinedScore) return mB.combinedScore - mA.combinedScore;
-      const aMarked = a.matrix.filter(n => drawnSet.has(n)).length + 1;
-      const bMarked = b.matrix.filter(n => drawnSet.has(n)).length + 1;
-      return bMarked - aMarked;
+      const kA = scoreCache.get(a.id)!.key;
+      const kB = scoreCache.get(b.id)!.key;
+      if (kA !== kB) return kB - kA;
+      return a.id.localeCompare(b.id);
     });
     groups.push({ category: 'none', label: 'Other', icon: '📋', tickets: noneTickets });
   }
