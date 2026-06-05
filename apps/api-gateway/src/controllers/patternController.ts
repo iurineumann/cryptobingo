@@ -10,20 +10,25 @@ import { Request, Response } from 'express';
 import { Session }           from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
+import { UInt64 }            from '@wharfkit/antelope';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
 import mongoose, { Schema, Document } from 'mongoose';
+import { redisClient }       from '../database/redis';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+const PATTERN_CACHE_TTL     = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
 
 interface GametypeMetadataDocument extends Document {
-    gametype_id: string;
-    description: string;
+    gametype_id:  string;
+    description:  string;
     cover_image_url: string;
     rules_summary: string;
-    sort_order: number;
+    sort_order:   number;
+    rules:        Array<{ pattern_id: string; weight: number; type: string }>;
+    combinations: Array<Record<string, unknown>>;
 }
 
 const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
@@ -32,6 +37,8 @@ const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
     cover_image_url: { type: String, default: '' },
     rules_summary:   { type: String, default: '' },
     sort_order:      { type: Number, default: 0 },
+    rules:           { type: [{ pattern_id: String, weight: Number, type: String }], default: [] },
+    combinations:    { type: [Schema.Types.Mixed], default: [] },
 }, { timestamps: true });
 
 const GametypeMetadataModel = mongoose.model<GametypeMetadataDocument>('GametypeMetadata', GametypeMetadataSchema);
@@ -318,6 +325,85 @@ export async function getGametypeMetadataPublic(req: Request, res: Response): Pr
     } catch (err) {
         console.error('[PatternCtrl] Erro ao buscar metadados públicos do gametype:', err);
         res.status(500).json({ error: 'Erro ao buscar metadados.' });
+    }
+}
+
+/**
+ * GET /api/v1/gametypes/:gametypeId/patterns  (público)
+ * Retorna padrões on-chain + combinações off-chain em uma única chamada,
+ * com cache Redis (TTL 1h).
+ *
+ * Cache key: pattern:gametype:{gametypeId} (alinhado ao worker patternCache.ts)
+ *
+ * Response: {
+ *   patterns:     { name, mask, weight }[]   — on-chain
+ *   rules:        { pattern_id, weight, type }[] — MongoDB extended rules
+ *   combinations: CombinationRuleDoc[]        — MongoDB combos
+ * }
+ */
+export async function getGametypePatternsPublic(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+
+    try {
+        // 1. Tenta Redis cache
+        if (redisClient.isOpen) {
+            const cached = await redisClient.get(`pattern:gametype:${gametypeId}`);
+            if (cached) {
+                res.status(200).json(JSON.parse(cached));
+                return;
+            }
+        }
+
+        // 2. Cache miss: busca on-chain patterns
+        const gtRes = await rpcClient.v1.chain.get_table_rows({
+            code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'gametypes',
+            lower_bound: UInt64.from(gametypeId), upper_bound: UInt64.from(gametypeId),
+            limit: 1, json: true,
+        });
+        if (!gtRes.rows.length) {
+            res.status(404).json({ error: 'Gametype não encontrado on-chain.' });
+            return;
+        }
+        const gametype = gtRes.rows[0] as BlockchainGametype;
+
+        const patterns: Array<{ name: string; mask: string; weight: number }> = [];
+        for (const rule of gametype.rules) {
+            const patRes = await rpcClient.v1.chain.get_table_rows({
+                code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'patterns',
+                lower_bound: UInt64.from(String(rule.pattern_id)),
+                upper_bound: UInt64.from(String(rule.pattern_id)),
+                limit: 1, json: true,
+            });
+            if (patRes.rows.length) {
+                const p = patRes.rows[0] as BlockchainPattern;
+                patterns.push({ name: p.name, mask: String(p.mask), weight: rule.weight });
+            }
+        }
+
+        // 3. Cache miss: busca combinations + extended rules do MongoDB
+        const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId })
+            .select('rules combinations')
+            .lean();
+
+        const payload = {
+            patterns,
+            rules:        (metadata as any)?.rules        ?? [],
+            combinations: (metadata as any)?.combinations ?? [],
+        };
+
+        // 4. Popula o cache Redis
+        if (redisClient.isOpen) {
+            await redisClient.set(
+                `pattern:gametype:${gametypeId}`,
+                JSON.stringify(payload),
+                { EX: PATTERN_CACHE_TTL },
+            );
+        }
+
+        res.status(200).json(payload);
+    } catch (err) {
+        console.error('[PatternCtrl] Erro ao buscar padrões do gametype:', err);
+        res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
 

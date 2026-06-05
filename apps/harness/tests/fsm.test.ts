@@ -23,10 +23,11 @@ import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wh
 import * as dotenv from 'dotenv';
 import * as path   from 'path';
 
-import { WIN_PATTERNS, applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
-import type { BlockchainTicketRecord }                      from '../../../packages/shared-types/src';
+import { applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
+import { BlockchainTicketRecord }           from '../../../packages/shared-types/src';
 
-dotenv.config({ path: path.resolve(__dirname, '../../../.dune.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.waxdev.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../apps/worker-game-loop/.env') });
 
 // ==========================================
 // CONFIG
@@ -53,6 +54,9 @@ const rootSession   = makeSession('eosio',        eosioKey);
 const bingoSession  = makeSession('bingo.game',   bingoKey);
 const playerSession = makeSession('jogador1',     playerKey);
 const microSession  = makeSession('microservice', eosioKey);
+
+const MASK_ROW0 = BigInt(1082401); // bits 0,5,10,15,20
+const MASK_ROW1 = BigInt(2164802); // bits 1,6,11,16,21
 
 const PATTERN_ID_ROW0 = UInt64.from(1);
 const PATTERN_ID_ROW1 = UInt64.from(2);
@@ -154,8 +158,8 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 0: Seed patterns (ROW_0, ROW_1) e gametype Standard', async () => {
-        const row0Mask = Number(WIN_PATTERNS.ROW_0);
-        const row1Mask = Number(WIN_PATTERNS.ROW_1);
+        const row0Mask = Number(MASK_ROW0);
+        const row1Mask = Number(MASK_ROW1);
 
         await transact(bingoSession, 'bingo.game', 'addpattern', {
             pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: row0Mask,
@@ -258,9 +262,9 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const ticketId = UInt64.from(ticket.ticket_id);
 
         const finalState = applyDrawnBalls(ticket, drawnBalls.slice(0, 35)); // ADR-012: usa 35 bolas
-        let winPatternMask = UInt64.from(WIN_PATTERNS.ROW_0.toString()); // fallback
+        let winPatternMask = UInt64.from(MASK_ROW0.toString()); // fallback
 
-        for (const [, mask] of Object.entries(WIN_PATTERNS)) {
+        for (const mask of [MASK_ROW0, MASK_ROW1]) {
             if ((BigInt(finalState) & mask) === mask) {
                 winPatternMask = UInt64.from(mask.toString()); break;
             }
@@ -442,7 +446,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             ticket_id:        ticketId,
             stage:            1,
             ball_count:       35,
-            win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_0.toString()),
+            win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mmGameIdStr)).toBe('paying');
@@ -461,7 +465,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             ticket_id:        ticketId,
             stage:            2,
             ball_count:       35,
-            win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_1.toString()),
+            win_pattern_mask: UInt64.from(MASK_ROW1.toString()),
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mmGameIdStr)).toBe('paying');
@@ -508,7 +512,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         // Leva jogo a PAYING via claimwin
         await transact(microSession, 'bingo.game', 'claimwin', {
             game_id: payingGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
-            ball_count: 35, win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_0.toString()),
+            ball_count: 35, win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: 0,
         });
         expect(await getGameStatus(payingGameStr)).toBe('paying');
