@@ -290,10 +290,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         const hasNftDrop   = room.metadata?.drops?.some(d => d.template_id != null) ?? false;
                         const hasTokenDrop = room.metadata?.drops?.some(d => d.amount != null)       ?? false;
 
-                        // Cartelas vendidas na partida atual (prize_pool / ticket_price)
+                        // Cartelas vendidas na partida atual (total_wagered / ticket_price)
                         const ticketsSold = (() => {
                             if (!currentGame) return null;
-                            const pool  = parseFloat(currentGame.prize_pool?.quantity?.split(' ')[0] ?? '0');
+                            const pool  = parseFloat(currentGame.total_wagered?.quantity?.split(' ')[0] ?? '0');
                             const price = parseFloat(currentGame.ticket_price?.quantity?.split(' ')[0] ?? '0');
                             return pool > 0 && price > 0 ? Math.round(pool / price) : null;
                         })();

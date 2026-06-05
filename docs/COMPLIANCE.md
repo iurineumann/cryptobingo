@@ -41,12 +41,12 @@ A lei exige que o dinheiro dos apostadores não se misture com o caixa operacion
 
 A plataforma deve deixar claro qual é a taxa de retorno ao jogador ($RTP$) e a receita bruta do jogo ($GGR$).
 
-* **Aplicação Técnica:** A matemática do prêmio é resolvida atomicamente na action `claimwin()`. A divisão do `prize_pool` é hardcoded no contrato.
+* **Aplicação Técnica:** A matemática do prêmio é resolvida atomicamente na action `claimwin()`. A divisão do `total_wagered` é hardcoded no contrato.
 
-$$GGR = \lfloor prize\_pool \times 0.15 \rfloor$$
+$$GGR = \lfloor total\_wagered \times 0.15 \rfloor$$
 
 
-$$RTP = prize\_pool - GGR$$
+$$RTP = total\_wagered - GGR$$
 
 
 

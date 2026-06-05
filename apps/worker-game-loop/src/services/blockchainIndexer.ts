@@ -21,7 +21,6 @@ async function ensureTables(): Promise<void> {
             campaign_id     VARCHAR(32)    NOT NULL DEFAULT '0',
             ticket_price    NUMERIC(18,4)  NOT NULL DEFAULT 0,
             ticket_symbol   VARCHAR(12)    NOT NULL DEFAULT 'WAX',
-            prize_pool      NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_tickets   INTEGER        NOT NULL DEFAULT 0,
             total_wagered   NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_paid_out  NUMERIC(18,4)  NOT NULL DEFAULT 0,
@@ -83,13 +82,12 @@ async function indexGames(): Promise<void> {
 
     for (const game of games) {
         const ticketPrice = game.ticket_price;
-        const prizePool = game.prize_pool;
         const ticketSymbol = ticketPrice.quantity.split(' ')[1] ?? 'WAX';
         const ticketPriceNum = parseFloat(ticketPrice.quantity) || 0;
-        const prizePoolNum = parseFloat(prizePool.quantity) || 0;
+        const totalWagered = parseFloat(game.total_wagered?.quantity ?? '0') || 0;
+        const totalPaidOut = Math.abs(game.total_paid ?? 0);
 
         let totalTickets = 0;
-        let totalWagered = 0;
         if (['locked', 'drawing', 'drawn', 'archived', 'aborted'].includes(game.status)) {
             try {
                 const ticketRes = await rpcClient.v1.chain.get_table_rows({
@@ -103,7 +101,6 @@ async function indexGames(): Promise<void> {
                 totalTickets = ticketRes.rows.length > 0
                     ? parseInt(ticketRes.rows[ticketRes.rows.length - 1].ticket_id) || 0
                     : 0;
-                totalWagered = totalTickets * ticketPriceNum;
             } catch { }
         }
 
@@ -113,19 +110,18 @@ async function indexGames(): Promise<void> {
                 : null
             : null;
 
-        const ggr = totalWagered - prizePoolNum;
-        const rtpPct = totalWagered > 0 ? prizePoolNum / totalWagered : 0;
+        const ggr = totalWagered - totalPaidOut;
+        const rtpPct = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
 
         await pgPool.query(
             `INSERT INTO games_history
                 (game_id, status, gametype_id, campaign_id,
-                 ticket_price, ticket_symbol, prize_pool,
+                 ticket_price, ticket_symbol,
                  total_tickets, total_wagered, total_paid_out,
                  ggr, rtp_pct, resolved_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
              ON CONFLICT (game_id) DO UPDATE SET
                 status         = EXCLUDED.status,
-                prize_pool     = EXCLUDED.prize_pool,
                 total_tickets  = EXCLUDED.total_tickets,
                 total_wagered  = EXCLUDED.total_wagered,
                 total_paid_out = EXCLUDED.total_paid_out,
@@ -134,8 +130,8 @@ async function indexGames(): Promise<void> {
                 resolved_at    = EXCLUDED.resolved_at`,
             [
                 game.game_id, game.status, game.gametype_id ?? '0', game.campaign_id ?? '0',
-                ticketPriceNum, ticketSymbol, prizePoolNum,
-                totalTickets, totalWagered, prizePoolNum,
+                ticketPriceNum, ticketSymbol,
+                totalTickets, totalWagered, totalPaidOut,
                 ggr, rtpPct, resolvedAt,
             ]
         );

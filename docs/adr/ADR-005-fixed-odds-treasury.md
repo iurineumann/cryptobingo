@@ -43,7 +43,7 @@ A plataforma CryptoBingo precisa de uma mecânica de pagamentos que seja atrativ
 Fórmula implementada na action `claimwin()`:
 ```cpp
 // Multiplicação antes da divisão — previne Precision Loss (SPEC.md §2.2)
-extended_asset rtp = game_itr->prize_pool;
+extended_asset rtp = game_itr->total_wagered;
 rtp.quantity.amount = (rtp.quantity.amount * 85) / 100;
 ```
 - GGR (15%) permanece na conta do contrato (não é subtraído explicitamente)
@@ -70,7 +70,7 @@ Implementado em `claimwin()` para jogos com `gametype_id > 0`:
 payout.quantity.amount =
     payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
 ```
-- Modo legado (`gametype_id = 0`): RTP fixo 85% do prize_pool (retrocompatível)
+- Modo legado (`gametype_id = 0`): RTP fixo 85% do total_wagered (retrocompatível)
 - `win_weight`: extraído da regra do gametype cujo `pattern.mask == win_pattern_mask`
 - Worker off-chain seleciona o max_weight entre todos os padrões vencedores da cartela
 
@@ -121,8 +121,8 @@ Action `sweepggr(name token_contract, symbol_code sym)` (auth: `bingo.game`):
 Acumulação do GGR:
 
 - `game_state.total_paid` (int64, default 0): acumulado em `claimwin` e `claimstage`
-- `closegame`: calcula `ggr = prize_pool.amount - total_paid`; se `ggr > 0`, acumula em `ggrpool`
-- Jogos sem vencedor (`drawn → archived` direto): 100% do prize_pool vai para GGR
+- `closegame`: calcula `ggr = total_wagered.amount - total_paid`; se `ggr > 0`, acumula em `ggrpool`
+- Jogos sem vencedor (`drawn → archived` direto): 100% do total_wagered vai para GGR
 - GGR de sponsor_pool não é capturado (sponsors contribuem 100% como prêmio)
 
 Tabela `ggrpool` (multi_index, chave: `symbol_code.raw()`): acumulador persistente, um row por token.
