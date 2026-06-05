@@ -46,6 +46,22 @@
                 {
                     "name": "rules",
                     "type": "pattern_rule[]"
+                },
+                {
+                    "name": "draw_mode",
+                    "type": "name"
+                },
+                {
+                    "name": "max_balls",
+                    "type": "uint8"
+                },
+                {
+                    "name": "golden_ball_after",
+                    "type": "uint8"
+                },
+                {
+                    "name": "master_weight_ovrd",
+                    "type": "uint8"
                 }
             ]
         },
@@ -120,6 +136,36 @@
                 {
                     "name": "nft_id",
                     "type": "uint64"
+                },
+                {
+                    "name": "requested_price",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "claimstage",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ticket_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "stage",
+                    "type": "uint8"
+                },
+                {
+                    "name": "ball_count",
+                    "type": "uint8"
+                },
+                {
+                    "name": "win_pattern_mask",
+                    "type": "uint64"
                 }
             ]
         },
@@ -142,6 +188,10 @@
                 {
                     "name": "win_pattern_mask",
                     "type": "uint64"
+                },
+                {
+                    "name": "golden_multiplier",
+                    "type": "uint16"
                 }
             ]
         },
@@ -165,6 +215,16 @@
             "fields": [
                 {
                     "name": "campaign_id",
+                    "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "closegame",
+            "base": "",
+            "fields": [
+                {
+                    "name": "game_id",
                     "type": "uint64"
                 }
             ]
@@ -368,8 +428,8 @@
                     "type": "uint64"
                 },
                 {
-                    "name": "random_bytes",
-                    "type": "bytes"
+                    "name": "random_value",
+                    "type": "checksum256"
                 }
             ]
         },
@@ -452,12 +512,68 @@
             ]
         },
         {
+            "name": "setstages",
+            "base": "",
+            "fields": [
+                {
+                    "name": "gametype_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "stages",
+                    "type": "stage_rule[]"
+                }
+            ]
+        },
+        {
+            "name": "settreasury",
+            "base": "",
+            "fields": [
+                {
+                    "name": "account",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "stage_rule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "stage",
+                    "type": "uint8"
+                },
+                {
+                    "name": "patterns_required",
+                    "type": "uint8"
+                },
+                {
+                    "name": "weight",
+                    "type": "uint16"
+                }
+            ]
+        },
+        {
             "name": "startdraw",
             "base": "",
             "fields": [
                 {
                     "name": "game_id",
                     "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "sweepggr",
+            "base": "",
+            "fields": [
+                {
+                    "name": "token_contract",
+                    "type": "name"
+                },
+                {
+                    "name": "sym",
+                    "type": "symbol_code"
                 }
             ]
         },
@@ -508,6 +624,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "claimstage",
+            "type": "claimstage",
+            "ricardian_contract": ""
+        },
+        {
             "name": "claimwin",
             "type": "claimwin",
             "ricardian_contract": ""
@@ -520,6 +641,11 @@
         {
             "name": "closecmpgn",
             "type": "closecmpgn",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "closegame",
+            "type": "closegame",
             "ricardian_contract": ""
         },
         {
@@ -613,8 +739,23 @@
             "ricardian_contract": ""
         },
         {
+            "name": "setstages",
+            "type": "setstages",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "settreasury",
+            "type": "settreasury",
+            "ricardian_contract": ""
+        },
+        {
             "name": "startdraw",
             "type": "startdraw",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "sweepggr",
+            "type": "sweepggr",
             "ricardian_contract": ""
         },
         {

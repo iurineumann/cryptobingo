@@ -107,6 +107,16 @@
 [DONE] `healthController.ts` — /health/live + /health/ready + 5 testes, skip rate limiter (2026-06-04).
 [DONE] `dropWorker.ts` — BlockchainDrop* de shared-types, sem interfaces locais redundantes (2026-06-04).
 
+## [DONE] Sprint — QA Prize Calculation + Harness E2E (2026-06-05)
+
+[DONE] Prize calc bugs fixed: `buildWinnerPayloads` + `processAllGameWinners` now use `ticket.price?.quantity` (ADR-010); combination weights drive frontend `computeWinnerMap`.
+[DONE] `computeWinnerMap` extracted to `ticketUtils.ts` as pure function + `LocalWinnerRecord` interface.
+[DONE] 57 new tests: `evaluator.payout.test.ts` (34), `ticketUtils.test.ts` +23, `gameOrchestrator.test.ts` +7.
+[DONE] `patternCache.ts` — Redis-backed pattern cache (TTL 1h, fail-open); `evaluator.ts` delegates.
+[DONE] `GET /api/v1/gametypes/:gametypeId/patterns` — public endpoint combining on-chain + MongoDB.
+[DONE] `broadcaster.ts` — `NO_PARTICIPANTS` abort reason; worker aborts 0-ticket games pre-lock.
+[DONE] Harness E2E 20/20 — root cause: `orng.wax` ABI missing `reqs` table (CDT bug). Fixed: hand-maintained `contracts/orng/orng.abi` with `request` struct + `reqs` table; `init_dev_env.sh` now copies hand-maintained ABI into container before deploy. Total: 273 tests (100 worker + 110 API + 43 frontend + 20 E2E).
+
 ### Baixa prioridade / Futuro
 
 [ ] `bingo.swap` — contrato DEX x*y=k (fora do escopo atual).

@@ -135,11 +135,10 @@ export async function syncGameToLedger(req: Request, res: Response): Promise<voi
 
         // Extrai valores
         const [priceAmount, priceSymbol] = game.ticket_price.quantity.split(' ');
-        const [poolAmount]               = game.prize_pool.quantity.split(' ');
-        const ticketPrice   = parseFloat(priceAmount);
-        const prizePool     = parseFloat(poolAmount);
-        const totalWagered  = ticketPrice * totalTickets;
-        const totalPaidOut  = totalWagered * 0.85; // RTP 85% — legado (gametype_id=0)
+        const [wageredAmount]            = game.total_wagered.quantity.split(' ');
+        const ticketPrice     = parseFloat(priceAmount);
+        const totalWagered    = parseFloat(wageredAmount);
+        const totalPaidOut    = parseFloat(String(game.total_paid ?? 0));
 
         await upsertGameHistory({
             game_id:       game.game_id,
@@ -148,9 +147,8 @@ export async function syncGameToLedger(req: Request, res: Response): Promise<voi
             campaign_id:   game.campaign_id ?? '0',
             ticket_price:  ticketPrice,
             ticket_symbol: priceSymbol,
-            prize_pool:    prizePool,
-            total_tickets: totalTickets,
             total_wagered: totalWagered,
+            total_tickets: totalTickets,
             total_paid_out: totalPaidOut,
             resolved_at:   game.end_time ? new Date(game.end_time * 1000) : undefined,
         });

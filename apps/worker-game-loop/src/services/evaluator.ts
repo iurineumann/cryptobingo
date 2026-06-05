@@ -1,9 +1,8 @@
 // apps/worker-game-loop/src/services/evaluator.ts
 // Motor de avaliação de cartelas vencedoras.
 //
-// ADR-004 Fase 2: Quando o jogo tem gametype_id > 0, os padrões e pesos
-// são buscados on-chain da tabela `patterns`/`gametypes`. Caso contrário,
-// usa as 12 máscaras estáticas compiladas (modo legado).
+// ADR-004 Fase 2: Padrões e pesos são buscados on-chain da tabela
+// `patterns`/`gametypes`. Todo jogo tem gametype_id > 0.
 //
 // ADR-005 Fase 2: checkWinPatterns (plural) retorna TODOS os padrões
 // vencedores de uma cartela. O worker seleciona o de maior weight (max_weight)
@@ -11,9 +10,10 @@
 
 import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@cryptobingo/blockchain-core';
 import { UInt64 } from '@wharfkit/antelope';
-import type { BlockchainTicketRecord, BlockchainGametype, BlockchainPattern, DrawMode } from '@cryptobingo/shared-types';
+import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
+import { fetchPatternsWithCache } from './patternCache';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -46,10 +46,8 @@ async function recordClaimWin(
     }
 }
 
-function computePayoutAmount(
+export function computePayoutAmount(
     ticketQuantity: string,
-    prizePoolQuantity: string,
-    gametypeId: string,
     baseMultiplier: number,
     weight: number,
     goldenMultiplier: number,
@@ -57,11 +55,6 @@ function computePayoutAmount(
     const priceParts = ticketQuantity.split(' ');
     const priceNum = parseFloat(priceParts[0]);
     const currency = priceParts.slice(1).join(' ') || 'WAX';
-
-    if (gametypeId === '0') {
-        const ppNum = parseFloat(prizePoolQuantity.split(' ')[0]);
-        return { amount: Math.round(ppNum * 85) / 100, currency };
-    }
 
     let payout = priceNum * baseMultiplier * weight / 100;
     if (goldenMultiplier > 1) {
@@ -82,33 +75,6 @@ function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[]
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 
 // ==========================================
-// PADRÕES ESTÁTICOS — MODO LEGADO (gametype_id = 0)
-//
-// Layout de bit da cartela 5x5 (coluna-maior):
-//   Col:  B    I    N    G    O
-//  Row0: [0]  [5]  [10] [15] [20]
-//  Row1: [1]  [6]  [11] [16] [21]
-//  Row2: [2]  [7] [12*] [17] [22]   (* FREE SPACE — sempre setado)
-//  Row3: [3]  [8]  [13] [18] [23]
-//  Row4: [4]  [9]  [14] [19] [24]
-// ==========================================
-
-export const WIN_PATTERNS: Record<string, bigint> = {
-    ROW_0:      BigInt((1<<0)|(1<<5)|(1<<10)|(1<<15)|(1<<20)),
-    ROW_1:      BigInt((1<<1)|(1<<6)|(1<<11)|(1<<16)|(1<<21)),
-    ROW_2:      BigInt((1<<2)|(1<<7)|(1<<12)|(1<<17)|(1<<22)),
-    ROW_3:      BigInt((1<<3)|(1<<8)|(1<<13)|(1<<18)|(1<<23)),
-    ROW_4:      BigInt((1<<4)|(1<<9)|(1<<14)|(1<<19)|(1<<24)),
-    COL_B:      BigInt((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)),
-    COL_I:      BigInt((1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)),
-    COL_N:      BigInt((1<<10)|(1<<11)|(1<<12)|(1<<13)|(1<<14)),
-    COL_G:      BigInt((1<<15)|(1<<16)|(1<<17)|(1<<18)|(1<<19)),
-    COL_O:      BigInt((1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)),
-    DIAG_TL_BR: BigInt((1<<0)|(1<<6)|(1<<12)|(1<<18)|(1<<24)),
-    DIAG_TR_BL: BigInt((1<<4)|(1<<8)|(1<<12)|(1<<16)|(1<<20)),
-};
-
-// ==========================================
 // TIPOS
 // ==========================================
 
@@ -116,7 +82,7 @@ export interface WinResult {
     ticket:      BlockchainTicketRecord;
     patternName: string;
     patternMask: bigint;
-    weight:      number; // 0 = modo legado (sem gametype)
+    weight:      number; // weight do padrão vencedor no gametype
 }
 
 /** Par de padrão + weight para avaliação dinâmica. */
@@ -160,75 +126,18 @@ export function checkWinPatterns(state: number, patterns: PatternEntry[]): Patte
     return patterns.filter(p => (stateBig & p.mask) === p.mask);
 }
 
-/**
- * Versão legada — retorna o primeiro padrão vencedor encontrado (compatibilidade).
- * Usado pelos testes unitários e pelo evaluator em modo legado.
- */
-export function checkWinPattern(state: number): { patternName: string; patternMask: bigint } | null {
-    const stateBig = BigInt(state);
-    for (const [patternName, mask] of Object.entries(WIN_PATTERNS)) {
-        if ((stateBig & mask) === mask) {
-            return { patternName, patternMask: mask };
-        }
-    }
-    return null;
-}
-
 // ==========================================
-// BUSCA DE PADRÕES ON-CHAIN (ADR-004 Fase 2)
+// BUSCA DE PADRÕES ON-CHAIN
 // ==========================================
 
 /**
- * Busca os padrões de vitória do gametype on-chain.
- * Retorna null se gametype_id = 0 (modo legado).
+ * Busca os padrões de vitória do gametype, com cache Redis.
+ * Cache key: pattern:gametype:{gametypeId}, TTL 1h.
+ * Fallback para blockchain se Redis indisponível.
+ * Todo jogo tem gametype_id > 0; lança erro se não encontrado.
  */
-async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[] | null> {
-    if (gametypeId === '0') return null;
-
-    // 1. Busca o gametype
-    const gtRes = await rpcClient.v1.chain.get_table_rows({
-        code:        CONTRACT_ACCOUNT,
-        scope:       CONTRACT_ACCOUNT,
-        table:       'gametypes',
-        lower_bound: UInt64.from(gametypeId),
-        upper_bound: UInt64.from(gametypeId),
-        limit:       1,
-        json:        true,
-    });
-
-    if (!gtRes.rows.length) {
-        console.warn(`[Evaluator] gametype_id ${gametypeId} não encontrado on-chain. Usando modo legado.`);
-        return null;
-    }
-
-    const gametype = gtRes.rows[0] as BlockchainGametype;
-
-    // 2. Busca todos os patterns referenciados nas regras do gametype
-    const entries: PatternEntry[] = [];
-
-    for (const rule of gametype.rules) {
-        const patId = UInt64.from(String(rule.pattern_id));
-        const patRes = await rpcClient.v1.chain.get_table_rows({
-            code:        CONTRACT_ACCOUNT,
-            scope:       CONTRACT_ACCOUNT,
-            table:       'patterns',
-            lower_bound: patId,
-            upper_bound: patId,
-            limit:       1,
-            json:        true,
-        });
-
-        if (patRes.rows.length) {
-            const pattern = patRes.rows[0] as BlockchainPattern;
-            entries.push({
-                name:   pattern.name,
-                mask:   BigInt(pattern.mask),
-                weight: rule.weight,
-            });
-        }
-    }
-
-    return entries.length > 0 ? entries : null;
+async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]> {
+    return fetchPatternsWithCache(gametypeId);
 }
 
 // ==========================================
@@ -237,21 +146,15 @@ async function fetchGametypePatterns(gametypeId: string): Promise<PatternEntry[]
 
 /**
  * Varre TODOS os tickets de um jogo e retorna os vencedores.
- *
- * ADR-004 Fase 2: Se o jogo tem gametype_id > 0, usa os padrões on-chain.
+ * Usa os padrões on-chain do gametype para avaliação.
  * ADR-005 Fase 2: Seleciona o padrão de maior weight por cartela (max_weight rule).
- *
- * @param gameId       - ID do jogo
- * @param drawnBalls   - Bolas sorteadas (drawn_balls do jogo)
- * @param gametypeId   - '0' para modo legado; outro valor para modo dinâmico
  */
 export async function findAllWinners(
     gameId:     string,
     drawnBalls: number[],
-    gametypeId: string = '0',
+    gametypeId: string,
 ): Promise<WinResult[]> {
-    // Tenta buscar padrões on-chain; cai para modo legado se não existirem
-    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+    const patterns = await fetchGametypePatterns(gametypeId);
 
     const winners:    WinResult[] = [];
     let lowerBound:   string | undefined = undefined;
@@ -272,34 +175,18 @@ export async function findAllWinners(
 
         for (const ticket of tickets) {
             const finalState = applyDrawnBalls(ticket, drawnBalls);
+            const winningPatterns = checkWinPatterns(finalState, patterns);
 
-            if (dynamicPatterns) {
-                // ── MODO DINÂMICO: todos os padrões do gametype ───────────────
-                const winningPatterns = checkWinPatterns(finalState, dynamicPatterns);
-
-                if (winningPatterns.length > 0) {
-                    // ADR-005: seleciona o padrão de MAIOR weight (max_weight rule)
-                    const best = winningPatterns.reduce(
-                        (prev, curr) => curr.weight > prev.weight ? curr : prev
-                    );
-                    winners.push({
-                        ticket,
-                        patternName: best.name,
-                        patternMask: best.mask,
-                        weight:      best.weight,
-                    });
-                }
-            } else {
-                // ── MODO LEGADO: 12 padrões estáticos compilados ──────────────
-                const winResult = checkWinPattern(finalState);
-                if (winResult) {
-                    winners.push({
-                        ticket,
-                        patternName: winResult.patternName,
-                        patternMask: winResult.patternMask,
-                        weight:      0, // Legado: sem weight
-                    });
-                }
+            if (winningPatterns.length > 0) {
+                const best = winningPatterns.reduce(
+                    (prev, curr) => curr.weight > prev.weight ? curr : prev
+                );
+                winners.push({
+                    ticket,
+                    patternName: best.name,
+                    patternMask: best.mask,
+                    weight:      best.weight,
+                });
             }
         }
 
@@ -324,48 +211,34 @@ export async function findAllWinners(
 async function findAllWinnersWithIndex(
     gameId:     string,
     drawnBalls: number[],
-    gametypeId: string = '0',
+    gametypeId: string,
 ): Promise<WinResult[]> {
-    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+    const patterns = await fetchGametypePatterns(gametypeId);
 
-    // Mapa: ticket_id → estado bitmask acumulado
     const stateMap = new Map<string, number>();
 
-    // Para cada bola sorteada, atualiza o estado dos tickets afetados via índice
     for (const ball of drawnBalls) {
         const entries = await getTicketsForBall(gameId, ball);
         for (const { ticket_id, bit_index } of entries) {
-            const current = stateMap.get(ticket_id) ?? 0x00001000; // bit 12 = FREE SPACE
+            const current = stateMap.get(ticket_id) ?? 0x00001000;
             stateMap.set(ticket_id, current | (1 << bit_index));
         }
     }
 
-    // Avalia cada ticket com estado completo
     const winners: WinResult[] = [];
 
     for (const [ticketId, finalState] of stateMap) {
-        if (dynamicPatterns) {
-            const winningPatterns = checkWinPatterns(finalState, dynamicPatterns);
-            if (winningPatterns.length > 0) {
-                const best = winningPatterns.reduce((a, b) => b.weight > a.weight ? b : a);
-                // Busca os dados completos do ticket (owner) para o payload
-                const ticketData = await fetchTicketById(gameId, ticketId);
-                if (ticketData) {
-                    winners.push({
-                        ticket:      ticketData,
-                        patternName: best.name,
-                        patternMask: best.mask,
-                        weight:      best.weight,
-                    });
-                }
-            }
-        } else {
-            const winResult = checkWinPattern(finalState);
-            if (winResult) {
-                const ticketData = await fetchTicketById(gameId, ticketId);
-                if (ticketData) {
-                    winners.push({ ticket: ticketData, ...winResult, weight: 0 });
-                }
+        const winningPatterns = checkWinPatterns(finalState, patterns);
+        if (winningPatterns.length > 0) {
+            const best = winningPatterns.reduce((a, b) => b.weight > a.weight ? b : a);
+            const ticketData = await fetchTicketById(gameId, ticketId);
+            if (ticketData) {
+                winners.push({
+                    ticket:      ticketData,
+                    patternName: best.name,
+                    patternMask: best.mask,
+                    weight:      best.weight,
+                });
             }
         }
     }
@@ -529,7 +402,6 @@ export async function preComputeMultiMatchCutoffs(
     if (!stages.length) throw new Error(`[MULTI_MATCH] Gametype ${gametypeId} não tem stages.`);
 
     const dynamicPatterns = await fetchGametypePatterns(gametypeId);
-    if (!dynamicPatterns) throw new Error(`[MULTI_MATCH] Nenhum padrão para gametype ${gametypeId}.`);
 
     // Carrega todos os tickets uma vez
     const allTickets: BlockchainTicketRecord[] = [];
@@ -637,44 +509,38 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
         throw new Error(`[Avaliador] Jogo ${gameId} não está em estado 'drawn'. Status: ${game.status}`);
     }
 
-    const gametypeId  = (game as any).gametype_id?.toString() ?? '0';
+    const gametypeId  = (game as any).gametype_id?.toString();
+    if (!gametypeId || gametypeId === '0') {
+        throw new Error(`[Avaliador] Jogo ${gameId} sem gametype_id válido (todos os jogos devem ter gametype_id > 0).`);
+    }
     const hasIndex    = await indexExists(gameId);
 
-    // Busca metadados do gametype para determinar draw_mode e parâmetros
-    let drawMode: DrawMode       = 'standard';
-    let maxBalls: number         = DEFAULT_DRAW_BALLS;
-    let goldenBallAfter: number  = 0;
+    const gtRes = await rpcClient.v1.chain.get_table_rows({
+        code:        CONTRACT_ACCOUNT,
+        scope:       CONTRACT_ACCOUNT,
+        table:       'gametypes',
+        lower_bound: UInt64.from(gametypeId),
+        upper_bound: UInt64.from(gametypeId),
+        limit:       1,
+        json:        true,
+    });
+
+    if (!gtRes.rows.length) {
+        throw new Error(`[Avaliador] gametype_id ${gametypeId} não encontrado on-chain.`);
+    }
+    const gt = gtRes.rows[0] as any;
+    const drawMode: DrawMode = (gt.draw_mode ?? 'standard') as DrawMode;
+    const maxBalls: number   = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
+    const goldenBallAfter: number = gt.golden_ball_after ?? 0;
+    const baseMultiplier: number = gt.base_multiplier ?? 1;
+
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
-    let baseMultiplier: number   = 1;
-
-    if (gametypeId !== '0') {
-        const gtRes = await rpcClient.v1.chain.get_table_rows({
-            code:        CONTRACT_ACCOUNT,
-            scope:       CONTRACT_ACCOUNT,
-            table:       'gametypes',
-            lower_bound: UInt64.from(gametypeId),
-            upper_bound: UInt64.from(gametypeId),
-            limit:       1,
-            json:        true,
-        });
-
-        if (gtRes.rows.length) {
-            const gt = gtRes.rows[0] as any;
-            drawMode       = (gt.draw_mode ?? 'standard') as DrawMode;
-            maxBalls       = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
-            goldenBallAfter= gt.golden_ball_after ?? 0;
-            baseMultiplier = gt.base_multiplier ?? 1;
-        }
-    } else {
-        // Modo legado (gametype_id = 0): aplica padrão de 35 bolas
-        maxBalls = DEFAULT_DRAW_BALLS;
-    }
 
     console.log(
         `🔍 [Avaliador] Modo: ${drawMode} | Bolas: ${maxBalls} | ` +
         `Estratégia: ${hasIndex ? 'Índice O(1)' : 'RPC O(n)'} | ` +
-        `Gametype: ${gametypeId === '0' ? 'legado' : gametypeId}`
+        `Gametype: ${gametypeId}`
     );
 
     // ── MULTI_MATCH: delega para handler especializado ───────────────────────
@@ -756,10 +622,9 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             );
 
             if (txHash) {
+                const actualPrice = ticket.price?.quantity ?? game.ticket_price.quantity;
                 const payout = computePayoutAmount(
-                    game.ticket_price.quantity,
-                    game.prize_pool.quantity,
-                    game.gametype_id,
+                    actualPrice,
                     baseMultiplier,
                     weight,
                     appliedMultiplier,
@@ -796,30 +661,26 @@ export async function processGameWinners(gameId: string, playerWallet: string): 
         return;
     }
 
-    const gametypeId  = (game as any).gametype_id?.toString() ?? '0';
+    const gametypeId  = (game as any).gametype_id?.toString();
+    if (!gametypeId || gametypeId === '0') {
+        console.warn(`⚠️ [Avaliador] Jogo ${gameId} sem gametype_id válido. Pulando auditoria.`);
+        return;
+    }
     const tickets     = await fetchPlayerTickets(gameId, playerWallet);
     if (!tickets.length) {
         console.log(`ℹ️ [Avaliador] ${playerWallet} não tem cartelas neste jogo.`);
         return;
     }
 
-    const dynamicPatterns = await fetchGametypePatterns(gametypeId);
+    const patterns = await fetchGametypePatterns(gametypeId);
     const winningTickets: WinResult[] = [];
 
     for (const ticket of tickets) {
         const finalState = applyDrawnBalls(ticket, game.drawn_balls);
-
-        if (dynamicPatterns) {
-            const patterns = checkWinPatterns(finalState, dynamicPatterns);
-            if (patterns.length > 0) {
-                const best = patterns.reduce((a, b) => b.weight > a.weight ? b : a);
-                winningTickets.push({ ticket, patternName: best.name, patternMask: best.mask, weight: best.weight });
-            }
-        } else {
-            const winResult = checkWinPattern(finalState);
-            if (winResult) {
-                winningTickets.push({ ticket, ...winResult, weight: 0 });
-            }
+        const wp = checkWinPatterns(finalState, patterns);
+        if (wp.length > 0) {
+            const best = wp.reduce((a, b) => b.weight > a.weight ? b : a);
+            winningTickets.push({ ticket, patternName: best.name, patternMask: best.mask, weight: best.weight });
         }
     }
 
