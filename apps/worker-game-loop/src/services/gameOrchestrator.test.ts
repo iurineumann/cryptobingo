@@ -19,6 +19,7 @@ jest.mock('./evaluator', () => ({
     preComputeMultiMatchCutoffs:     jest.fn(),
     payMultiMatchStage:              jest.fn(),
     deriveGoldenMultiplierExported:  jest.fn(),
+    computePayoutAmount:             jest.fn().mockReturnValue({ amount: 0, currency: 'BINGO' }),
 }));
 jest.mock('./broadcaster', () => ({
     startSlowReveal:    jest.fn().mockResolvedValue(undefined),
@@ -52,6 +53,7 @@ import {
     findAllWinners, processAllGameWinners,
     findFirstFullCutoff, preComputeMultiMatchCutoffs,
     payMultiMatchStage, deriveGoldenMultiplierExported,
+    computePayoutAmount,
 } from './evaluator';
 import {
     startSlowReveal, endRevealSession, notifyWinners,
@@ -77,6 +79,7 @@ const mockNotifyStaged      = notifyStageCleared                           as je
 const mockNotifyEnded       = notifyGameEnded                              as jest.Mock;
 const mockDeleteIndex       = deleteIndex                                  as jest.Mock;
 const mockOnResolved        = onGameResolved                               as jest.Mock;
+const mockComputePayout     = computePayoutAmount                          as jest.Mock;
 
 const DRAWN_BALLS = Array.from({ length: 75 }, (_, i) => i + 1);
 
@@ -98,6 +101,18 @@ function makeWinResult(ticketId = '1', owner = 'jogador1') {
         patternName: 'ROW_0',
         patternMask: 0n,
         weight:      100,
+    };
+}
+
+// WinResult com ticket.price explícito (ADR-010: preço variável)
+function makeWinResultWithPrice(price: string, ticketId = '1', weight = 100) {
+    return {
+        ...makeWinResult(ticketId),
+        ticket: {
+            ticket_id: ticketId, owner: 'jogador1', matrix: [], state: 0x1000, game_id: '1',
+            price: { quantity: price, contract: 'bingo.token' },
+        },
+        weight,
     };
 }
 
@@ -258,5 +273,129 @@ describe('orchestrateGame — multimatch', () => {
     it('payMultiMatchStage chamado para cada stage com vencedores', async () => {
         await orchestrateGame('1');
         expect(mockPayStage).toHaveBeenCalledTimes(2);
+    });
+});
+
+// ── buildWinnerPayloads (via orchestrateStandard) ────────────────────────────
+
+// buildWinnerPayloads é privada; é testada indiretamente via orchestrateGame no
+// caminho standard com gametype_id != '0' (modo dinâmico ADR-005 Fase 2).
+describe('buildWinnerPayloads — preço variável e baseMultiplier (ADR-010 + ADR-005)', () => {
+    const GT_ROWS = (baseMultiplier = 1) => ({
+        rows: [{ gametype_id: '1', draw_mode: 'standard', max_balls: 75, base_multiplier: baseMultiplier, rules: [], stages: [] }],
+        more: false,
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        jest.useFakeTimers();
+        mockFetchGame.mockResolvedValue(makeGame({
+            gametype_id: '1',
+            ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
+        }));
+        mockGetTableRows.mockResolvedValue(GT_ROWS());
+        mockFindAllWinners.mockResolvedValue([makeWinResult()]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+        mockComputePayout.mockReturnValue({ amount: 5, currency: 'BINGO' });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('usa ticket.price quando definido — não o default do jogo (ADR-010)', async () => {
+        mockFindAllWinners.mockResolvedValue([makeWinResultWithPrice('1.0000 BINGO')]);
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockComputePayout).toHaveBeenCalledWith(
+            '1.0000 BINGO',
+            1,
+            100,
+            0,
+        );
+    });
+
+    it('cai para game.ticket_price quando ticket.price não está definido', async () => {
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockComputePayout).toHaveBeenCalledWith(
+            '10.0000 BINGO',
+            1,
+            100,
+            0,
+        );
+    });
+
+    it('baseMultiplier do gametype é repassado a computePayoutAmount', async () => {
+        mockGetTableRows.mockResolvedValue(GT_ROWS(200));
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockComputePayout).toHaveBeenCalledWith(
+            expect.any(String),
+            200,
+            100,
+            0,
+        );
+    });
+
+    it('notifyWinners recebe payouts formatados quando amount > 0', async () => {
+        mockComputePayout.mockReturnValue({ amount: 3.5, currency: 'BINGO' });
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockNotifyWinners).toHaveBeenCalledWith('1', [
+            expect.objectContaining({ payouts: ['3.5000 BINGO'] }),
+        ]);
+    });
+
+    it('payouts vazio quando computePayoutAmount retorna amount=0', async () => {
+        mockComputePayout.mockReturnValue({ amount: 0, currency: 'BINGO' });
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockNotifyWinners).toHaveBeenCalledWith('1', [
+            expect.objectContaining({ payouts: [] }),
+        ]);
+    });
+
+    it('2 tickets com preços diferentes → cada um usa seu próprio preço', async () => {
+        mockFindAllWinners.mockResolvedValue([
+            makeWinResultWithPrice('1.0000 BINGO', 'tk1'),
+            makeWinResultWithPrice('5.0000 BINGO', 'tk2'),
+        ]);
+        mockComputePayout
+            .mockReturnValueOnce({ amount: 1, currency: 'BINGO' })
+            .mockReturnValueOnce({ amount: 5, currency: 'BINGO' });
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockComputePayout).toHaveBeenNthCalledWith(1, '1.0000 BINGO', 1, 100, 0);
+        expect(mockComputePayout).toHaveBeenNthCalledWith(2, '5.0000 BINGO', 1, 100, 0);
+    });
+
+    it('weight do WinResult é repassado a computePayoutAmount', async () => {
+        mockFindAllWinners.mockResolvedValue([makeWinResultWithPrice('2.0000 BINGO', 'tk1', 250)]);
+
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockComputePayout).toHaveBeenCalledWith(
+            '2.0000 BINGO',
+            1,
+            250,
+            0,
+        );
     });
 });

@@ -24,6 +24,7 @@ import {
     payMultiMatchStage,
     deriveGoldenMultiplierExported as deriveGoldenMultiplier,
     DEFAULT_DRAW_BALLS,
+    computePayoutAmount,
 }                                                                    from './evaluator';
 import {
     startSlowReveal,
@@ -53,21 +54,34 @@ function sleep(ms: number): Promise<void> {
 // CONVERSÃO DE RESULTADOS PARA WinnerPayload
 // ==========================================
 
-async function buildWinnerPayloads(gameId: string, winResults: Awaited<ReturnType<typeof findAllWinners>>): Promise<WinnerPayload[]> {
+async function buildWinnerPayloads(
+    gameId:        string,
+    winResults:    Awaited<ReturnType<typeof findAllWinners>>,
+    baseMultiplier = 1,
+    goldenMultiplier = 0,
+): Promise<WinnerPayload[]> {
     const game = await fetchGame(gameId);
-    return winResults.map(w => ({
-        account:     w.ticket.owner,
-        ticket_id:   w.ticket.ticket_id,
-        win_pattern: w.patternName,
-        payouts:     game ? [game.ticket_price.quantity] : [],
-    }));
+    return winResults.map(w => {
+        const ticketPrice = w.ticket.price?.quantity ?? game?.ticket_price.quantity ?? '';
+        if (!game || !ticketPrice) return {
+            account: w.ticket.owner, ticket_id: w.ticket.ticket_id,
+            win_pattern: w.patternName, payouts: [],
+        };
+        const payout = computePayoutAmount(ticketPrice, baseMultiplier, w.weight || 100, goldenMultiplier);
+        return {
+            account:     w.ticket.owner,
+            ticket_id:   w.ticket.ticket_id,
+            win_pattern: w.patternName,
+            payouts:     payout.amount > 0 ? [`${payout.amount.toFixed(4)} ${payout.currency}`] : [],
+        };
+    });
 }
 
 // ==========================================
 // HANDLERS POR MODO
 // ==========================================
 
-async function orchestrateStandard(gameId: string, drawnBalls: number[], maxBalls: number, gametypeId: string): Promise<number> {
+async function orchestrateStandard(gameId: string, drawnBalls: number[], maxBalls: number, gametypeId: string, baseMultiplier = 1): Promise<number> {
     const balls = drawnBalls.slice(0, maxBalls);
     await startSlowReveal(gameId, balls);
     endRevealSession(gameId);
@@ -76,13 +90,13 @@ async function orchestrateStandard(gameId: string, drawnBalls: number[], maxBall
     await processAllGameWinners(gameId);
 
     if (winResults.length > 0) {
-        const payloads = await buildWinnerPayloads(gameId, winResults);
+        const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
         notifyWinners(gameId, payloads);
     }
     return winResults.length;
 }
 
-async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gametypeId: string): Promise<number> {
+async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gametypeId: string, baseMultiplier = 1): Promise<number> {
     const cutoff = await findFirstFullCutoff(gameId, drawnBalls);
     const balls  = drawnBalls.slice(0, cutoff);
 
@@ -93,7 +107,7 @@ async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gamety
     const winResults = await findAllWinners(gameId, balls, gametypeId);
 
     if (winResults.length > 0) {
-        const payloads = await buildWinnerPayloads(gameId, winResults);
+        const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
         notifyWinners(gameId, payloads);
     }
     return winResults.length;
@@ -105,6 +119,7 @@ async function orchestrateGoldenBall(
     maxBalls:       number,
     goldenBallAfter: number,
     gametypeId:     string,
+    baseMultiplier  = 1,
 ): Promise<number> {
     const ga         = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
     const normalBalls = drawnBalls.slice(0, ga);
@@ -128,7 +143,7 @@ async function orchestrateGoldenBall(
     const winResults     = await findAllWinners(gameId, effectiveBalls, gametypeId);
 
     if (winResults.length > 0) {
-        const payloads = await buildWinnerPayloads(gameId, winResults);
+        const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier, multiplier);
         notifyWinners(gameId, payloads);
     }
     return winResults.length;
@@ -197,8 +212,9 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
     const gametypeId = (game as any).gametype_id?.toString() ?? '0';
     let drawMode: DrawMode = 'standard';
-    let maxBalls  = DEFAULT_DRAW_BALLS;
+    let maxBalls        = DEFAULT_DRAW_BALLS;
     let goldenBallAfter = 0;
+    let baseMultiplier  = 1;
 
     if (gametypeId !== '0') {
         const gtRes = await rpcClient.v1.chain.get_table_rows({
@@ -208,9 +224,10 @@ export async function orchestrateGame(gameId: string): Promise<void> {
         });
         if (gtRes.rows.length) {
             const gt    = gtRes.rows[0] as any;
-            drawMode    = (gt.draw_mode ?? 'standard') as DrawMode;
-            maxBalls    = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
+            drawMode        = (gt.draw_mode ?? 'standard') as DrawMode;
+            maxBalls        = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
             goldenBallAfter = gt.golden_ball_after ?? 0;
+            baseMultiplier  = gt.base_multiplier ?? 1;
         }
     }
 
@@ -223,15 +240,15 @@ export async function orchestrateGame(gameId: string): Promise<void> {
         switch (drawMode) {
             case 'fixed':
             case 'standard':
-                totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId);
+                totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
                 break;
 
             case 'firstfull':
-                totalWinners = await orchestrateFirstFull(gameId, drawnBalls, gametypeId);
+                totalWinners = await orchestrateFirstFull(gameId, drawnBalls, gametypeId, baseMultiplier);
                 break;
 
             case 'goldenball':
-                totalWinners = await orchestrateGoldenBall(gameId, drawnBalls, maxBalls, goldenBallAfter, gametypeId);
+                totalWinners = await orchestrateGoldenBall(gameId, drawnBalls, maxBalls, goldenBallAfter, gametypeId, baseMultiplier);
                 break;
 
             case 'multimatch':
@@ -240,7 +257,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
             default:
                 console.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`);
-                totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId);
+                totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
         }
     } finally {
         // Garante limpeza do índice e do reveal mesmo em caso de erro parcial
