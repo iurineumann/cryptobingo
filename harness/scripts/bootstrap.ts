@@ -1,85 +1,139 @@
-import { PrivateKey, Session } from '@wharfkit/session';
+import { APIClient, PrivateKey, Session, Serializer, Action } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
-import { Serializer, ABI } from '@wharfkit/antelope'; 
-import * as dotenv from 'dotenv';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.dune.env') });
+// 1. Configuração do Testbed (Localhost)
+const url = 'http://127.0.0.1:8888';
+const client = new APIClient({ url });
 
-const url = process.env.RPC_URL!;
-const chainId = process.env.CHAIN_ID!;
+// A chave mestra do ambiente de desenvolvimento (EOSIO_ROOT_KEY)
+const eosioKey = PrivateKey.from('5KQwrPbwdL6PhXujxW278EGzaVqexa18rcMvUKdpjzJVjc4jgw');
+const eosioWallet = new WalletPluginPrivateKey(eosioKey);
 
-const eosioKey = PrivateKey.from(process.env.EOSIO_KEY!);
-const bingoKey = PrivateKey.from(process.env.BINGO_GAME_KEY!);
-const alienKey = PrivateKey.from(process.env.ALIEN_WORLDS_KEY!);
-const eosioTokenKey = PrivateKey.from(process.env.EOSIO_TOKEN_KEY!);
+// 2. Utilitário de Sessão Root
+const rootSession = new Session({
+    actor: 'eosio',
+    permission: 'active',
+    chain: { id: 'testbed', url },
+    walletPlugin: eosioWallet,
+});
 
-const eosioTokenSession = new Session({ actor: 'eosio.token', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioTokenKey) });
-const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
-const bingoOwnerSession = new Session({ actor: 'bingo.game', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
-const alienSession = new Session({ actor: 'alien.worlds', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(alienKey) });
+/**
+ * Utilitário: Cria uma conta nova na blockchain alocando RAM e CPU infinita para testes
+ */
+async function createAccount(accountName: string, pubKey: string) {
+    console.log(`[+] Criando conta: ${accountName}...`);
+    const action = Action.from({
+        account: 'eosio',
+        name: 'newaccount',
+        authorization: [rootSession.permissionLevel],
+        data: {
+            creator: 'eosio',
+            name: accountName,
+            owner: { threshold: 1, keys: [{ key: pubKey, weight: 1 }], accounts: [], waits: [] },
+            active: { threshold: 1, keys: [{ key: pubKey, weight: 1 }], accounts: [], waits: [] },
+        },
+    });
 
-async function deployContractRaw(account: string, wasmPath: string, abiPath: string, session: Session) {
-    console.log(`[+] Realizando Deploy em: ${account}...`);
+    // Em um ambiente real, você faria buyram e delegatebw. 
+    // No Testbed, a conta eosio tem recursos ilimitados.
+    await rootSession.transact({ actions: [action] }, { broadcast: true });
+}
+
+/**
+ * Utilitário: Faz o deploy de arquivos .wasm e .abi
+ */
+async function deployContract(account: string, wasmPath: string, abiPath: string) {
+    console.log(`[+] Realizando Deploy no contrato: ${account}...`);
     const wasmHex = fs.readFileSync(path.resolve(__dirname, wasmPath)).toString('hex');
-    const abiJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, abiPath), 'utf8'));
-    const abi = ABI.from(abiJson);
-    const abiHex = Serializer.encode({object: abi}).hexString;
+    const abiHex = Serializer.encode({
+        object: JSON.parse(fs.readFileSync(path.resolve(__dirname, abiPath), 'utf8')),
+        type: 'abi_def'
+    }).hexString;
 
-    await session.transact({
+    await rootSession.transact({
         actions: [
-            { account: 'eosio', name: 'setcode', authorization: [{ actor: account, permission: 'active' }], data: { account, vmtype: 0, vmversion: 0, code: wasmHex } },
-            { account: 'eosio', name: 'setabi', authorization: [{ actor: account, permission: 'active' }], data: { account, abi: abiHex } }
+            {
+                account: 'eosio',
+                name: 'setcode',
+                authorization: [{ actor: account, permission: 'active' }],
+                data: { account, vmtype: 0, vmversion: 0, code: wasmHex }
+            },
+            {
+                account: 'eosio',
+                name: 'setabi',
+                authorization: [{ actor: account, permission: 'active' }],
+                data: { account, abi: abiHex }
+            }
         ]
     }, { broadcast: true });
 }
 
+// 3. Orquestração do Bootstrapping
 async function bootstrap() {
-    console.log('🚀 Iniciando Bootstrapping Definitivo...');
-    try { 
-        await deployContractRaw('bingo.game', '../../contracts/bingo/bingo.wasm', '../../contracts/bingo/bingo.abi', bingoSession);
-
-        console.log('[+] Configurando chave e permissão eosio.code...');
-        await bingoSession.transact({
-            actions: [{ account: 'bingo.game', name: 'setconfig', authorization: [{ actor: 'bingo.game', permission: 'active' }], data: { signer_key: bingoKey.toPublic().toString() } }]
-        }, { broadcast: true });
-
-        await bingoOwnerSession.transact({
-            actions: [{
-                account: 'eosio', name: 'updateauth', authorization: [{ actor: 'bingo.game', permission: 'owner' }],
-                data: {
-                    account: 'bingo.game', permission: 'active', parent: 'owner',
-                    auth: {
-                        threshold: 1, keys: [{ key: bingoKey.toPublic().toString(), weight: 1 }],
-                        accounts: [{ permission: { actor: 'bingo.game', permission: 'eosio.code' }, weight: 1 }], waits: []
-                    }
-                }
-            }]
-        }, { broadcast: true });
-    } catch (e) {
-        console.error('❌ Erro no deploy:', e);
-        return;
-    }
-
     try {
-        console.log('[+] Criando o token TLM e distribuindo liquidez...');
-        await eosioTokenSession.transact({
-            actions: [{ account: 'eosio.token', name: 'create', authorization: [{ actor: 'eosio.token', permission: 'active' }], data: { issuer: 'alien.worlds', maximum_supply: '5000000.0000 TLM' } }]
-        }, { broadcast: true });
+        console.log('🚀 Iniciando Bootstrapping do Testbed GameFi...');
 
-        await alienSession.transact({
+        // Chave genérica para as contas de teste
+        const testPubKey = eosioKey.toPublic().toString();
+
+        // Passo 1: Criar contas do ecossistema
+        await createAccount('eosio.token', testPubKey);
+        await createAccount('orng.wax', testPubKey);
+        await createAccount('bingo.game', testPubKey);
+        await createAccount('alien.worlds', testPubKey); // Conta patrocinadora B2B
+        await createAccount('jogador1', testPubKey);
+        await createAccount('jogador2', testPubKey);
+
+        // Passo 2: Deploy do contrato eosio.token (Padrão Antelope)
+        await deployContract('eosio.token', '../mocks/eosio.token.wasm', '../mocks/eosio.token.abi');
+
+        // Passo 3: Emitir moedas e criar a Economia Fake
+        console.log('[+] Emitindo WAX (Moeda Base) e TLM (Moeda Patrocinada)...');
+        await rootSession.transact({
             actions: [
-                { account: 'eosio.token', name: 'issue', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { to: 'alien.worlds', quantity: '50000.0000 TLM', memo: 'Init' } },
-                { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'bingo.game', quantity: '1000.0000 TLM', memo: 'Sponsor Pool' } },
-                { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'jogador1', quantity: '500.0000 TLM', memo: 'Airdrop Jogador 1' } }
+                // Criar os Tokens
+                Action.from({
+                    account: 'eosio.token', name: 'create',
+                    authorization: [{ actor: 'eosio.token', permission: 'active' }],
+                    data: { issuer: 'eosio', maximum_supply: '1000000000.0000 WAX' }
+                }),
+                Action.from({
+                    account: 'eosio.token', name: 'create',
+                    authorization: [{ actor: 'eosio.token', permission: 'active' }],
+                    data: { issuer: 'alien.worlds', maximum_supply: '5000000.0000 TLM' }
+                }),
+                // Emitir para os emissores
+                Action.from({
+                    account: 'eosio.token', name: 'issue',
+                    authorization: [{ actor: 'eosio', permission: 'active' }],
+                    data: { to: 'eosio', quantity: '1000000.0000 WAX', memo: 'Init' }
+                }),
+                Action.from({
+                    account: 'eosio.token', name: 'issue',
+                    authorization: [{ actor: 'alien.worlds', permission: 'active' }],
+                    data: { to: 'alien.worlds', quantity: '50000.0000 TLM', memo: 'B2B Init' }
+                }),
+                // Distribuir para os jogadores
+                Action.from({
+                    account: 'eosio.token', name: 'transfer',
+                    authorization: [{ actor: 'eosio', permission: 'active' }],
+                    data: { from: 'eosio', to: 'jogador1', quantity: '5000.0000 WAX', memo: 'Saldo Inicial' }
+                })
             ]
         }, { broadcast: true });
-        console.log('🎉 Bootstrapping 100% concluído com sucesso!');
-    } catch (e: any) {
-        if (!e.message.includes('token with symbol already exists')) {
-            console.error('❌ Erro nos tokens:', e);
-        }
+
+        // Passo 4: Deploy do Mock do Oráculo e do nosso Contrato
+        console.log('[+] Injetando Oráculo Mockado e Smart Contract do Bingo...');
+        await deployContract('orng.wax', '../mocks/orng_mock.wasm', '../mocks/orng_mock.abi');
+        await deployContract('bingo.game', '../../contracts/bingo.wasm', '../../contracts/bingo.abi');
+
+        console.log('✅ Bootstrapping concluído! A blockchain local está estéril, financiada e pronta para os Testes Unitários.');
+
+    } catch (error) {
+        console.error('❌ Erro no Bootstrapping:', error);
     }
 }
+
 bootstrap();

@@ -5,23 +5,15 @@
 namespace orng {
     using namespace eosio;
 
+    // Mock do oráculo WAX para ambiente de desenvolvimento.
+    // Replica o comportamento do orng.wax de produção:
+    //   requestrand → responde inline com receiverand (sem deferred transaction).
+    // Sem estado persistente — não há requests_table nem fulfillrand manual.
     class [[eosio::contract("orngmock")]] orng_mock : public contract {
     public:
         using contract::contract;
 
         [[eosio::action]]
         void requestrand(uint64_t assoc_id, uint64_t signing_value, name caller);
-
-        [[eosio::action]]
-        void fulfillrand(uint64_t assoc_id);
-
-    private:
-        struct [[eosio::table]] request_record {
-            uint64_t assoc_id;
-            name caller;
-
-            uint64_t primary_key() const { return assoc_id; }
-        };
-        typedef multi_index<"requests"_n, request_record> requests_table;
     };
 }

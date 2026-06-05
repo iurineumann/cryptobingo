@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 170" width="780" height="170" role="img" aria-label="CryptoBingo">
+  <title>CryptoBingo</title>
+  <text
+    x="0" y="126"
+    font-family="'Space Grotesk','Inter',sans-serif"
+    font-weight="700"
+    font-size="132"
+    letter-spacing="-5"
+  >
+    <tspan fill="#15152a">Crypto</tspan><tspan fill="#7c3aed">Bingo</tspan>
+  </text>
+</svg>

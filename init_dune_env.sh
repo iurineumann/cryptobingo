@@ -46,6 +46,18 @@ for acc in orng.wax bingo.game alien.worlds jogador1 jogador2; do
     dune --import-dev-key $PRIV
 done
 
+# 1. Cria a conta dedicada para o token do projeto
+dune create account bingo.token
+
+# 2. Faz o deploy do contrato padrão de tokens para esta nova conta
+dune set contract bingo.token /usr/opt/eosio.cdt/examples/eosio.token --gas-limit 0
+
+# 3. Cria o token BINGO com 4 casas decimais gerenciado por bingo.token
+dune push action bingo.token create '["bingo.game", "1000000000.0000 BINGO"]' -p bingo.token@active
+
+# 4. Emite a quantidade inicial para a conta do jogo gerenciar os prêmios/drops
+dune push action bingo.token issue '["bingo.game", "500000000.0000 BINGO", "Emissão Inicial CriptoBingo"]' -p bingo.game@active
+
 echo "[*] Finalizando configurações..."
 CHAIN_ID=$(curl -s http://127.0.0.1:8888/v1/chain/get_info | jq -r '.chain_id')
 echo "CHAIN_ID=$CHAIN_ID" >> .dune.env

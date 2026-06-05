@@ -1,0 +1,19 @@
+{
+  "name": "@cryptobingo/blockchain-core",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json"
+  },
+  "dependencies": {
+    "@cryptobingo/shared-types": "workspace:*",
+    "@wharfkit/antelope": "^1.0.0",
+    "@wharfkit/session": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
