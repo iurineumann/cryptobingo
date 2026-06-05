@@ -1,0 +1,121 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.2",
+    "types": [],
+    "structs": [
+        {
+            "name": "request",
+            "base": "",
+            "fields": [
+                { "name": "id",       "type": "uint64"      },
+                { "name": "dapp",     "type": "name"        },
+                { "name": "seed",     "type": "checksum256" },
+                { "name": "ver",      "type": "uint8"       },
+                { "name": "nonce",    "type": "uint64"      },
+                { "name": "assoc_id", "type": "uint64"      }
+            ]
+        },
+        {
+            "name": "regkey",
+            "base": "",
+            "fields": [
+                {
+                    "name": "ver",
+                    "type": "uint8"
+                },
+                {
+                    "name": "exponent",
+                    "type": "string"
+                },
+                {
+                    "name": "modulus",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "requestrand",
+            "base": "",
+            "fields": [
+                {
+                    "name": "assoc_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "signing_value",
+                    "type": "uint64"
+                },
+                {
+                    "name": "caller",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "setrand",
+            "base": "",
+            "fields": [
+                {
+                    "name": "oracle",
+                    "type": "name"
+                },
+                {
+                    "name": "id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "ver",
+                    "type": "uint8"
+                },
+                {
+                    "name": "sig",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "setver",
+            "base": "",
+            "fields": [
+                {
+                    "name": "ver",
+                    "type": "uint8"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "regkey",
+            "type": "regkey",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "requestrand",
+            "type": "requestrand",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setrand",
+            "type": "setrand",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setver",
+            "type": "setver",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "reqs",
+            "type": "request",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "ricardian_clauses": [],
+    "variants": [],
+    "action_results": []
+}
