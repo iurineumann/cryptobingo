@@ -864,8 +864,8 @@
           "type": "uint64"
         },
         {
-          "name": "random_bytes",
-          "type": "bytes"
+          "name": "random_value",
+          "type": "checksum256"
         }
       ]
     },

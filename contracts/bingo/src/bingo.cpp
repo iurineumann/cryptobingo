@@ -542,20 +542,52 @@ namespace bingo {
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
         games.modify(game_itr, same_payer, [&](auto& g) { g.status = "drawing"_n; });
+        // signing_value = game_id — único por partida (primary key da tabela reqs).
+        // Compatível com o contrato orng.wax de produção: requestrand(assoc_id, signing_value, caller).
         action(
             permission_level{get_self(), "active"_n},
             "orng.wax"_n, "requestrand"_n,
-            std::make_tuple(game_id, (uint64_t)0, get_self())
+            std::make_tuple(game_id, game_id, get_self())
         ).send();
     }
 
-    void bingo_contract::receiverand(uint64_t assoc_id, std::vector<char> random_bytes) {
+    // receiverand — compatível com o callback legacy do orng.wax de produção.
+    // O contrato orng.wax entrega: receiverand(assoc_id, checksum256 rnd)
+    // onde rnd = sha256(rsa_sig_hex_string).
+    // As 75 bolas são derivadas on-chain via Fisher-Yates seeded pelo checksum256.
+    void bingo_contract::receiverand(uint64_t assoc_id, eosio::checksum256 random_value) {
         require_auth("orng.wax"_n);
+
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(assoc_id, "Game not found for Oracle response.");
         check(game_itr->status == "drawing"_n, "Game is not in DRAWING status.");
+
+        // Deriva 75 bolas (1-75) via Fisher-Yates com seed do checksum256.
+        // Seed: 8 bytes little-endian extraídos dos primeiros bytes do checksum256.
+        auto bytes = random_value.extract_as_byte_array();
+
+        std::vector<char> balls(75);
+        for (uint8_t i = 0; i < 75; ++i) balls[i] = (char)(i + 1);
+
+        uint64_t seed = 0;
+        for (int i = 7; i >= 0; i--) seed = (seed << 8) | bytes[i];  // little-endian
+
+        // Mistura do seed (splitmix64 — melhor distribuição inicial)
+        seed ^= (seed >> 30) * 0xbf58476d1ce4e5b9ULL;
+        seed ^= (seed >> 27) * 0x94d049bb133111ebULL;
+        seed ^= (seed >> 31);
+
+        // Fisher-Yates com xorshift64
+        for (int i = 74; i > 0; --i) {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            int j = (int)(seed % (uint64_t)(i + 1));
+            char tmp = balls[i]; balls[i] = balls[j]; balls[j] = tmp;
+        }
+
         games.modify(game_itr, same_payer, [&](auto& g) {
-            g.drawn_balls = random_bytes;
+            g.drawn_balls = balls;
             g.status      = "drawn"_n;
         });
     }

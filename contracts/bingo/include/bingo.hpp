@@ -326,7 +326,9 @@ namespace bingo {
         [[eosio::action]] void fundgame(uint64_t game_id);
         [[eosio::action]] void lockgame(uint64_t game_id);
         [[eosio::action]] void startdraw(uint64_t game_id);
-        [[eosio::action]] void receiverand(uint64_t assoc_id, std::vector<char> random_bytes);
+        // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
+        // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
+        [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
         [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived
