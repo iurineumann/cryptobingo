@@ -1,0 +1,187 @@
+/* ===========================================================
+   CryptoBingo — Logomarca / componentes visuais
+   Paleta: violeta (#8b5cf6→#4c1d95) + âmbar (#f59e0b) + Space Grotesk
+   =========================================================== */
+
+:root {
+  --v3:#c4b5fd; --v4:#a78bfa; --v5:#8b5cf6; --v6:#7c3aed;
+  --v7:#6d28d9; --v8:#5b21b6; --v9:#4c1d95; --v10:#2e1065;
+  --gold:#f59e0b; --gold-l:#fcd34d; --gold-d:#d97706;
+  --ink:#0f0f1a; --ink2:#15152a; --ink3:#1a1a2e;
+  --paper:#f7f7fb; --paper2:#ffffff;
+}
+
+.lm-wm {
+  font-family:'Space Grotesk','Inter',sans-serif;
+  font-weight:700;
+  letter-spacing:-0.03em;
+  line-height:0.95;
+  white-space:nowrap;
+  display:inline-flex;
+  align-items:baseline;
+}
+.lm-wm .c1 { color:#f1f5f9; }
+.lm-wm .c2 { color:var(--v4); }
+.lm-wm.on-light .c1 { color:#15152a; }
+.lm-wm.on-light .c2 { color:var(--v6); }
+.lm-wm.solid .c1, .lm-wm.solid .c2 { color:inherit; }
+
+.lm-tag {
+  font-family:'JetBrains Mono','Space Grotesk',monospace;
+  font-weight:600;
+  text-transform:uppercase;
+}
+
+/* ---------- Bola de bingo (esfera violeta brilhante) ---------- */
+.lm-ball {
+  position:relative;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 34% 27%,
+      #d6c9ff 0%, #a78bfa 22%, #8b5cf6 42%,
+      #6d28d9 68%, #43208f 100%);
+  box-shadow:
+    inset 0 -16px 32px rgba(20,0,40,.55),
+    inset 0 10px 20px rgba(255,255,255,.28),
+    0 18px 48px -12px rgba(124,58,237,.65);
+  isolation:isolate;
+  flex:none;
+}
+.lm-ball::after { /* gloss highlight */
+  content:'';
+  position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle at 33% 23%, rgba(255,255,255,.85) 0%, rgba(255,255,255,.18) 14%, transparent 34%);
+  pointer-events:none; z-index:3;
+}
+.lm-ball .fox {
+  position:absolute; inset:0; z-index:2;
+  width:74%; height:74%; margin:13%;
+  object-fit:contain;
+  filter:drop-shadow(0 4px 8px rgba(20,0,40,.45));
+}
+/* white bingo disc behind fox (classic number window) */
+.lm-ball.disc::before {
+  content:''; position:absolute; z-index:1;
+  inset:16%; border-radius:50%;
+  background:radial-gradient(circle at 40% 32%, #ffffff, #e9e6f5 70%, #d9d4ec 100%);
+  box-shadow:inset 0 -4px 10px rgba(60,40,110,.18);
+}
+
+/* small bingo letter/number tag */
+.lm-balltag {
+  position:absolute; z-index:4;
+  display:inline-flex; align-items:center; gap:.18em;
+  padding:.16em .5em;
+  border-radius:999px;
+  background:rgba(255,255,255,.94);
+  color:var(--v8);
+  font-family:'JetBrains Mono',monospace;
+  font-weight:700;
+  box-shadow:0 4px 10px rgba(20,0,40,.35);
+}
+
+/* ---------- Hexágono token (web3) ---------- */
+.lm-hex {
+  position:relative;
+  clip-path:polygon(50% 1%, 93% 25.5%, 93% 74.5%, 50% 99%, 7% 74.5%, 7% 25.5%);
+  background:
+    radial-gradient(circle at 36% 28%, #a78bfa 0%, #7c3aed 45%, #5b21b6 78%, #3a1a72 100%);
+  display:flex; align-items:center; justify-content:center;
+  flex:none;
+}
+.lm-hex::before { /* inner bevel */
+  content:''; position:absolute; inset:7%;
+  clip-path:polygon(50% 1%, 93% 25.5%, 93% 74.5%, 50% 99%, 7% 74.5%, 7% 25.5%);
+  background:linear-gradient(150deg, rgba(255,255,255,.18), transparent 40%, rgba(0,0,0,.30));
+  pointer-events:none;
+}
+.lm-hex .fox { position:relative; z-index:1; width:66%; height:66%; object-fit:contain;
+  filter:drop-shadow(0 4px 8px rgba(20,0,40,.5)); }
+.lm-hex-glow { filter:drop-shadow(0 14px 34px rgba(124,58,237,.55)); }
+
+/* ---------- Moeda dourada (rim metálico) ---------- */
+.lm-coin {
+  position:relative; border-radius:50%;
+  padding:8%;
+  background:
+    conic-gradient(from 210deg, #fcd34d, #d97706, #fbbf24, #92400e, #fde68a, #d97706, #fcd34d);
+  box-shadow:0 18px 44px -12px rgba(217,119,6,.6);
+  flex:none;
+}
+.lm-coin .inner {
+  position:relative; width:100%; height:100%; border-radius:50%;
+  background:radial-gradient(circle at 34% 27%, #a78bfa 0%, #7c3aed 50%, #4c1d95 100%);
+  box-shadow:inset 0 -10px 22px rgba(20,0,40,.5), inset 0 6px 14px rgba(255,255,255,.22);
+  overflow:hidden;
+}
+.lm-coin .inner::after {
+  content:''; position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle at 33% 22%, rgba(255,255,255,.6), transparent 34%);
+}
+.lm-coin .fox { position:absolute; inset:0; z-index:1; width:70%; height:70%; margin:15%;
+  object-fit:contain; filter:drop-shadow(0 3px 7px rgba(20,0,40,.45)); }
+
+/* ---------- App icon / squircle (monograma CB) ---------- */
+.lm-tile {
+  position:relative;
+  border-radius:24%;
+  background:
+    radial-gradient(circle at 30% 22%, #8b5cf6 0%, #6d28d9 48%, #3f1d8a 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 18px 44px -14px rgba(124,58,237,.6);
+  overflow:hidden; flex:none;
+  display:flex; align-items:center; justify-content:center;
+}
+.lm-tile::before {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(160deg, rgba(255,255,255,.18), transparent 38%);
+  pointer-events:none;
+}
+.lm-tile .fox { position:relative; z-index:1; width:74%; height:74%; object-fit:contain;
+  filter:drop-shadow(0 4px 9px rgba(20,0,40,.5)); }
+.lm-tile .cb {
+  position:absolute; right:7%; bottom:5%; z-index:2;
+  font-family:'Space Grotesk',sans-serif; font-weight:700;
+  color:rgba(255,255,255,.92); letter-spacing:-.04em;
+}
+
+/* ---------- Rede / órbita (blockchain) ---------- */
+.lm-orbit { position:absolute; inset:-14%; z-index:0; pointer-events:none; }
+.lm-orbit .ring {
+  position:absolute; inset:0; border-radius:50%;
+  border:1.5px dashed rgba(167,139,250,.55);
+  transform:rotate(-18deg) scaleY(.9);
+}
+.lm-orbit .node {
+  position:absolute; width:9%; height:9%; border-radius:50%;
+  background:var(--gold);
+  box-shadow:0 0 10px var(--gold);
+}
+
+/* ---------- mascote coin (aro + disco claro + mascote 3D) ---------- */
+.lm-mcoin {
+  position:relative; border-radius:50%; padding:6.5%;
+  background:conic-gradient(from 210deg, #fcd34d, #d97706, #fbbf24, #92400e, #fde68a, #d97706, #fcd34d);
+  box-shadow:0 18px 44px -12px rgba(217,119,6,.55);
+  flex:none;
+}
+.lm-mcoin .disc {
+  position:relative; width:100%; height:100%; border-radius:50%; overflow:hidden;
+  background:radial-gradient(circle at 50% 34%, #ffffff 0%, #f2ecfb 62%, #e3d8f6 100%);
+  box-shadow:inset 0 -8px 20px rgba(80,50,140,.16), inset 0 5px 12px rgba(255,255,255,.7);
+}
+.lm-mcoin .disc img {
+  position:absolute; left:50%; top:52%; transform:translate(-50%,-50%);
+  width:90%; object-fit:contain;
+}
+
+/* ---------- generic lockup helpers ---------- */
+.lm-row { display:flex; align-items:center; }
+.lm-stack { display:flex; flex-direction:column; align-items:center; }
+
+/* monochrome silhouette via mask */
+.lm-sil {
+  -webkit-mask-position:center; mask-position:center;
+  -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+  -webkit-mask-size:contain; mask-size:contain;
+  flex:none;
+}

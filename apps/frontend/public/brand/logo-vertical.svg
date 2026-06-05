@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 450" role="img" aria-label="CryptoBingo">
+  <defs>
+    <radialGradient id="hex-v" cx="36%" cy="28%" r="72%">
+      <stop offset="0%"   stop-color="#a78bfa"/>
+      <stop offset="45%"  stop-color="#7c3aed"/>
+      <stop offset="78%"  stop-color="#5b21b6"/>
+      <stop offset="100%" stop-color="#3a1a72"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(100,10)">
+    <polygon points="100,2 186,48 186,140 100,186 14,140 14,48" fill="url(#hex-v)"/>
+    <image href="fox_10.png" x="36" y="36" width="128" height="128"/>
+  </g>
+  <text x="200" y="270" font-family="'Space Grotesk','Inter',sans-serif" font-weight="700" font-size="72" letter-spacing="-2.9" text-anchor="middle">
+    <tspan fill="#15152a">Crypto</tspan>
+  </text>
+  <text x="200" y="340" font-family="'Space Grotesk','Inter',sans-serif" font-weight="700" font-size="72" letter-spacing="-2.9" text-anchor="middle">
+    <tspan fill="#7c3aed">Bingo</tspan>
+  </text>
+</svg>

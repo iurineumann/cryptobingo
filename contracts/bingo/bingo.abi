@@ -1,191 +1,1359 @@
 {
-    "version": "eosio::abi/1.2",
-    "types": [],
-    "structs": [
+  "____comment": "bingo.abi v2.0 \u2014 gerado por cdt-cpp 4.0.1 + revis\u00e3o manual. Atualizado com Rooms (ADR-010) e Drop Vault (ADR-011).",
+  "version": "eosio::abi/1.2",
+  "types": [],
+  "structs": [
+    {
+      "name": "pattern_rule",
+      "base": "",
+      "fields": [
         {
-            "name": "extended_asset",
-            "base": "",
-            "fields": [
-                {"name": "quantity", "type": "asset"},
-                {"name": "contract", "type": "name"}
-            ]
+          "name": "pattern_id",
+          "type": "uint64"
         },
         {
-            "name": "config_state",
-            "base": "",
-            "fields": [
-                {"name": "signer_key", "type": "public_key"}
-            ]
-        },
-        {
-            "name": "balance_record",
-            "base": "",
-            "fields": [
-                {"name": "balance", "type": "extended_asset"}
-            ]
-        },
-        {
-            "name": "game_state",
-            "base": "",
-            "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "status", "type": "name"},
-                {"name": "ticket_price", "type": "extended_asset"},
-                {"name": "prize_pool", "type": "extended_asset"},
-                {"name": "sponsor_pool", "type": "extended_asset[]"},
-                {"name": "drawn_balls", "type": "bytes"}
-            ]
-        },
-        {
-            "name": "ticket_record",
-            "base": "",
-            "fields": [
-                {"name": "ticket_id", "type": "uint64"},
-                {"name": "owner", "type": "name"},
-                {"name": "matrix", "type": "bytes"},
-                {"name": "state", "type": "uint32"},
-                {"name": "game_id", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "setconfig",
-            "base": "",
-            "fields": [
-                {"name": "signer_key", "type": "public_key"}
-            ]
-        },
-        {
-            "name": "creategame",
-            "base": "",
-            "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "ticket_price", "type": "extended_asset"}
-            ]
-        },
-        {
-            "name": "buytickets",
-            "base": "",
-            "fields": [
-                {"name": "owner", "type": "name"},
-                {"name": "game_id", "type": "uint64"},
-                {"name": "matrices", "type": "bytes[]"},
-                {"name": "signatures", "type": "signature[]"}
-            ]
-        },
-        {
-            "name": "lockgame",
-            "base": "",
-            "fields": [
-                {"name": "game_id", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "startdraw",
-            "base": "",
-            "fields": [
-                {"name": "game_id", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "claimwin",
-            "base": "",
-            "fields": [
-                {"name": "game_id", "type": "uint64"},
-                {"name": "ticket_id", "type": "uint64"},
-                {"name": "ball_count", "type": "uint8"},
-                {"name": "win_pattern_mask", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "withdraw",
-            "base": "",
-            "fields": [
-                {"name": "owner", "type": "name"},
-                {"name": "amount", "type": "extended_asset"}
-            ]
+          "name": "weight",
+          "type": "uint16"
         }
-    ],
-    "actions": [
+      ]
+    },
+    {
+      "name": "config_state",
+      "base": "",
+      "fields": [
         {
-            "name": "setconfig",
-            "type": "setconfig",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Configurar Autoridade do Oráculo\nsummary: 'Define a chave pública para validação de assinaturas no contrato.'\n---\n\nAo executar esta ação, a administração do protocolo CryptoBingo estabelece a chave pública {{signer_key}} como a autoridade criptográfica. Esta chave será estritamente utilizada para validar a autenticidade, segurança e imutabilidade das cartelas compradas pelos participantes."
+          "name": "signer_key",
+          "type": "public_key"
         },
         {
-            "name": "creategame",
-            "type": "creategame",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Inicializar Novo Evento de Bingo\nsummary: 'Abre o jogo #{{game_id}} com preço de entrada fixado em {{ticket_price}}.'\n---\n\nO contrato inicializa um novo evento de bingo identificado pelo ID numérico {{game_id}}.\nO valor para a participação neste evento é fixado em {{ticket_price}}. A governança e a custódia do fundo de prêmios gerado pelas entradas serão mantidas de forma autônoma por este contrato, visando alinhamento aos parâmetros de conformidade, auditoria técnica e melhores práticas regulatórias aplicáveis a ecossistemas descentralizados."
-        },
-        {
-            "name": "buytickets",
-            "type": "buytickets",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Aquisição de Cartelas\nsummary: 'O participante {{owner}} adquire cartelas para o jogo #{{game_id}}.'\n---\n\nO participante identificado pela conta {{owner}} formaliza a compra de cartelas para o jogo {{game_id}}.\nAo assinar esta transação, o participante autoriza o protocolo a deduzir o valor exato correspondente ao número de cartelas diretamente de seu saldo interno sob custódia. O participante declara ciência de que os dados das matrizes tornam-se inalteráveis na blockchain após esta execução."
-        },
-        {
-            "name": "lockgame",
-            "type": "lockgame",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Bloqueio de Entrada do Jogo\nsummary: 'Trava permanentemente a adesão de novos participantes no jogo #{{game_id}}.'\n---\n\nO sistema autorizado invoca o bloqueio do jogo {{game_id}}. A partir deste marco de transição de estado, nenhuma nova cartela poderá ser comercializada. Esta ação assegura a estabilidade e o selamento financeiro do prize pool imediatamente antes da fase de extração das bolas."
-        },
-        {
-            "name": "startdraw",
-            "type": "startdraw",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Início da Fase de Sorteio\nsummary: 'Muda o estado do jogo #{{game_id}} para sorteio.'\n---\n\nO jogo {{game_id}} inicia oficialmente o processo de extração e registro de bolas. O contrato atesta o congelamento total dos parâmetros do jogo para liquidação."
-        },
-        {
-            "name": "claimwin",
-            "type": "claimwin",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Liquidação de Prêmio (RTP)\nsummary: 'Distribui os ganhos da cartela #{{ticket_id}} no jogo #{{game_id}}.'\n---\n\nO sistema descentralizado audita e confirma que a cartela com o ID {{ticket_id}} cumpriu o padrão de vitória estipulado pela máscara {{win_pattern_mask}} em um total de {{ball_count}} bolas sorteadas.\nO contrato executará a liquidação exata dos fundos: 85% do fundo de prêmios retido será transferido ao dono da cartela vencedora (Retorno ao Jogador), enquanto o saldo operacional remanescente será provisionado nos pools de patrocínio ou reservas do protocolo."
-        },
-        {
-            "name": "withdraw",
-            "type": "withdraw",
-            "ricardian_contract": "---\nspec_version: \"0.2.0\"\ntitle: Saque de Fundos da Custódia\nsummary: '{{owner}} solicita o saque de {{amount}} da carteira interna.'\n---\n\nO titular da conta {{owner}} comanda a retirada voluntária do montante de {{amount}} disponível em seu saldo interno. Em resposta imediata, a máquina de estados deste contrato executará, de forma autônoma, uma transação eletrônica devolvendo o valor especificado para a carteira de origem na blockchain, sem a necessidade de intermediários humanos."
+          "name": "treasury_account",
+          "type": "name"
         }
-    ],
-    "tables": [
+      ]
+    },
+    {
+      "name": "extended_asset",
+      "base": "",
+      "fields": [
         {
-            "name": "config",
-            "type": "config_state",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+          "name": "quantity",
+          "type": "asset"
         },
         {
-            "name": "balances",
-            "type": "balance_record",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
-        },
-        {
-            "name": "games",
-            "type": "game_state",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
-        },
-        {
-            "name": "tickets",
-            "type": "ticket_record",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": []
+          "name": "contract",
+          "type": "name"
         }
-    ],
-    "ricardian_clauses": [
+      ]
+    },
+    {
+      "name": "balance_record",
+      "base": "",
+      "fields": [
         {
-            "id": "Auditoria e Transparência",
-            "body": "Todas as transações, incluindo depósitos, compras de cartelas, sorteios e saques, são públicas, imutáveis e auditáveis na blockchain pública, garantindo total transparência da operação."
-        },
-        {
-            "id": "Custódia Algorítmica",
-            "body": "Os fundos depositados no contrato bingo.game são geridos inteiramente por lógica algorítmica autônoma (Smart Contract) e não podem ser acessados, movidos ou congelados por intervenção de terceiros ou administradores."
-        },
-        {
-            "id": "Limitação de Responsabilidade DeFi",
-            "body": "O usuário declara estar ciente dos riscos técnicos inerentes a protocolos de Finanças Descentralizadas (DeFi). A operação e o processamento de saldos são regidos estritamente pelos limites operacionais deste código-fonte auditado."
+          "name": "balance",
+          "type": "extended_asset"
         }
-    ],
-    "variants": [],
-    "action_results": []
+      ]
+    },
+    {
+      "name": "game_state",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "status",
+          "type": "name"
+        },
+        {
+          "name": "ticket_price",
+          "type": "extended_asset"
+        },
+        {
+          "name": "prize_pool",
+          "type": "extended_asset"
+        },
+        {
+          "name": "sponsor_pool",
+          "type": "extended_asset[]"
+        },
+        {
+          "name": "drawn_balls",
+          "type": "bytes"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "end_time",
+          "type": "time_point_sec"
+        },
+        {
+          "name": "golden_ball_num",
+          "type": "uint8"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
+        },
+        {
+          "name": "total_paid",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "ggr_pool_row",
+      "base": "",
+      "fields": [
+        {
+          "name": "ggr",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "settreasury",
+      "base": "",
+      "fields": [
+        {
+          "name": "account",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "sweepggr",
+      "base": "",
+      "fields": [
+        {
+          "name": "token_contract",
+          "type": "name"
+        },
+        {
+          "name": "sym",
+          "type": "symbol_code"
+        }
+      ]
+    },
+    {
+      "name": "ticket_record",
+      "base": "",
+      "fields": [
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "matrix",
+          "type": "bytes"
+        },
+        {
+          "name": "state",
+          "type": "uint32"
+        },
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "price",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "nft_config",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "int32"
+        },
+        {
+          "name": "discount_pct",
+          "type": "uint8"
+        },
+        {
+          "name": "is_vip",
+          "type": "bool"
+        },
+        {
+          "name": "valid_until",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "campaign_record",
+      "base": "",
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "sponsor",
+          "type": "name"
+        },
+        {
+          "name": "total_budget",
+          "type": "extended_asset"
+        },
+        {
+          "name": "payout_per_game",
+          "type": "extended_asset"
+        },
+        {
+          "name": "balance_remaining",
+          "type": "extended_asset"
+        },
+        {
+          "name": "leftover_policy",
+          "type": "name"
+        },
+        {
+          "name": "games_linked",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "pattern_record",
+      "base": "",
+      "fields": [
+        {
+          "name": "pattern_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "mask",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "gametype_record",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "base_multiplier",
+          "type": "uint8"
+        },
+        {
+          "name": "rules",
+          "type": "pattern_rule[]"
+        },
+        {
+          "name": "draw_mode",
+          "type": "name"
+        },
+        {
+          "name": "max_balls",
+          "type": "uint8"
+        },
+        {
+          "name": "golden_ball_after",
+          "type": "uint8"
+        },
+        {
+          "name": "master_weight_ovrd",
+          "type": "uint8"
+        },
+        {
+          "name": "stages",
+          "type": "stage_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "room_record",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "sponsor",
+          "type": "name"
+        },
+        {
+          "name": "status",
+          "type": "name"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price_min",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_max",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_default",
+          "type": "extended_asset"
+        },
+        {
+          "name": "max_tickets_per_player",
+          "type": "uint32"
+        },
+        {
+          "name": "current_game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_drop_chance_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "sponsor_room",
+          "type": "bool"
+        },
+        {
+          "name": "created_at",
+          "type": "time_point_sec"
+        }
+      ]
+    },
+    {
+      "name": "drop_state",
+      "base": "",
+      "fields": [
+        {
+          "name": "next_deposit_id",
+          "type": "uint64"
+        },
+        {
+          "name": "next_alloc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "player_base_chance_bps",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "drop_deposit",
+      "base": "",
+      "fields": [
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        },
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "asset_type",
+          "type": "name"
+        },
+        {
+          "name": "token_contract",
+          "type": "name"
+        },
+        {
+          "name": "token_symbol",
+          "type": "symbol"
+        },
+        {
+          "name": "quantity_original",
+          "type": "extended_asset"
+        },
+        {
+          "name": "quantity_remaining",
+          "type": "extended_asset"
+        },
+        {
+          "name": "nft_asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "nft_template_id",
+          "type": "int32"
+        },
+        {
+          "name": "nft_collection",
+          "type": "name"
+        },
+        {
+          "name": "status",
+          "type": "name"
+        },
+        {
+          "name": "deposited_at",
+          "type": "time_point_sec"
+        }
+      ]
+    },
+    {
+      "name": "drop_allocation",
+      "base": "",
+      "fields": [
+        {
+          "name": "alloc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        },
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "asset_type",
+          "type": "name"
+        },
+        {
+          "name": "token_contract",
+          "type": "name"
+        },
+        {
+          "name": "token_symbol",
+          "type": "symbol"
+        },
+        {
+          "name": "quantity_per_drop",
+          "type": "extended_asset"
+        },
+        {
+          "name": "quantity_distributed",
+          "type": "extended_asset"
+        },
+        {
+          "name": "nft_asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "nft_template_id",
+          "type": "int32"
+        },
+        {
+          "name": "nft_collection",
+          "type": "name"
+        },
+        {
+          "name": "drop_chance_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "drops_executed",
+          "type": "uint32"
+        },
+        {
+          "name": "status",
+          "type": "name"
+        },
+        {
+          "name": "allocated_at",
+          "type": "time_point_sec"
+        }
+      ]
+    },
+    {
+      "name": "abortgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "activateroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "addgametype",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "base_multiplier",
+          "type": "uint8"
+        },
+        {
+          "name": "rules",
+          "type": "pattern_rule[]"
+        },
+        {
+          "name": "draw_mode",
+          "type": "name"
+        },
+        {
+          "name": "max_balls",
+          "type": "uint8"
+        },
+        {
+          "name": "golden_ball_after",
+          "type": "uint8"
+        },
+        {
+          "name": "master_weight_ovrd",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "addpattern",
+      "base": "",
+      "fields": [
+        {
+          "name": "pattern_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "mask",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "allocatedrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "caller",
+          "type": "name"
+        },
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "quantity_per_drop",
+          "type": "extended_asset"
+        },
+        {
+          "name": "nft_asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "drop_chance_bps",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "buytickets",
+      "base": "",
+      "fields": [
+        {
+          "name": "buyer",
+          "type": "name"
+        },
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "matrices",
+          "type": "bytes[]"
+        },
+        {
+          "name": "signatures",
+          "type": "signature[]"
+        },
+        {
+          "name": "nft_id",
+          "type": "uint64"
+        },
+        {
+          "name": "requested_price",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "claimwin",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "win_pattern_mask",
+          "type": "uint64"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "cleargame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "max_rows",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "closecmpgn",
+      "base": "",
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "closeroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "creategame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price",
+          "type": "extended_asset"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "createroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "sponsor",
+          "type": "name"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price_min",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_max",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_default",
+          "type": "extended_asset"
+        },
+        {
+          "name": "max_tickets_per_player",
+          "type": "uint32"
+        },
+        {
+          "name": "sponsor_room",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "deallocdrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "caller",
+          "type": "name"
+        },
+        {
+          "name": "alloc_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delgametype",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delnftconf",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "int32"
+        }
+      ]
+    },
+    {
+      "name": "delpattern",
+      "base": "",
+      "fields": [
+        {
+          "name": "pattern_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "execdrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "alloc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "winner",
+          "type": "name"
+        },
+        {
+          "name": "quantity",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "fundgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "linkcampaign",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "lockgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "pauseroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "receiverand",
+      "base": "",
+      "fields": [
+        {
+          "name": "assoc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "random_value",
+          "type": "checksum256"
+        }
+      ]
+    },
+    {
+      "name": "reclaimasset",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "refundticket",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "setconfig",
+      "base": "",
+      "fields": [
+        {
+          "name": "signer_key",
+          "type": "public_key"
+        }
+      ]
+    },
+    {
+      "name": "setnftconf",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "int32"
+        },
+        {
+          "name": "discount_pct",
+          "type": "uint8"
+        },
+        {
+          "name": "is_vip",
+          "type": "bool"
+        },
+        {
+          "name": "valid_until",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "setroommeta",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_drop_chance_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "max_tickets_per_player",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "startdraw",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "amount",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "closegame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "stage_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "stage",
+          "type": "uint8"
+        },
+        {
+          "name": "patterns_required",
+          "type": "uint8"
+        },
+        {
+          "name": "weight",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "setstages",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "stages",
+          "type": "stage_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "claimstage",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "stage",
+          "type": "uint8"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "win_pattern_mask",
+          "type": "uint64"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "abortgame",
+      "type": "abortgame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "activateroom",
+      "type": "activateroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "addgametype",
+      "type": "addgametype",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "addpattern",
+      "type": "addpattern",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "allocatedrop",
+      "type": "allocatedrop",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "buytickets",
+      "type": "buytickets",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "claimwin",
+      "type": "claimwin",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "cleargame",
+      "type": "cleargame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "closecmpgn",
+      "type": "closecmpgn",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "closeroom",
+      "type": "closeroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "creategame",
+      "type": "creategame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "createroom",
+      "type": "createroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "deallocdrop",
+      "type": "deallocdrop",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "delgametype",
+      "type": "delgametype",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "delnftconf",
+      "type": "delnftconf",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "delpattern",
+      "type": "delpattern",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "execdrop",
+      "type": "execdrop",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "fundgame",
+      "type": "fundgame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "linkcampaign",
+      "type": "linkcampaign",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "lockgame",
+      "type": "lockgame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "pauseroom",
+      "type": "pauseroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "receiverand",
+      "type": "receiverand",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "reclaimasset",
+      "type": "reclaimasset",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "refundticket",
+      "type": "refundticket",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setconfig",
+      "type": "setconfig",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setnftconf",
+      "type": "setnftconf",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setroommeta",
+      "type": "setroommeta",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "startdraw",
+      "type": "startdraw",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "withdraw",
+      "type": "withdraw",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "closegame",
+      "type": "closegame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setstages",
+      "type": "setstages",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "claimstage",
+      "type": "claimstage",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "settreasury",
+      "type": "settreasury",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "sweepggr",
+      "type": "sweepggr",
+      "ricardian_contract": ""
+    }
+  ],
+  "tables": [
+    {
+      "name": "balances",
+      "type": "balance_record",
+      "index_type": "i64",
+      "key_names": [
+        "sym_code"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "games",
+      "type": "game_state",
+      "index_type": "i64",
+      "key_names": [
+        "game_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "tickets",
+      "type": "ticket_record",
+      "index_type": "i64",
+      "key_names": [
+        "ticket_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "nftconfigs",
+      "type": "nft_config",
+      "index_type": "i64",
+      "key_names": [
+        "template_id"
+      ],
+      "key_types": [
+        "int32"
+      ]
+    },
+    {
+      "name": "campaigns",
+      "type": "campaign_record",
+      "index_type": "i64",
+      "key_names": [
+        "campaign_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "patterns",
+      "type": "pattern_record",
+      "index_type": "i64",
+      "key_names": [
+        "pattern_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "gametypes",
+      "type": "gametype_record",
+      "index_type": "i64",
+      "key_names": [
+        "gametype_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "rooms",
+      "type": "room_record",
+      "index_type": "i64",
+      "key_names": [
+        "room_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "dropstate",
+      "type": "drop_state",
+      "index_type": "i64",
+      "key_names": [
+        "pk"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "dropdeposits",
+      "type": "drop_deposit",
+      "index_type": "i64",
+      "key_names": [
+        "deposit_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "dropallocs",
+      "type": "drop_allocation",
+      "index_type": "i64",
+      "key_names": [
+        "alloc_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "config",
+      "type": "config_state",
+      "index_type": "i64",
+      "key_names": [],
+      "key_types": []
+    },
+    {
+      "name": "ggrpool",
+      "type": "ggr_pool_row",
+      "index_type": "i64",
+      "key_names": [
+        "sym_code"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    }
+  ],
+  "ricardian_clauses": [],
+  "variants": [],
+  "action_results": []
 }

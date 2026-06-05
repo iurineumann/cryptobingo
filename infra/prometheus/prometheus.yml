@@ -1,0 +1,28 @@
+global:
+  scrape_interval:     10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # ── Prometheus (self-monitoring) ─────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── cAdvisor (métricas de containers Docker) ─────────────────────────────────
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # ── RabbitMQ (plugin Prometheus — expõe /metrics na porta 15692) ─────────────
+  # Requer: rabbitmq-plugins enable rabbitmq_prometheus
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+
+  # ── Game Loop Worker (porta 9091 — exposta pelo metrics.ts) ──────────────────
+  # Em dev+compose: o worker roda dentro do Docker → service name
+  - job_name: 'worker_game_loop'
+    static_configs:
+      - targets: ['worker-game-loop:9091']
+    scrape_interval: 5s   # Mais frequente: eventos de jogo são críticos
+    metrics_path: '/metrics'

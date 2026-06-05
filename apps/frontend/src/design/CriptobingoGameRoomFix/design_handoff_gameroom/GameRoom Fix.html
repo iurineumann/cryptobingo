@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GameRoom — Fix Prototype · CryptoBingo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+/* ================================================================
+   DESIGN TOKENS — espelho de globals.css @theme
+   ================================================================ */
+:root {
+  --color-brand-400:#a78bfa; --color-brand-500:#8b5cf6; --color-brand-600:#7c3aed; --color-brand-700:#6d28d9;
+  --color-accent-200:#fde68a; --color-accent-300:#fcd34d; --color-accent-400:#fbbf24; --color-accent-500:#f59e0b; --color-accent-600:#d97706;
+  --color-surface-950:#0a0a0f; --color-surface-900:#0f0f1a; --color-surface-800:#1a1a2e;
+  --color-surface-750:#1e1e35; --color-surface-700:#252541; --color-surface-600:#2d2d52;
+  --color-success-400:#34d399; --color-success-500:#10b981;
+  --color-danger-400:#fb7185; --color-danger-500:#f43f5e;
+  --color-warning-400:#fbbf24; --color-info-400:#60a5fa;
+  --color-bingo-b:#ef4444; --color-bingo-i:#f97316; --color-bingo-n:#22c55e; --color-bingo-g:#3b82f6; --color-bingo-o:#a855f7;
+  --font-family-sans:'Inter',system-ui,sans-serif;
+  --font-family-display:'Space Grotesk','Inter',sans-serif;
+  --font-family-mono:'JetBrains Mono',monospace;
+  --shadow-card:0 4px 6px -1px rgb(0 0 0/.3),0 2px 4px -2px rgb(0 0 0/.3);
+  --shadow-glow-brand:0 0 20px -4px rgb(124 58 237/.6);
+  --shadow-glow-accent:0 0 20px -4px rgb(245 158 11/.7);
+}
+
+/* Semantic — dark */
+:root,[data-theme="dark"] {
+  color-scheme: dark;
+  --cb-bg-base:var(--color-surface-900); --cb-bg-elevated:var(--color-surface-800);
+  --cb-bg-overlay:var(--color-surface-750); --cb-bg-sunken:var(--color-surface-950);
+  --cb-bg-card:var(--color-surface-800); --cb-bg-input:var(--color-surface-700);
+  --cb-text-primary:#f1f5f9; --cb-text-secondary:#94a3b8; --cb-text-tertiary:#64748b; --cb-text-disabled:#475569; --cb-text-on-brand:#fff;
+  --cb-border-subtle:rgb(255 255 255/.06); --cb-border-default:rgb(255 255 255/.10); --cb-border-strong:rgb(255 255 255/.16); --cb-border-focus:var(--color-brand-500);
+  --cb-brand:var(--color-brand-500); --cb-brand-hover:var(--color-brand-400); --cb-brand-subtle:rgb(139 92 246/.15); --cb-brand-muted:rgb(139 92 246/.08);
+  --cb-accent:var(--color-accent-400); --cb-accent-hover:var(--color-accent-300); --cb-accent-subtle:rgb(251 191 36/.15);
+  --cb-success:var(--color-success-400); --cb-success-subtle:rgb(52 211 153/.12);
+  --cb-danger:var(--color-danger-400); --cb-danger-subtle:rgb(251 113 133/.12);
+  --cb-warning:var(--color-warning-400); --cb-warning-subtle:rgb(251 191 36/.12);
+  --cb-info:var(--color-info-400);
+  --cb-stage-bg:radial-gradient(circle at 50% 35%,rgb(139 92 246/.18) 0%,rgb(124 58 237/.06) 35%,transparent 70%),linear-gradient(180deg,var(--color-surface-800),var(--color-surface-900));
+  --cb-stage-grid:linear-gradient(rgb(255 255 255/.025) 1px,transparent 1px) 0 0/24px 24px,linear-gradient(90deg,rgb(255 255 255/.025) 1px,transparent 1px) 0 0/24px 24px;
+}
+
+/* ================================================================
+   BASE
+   ================================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{background:var(--cb-bg-base);color:var(--cb-text-primary);font-family:var(--font-family-sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden;overflow-y:auto /* scroll no body — modelo de documento */}
+button{font:inherit;border:none;cursor:pointer}
+::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--cb-border-default);border-radius:3px}
+
+/* ================================================================
+   CB COMPONENTS
+   ================================================================ */
+.cb-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.5rem 1rem;font-size:.82rem;font-weight:600;line-height:1.25;border-radius:.5rem;border:1px solid transparent;white-space:nowrap;transition:background .15s,box-shadow .15s,transform .12s}
+.cb-btn:active:not(:disabled){transform:scale(.97)}
+.cb-btn-primary{background:var(--cb-brand);color:#fff}
+.cb-btn-primary:hover{background:var(--cb-brand-hover);box-shadow:var(--shadow-glow-brand)}
+.cb-btn-ghost{background:transparent;color:var(--cb-text-secondary)}
+.cb-btn-ghost:hover{background:var(--cb-border-subtle);color:var(--cb-text-primary)}
+.cb-btn-sm{padding:.3rem .75rem;font-size:.75rem;border-radius:.4rem}
+.cb-wallet-chip{display:inline-flex;align-items:center;gap:.45rem;padding:.3rem .75rem;background:var(--cb-bg-overlay);border:1px solid var(--cb-border-default);border-radius:9999px;font-family:var(--font-family-mono);font-size:.7rem;color:var(--cb-text-secondary)}
+.cb-status-dot{display:inline-block;width:.45rem;height:.45rem;border-radius:50%;flex-shrink:0}
+.cb-status-dot-live{background:var(--cb-success);box-shadow:0 0 6px var(--cb-success);animation:cb-pulse 2s ease-in-out infinite}
+.cb-status-dot-pending{background:var(--cb-warning)}
+.cb-status-dot-offline{background:var(--cb-text-disabled)}
+.cb-progress-track{height:.3rem;background:var(--cb-border-subtle);border-radius:9999px;overflow:hidden}
+.cb-progress-fill{height:100%;background:linear-gradient(90deg,var(--cb-brand),var(--cb-accent));border-radius:9999px;transition:width .5s ease;box-shadow:0 0 6px var(--cb-brand)}
+
+/* ================================================================
+   GAME ROOM SHELL
+   ================================================================ */
+.gr-shell{width:100%;min-height:100%;display:flex;flex-direction:column;background:var(--cb-bg-base);font-family:var(--font-family-sans)
+  /* height:auto — cresce com o conteúdo, body scrola */}
+
+/* ── Navbar ── */
+.gr-navbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0 1.5rem;height:4rem;background:color-mix(in srgb,var(--cb-bg-base) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--cb-border-subtle);flex-shrink:0;
+  position:sticky;top:0;z-index:50 /* sticky ao topo conforme page scrola */}
+.gr-nav-left,.gr-nav-right{display:flex;align-items:center;gap:.625rem}
+.gr-nav-crumb{display:flex;align-items:center;gap:.4rem;color:var(--cb-text-secondary);font-size:.85rem}
+.gr-nav-crumb .sep{opacity:.4}
+.gr-nav-crumb .room{color:var(--cb-text-primary);font-weight:600;font-family:var(--font-family-mono);font-size:.78rem}
+.gr-live{display:inline-flex;align-items:center;gap:.35rem;padding:.18rem .55rem;font-size:.65rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:9999px;background:rgb(244 63 94/.12);color:var(--color-danger-400);border:1px solid rgb(244 63 94/.25)}
+.gr-live::before{content:'';width:.4rem;height:.4rem;border-radius:50%;background:var(--color-danger-500);box-shadow:0 0 6px var(--color-danger-500);animation:cb-pulse 1.6s ease-in-out infinite}
+
+/* ================================================================
+   MAIN — flex coluna com scroll: cada seção tem altura pelo conteúdo
+   ================================================================ */
+.gr-main{flex:1;display:flex;flex-direction:column;gap:.875rem;padding:.5rem 1.5rem 1.25rem
+  /* sem overflow:auto — body scrola */}
+
+/* linha superior: stage + patterns lado a lado, cada um com sua altura */
+.gr-top-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:.875rem;align-items:start}
+
+/* compact */
+.gr-main.gr-compact{gap:.625rem;padding:.5rem 1.25rem 1rem}
+.gr-main.gr-compact .gr-top-row{gap:.625rem}
+
+/* ================================================================
+   STAGE
+   ================================================================ */
+.gr-stage{position:relative;overflow:clip;background:var(--cb-stage-bg);border:1px solid var(--cb-border-default);border-radius:1.25rem;box-shadow:var(--shadow-card);display:flex;flex-direction:column;
+  /* sem min-height: stage cresce com o conteúdo da sequência */}
+.gr-stage::before{content:'';position:absolute;inset:0;background-image:var(--cb-stage-grid);pointer-events:none;mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%)}
+
+/* FIX #6 — variant spotlight (usado no GameRoom.tsx) */
+.gr-stage[data-stage-style="spotlight"]{
+  background:radial-gradient(circle at 50% 40%,rgb(139 92 246/.22) 0%,rgb(124 58 237/.08) 40%,transparent 70%),
+             linear-gradient(180deg,var(--color-surface-800),var(--color-surface-900))
+}
+.gr-stage[data-stage-style="spotlight"] .gr-ball-halo{width:26rem;height:26rem}
+
+.gr-stage-header{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid var(--cb-border-subtle);position:relative;z-index:1;flex-shrink:0}
+.gr-stage-label{font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cb-text-tertiary)}
+.gr-stage-body{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;overflow:visible}
+
+/* FIX #1 — gr-stage-spot precisa de position:relative para contexto do halo */
+.gr-stage-spot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;
+  position:relative;min-height:16rem;padding:.5rem .75rem;overflow:visible}
+
+/* ================================================================
+   BALL HERO
+   ================================================================ */
+/* Ball hero — tamanho fixo com flexshrink:0 para nunca colapsar */
+.gr-ball-hero{position:relative;width:9.5rem;height:9.5rem;flex-shrink:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:var(--font-family-display);user-select:none;isolation:isolate;opacity:1}
+.gr-ball-hero .ball-surface{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.55),transparent 35%),radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--ball-color,#8b5cf6) 75%,white 8%) 0%,var(--ball-color,#8b5cf6) 55%,color-mix(in srgb,var(--ball-color,#8b5cf6) 70%,black 10%) 100%);box-shadow:0 16px 50px -10px color-mix(in srgb,var(--ball-color,#8b5cf6) 65%,transparent),inset 0 -8px 20px rgba(0,0,0,.3),inset 0 4px 10px rgba(255,255,255,.2);z-index:0}
+.gr-ball-hero .ball-letter{position:relative;font-size:.92rem;font-weight:700;letter-spacing:.18em;opacity:.85;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.gr-ball-hero .ball-number{position:relative;font-size:3.5rem;font-weight:800;line-height:1;letter-spacing:-.04em;text-shadow:0 2px 6px rgba(0,0,0,.4)}
+.gr-ball-hero .ball-order{position:relative;font-family:var(--font-family-mono);font-size:.6rem;opacity:.6;margin-top:.1rem}
+
+/* ★ FIX #2 — gr-ball-halo centrado (top/left/transform)
+   Antes: sem top/left → renderizava no canto top-left do pai.
+   Agora: centrado sobre a bola hero.
+   ATENÇÃO: a animação cb-halo-pulse também precisa manter o translate. */
+.gr-ball-halo{
+  position:absolute;
+  width:22rem;height:22rem;
+  border-radius:50%;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%); /* ← FIX */
+  background:radial-gradient(circle,color-mix(in srgb,var(--ball-color,#8b5cf6) 30%,transparent) 0%,transparent 60%);
+  filter:blur(6px);
+  z-index:-1;
+  pointer-events:none;
+  animation:cb-halo-pulse 2.8s ease-in-out infinite
+}
+
+.gr-call{display:flex;align-items:center;gap:.5rem;font-family:var(--font-family-display);font-size:1.05rem;font-weight:700;color:var(--cb-text-primary)}
+.gr-call .col-tag{font-size:1.35rem;font-weight:800;color:var(--ball-color,var(--cb-brand));text-shadow:0 0 14px color-mix(in srgb,var(--ball-color,var(--cb-brand)) 60%,transparent)}
+
+.gr-stage-footer{padding:.5rem 1rem .75rem;display:flex;flex-direction:column;gap:.45rem;border-top:1px solid var(--cb-border-subtle);background:color-mix(in srgb,var(--cb-bg-base) 30%,transparent);flex-shrink:0;
+  /* sem overflow:hidden — footer cresce junto com as linhas de bolas */}
+.gr-sequence{display:flex;flex-wrap:wrap;gap:.3rem;
+  align-items:flex-start;align-content:flex-start;
+  padding-bottom:.15rem
+  /* sem max-height — cresce livremente, empurra seções abaixo */}
+.gr-mini-ball{flex-shrink:0;width:2rem;height:2rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-family-mono);font-size:.75rem;font-weight:700;color:var(--ball-color);background:color-mix(in srgb,var(--ball-color) 14%,transparent);border:1.5px solid color-mix(in srgb,var(--ball-color) 50%,transparent);transition:transform .2s;position:relative}
+.gr-mini-ball.latest{color:white;background:var(--ball-color);transform:scale(1.22);box-shadow:0 0 12px color-mix(in srgb,var(--ball-color) 70%,transparent)}
+.gr-progress{display:flex;flex-direction:column;gap:.3rem}
+.gr-progress-row{display:flex;justify-content:space-between;align-items:baseline;font-size:.7rem;color:var(--cb-text-tertiary)}
+.gr-progress-row .count{font-family:var(--font-family-mono);font-weight:700;font-size:.8rem;color:var(--cb-text-primary)}
+
+/* ================================================================
+   PATTERNS PANEL
+   ================================================================ */
+.gr-patterns{background:var(--cb-bg-card);border:1px solid var(--cb-border-default);border-radius:1.25rem;padding:.875rem 1rem;display:flex;flex-direction:column;gap:.5rem;box-shadow:var(--shadow-card)}
+.gr-patterns-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.gr-patterns-head .title{font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cb-text-tertiary)}
+.gr-patterns-list{display:flex;flex-direction:column;gap:.375rem;overflow-y:auto;flex:1;min-height:0}
+.gr-pattern{display:grid;grid-template-columns:2rem 1fr auto;align-items:center;gap:.55rem;padding:.4rem .625rem;background:var(--cb-bg-overlay);border:1px solid var(--cb-border-subtle);border-radius:.5rem;transition:border-color .15s}
+.gr-pattern.is-close{border-color:var(--cb-accent);background:var(--cb-accent-subtle)}
+.gr-pattern-mini{display:grid;grid-template-columns:repeat(5,1fr);gap:1.5px;aspect-ratio:1;background:var(--cb-bg-sunken);padding:2px;border-radius:3px}
+.gr-pattern-mini i{display:block;aspect-ratio:1;background:var(--cb-border-subtle);border-radius:1px}
+.gr-pattern-mini i.on{background:var(--cb-brand)}
+.gr-pattern.is-close .gr-pattern-mini i.on{background:var(--cb-accent)}
+.gr-pattern-info{min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.gr-pattern-info .name{font-size:.8rem;font-weight:600;color:var(--cb-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr-pattern-info .mini-progress{height:.22rem;background:var(--cb-border-subtle);border-radius:9999px;overflow:hidden}
+.gr-pattern-info .mini-progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--cb-brand),var(--cb-accent))}
+.gr-pattern-info .meta{font-size:.6rem;font-weight:700;color:var(--cb-text-tertiary)}
+.gr-pattern-prize{display:flex;flex-direction:column;align-items:flex-end;gap:.05rem}
+.gr-pattern-prize .amt{font-family:var(--font-family-mono);font-size:.8rem;font-weight:700;color:var(--cb-accent)}
+.gr-pattern-prize .hits{font-family:var(--font-family-mono);font-size:.62rem;color:var(--cb-text-tertiary)}
+.gr-pattern.is-close .gr-pattern-prize .hits{color:var(--cb-accent);font-weight:700}
+
+/* ================================================================
+   ★ FIX #3-5: BANNERS ROW + ADR-013/014 — classes que faltavam
+   Adicionar em globals.design.css
+   ================================================================ */
+
+/* Container wrapper — SEMPRE na posição grid-area:banners.
+   Quando não há banners, gr-banners-row está fora do DOM (render condicional)
+   e a row colapsa para 0. */
+.gr-banners-row{
+  display:flex;
+  flex-direction:column;
+  gap:.5rem
+}
+
+/* ADR-014: Golden Ball banner */
+.gr-golden-banner{
+  display:flex;align-items:center;gap:1rem;
+  padding:.875rem 1.25rem;
+  background:linear-gradient(135deg,rgba(251,191,36,.14),rgba(245,158,11,.06));
+  border:1px solid rgba(251,191,36,.35);
+  border-radius:.875rem;
+  animation:cb-fade-in .3s ease forwards
+}
+.gr-golden-banner .gr-golden-icon{
+  font-size:1.6rem;flex-shrink:0;
+  filter:drop-shadow(0 0 12px rgba(251,191,36,.7));
+  animation:cb-halo-pulse-simple 2s ease-in-out infinite
+}
+.gr-golden-banner .gr-golden-text{flex:1;display:flex;flex-direction:column;gap:.1rem}
+.gr-golden-banner .gr-golden-text strong{font-family:var(--font-family-display);font-size:.92rem;font-weight:700;color:var(--cb-accent)}
+.gr-golden-banner .gr-golden-text span{font-size:.78rem;color:var(--cb-text-secondary)}
+.gr-golden-banner .gr-golden-mult{
+  font-family:var(--font-family-display);font-size:1.6rem;font-weight:800;
+  color:var(--cb-accent);letter-spacing:-.03em;
+  text-shadow:0 0 20px rgba(251,191,36,.55);flex-shrink:0
+}
+
+/* ADR-013: Multi-Match stages panel */
+.gr-stages-panel{
+  display:flex;align-items:center;gap:.875rem;
+  padding:.5rem 1.125rem;
+  background:var(--cb-bg-card);
+  border:1px solid var(--cb-border-default);
+  border-radius:.75rem;
+  box-shadow:var(--shadow-card)
+}
+.gr-stages-title{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--cb-text-tertiary);flex-shrink:0}
+.gr-stages-list{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.gr-stage-item{
+  display:inline-flex;align-items:center;gap:.35rem;
+  padding:.18rem .55rem;
+  background:var(--cb-brand-subtle);
+  border:1px solid rgba(139,92,246,.25);
+  border-radius:9999px
+}
+.gr-stage-badge{font-family:var(--font-family-mono);font-size:.7rem;font-weight:700;color:var(--cb-brand)}
+.gr-stage-count{font-size:.67rem;color:var(--cb-text-secondary)}
+
+/* ADR-014: Game ended banner */
+.gr-ended-banner{
+  display:flex;align-items:center;gap:1rem;
+  padding:.875rem 1.25rem;
+  background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(30,30,53,.88));
+  border:1px solid rgba(139,92,246,.3);
+  border-radius:.875rem;
+  animation:cb-fade-in .4s ease forwards
+}
+.gr-ended-banner .gr-ended-icon{font-size:1.6rem;flex-shrink:0}
+.gr-ended-banner .gr-ended-text{flex:1;display:flex;flex-direction:column;gap:.15rem}
+.gr-ended-banner .gr-ended-text strong{font-family:var(--font-family-display);font-size:.92rem;font-weight:700;color:var(--cb-text-primary)}
+.gr-ended-banner .gr-ended-text span{font-size:.78rem;color:var(--cb-text-secondary)}
+.gr-ended-banner .gr-ended-next{font-size:.72rem;color:var(--cb-brand);font-weight:600;margin-top:.1rem}
+
+/* ================================================================
+   TICKETS
+   ================================================================ */
+.gr-tickets-section{display:flex;flex-direction:column;gap:.5rem;min-height:0}
+.gr-tickets-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0 .2rem;flex-shrink:0}
+.gr-tickets-head .title{display:inline-flex;align-items:baseline;gap:.4rem;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cb-text-tertiary)}
+.gr-tickets-head .title .count{font-family:var(--font-family-mono);font-size:.88rem;font-weight:700;letter-spacing:.02em;text-transform:none;color:var(--cb-text-primary)}
+.gr-tickets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(14.5rem,1fr));gap:.625rem;flex:1;min-height:0;overflow-y:auto;padding:2px;align-items:start}
+.gr-ticket{display:flex;flex-direction:column;background:var(--cb-bg-card);border:1px solid var(--cb-border-default);border-radius:.875rem;overflow:hidden;box-shadow:var(--shadow-card);transition:box-shadow .4s,border-color .2s,transform .2s}
+.gr-ticket:hover:not(.is-winner){border-color:var(--cb-border-strong);transform:translateY(-1px)}
+.gr-ticket.is-winner{border-color:var(--cb-accent);animation:cb-winner-glow 2.4s ease-in-out infinite}
+.gr-ticket.is-dimmed{opacity:.5;filter:saturate(.65)}
+.gr-ticket.is-dimmed:hover{opacity:.8;filter:saturate(1)}
+.gr-ticket-header{display:flex;align-items:center;justify-content:space-between;padding:.45rem .65rem;border-bottom:1px solid var(--cb-border-subtle);gap:.5rem}
+.gr-ticket-id{display:inline-flex;align-items:baseline;gap:.3rem;min-width:0}
+.gr-ticket-id .label{font-size:.56rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cb-text-tertiary)}
+.gr-ticket-id .id{font-family:var(--font-family-mono);font-size:.8rem;font-weight:700;color:var(--cb-text-primary)}
+.gr-ticket-marks{display:inline-flex;align-items:center;gap:.25rem;font-family:var(--font-family-mono);font-size:.66rem;font-weight:700;color:var(--cb-text-secondary);padding:.1rem .38rem;border-radius:9999px;background:var(--cb-border-subtle)}
+.gr-ticket-marks.is-close{color:var(--cb-accent);background:var(--cb-accent-subtle);border:1px solid rgba(251,191,36,.25)}
+.gr-ticket-marks.is-winner{color:#1a1a2e;background:linear-gradient(135deg,var(--color-accent-600),var(--color-accent-300));font-weight:800}
+.gr-bingo-grid{display:flex;flex-direction:column}
+.gr-bingo-grid-head{display:grid;grid-template-columns:repeat(5,1fr);gap:.18rem;padding:.3rem .45rem;background:var(--cb-bg-sunken);border-bottom:1px solid var(--cb-border-default)}
+.gr-bingo-head{height:1.6rem;display:flex;align-items:center;justify-content:center;font-family:var(--font-family-display);font-weight:800;font-size:.85rem;letter-spacing:.04em;color:white;border-radius:.3rem;box-shadow:inset 0 -2px 5px rgba(0,0,0,.2)}
+.gr-bingo-grid-body{display:flex;flex-direction:column;padding:.4rem .45rem;gap:.2rem}
+.gr-bingo-row{display:grid;grid-template-columns:repeat(5,1fr);gap:.2rem}
+.gr-bingo-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--font-family-mono);font-weight:700;font-size:.85rem;background:var(--cb-bg-overlay);color:var(--cb-text-secondary);border:1px solid var(--cb-border-subtle);border-radius:.3rem;position:relative;overflow:hidden;transition:background .2s,color .2s,border-color .2s}
+.gr-bingo-cell.is-marked{background:var(--cell-color);color:white;border-color:color-mix(in srgb,var(--cell-color) 70%,transparent);box-shadow:inset 0 -3px 6px rgba(0,0,0,.18)}
+.gr-bingo-cell.is-marked::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 35% 25%,rgba(255,255,255,.28) 0%,transparent 55%);pointer-events:none}
+.gr-bingo-cell.is-just-hit{animation:cb-cell-pop 380ms cubic-bezier(.34,1.56,.64,1)}
+.gr-bingo-cell.is-free{background:linear-gradient(135deg,var(--color-accent-600),var(--color-accent-400));color:#1a1a2e;border-color:var(--color-accent-500);font-size:1rem}
+.gr-bingo-cell.in-winning-pattern{
+  outline:2px solid var(--cb-accent);
+  outline-offset:-2px;
+  z-index:1;
+  animation:cb-winning-blink 1.8s ease-in-out infinite
+}
+@keyframes cb-winning-blink{
+  0%,100%{outline-color:var(--cb-accent);box-shadow:inset 0 0 8px rgba(251,191,36,.25)}
+  50%    {outline-color:rgba(251,191,36,.3);box-shadow:none}
+}
+
+/* badges de padrões completados na cartela */
+.gr-ticket-patterns{
+  display:flex;flex-wrap:wrap;gap:.25rem;
+  padding:.35rem .65rem;
+  border-top:1px solid rgba(251,191,36,.2);
+  background:rgba(251,191,36,.05)
+}
+.gr-ticket-pattern-badge{
+  display:inline-flex;align-items:center;gap:.2rem;
+  padding:.1rem .45rem;
+  background:rgba(251,191,36,.15);
+  border:1px solid rgba(251,191,36,.35);
+  border-radius:9999px;
+  font-size:.62rem;font-weight:700;
+  color:var(--cb-accent);
+  animation:cb-fade-in .3s ease forwards
+}
+.gr-ticket-pattern-badge .star{font-size:.55rem}
+.gr-ticket-foot{display:flex;align-items:center;justify-content:space-between;padding:.32rem .65rem .42rem;border-top:1px solid var(--cb-border-subtle);background:var(--cb-bg-overlay);font-size:.66rem;gap:.5rem}
+.gr-ticket-foot .best{color:var(--cb-text-tertiary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr-ticket-foot .prize{font-family:var(--font-family-mono);font-weight:700;color:var(--cb-accent);flex-shrink:0}
+.gr-ticket-foot .prize.is-paid{font-weight:800;font-size:.72rem}
+
+/* ================================================================
+   TWEAKS PANEL
+   ================================================================ */
+.tweaks-wrap{position:fixed;top:.875rem;right:.875rem;z-index:999;display:flex;flex-direction:column;gap:.5rem}
+.tweaks{background:var(--cb-bg-elevated);border:1px solid var(--cb-border-default);border-radius:.875rem;padding:.875rem 1rem;display:flex;flex-direction:column;gap:.45rem;min-width:13.5rem;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:var(--font-family-sans)}
+.tweaks-title{font-size:.6rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--cb-text-tertiary);margin-bottom:.1rem}
+.tweak-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.tweak-label{font-size:.78rem;color:var(--cb-text-secondary)}
+.tweak-toggle{position:relative;width:2rem;height:1.1rem;flex-shrink:0}
+.tweak-toggle input{opacity:0;width:0;height:0;position:absolute}
+.tweak-track{position:absolute;inset:0;background:var(--cb-border-default);border-radius:9999px;cursor:pointer;transition:background .2s}
+.tweak-track::before{content:'';position:absolute;left:.18rem;top:.18rem;width:.74rem;height:.74rem;border-radius:50%;background:white;transition:transform .2s}
+.tweak-toggle input:checked + .tweak-track{background:var(--cb-brand)}
+.tweak-toggle input:checked + .tweak-track::before{transform:translateX(.85rem)}
+.tweak-sep{height:1px;background:var(--cb-border-subtle);margin:.1rem 0}
+.fix-item{display:flex;align-items:flex-start;gap:.4rem;font-size:.68rem;color:var(--cb-text-secondary);line-height:1.4}
+.fix-item .ok{color:var(--color-success-400);flex-shrink:0;font-size:.75rem}
+.fix-item .bug{color:var(--color-danger-400);flex-shrink:0;font-size:.75rem}
+
+/* ================================================================
+   KEYFRAMES
+   ================================================================ */
+@keyframes cb-spin{to{transform:rotate(360deg)}}
+@keyframes cb-pulse{0%,100%{opacity:1;box-shadow:0 0 6px currentColor}50%{opacity:.6;box-shadow:0 0 14px currentColor}}
+@keyframes cb-fade-in{from{opacity:0}to{opacity:1}}
+@keyframes cb-ball-drop{0%{opacity:0;transform:translateY(-3rem) scale(.5) rotate(-10deg)}60%{transform:translateY(.5rem) scale(1.05) rotate(2deg)}80%{transform:translateY(-.2rem) scale(.97) rotate(-1deg)}100%{opacity:1;transform:translateY(0) scale(1) rotate(0)}}
+@keyframes cb-winner-glow{0%,100%{box-shadow:0 0 20px var(--color-accent-400),0 0 40px rgba(245,158,11,.35)}50%{box-shadow:0 0 36px var(--color-accent-300),0 0 80px rgba(245,158,11,.5)}}
+@keyframes cb-cell-pop{0%{transform:scale(.8)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+
+/* ★ FIX: cb-halo-pulse inclui translate para não conflitar com top/left/transform do halo */
+@keyframes cb-halo-pulse{
+  0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(1)}
+  50%    {opacity:.8;transform:translate(-50%,-50%) scale(1.1)}
+}
+/* versão simples para ícones (sem translate) */
+@keyframes cb-halo-pulse-simple{
+  0%,100%{opacity:.7;transform:scale(1)}
+  50%    {opacity:1; transform:scale(1.1)}
+}
+@keyframes cb-shimmer{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+/* ── CONSTANTS ── */
+const BINGO_COLORS = {
+  B:'var(--color-bingo-b)', I:'var(--color-bingo-i)',
+  N:'var(--color-bingo-n)', G:'var(--color-bingo-g)', O:'var(--color-bingo-o)',
+};
+const COLS = ['B','I','N','G','O'];
+function getCol(n){ if(n<=15)return 'B'; if(n<=30)return 'I'; if(n<=45)return 'N'; if(n<=60)return 'G'; return 'O'; }
+
+/* 18 bolas sorteadas — set inclui marcações do Ticket A */
+const ALL_DRAWN = [8,22,47,68,64,12,29,33,55,71,3,19,43,58,74,14,17,26];
+
+/* matrices: flat 24 — B(5)+I(5)+N(4,sem free)+G(5)+O(5) */
+const TICKETS = [
+  { id:'001', matrix:[8,12,3,14,6,  22,29,19,17,26, 33,38,43,45, 47,55,58,49,60, 68,71,64,74,70] },
+  { id:'002', matrix:[4,8,7,5,13,   16,22,20,26,30, 32,36,44,41, 48,55,56,50,59, 62,63,65,72,75] },
+  { id:'003', matrix:[2,11,9,6,15,  16,25,18,28,24, 34,40,42,45, 46,53,57,52,60, 66,67,69,73,75] },
+];
+
+/* mini-grid 25 bools para preview de padrão */
+const PATTERNS = [
+  { name:'Linha 1',    prize:'25.00', cells:[1,1,1,1,1, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0], prog:1.0 },
+  { name:'Linha 3',    prize:'30.00', cells:[0,0,0,0,0, 0,0,0,0,0, 1,1,1,1,1, 0,0,0,0,0, 0,0,0,0,0], prog:1.0 },
+  { name:'Coluna I',   prize:'40.00', cells:[0,1,0,0,0, 0,1,0,0,0, 0,1,0,0,0, 0,1,0,0,0, 0,1,0,0,0], prog:1.0 },
+  { name:'Coluna B',   prize:'40.00', cells:[1,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0, 1,0,0,0,0], prog:.80 },
+  { name:'Diagonal ↘', prize:'80.00', cells:[1,0,0,0,0, 0,1,0,0,0, 0,0,1,0,0, 0,0,0,1,0, 0,0,0,0,1], prog:.60 },
+];
+
+/* ── TICKET CARD ── */
+function TicketCard({ ticketId, matrix, drawnSet, lastDrawn, patterns }) {
+  const B=matrix.slice(0,5), I=matrix.slice(5,10);
+  const Nr=matrix.slice(10,14), G=matrix.slice(14,19), O=matrix.slice(19,24);
+  const N=[Nr[0],Nr[1],null,Nr[2],Nr[3]];
+
+  // flat[12] = null (free space, sempre marcado)
+  const flat = [];
+  for (let r=0; r<5; r++) flat.push(B[r],I[r],N[r],G[r],O[r]);
+
+  const grid = Array.from({length:5},(_,r)=>Array.from({length:5},(_,c)=>flat[r*5+c]));
+
+  const isCellMarked = i => flat[i]===null || drawnSet.has(flat[i]);
+
+  // padrões completados: TODOS os bits 1 do padrão têm células marcadas
+  const completedPatterns = patterns.filter(p =>
+    p.cells.every((req,i) => !req || isCellMarked(i))
+  );
+
+  // índices de células que fazem parte de algum padrão completado
+  const winningCells = new Set();
+  completedPatterns.forEach(p =>
+    p.cells.forEach((req,i) => { if (req) winningCells.add(i); })
+  );
+
+  const markedCount = matrix.filter(n=>drawnSet.has(n)).length + 1;
+  const isWinner   = completedPatterns.length > 0;
+  const isClose    = !isWinner && markedCount >= 18;
+  const isDimmed   = !isClose && !isWinner && markedCount < 3;
+  const totalPrize = completedPatterns.reduce((s,p)=>s+parseFloat(p.prize),0).toFixed(2);
+
+  return (
+    <article className={`gr-ticket${isWinner?' is-winner':''}${isClose?' is-close':''}${isDimmed?' is-dimmed':''}`}>
+      <div className="gr-ticket-header">
+        <div className="gr-ticket-id">
+          <span className="label">TICKET</span>
+          <span className="id">#{ticketId}</span>
+        </div>
+        {isWinner
+          ? <span className="gr-ticket-marks is-winner">★ {completedPatterns.length} padrão{completedPatterns.length>1?'ões':''}</span>
+          : <span className={`gr-ticket-marks${isClose?' is-close':''}`}>{markedCount}/25</span>
+        }
+      </div>
+      <div className="gr-bingo-grid">
+        <div className="gr-bingo-grid-head">
+          {COLS.map(c=><div key={c} className="gr-bingo-head" style={{background:BINGO_COLORS[c]}}>{c}</div>)}
+        </div>
+        <div className="gr-bingo-grid-body">
+          {grid.map((row,ri)=>(
+            <div key={ri} className="gr-bingo-row">
+              {row.map((val,ci)=>{
+                const flatIdx = ri*5+ci;
+                const isFree  = val===null;
+                const isMarked= isFree||drawnSet.has(val);
+                const isJust  = !isFree&&val===lastDrawn;
+                const inWin   = winningCells.has(flatIdx);
+                return (
+                  <div key={ci}
+                    className={['gr-bingo-cell',isFree?'is-free':'',isMarked&&!isFree?'is-marked':'',isJust?'is-just-hit':'',inWin?'in-winning-pattern':''].filter(Boolean).join(' ')}
+                    style={isMarked&&!isFree?{'--cell-color':BINGO_COLORS[COLS[ci]]}:{}}
+                  >{isFree?'★':val}</div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {completedPatterns.length>0 && (
+        <div className="gr-ticket-patterns">
+          {completedPatterns.map(p=>(
+            <span key={p.name} className="gr-ticket-pattern-badge">
+              <span className="star">★</span>{p.name}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="gr-ticket-foot">
+        <span className="best">
+          {isWinner ? `${completedPatterns.length} padrão${completedPatterns.length>1?'ões':''} completado${completedPatterns.length>1?'s':''}!` : `${markedCount} marcadas de 25`}
+        </span>
+        {isWinner && <span className="prize is-paid">{totalPrize} WAX</span>}
+        {isClose && !isWinner && <span className="prize">~25.00 WAX</span>}
+      </div>
+    </article>
+  );
+}
+
+/* ── PATTERNS PANEL ── */
+function PatternsPanel({ onHide }) {
+  return (
+    <aside className="gr-patterns">
+      <div className="gr-patterns-head">
+        <span className="title">Padrões de Vitória</span>
+        <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onHide} aria-label="Ocultar padrões">✕</button>
+      </div>
+      <div className="gr-patterns-list">
+        {PATTERNS.map(p=>(
+          <div key={p.name} className={`gr-pattern${p.prog>=.6?' is-close':''}`}>
+            <div className="gr-pattern-mini">{p.cells.map((on,j)=><i key={j} className={on?'on':''}/>)}</div>
+            <div className="gr-pattern-info">
+              <span className="name">{p.name}</span>
+              <div className="mini-progress"><i style={{width:`${p.prog*100}%`}}/></div>
+              <span className="meta">{Math.round(p.prog*100)}% progresso</span>
+            </div>
+            <div className="gr-pattern-prize">
+              <span className="amt">{p.prize}</span>
+              <span className="hits">WAX</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+/* ── TWEAKS ── */
+function TweaksPanel({ tweaks, setTweaks }) {
+  const rows = [
+    { key:'patterns', label:'Painel de Padrões' },
+    { key:'golden',   label:'Bola Dourada (ADR-014)' },
+    { key:'stages',   label:'Multi-Match Stages (ADR-013)' },
+    { key:'ended',    label:'Jogo Encerrado' },
+    { key:'autoPlay', label:'Auto-avançar bola' },
+  ];
+  const fixes = [
+    { ok:true,  text:'gr-ball-halo centrado (top/left/transform)' },
+    { ok:true,  text:'cb-halo-pulse com translate na animação' },
+    { ok:true,  text:'gr-banners-row — wrapper único no grid' },
+    { ok:true,  text:'gr-golden-banner + sub-classes' },
+    { ok:true,  text:'gr-stages-panel + gr-stage-item' },
+    { ok:true,  text:'gr-ended-banner + sub-classes' },
+    { ok:true,  text:'data-stage-style="spotlight" definido' },
+    { ok:true,  text:'grid-template-areas (3 rows explícitas)' },
+  ];
+  return (
+    <div className="tweaks-wrap">
+      <div className="tweaks">
+        <div className="tweaks-title">Estados · Tweaks</div>
+        {rows.map(r=>(
+          <div key={r.key} className="tweak-row">
+            <span className="tweak-label">{r.label}</span>
+            <label className="tweak-toggle">
+              <input type="checkbox" checked={tweaks[r.key]} onChange={e=>setTweaks(p=>({...p,[r.key]:e.target.checked}))}/>
+              <div className="tweak-track"/>
+            </label>
+          </div>
+        ))}
+      </div>
+      <div className="tweaks">
+        <div className="tweaks-title">Fixes Aplicados</div>
+        {fixes.map(f=>(
+          <div key={f.text} className="fix-item">
+            <span className={f.ok?'ok':'bug'}>{f.ok?'✓':'✗'}</span>
+            <span>{f.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── APP ── */
+function App() {
+  const [ballIdx,  setBallIdx]  = useState(ALL_DRAWN.length - 1);
+  const [tweaks,   setTweaks]   = useState({ patterns:true, golden:false, stages:false, ended:false, autoPlay:false });
+  const heroRef = useRef(null);
+  const prevIdx = useRef(ALL_DRAWN.length - 1);
+
+  /* auto-advance */
+  useEffect(()=>{
+    if (!tweaks.autoPlay) return;
+    const id = setInterval(()=> setBallIdx(x=>(x+1)%ALL_DRAWN.length), 2600);
+    return ()=>clearInterval(id);
+  },[tweaks.autoPlay]);
+
+  /* drop animation */
+  useEffect(()=>{
+    if (!heroRef.current || ballIdx===prevIdx.current) return;
+    prevIdx.current = ballIdx;
+    const el = heroRef.current;
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'cb-ball-drop 620ms cubic-bezier(.34,1.56,.64,1) forwards';
+  },[ballIdx]);
+
+  const drawn   = ALL_DRAWN.slice(0, ballIdx+1);
+  const drawnSet = useMemo(()=>new Set(drawn),[ballIdx]);
+  const lastBall = ALL_DRAWN[ballIdx];
+  const col      = getCol(lastBall);
+  const color    = BINGO_COLORS[col];
+
+  /* há algum banner para mostrar? */
+  const hasBanners = tweaks.golden || tweaks.stages || tweaks.ended;
+
+  return (
+    <div className="gr-shell">
+
+      {/* ── Navbar ── */}
+      <header className="gr-navbar">
+        <div className="gr-nav-left">
+          <button className="cb-btn cb-btn-ghost cb-btn-sm">← Lobby</button>
+          <div className="gr-nav-crumb">
+            <span className="sep">/</span>
+            <span style={{color:'var(--cb-text-tertiary)',fontSize:'.8rem'}}>Sala</span>
+            <span className="room">Sala VIP #42</span>
+            <span className="gr-live">AO VIVO</span>
+            <span style={{fontFamily:'var(--font-family-mono)',fontSize:'.7rem',color:'var(--cb-text-secondary)',background:'var(--cb-bg-elevated)',border:'1px solid var(--cb-border-default)',borderRadius:'.35rem',padding:'.15rem .45rem'}}>🎲 drawing</span>
+          </div>
+        </div>
+        <div className="gr-nav-right">
+          <span className="cb-wallet-chip">
+            <span style={{color:'var(--cb-brand)'}}>◆</span>
+            <span style={{fontFamily:'var(--font-family-mono)',fontSize:'.68rem'}}>player1.wam</span>
+          </span>
+          <span className="cb-status-dot cb-status-dot-live" title="WebSocket conectado"/>
+        </div>
+      </header>
+
+      {/* ── Grid ── */}
+      <div className="gr-main gr-comfortable">
+
+        {/* ── Linha superior: stage + patterns crescem juntos ── */}
+        <div className="gr-top-row">
+
+        {/* Stage — data-stage-style="spotlight" agora tem CSS definido */}
+        <section className="gr-stage" data-stage-style="spotlight" aria-label="Sorteio ao vivo">
+          <div className="gr-stage-header">
+            <span className="gr-stage-label">Última Bola Sorteada</span>
+            <span style={{display:'flex',alignItems:'center',gap:'.4rem',fontSize:'.7rem',color:'var(--cb-text-tertiary)'}}>
+              <span className="cb-status-dot cb-status-dot-live" aria-hidden="true"/>
+              <span style={{fontWeight:600,color:'var(--cb-text-secondary)',fontFamily:'var(--font-family-mono)'}}>{drawn.length}/75</span>
+            </span>
+          </div>
+
+          <div className="gr-stage-body">
+            {/* gr-stage-spot: position:relative ← contexto do halo */}
+            <div className="gr-stage-spot" style={{'--ball-color':color}}>
+              {/* ★ FIX #1+2: halo centrado via top/left/transform */}
+              <div className="gr-ball-halo" aria-hidden="true"/>
+
+              <div ref={heroRef} className="gr-ball-hero" role="status" aria-live="polite" aria-atomic="true">
+                <div className="ball-surface" aria-hidden="true"/>
+                <span className="ball-letter">{col}</span>
+                <span className="ball-number">{lastBall}</span>
+                <span className="ball-order">#{drawn.length}</span>
+              </div>
+
+              <div className="gr-call" aria-hidden="true">
+                <span className="col-tag">{col}</span>
+                <span>{lastBall}</span>
+              </div>
+            </div>
+
+            <div className="gr-stage-footer">
+              <div className="gr-sequence" aria-label="Histórico de bolas">
+                {[...drawn].reverse().map((n,i)=>{
+                  const c=getCol(n);
+                  return <div key={i} className={`gr-mini-ball${i===0?' latest':''}`} style={{'--ball-color':BINGO_COLORS[c]}} title={`${c}${n}`}>{n}</div>;
+                })}
+              </div>
+              <div className="gr-progress">
+                <div className="gr-progress-row">
+                  <span>Progresso do sorteio</span>
+                  <span className="count">{drawn.length}/75</span>
+                </div>
+                <div className="cb-progress-track">
+                  <div className="cb-progress-fill" style={{width:`${(drawn.length/75)*100}%`}}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Patterns panel */}
+        {tweaks.patterns && <PatternsPanel onHide={()=>setTweaks(p=>({...p,patterns:false}))}/>}
+
+        </div>{/* fim gr-top-row */}
+
+        {/* ★ FIX #3-5: gr-banners-row — SÓ no DOM quando há banners. */}
+        {hasBanners && (
+          <div className="gr-banners-row">
+            {tweaks.golden && (
+              <div className="gr-golden-banner" role="status" aria-live="assertive">
+                <span className="gr-golden-icon">🌟</span>
+                <div className="gr-golden-text">
+                  <strong>Bola Dourada Ativada!</strong>
+                  <span>A próxima bola sorteada tem multiplicador de prêmio</span>
+                </div>
+                <span className="gr-golden-mult">×3</span>
+              </div>
+            )}
+            {tweaks.stages && (
+              <div className="gr-stages-panel" role="status">
+                <span className="gr-stages-title">Estágios Multi-Match</span>
+                <div className="gr-stages-list">
+                  <div className="gr-stage-item">
+                    <span className="gr-stage-badge">Estágio 1</span>
+                    <span className="gr-stage-count">2 vencedores</span>
+                  </div>
+                  <div className="gr-stage-item">
+                    <span className="gr-stage-badge">Estágio 2</span>
+                    <span className="gr-stage-count">aguardando...</span>
+                  </div>
+                  <div className="gr-stage-item">
+                    <span className="gr-stage-badge">Estágio 3</span>
+                    <span className="gr-stage-count">aguardando...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {tweaks.ended && (
+              <div className="gr-ended-banner" role="status" aria-live="polite">
+                <span className="gr-ended-icon">🏁</span>
+                <div className="gr-ended-text">
+                  <strong>Jogo Encerrado</strong>
+                  <span>1 vencedor encontrado · Prêmio de 125.00 WAX pago automaticamente</span>
+                  <span className="gr-ended-next">◆ Próximo jogo abre em 2m 30s</span>
+                </div>
+                <button className="cb-btn cb-btn-primary cb-btn-sm">Próximo →</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tickets */}
+        <div className="gr-tickets-section">
+          <div className="gr-tickets-head">
+            <span className="title">Minhas Cartelas <span className="count">{TICKETS.length}</span></span>
+            <button className="cb-btn cb-btn-primary cb-btn-sm">+ Comprar Mais</button>
+          </div>
+          <div className="gr-tickets-grid">
+            {TICKETS.map(t=>(
+              <TicketCard key={t.id} ticketId={t.id} matrix={t.matrix} drawnSet={drawnSet} lastDrawn={lastBall} patterns={PATTERNS}/>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <TweaksPanel tweaks={tweaks} setTweaks={setTweaks}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
