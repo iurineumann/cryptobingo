@@ -92,7 +92,7 @@ async function indexGames(): Promise<void> {
             try {
                 const ticketRes = await rpcClient.v1.chain.get_table_rows({
                     code: CONTRACT_ACCOUNT,
-                    scope: game.game_id,
+                    scope: UInt64.from(String(game.game_id)),
                     table: 'tickets',
                     limit: 1,
                     json: true,
