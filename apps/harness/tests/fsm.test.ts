@@ -20,14 +20,9 @@
 import { APIClient, PrivateKey, Session }                              from '@wharfkit/session';
 import { WalletPluginPrivateKey }                                       from '@wharfkit/wallet-plugin-privatekey';
 import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
-import * as dotenv from 'dotenv';
-import * as path   from 'path';
 
 import { applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
 import { BlockchainTicketRecord }           from '../../../packages/shared-types/src';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../.waxdev.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../../apps/worker-game-loop/.env') });
 
 // ==========================================
 // CONFIG
