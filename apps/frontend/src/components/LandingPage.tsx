@@ -205,7 +205,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
   function getTicketsSold(roomId: string): number | null {
     const g = currentGames[String(roomId)];
     if (!g) return null;
-    const pool  = parseFloat(g.prize_pool?.quantity?.split(' ')[0] ?? '0');
+    const pool  = parseFloat(g.total_wagered?.quantity?.split(' ')[0] ?? '0');
     const price = parseFloat(g.ticket_price?.quantity?.split(' ')[0] ?? '0');
     if (pool <= 0 || price <= 0) return null;
     return Math.round(pool / price);
