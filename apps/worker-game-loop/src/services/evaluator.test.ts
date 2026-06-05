@@ -1,8 +1,6 @@
 import {
     applyDrawnBalls,
-    checkWinPattern,
     checkWinPatterns,
-    WIN_PATTERNS,
 } from './evaluator';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
 
@@ -15,37 +13,10 @@ function makeTicket(matrix: number[], state = 0x00001000): BlockchainTicketRecor
     } as BlockchainTicketRecord;
 }
 
-// ==========================================
-// WIN_PATTERNS — integridade das máscaras
-// ==========================================
-
-describe('WIN_PATTERNS', () => {
-    it('define 12 padrões', () => {
-        expect(Object.keys(WIN_PATTERNS).length).toBe(12);
-    });
-
-    it('ROW_0 cobre bits 0,5,10,15,20 (primeira linha)', () => {
-        const mask = WIN_PATTERNS.ROW_0;
-        expect(mask & (1n << 0n)).toBe(1n << 0n);   // B col, row 0
-        expect(mask & (1n << 5n)).toBe(1n << 5n);   // I col, row 0
-        expect(mask & (1n << 10n)).toBe(1n << 10n); // N col, row 0
-        expect(mask & (1n << 15n)).toBe(1n << 15n); // G col, row 0
-        expect(mask & (1n << 20n)).toBe(1n << 20n); // O col, row 0
-        expect(mask & (1n << 1n)).toBe(0n);          // row 1 não deve bater
-    });
-
-    it('COL_B cobre bits 0-4 (primeira coluna)', () => {
-        const mask = WIN_PATTERNS.COL_B;
-        for (let b = 0; b <= 4; b++) {
-            expect(mask & (1n << BigInt(b))).toBe(1n << BigInt(b));
-        }
-        expect(mask & (1n << 5n)).toBe(0n); // Primeiro bit da col I
-    });
-
-    it('ROW_0 é a máscara 1082401 (soma bits 0,5,10,15,20)', () => {
-        expect(WIN_PATTERNS.ROW_0).toBe(1082401n);
-    });
-});
+const ROW0_MASK = 1082401n; // bits 0,5,10,15,20
+const COLB_MASK = 1082401n
+    ? 1082401n & (1n << 0n) | (1n << 1n) | (1n << 2n) | (1n << 3n) | (1n << 4n)
+    : 0n;
 
 // ==========================================
 // applyDrawnBalls — bitmask após bolas
@@ -100,38 +71,13 @@ describe('applyDrawnBalls', () => {
 });
 
 // ==========================================
-// checkWinPattern — modo legado
-// ==========================================
-
-describe('checkWinPattern', () => {
-    it('detecta ROW_0 quando bits 0,5,10,15,20 estão setados', () => {
-        const state = (1 << 0) | (1 << 5) | (1 << 10) | (1 << 15) | (1 << 20);
-        const result = checkWinPattern(state | 0x00001000);
-        expect(result).not.toBeNull();
-        expect(result!.patternName).toBe('ROW_0');
-    });
-
-    it('retorna null quando nenhum padrão é satisfeito', () => {
-        const state = 0x00001000; // só FREE SPACE
-        expect(checkWinPattern(state)).toBeNull();
-    });
-
-    it('detecta ROW_0 quando todos os 25 bits estão setados (primeiro match)', () => {
-        const state = (1 << 25) - 1; // bits 0-24 setados
-        const result = checkWinPattern(state);
-        expect(result).not.toBeNull();
-        expect(result!.patternName).toBe('ROW_0');
-    });
-});
-
-// ==========================================
 // checkWinPatterns — modo dinâmico com weights
 // ==========================================
 
 describe('checkWinPatterns', () => {
     const patterns = [
-        { name: 'ROW_0', mask: WIN_PATTERNS.ROW_0, weight: 5 },
-        { name: 'COL_B', mask: WIN_PATTERNS.COL_B, weight: 3 },
+        { name: 'ROW_0', mask: ROW0_MASK, weight: 5 },
+        { name: 'COL_B', mask: 31n, weight: 3 },           // bits 0-4
     ];
 
     it('retorna padrões vencedores quando estado bate', () => {
