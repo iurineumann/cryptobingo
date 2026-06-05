@@ -45,7 +45,7 @@ async function recordClaimWin(
     }
 }
 
-function computePayoutAmount(
+export function computePayoutAmount(
     ticketQuantity: string,
     baseMultiplier: number,
     weight: number,
@@ -663,8 +663,9 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             );
 
             if (txHash) {
+                const actualPrice = ticket.price?.quantity ?? game.ticket_price.quantity;
                 const payout = computePayoutAmount(
-                    game.ticket_price.quantity,
+                    actualPrice,
                     baseMultiplier,
                     weight,
                     appliedMultiplier,
