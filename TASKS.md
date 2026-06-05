@@ -100,3 +100,8 @@
 - [x] `healthController.ts` — probes Kubernetes `/health/live` e `/health/ready` (5 testes).
 - [x] `dropWorker.ts` — tipos internos substituídos por `BlockchainDrop*` de shared-types.
 - [x] `sweepggr` + `settreasury` — contrato C++ + ABI + ADR-005 Fase 4 documentada.
+- [x] Prize calc bugs fixed — `buildWinnerPayloads` + `processAllGameWinners` usam `ticket.price?.quantity` (ADR-010); `computeWinnerMap` usa combination weights no frontend.
+- [x] `computeWinnerMap` extraído para `ticketUtils.ts` — testável isoladamente.
+- [x] 57 novos testes QA: `evaluator.payout.test.ts` (34), `ticketUtils.test.ts` +23, `gameOrchestrator.test.ts` +7.
+- [x] `patternCache.ts` — Redis TTL 1h, fail-open; `GET /api/v1/gametypes/:gametypeId/patterns`.
+- [x] Harness E2E 20/20 — ABI `orng.wax` corrigido (tabela `reqs` adicionada manualmente); `init_dev_env.sh` usa ABI hand-maintained. Total: 273 testes passando.

@@ -10,7 +10,7 @@ import { Session } from '@wharfkit/session';
 import { useReplay } from '../hooks/useReplay';
 import { TicketCard } from './TicketCard';
 import {
-  BINGO_COLORS, getCol, type Pattern, type GamePhase,
+  BINGO_COLORS, getCol, type Pattern,
   sortTickets, sortPatterns, groupTicketsByCategory,
 } from './ticketUtils';
 
@@ -130,10 +130,9 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
   }, [patterns]);
 
   // ── Sort/group ────────────────────────────────────────────────────────────
-  const replayPhase: GamePhase = isComplete || gameEnded ? 'after' : 'during';
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap, revealedBalls.length, totalBalls, replayPhase),
-    [tickets, revealedSet, patterns, winnerMap, revealedBalls.length, totalBalls, replayPhase],
+    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap),
+    [tickets, revealedSet, patterns, winnerMap],
   );
   const sortedPatterns = useMemo(
     () => sortPatterns(patterns, tickets, revealedSet, patternWinCount),

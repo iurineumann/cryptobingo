@@ -42,7 +42,7 @@ O contrato integra-se com o padrão AtomicAssets. Benefícios (como descontos) n
   * `lockgame`: Fecho de vendas (Invocado pelo Worker via RabbitMQ).
   * `startdraw`: Aciona o oráculo.
   * `receiverand`: Callback do oráculo que define o resultado.
-  * `claimwin`: Executa o cálculo de prémios. Em jogos com `gametype_id` definido, paga com base no weight do padrão vencedor (max_weight rule): `ticket_price × base_multiplier × win_weight / 100`. Modo legado (`gametype_id=0`) mantém RTP fixo de 85% do `prize_pool`. Distribui também o `sponsor_pool` integralmente (multidrop).
+  * `claimwin`: Executa o cálculo de prémios. Em jogos com `gametype_id` definido, paga com base no weight do padrão vencedor (max_weight rule): `ticket_price × base_multiplier × win_weight / 100`. Modo legado (`gametype_id=0`) mantém RTP fixo de 85% do `total_wagered`. Distribui também o `sponsor_pool` integralmente (multidrop).
 
 ## 5. Estrutura do Monorepo Off-Chain
 * **`@cryptobingo/api-gateway`**: Ouve na porta `8082`. Conectado ao Mongo (Perfis) e Postgres (Ledger). Possui as rotas `/profile` e a rota crítica de geração/assinatura de cartelas.

@@ -42,7 +42,7 @@ namespace bingo {
         uint64_t                    game_id;
         name                        status;
         extended_asset              ticket_price;
-        extended_asset              prize_pool;
+        extended_asset              total_wagered;
         std::vector<extended_asset> sponsor_pool;
         std::vector<char>           drawn_balls;
         uint64_t                    campaign_id       = 0;
@@ -51,7 +51,7 @@ namespace bingo {
         time_point_sec              end_time          = time_point_sec(0);
         uint8_t                     golden_ball_num   = 0;  // ADR-012: número da bola dourada (1-75; 0=nenhuma)
         uint16_t                    golden_multiplier = 0;  // ADR-012: multiplicador derivado (0=nenhum)
-        int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts do prize_pool (para cálculo do GGR)
+        int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts (para cálculo do GGR)
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }

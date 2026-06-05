@@ -327,14 +327,13 @@ export default function GameRoom({
   // patterns ordenados por nº de cartelas que completaram (decrescente)
 
   // ── Cartelas ordenadas + agrupadas ─────────────────────────────────────
-  const gamePhase = isEffectiveGameEnded ? 'after' : 'during';
   const sortedTickets = useMemo(
-    () => sortTickets(playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase),
-    [playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase],
+    () => sortTickets(playerTickets, drawnSet, gamePatterns, winnerMap),
+    [playerTickets, drawnSet, gamePatterns, winnerMap],
   );
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase),
-    [playerTickets, drawnSet, gamePatterns, winnerMap, drawnNumbers.length, maxBalls, gamePhase],
+    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap),
+    [playerTickets, drawnSet, gamePatterns, winnerMap],
   );
 
   // ── Refs para animação ────────────────────────────────────────────────────
