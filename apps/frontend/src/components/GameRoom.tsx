@@ -372,7 +372,7 @@ export default function GameRoom({
     try {
       // Busca todos os tickets paginando (limit 50 por página) até não restar mais
       async function fetchAllTickets() {
-        const rows: Array<{ ticket_id: string; matrix: number[] | string }> = [];
+        const rows: Array<{ ticket_id: string; matrix: number[] | string; price?: { quantity: string; contract: string } }> = [];
         let lowerBound: string | undefined;
         while (true) {
           const res = await session.client.v1.chain.get_table_rows({
@@ -463,8 +463,9 @@ export default function GameRoom({
 
       setPlayerTickets(
         allTickets.map(r => ({
-          id:     r.ticket_id,
-          matrix: Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
+          id:        r.ticket_id,
+          matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
+          pricePaid: r.price?.quantity,
         }))
       );
     } catch (err) {
@@ -985,6 +986,7 @@ export default function GameRoom({
                         density={density}
                         patterns={roomPatterns}
                         completedCombinations={completedCombinationsPerTicket.get(ticket.id)}
+                        pricePaid={ticket.pricePaid}
                       />
                     );
                   })}

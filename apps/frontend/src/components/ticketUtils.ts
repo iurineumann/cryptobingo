@@ -71,8 +71,9 @@ export interface WinnerInfo {
 }
 
 export interface TicketEntry {
-  id: string;
-  matrix: number[];
+  id:         string;
+  matrix:     number[];
+  pricePaid?: string;  // quantity string ADR-010, ex: "5.0000 BINGO"
 }
 
 function ticketFlat(matrix: number[]): (number | null)[] {

@@ -65,7 +65,7 @@ function computeCompletedPatterns(
 
 export function useReplay(gameId: string, session: Session): ReplayState {
   const [game, setGame] = useState<BlockchainGameState | null>(null);
-  const [tickets, setTickets] = useState<Array<{ id: string; matrix: number[] }>>([]);
+  const [tickets, setTickets] = useState<Array<{ id: string; matrix: number[]; pricePaid?: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [revealedCount, setRevealedCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -128,8 +128,9 @@ export function useReplay(gameId: string, session: Session): ReplayState {
 
         setTickets(
           (ticketsRes.rows as Array<BlockchainTicketRecord & { matrix: number[] | string }>).map(r => ({
-            id: r.ticket_id,
-            matrix: Array.isArray(r.matrix) ? r.matrix : parseHexBytes(r.matrix as string),
+            id:        r.ticket_id,
+            matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexBytes(r.matrix as string),
+            pricePaid: r.price?.quantity,
           }))
         );
       } catch (err) {

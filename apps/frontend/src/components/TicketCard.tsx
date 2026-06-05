@@ -8,20 +8,21 @@ import { useTranslation } from 'react-i18next';
 import { BINGO_COLORS, COLS, type Pattern } from './ticketUtils';
 
 interface TicketCardProps {
-  ticketId:              string;
-  matrix:                number[];
-  drawnSet:              Set<number>;
-  lastDrawn:             number | null;
-  winPattern:            Set<number> | null;
-  prize:                 string | null;
-  density:               'comfortable' | 'compact';
-  patterns:              Pattern[];
+  ticketId:               string;
+  matrix:                 number[];
+  drawnSet:               Set<number>;
+  lastDrawn:              number | null;
+  winPattern:             Set<number> | null;
+  prize:                  string | null;
+  density:                'comfortable' | 'compact';
+  patterns:               Pattern[];
   completedCombinations?: string[];
+  pricePaid?:             string;  // preço pago por esta cartela (ADR-010)
 }
 
 export function TicketCard({
   ticketId, matrix, drawnSet, lastDrawn, winPattern,
-  prize, density, patterns, completedCombinations,
+  prize, density, patterns, completedCombinations, pricePaid,
 }: TicketCardProps) {
   const { t } = useTranslation();
 
@@ -145,7 +146,10 @@ export function TicketCard({
             ? t('game_room.ticket_footer_pattern', { count: completedPatterns.length || 1 })
             : t('game_room.ticket_footer_marked', { marked: markedCount, total: 25 })}
         </span>
-        {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
+        <div className="gr-ticket-foot-right">
+          {pricePaid && <span className="ticket-price-paid">{pricePaid}</span>}
+          {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
+        </div>
       </div>
     </article>
   );
