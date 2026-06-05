@@ -48,7 +48,7 @@ export default function AdminDashboard({ session }: AdminDashboardProps = {}) {
         g.status === 'funding' || g.status === 'locked' || g.status === 'drawing'
     );
     const totalPrizePool = games.reduce((sum, g) => {
-        const pp = g.prize_pool as unknown as ExtendedAsset;
+        const pp = g.total_wagered as unknown as ExtendedAsset;
         const qty = parseFloat(pp.quantity) || 0;
         return sum + qty;
     }, 0);

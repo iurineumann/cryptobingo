@@ -44,7 +44,7 @@ export interface BlockchainGameState {
     game_id:          string;            // uint64 como string
     status:           GameStatus;
     ticket_price:     ExtendedAsset;
-    prize_pool:       ExtendedAsset;
+    total_wagered:    ExtendedAsset;
     sponsor_pool:     ExtendedAsset[];   // vector<extended_asset>
     drawn_balls:      number[];          // 75 posições após receiverand()
     campaign_id:      string;            // uint64 — '0' se não patrocinado
@@ -191,7 +191,7 @@ export interface PostgresGamesHistory {
     game_id:          string;   // Sincronizado com on-chain
     status:           GameStatus;
     drawn_balls:      number[];
-    total_prize_pool: number;
+    total_wagered:    number;
     gametype_id:      string;
     campaign_id:      string;
     resolved_at:      Date | null;

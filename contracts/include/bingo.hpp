@@ -19,7 +19,7 @@ namespace bingo {
         uint64_t game_id;
         name status; // 'created', 'funding', 'locked', 'drawing', 'archived', 'aborted'
         extended_asset ticket_price;
-        extended_asset prize_pool;
+        extended_asset total_wagered;
         std::vector<extended_asset> sponsor_pool;
         std::vector<uint8_t> drawn_balls;
         uint64_t primary_key() const { return game_id; }

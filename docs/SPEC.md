@@ -47,7 +47,7 @@ CREATED → FUNDING → LOCKED → DRAWING → DRAWN → PAYING → ARCHIVED
 | `game_id` | `uint64_t` | Identificador unívoco (timestamp ms). |
 | `status` | `name` | FSM: `created`, `funding`, `locked`, `drawing`, `drawn`, `paying`, `archived`, `aborted`. |
 | `ticket_price` | `extended_asset` | Valor unitário. Permite `0` para Free-to-Play. |
-| `prize_pool` | `extended_asset` | Arrecadação total da venda de cartelas. |
+| `total_wagered` | `extended_asset` | Arrecadação total da venda de cartelas. |
 | `sponsor_pool` | `vector<extended_asset>` | Array de N tokens patrocinados (B2B). |
 | `drawn_balls` | `vector<uint8_t>` | 75 posições. Vazio até `receiverand`. |
 | `end_time` | `time_point_sec` | Timestamp de encerramento. Base para TTL de 24h do GC. |

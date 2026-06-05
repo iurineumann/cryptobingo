@@ -208,7 +208,7 @@ Responsável por dados imutáveis, histórico financeiro espelhado da blockchain
 * `game_id` (BIGINT, PK) - *Sincronizado com o on-chain*
 * `status` (VARCHAR)
 * `drawn_balls` (INT[])
-* `total_prize_pool` (DECIMAL)
+* `total_wagered` (DECIMAL)
 * `resolved_at` (TIMESTAMP)
 
 **Tabela: `transactions_ledger` (Auditoria Financeira)**

@@ -48,7 +48,7 @@ function makeGame(roomId = '1', gameId = '1') {
     return {
         game_id: gameId, status: 'archived', gametype_id: '1', room_id: roomId,
         drawn_balls: [], ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-        prize_pool:  { quantity: '0.0000 BINGO', contract: 'bingo.token' },
+        total_wagered:  { quantity: '0.0000 BINGO', contract: 'bingo.token' },
     };
 }
 
