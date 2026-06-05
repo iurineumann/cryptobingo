@@ -19,10 +19,8 @@ import {
     deriveGoldenMultiplierExported,
     findFirstFullCutoff,
     checkWinPatterns,
-    checkWinPattern,
     applyDrawnBalls,
     preComputeMultiMatchCutoffs,
-    WIN_PATTERNS,
     WinResult,
 } from './evaluator';
 
@@ -123,9 +121,11 @@ describe('applyDrawnBalls — estado bitmask', () => {
 // ── checkWinPatterns ──────────────────────────────────────────────────────────
 
 describe('checkWinPatterns — múltiplos padrões', () => {
+    const ROW0_MASK = 1082401n; // bits 0,5,10,15,20
+    const COLB_MASK = 31n;      // bits 0-4
     const patterns = [
-        { pattern_id: '1', name: 'ROW_0', mask: BigInt(WIN_PATTERNS['ROW_0']), weight: 100 },
-        { pattern_id: '2', name: 'COL_B', mask: BigInt(WIN_PATTERNS['COL_B']), weight: 150 },
+        { pattern_id: '1', name: 'ROW_0', mask: ROW0_MASK, weight: 100 },
+        { pattern_id: '2', name: 'COL_B', mask: COLB_MASK, weight: 150 },
     ];
 
     it('Estado que satisfaz ROW_0 + COL_B → retorna ambos', () => {
@@ -149,22 +149,6 @@ describe('checkWinPatterns — múltiplos padrões', () => {
     it('patterns vazio → array vazio', () => {
         const result = checkWinPatterns(0xFFFFFFFF, []);
         expect(result).toHaveLength(0);
-    });
-});
-
-// ── checkWinPattern (estático) ────────────────────────────────────────────────
-
-describe('checkWinPattern — padrões estáticos', () => {
-    it('ROW_0 completo → retorna patternName ROW_0', () => {
-        const ticket = makeTicket('1', ROW0_MATRIX);
-        const state  = applyDrawnBalls(ticket, [1, 16, 31, 46, 61]);
-        const result = checkWinPattern(state);
-        expect(result).not.toBeNull();
-        expect(result?.patternName).toBe('ROW_0');
-    });
-
-    it('Estado vazio (sem FREE SPACE) → null', () => {
-        expect(checkWinPattern(0)).toBeNull();
     });
 });
 
@@ -229,8 +213,8 @@ describe('preComputeMultiMatchCutoffs', () => {
     it('2 stages + 1 ticket → retorna array de StageCutoffResult', async () => {
         const fullMatrix = [1,2,3,4,5, 6,7,8,9,10, 11,12,13,14, 15,16,17,18,19, 20,21,22,23,24];
 
-        // ROW_0: bits 0,5,10,15,20 → mask
-        const ROW0_MASK = Number(WIN_PATTERNS['ROW_0']);
+        // ROW_0: bits 0,5,10,15,20 → 1082401
+        const ROW0_MASK = 1082401;
 
         // preComputeMultiMatchCutoffs faz 4 get_table_rows:
         //   1. gametypes (para stages)
