@@ -63,7 +63,7 @@ export async function fetchPlayerTickets(gameId: string, playerWallet: string): 
     const ownerU64 = Name.from(playerWallet).value;
     const response = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT,
-        scope: UInt64.from(gameId),  // uint64 scope — decimal string ou name string
+        scope: Name.from(UInt64.from(gameId)),
         table: 'tickets',
         index_position: 'secondary',
         key_type: 'i64',

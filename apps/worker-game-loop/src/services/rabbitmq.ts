@@ -31,7 +31,7 @@ import {
 }                          from './broadcaster';
 import { fetchGame }       from '@cryptobingo/blockchain-core';
 import { rpcClient }       from '@cryptobingo/blockchain-core';
-import { UInt64 }          from '@wharfkit/antelope';
+import { Name, UInt64 }    from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
@@ -370,7 +370,7 @@ async function processRefundAll(gameId: string): Promise<void> {
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       UInt64.from(gameId),
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
             limit:       GC_BATCH_SIZE,
             lower_bound: lowerBound as any,
@@ -414,7 +414,7 @@ async function processClearGame(gameId: string): Promise<void> {
         // Verifica se ainda há tickets
         const response = await rpcClient.v1.chain.get_table_rows({
             code:  CONTRACT_ACCOUNT,
-            scope: UInt64.from(gameId),
+            scope: Name.from(UInt64.from(gameId)),
             table: 'tickets',
             limit: 1,
             json:  true,

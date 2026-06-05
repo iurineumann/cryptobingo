@@ -9,7 +9,7 @@
 // antes de enviar claimwin — conforme ADR-005.
 
 import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@cryptobingo/blockchain-core';
-import { UInt64 } from '@wharfkit/antelope';
+import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
@@ -164,7 +164,7 @@ export async function findAllWinners(
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:         CONTRACT_ACCOUNT,
-            scope:        UInt64.from(gameId),
+            scope:        Name.from(UInt64.from(gameId)),
             table:        'tickets',
             limit:        PAGE_SIZE,
             lower_bound:  lowerBound as any,
@@ -257,7 +257,7 @@ async function fetchTicketById(
     try {
         const res = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       UInt64.from(gameId),
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
             lower_bound: ticketId as any,
             upper_bound: ticketId as any,
@@ -335,7 +335,7 @@ export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]):
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       UInt64.from(gameId),
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
             limit:       100,
             lower_bound: lowerBound as any,
@@ -409,7 +409,7 @@ export async function preComputeMultiMatchCutoffs(
     let hasMore = true;
     while (hasMore) {
         const res = await rpcClient.v1.chain.get_table_rows({
-            code: CONTRACT_ACCOUNT, scope: UInt64.from(gameId), table: 'tickets',
+            code: CONTRACT_ACCOUNT, scope: Name.from(UInt64.from(gameId)), table: 'tickets',
             limit: 100, lower_bound: lowerBound as any, json: true,
         });
         allTickets.push(...normalizeTickets(res.rows));
