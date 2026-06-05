@@ -325,9 +325,8 @@ fi
 
 echo "[*] Bootstrap dos contratos de sistema..."
 
-# eosio.bios (pode falhar se a imagem tiver contratos antigos — opcional em dev)
-cleos set contract eosio "${BIOS_CONTRACTS}/eosio.bios" -p eosio@active 2>/dev/null || \
-    echo "[!] Aviso: eosio.bios não pôde ser deployado (versão incompatível). Seguindo sem ele."
+# eosio.bios é opcional em dev (não precisamos das ações de sistema);
+# a imagem waxteam/waxdev usa uma versão incompatível, então pulamos.
 
 # eosio.token
 cleos create account eosio eosio.token "$EOSIO_PUB" 2>/dev/null || true
@@ -513,23 +512,36 @@ ORNG_RSA_MODULUS=$(echo  "$ORNG_RSA_JSON" | python3 -c "import sys,json; d=json.
 echo "[✓] RSA exponent: ${ORNG_RSA_EXPONENT}, modulus: ${ORNG_RSA_MODULUS:0:32}... (${#ORNG_RSA_MODULUS} chars)"
 
 # ── 8b-3. Compila contrato ORNG dentro do container ─────────────────────────
+# O volume contracts/ é montado :ro (read-only), então compilamos em /tmp/
+# e copiamos o resultado para o host com docker cp.
+# O cleos set contract usa o nome do diretório como basename do .wasm,
+# por isso criamos /tmp/orng/ (e não /tmp/orng-build/).
 echo "[*] Compilando contrato ORNG (WAX CDT / cdt-cpp)..."
 docker exec "$CONTAINER_NAME" bash -c \
-    "cdt-cpp -abigen \
-        -I /app/contracts/orng/include \
-        /app/contracts/orng/src/orng.cpp \
-        -o /app/contracts/orng/orng.wasm \
+    "mkdir -p /tmp/orng && \
+     cp -r /app/contracts/orng/* /tmp/orng/ && \
+     cdt-cpp -abigen \
+        -I /tmp/orng/include \
+        /tmp/orng/src/orng.cpp \
+        -o /tmp/orng/orng.wasm \
         --contract orng \
         -O2 2>&1" && \
-    echo "[✓] orng.wasm compilado." || {
+    echo "[✓] orng.wasm compilado." && \
+    docker cp "$CONTAINER_NAME:/tmp/orng/orng.wasm" "$ORNG_WASM" && \
+    echo "[✓] orng.wasm copiado para $ORNG_RSA_DIR/" || {
         echo "[!] ERRO: falha na compilação do ORNG."
         echo "    Verifique se o container tem WAX CDT com suporte a crypto_ext.hpp."
         exit 1
     }
+# O CDT gera um ABI incompleto (omite a tabela reqs — chave para o oracle daemon).
+# Usamos o ABI mantido manualmente em contracts/orng/orng.abi.
+# Copia o ABI hand-maintained para o container antes do deploy.
+docker cp "$ORNG_ABI" "$CONTAINER_NAME:/tmp/orng/orng.abi"
+echo "[✓] ABI hand-maintained copiado para container."
 
 # ── 8b-4. Deploy do contrato ORNG em orng.wax ───────────────────────────────
 echo "[*] Deploy do contrato ORNG em orng.wax..."
-cleos set contract orng.wax /app/contracts/orng -p orng.wax@active
+cleos set contract orng.wax /tmp/orng -p orng.wax@active
 cleos set account permission orng.wax active --add-code -p orng.wax@active 2>/dev/null || true
 echo "[✓] ORNG deployado em orng.wax."
 

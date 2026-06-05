@@ -43,3 +43,12 @@ local.db
 .aider*
 contracts/teste
 .turbo/cache/
+
+# Blockchain dev environment — gerado por init_dev_env.sh
+.waxdev.env
+.dev.env
+*.wallet_password.tmp
+*.pid
+*.pem
+contracts/orng/dev-rsa-private.pem
+contracts/orng/dev-rsa-public.pem

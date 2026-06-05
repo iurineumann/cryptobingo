@@ -29,6 +29,7 @@ import {
     listPatterns, upsertPattern, deletePattern,
     listGametypes, upsertGametype, deleteGametype,
     getGametypeMetadata, upsertGametypeMetadata, getGametypeMetadataPublic,
+    getGametypePatternsPublic,
 } from './controllers/patternController';
 import { simulateWeights, calibrateWeights }         from './controllers/monteCarloController';
 import { getRtpStatistics, getGamesHistory, syncGameToLedger, getGameStatsBatchHandler } from './controllers/statisticsController';
@@ -200,6 +201,10 @@ function registerRoutes(): void {
     app.get(
         '/api/v1/gametypes/:gametypeId/metadata',
         playerLimiter, getGametypeMetadataPublic
+    );
+    app.get(
+        '/api/v1/gametypes/:gametypeId/patterns',
+        playerLimiter, getGametypePatternsPublic
     );
     app.get(
         '/api/v1/admin/gametypes/:gametypeId/metadata',
