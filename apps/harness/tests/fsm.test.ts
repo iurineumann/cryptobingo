@@ -17,16 +17,13 @@
 //   Passo 9   — cleargame (GC após quarentena — bypassa 24h em teste)
 //   Suite 2   — MULTI_MATCH: setstages + claimstage + closegame (ADR-013)
 
-import { APIClient, PrivateKey, Session }                              from '@wharfkit/session';
+import { PrivateKey, Session }                              from '@wharfkit/session';
 import { WalletPluginPrivateKey }                                       from '@wharfkit/wallet-plugin-privatekey';
 import { Serializer, Checksum256, Name, UInt64, ExtendedAsset, Bytes } from '@wharfkit/antelope';
-import * as dotenv from 'dotenv';
-import * as path   from 'path';
+import { rpcClient } from '@cryptobingo/blockchain-core';
 
-import { WIN_PATTERNS, applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
-import type { BlockchainTicketRecord }                      from '../../../packages/shared-types/src';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../.dune.env') });
+import { applyDrawnBalls, checkWinPatterns } from '../../worker-game-loop/src/services/evaluator';
+import { BlockchainTicketRecord }           from '../../../packages/shared-types/src';
 
 // ==========================================
 // CONFIG
@@ -34,11 +31,12 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.dune.env') });
 
 const url     = process.env.RPC_URL  || 'http://127.0.0.1:8888';
 const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
-const client  = new APIClient({ url });
 
-const eosioKey  = PrivateKey.from(process.env.EOSIO_KEY!);
-const playerKey = PrivateKey.from(process.env.JOGADOR1_KEY!);
-const bingoKey  = PrivateKey.from(process.env.BINGO_GAME_KEY!);
+
+const eosioKey         = PrivateKey.from(process.env.EOSIO_KEY!);
+const playerKey        = PrivateKey.from(process.env.JOGADOR1_KEY!);
+const bingoKey         = PrivateKey.from(process.env.BINGO_GAME_KEY!);
+const microserviceKey  = PrivateKey.from(process.env.MICROSERVICE_KEY!);
 
 function makeSession(actor: string, key: PrivateKey) {
     return new Session({
@@ -52,7 +50,10 @@ function makeSession(actor: string, key: PrivateKey) {
 const rootSession   = makeSession('eosio',        eosioKey);
 const bingoSession  = makeSession('bingo.game',   bingoKey);
 const playerSession = makeSession('jogador1',     playerKey);
-const microSession  = makeSession('microservice', eosioKey);
+const microSession  = makeSession('microservice', microserviceKey);
+
+const MASK_ROW0 = BigInt(1082401); // bits 0,5,10,15,20
+const MASK_ROW1 = BigInt(2164802); // bits 1,6,11,16,21
 
 const PATTERN_ID_ROW0 = UInt64.from(1);
 const PATTERN_ID_ROW1 = UInt64.from(2);
@@ -99,12 +100,16 @@ async function transact(session: Session, account: string, name: string, data: o
 }
 
 async function getGameStatus(gameIdStr: string): Promise<string> {
-    const res = await client.v1.chain.get_table_rows({
-        code: 'bingo.game', scope: 'bingo.game', table: 'games',
-        lower_bound: gameIdStr, upper_bound: gameIdStr,
-        limit: 1, json: true,
-    });
-    return res.rows[0]?.status ?? 'not_found';
+    const res = await fetch(`${url}/v1/chain/get_table_rows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            code: 'bingo.game', scope: 'bingo.game', table: 'games',
+            lower_bound: gameIdStr, upper_bound: gameIdStr,
+            limit: 1, json: true,
+        }),
+    }).then(r => r.json() as any);
+    return res.rows?.[0]?.status ?? 'not_found';
 }
 
 // Aguarda o oracle daemon ORNG responder e o jogo transitar para 'drawn'.
@@ -154,8 +159,8 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 0: Seed patterns (ROW_0, ROW_1) e gametype Standard', async () => {
-        const row0Mask = Number(WIN_PATTERNS.ROW_0);
-        const row1Mask = Number(WIN_PATTERNS.ROW_1);
+        const row0Mask = Number(MASK_ROW0);
+        const row1Mask = Number(MASK_ROW1);
 
         await transact(bingoSession, 'bingo.game', 'addpattern', {
             pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: row0Mask,
@@ -182,9 +187,10 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 1: creategame → status CREATED', async () => {
         await transact(bingoSession, 'bingo.game', 'creategame', {
-            game_id:     mainGameId,
-            ticket_price: ExtendedAsset.from({ quantity: '10.0000 TLM', contract: 'eosio.token' }),
-            gametype_id: GAMETYPE_ID_STD,
+            game_id:      mainGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_STD,
+            room_id:      UInt64.from(0),
         });
         expect(await getGameStatus(mainGameIdStr)).toBe('created');
         console.log('   ✅ status: created');
@@ -201,7 +207,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     test('Passo 2: deposit via on_notify', async () => {
         const r = await transact(playerSession, 'eosio.token', 'transfer', {
             from: 'jogador1', to: 'bingo.game',
-            quantity: '500.0000 TLM', memo: 'Deposito para jogar',
+            quantity: '500.0000 WAX', memo: 'Deposito para jogar',
         });
         expect(r.response).toBeDefined();
         console.log('   ✅ Depósito realizado');
@@ -217,8 +223,12 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         const r = await transact(playerSession, 'bingo.game', 'buytickets', {
-            buyer: owner, game_id: mainGameId,
-            matrices: [matrixBytes], signatures: [sig], nft_id: 0,
+            buyer:           owner,
+            game_id:         mainGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
         expect(r.response).toBeDefined();
         console.log('   ✅ Cartela comprada');
@@ -244,11 +254,11 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 6: claimwin → DRAWN → PAYING (ADR-012: multi-winner)', async () => {
         const [gameRes, ticketRes] = await Promise.all([
-            client.v1.chain.get_table_rows({
+            rpcClient.v1.chain.get_table_rows({
                 code: 'bingo.game', scope: 'bingo.game', table: 'games',
                 lower_bound: mainGameIdStr, upper_bound: mainGameIdStr, limit: 1, json: true,
             }),
-            client.v1.chain.get_table_rows({
+            rpcClient.v1.chain.get_table_rows({
                 code: 'bingo.game', scope: mainGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
@@ -258,9 +268,9 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const ticketId = UInt64.from(ticket.ticket_id);
 
         const finalState = applyDrawnBalls(ticket, drawnBalls.slice(0, 35)); // ADR-012: usa 35 bolas
-        let winPatternMask = UInt64.from(WIN_PATTERNS.ROW_0.toString()); // fallback
+        let winPatternMask = UInt64.from(MASK_ROW0.toString()); // fallback
 
-        for (const [, mask] of Object.entries(WIN_PATTERNS)) {
+        for (const mask of [MASK_ROW0, MASK_ROW1]) {
             if ((BigInt(finalState) & mask) === mask) {
                 winPatternMask = UInt64.from(mask.toString()); break;
             }
@@ -293,7 +303,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     test('Passo 7: withdraw', async () => {
         const r = await transact(playerSession, 'bingo.game', 'withdraw', {
             owner:  'jogador1',
-            amount: ExtendedAsset.from({ quantity: '100.0000 TLM', contract: 'eosio.token' }),
+            amount: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
         });
         expect(r.response).toBeDefined();
         console.log('   ✅ Saque realizado');
@@ -308,9 +318,10 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
 
     test('Setup: cria, funde, compra, trava jogo de abort', async () => {
         await transact(bingoSession, 'bingo.game', 'creategame', {
-            game_id:     abortGameId,
-            ticket_price: ExtendedAsset.from({ quantity: '5.0000 TLM', contract: 'eosio.token' }),
-            gametype_id: UInt64.from(0),
+            game_id:      abortGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_STD,
+            room_id:      UInt64.from(0),
         });
         await transact(microSession, 'bingo.game', 'fundgame', { game_id: abortGameId });
 
@@ -322,8 +333,12 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingo.game', 'buytickets', {
-            buyer: owner, game_id: abortGameId,
-            matrices: [matrixBytes], signatures: [sig], nft_id: 0,
+            buyer:           owner,
+            game_id:         abortGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
         await transact(microSession, 'bingo.game', 'lockgame', { game_id: abortGameId });
         console.log(`   ✅ Jogo abort ${abortGameIdStr} em LOCKED`);
@@ -339,7 +354,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
     });
 
     test('refundticket → estorno O(1)', async () => {
-        const ticketRes = await client.v1.chain.get_table_rows({
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(ticketRes.rows.length).toBeGreaterThan(0);
@@ -348,7 +363,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
             game_id: abortGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
         });
 
-        const check = await client.v1.chain.get_table_rows({
+        const check = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(check.rows.length).toBe(0);
@@ -359,7 +374,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         await transact(microSession, 'bingo.game', 'cleargame', {
             game_id: abortGameId, max_rows: 100,
         });
-        const check = await client.v1.chain.get_table_rows({
+        const check = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: 'bingo.game', table: 'games',
             lower_bound: abortGameIdStr, upper_bound: abortGameIdStr, limit: 1, json: true,
         });
@@ -405,9 +420,10 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
 
     test('MM-1: Cria, funde, compra cartela, trava, sorteia', async () => {
         await transact(bingoSession, 'bingo.game', 'creategame', {
-            game_id:     mmGameId,
-            ticket_price: ExtendedAsset.from({ quantity: '10.0000 TLM', contract: 'eosio.token' }),
-            gametype_id: GAMETYPE_ID_MM,
+            game_id:      mmGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_MM,
+            room_id:      UInt64.from(0),
         });
         await transact(microSession, 'bingo.game', 'fundgame', { game_id: mmGameId });
 
@@ -419,7 +435,12 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingo.game', 'buytickets', {
-            buyer: owner, game_id: mmGameId, matrices: [matrixBytes], signatures: [sig], nft_id: 0,
+            buyer:           owner,
+            game_id:         mmGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
         await transact(microSession, 'bingo.game', 'lockgame',  { game_id: mmGameId });
         await transact(microSession, 'bingo.game', 'startdraw', { game_id: mmGameId });
@@ -430,7 +451,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
     }, 90_000);
 
     test('MM-2: claimstage stage 1 → DRAWN → PAYING', async () => {
-        const ticketRes = await client.v1.chain.get_table_rows({
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(ticketRes.rows.length).toBeGreaterThan(0);
@@ -442,7 +463,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             ticket_id:        ticketId,
             stage:            1,
             ball_count:       35,
-            win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_0.toString()),
+            win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mmGameIdStr)).toBe('paying');
@@ -450,7 +471,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
     });
 
     test('MM-3: claimstage stage 2 mesmo ticket → ainda PAYING', async () => {
-        const ticketRes = await client.v1.chain.get_table_rows({
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         const ticketId = UInt64.from(ticketRes.rows[0].ticket_id);
@@ -461,7 +482,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             ticket_id:        ticketId,
             stage:            2,
             ball_count:       35,
-            win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_1.toString()),
+            win_pattern_mask: UInt64.from(MASK_ROW1.toString()),
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mmGameIdStr)).toBe('paying');
@@ -482,9 +503,10 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const payingGameStr = payingName.toString();
 
         await transact(bingoSession, 'bingo.game', 'creategame', {
-            game_id: payingGameId,
-            ticket_price: ExtendedAsset.from({ quantity: '5.0000 TLM', contract: 'eosio.token' }),
-            gametype_id: GAMETYPE_ID_STD,
+            game_id:      payingGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_STD,
+            room_id:      UInt64.from(0),
         });
         await transact(microSession, 'bingo.game', 'fundgame',   { game_id: payingGameId });
 
@@ -496,19 +518,24 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingo.game', 'buytickets', {
-            buyer: owner, game_id: payingGameId, matrices: [matrixBytes], signatures: [sig], nft_id: 0,
+            buyer:           owner,
+            game_id:         payingGameId,
+            matrices:        [matrixBytes],
+            signatures:      [sig],
+            nft_id:          0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
         await transact(microSession, 'bingo.game', 'lockgame',  { game_id: payingGameId });
         await transact(microSession, 'bingo.game', 'startdraw', { game_id: payingGameId });
         await waitForDrawn(payingGameStr);
 
-        const ticketRes = await client.v1.chain.get_table_rows({
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: payingGameStr, table: 'tickets', limit: 1, json: true,
         });
         // Leva jogo a PAYING via claimwin
         await transact(microSession, 'bingo.game', 'claimwin', {
             game_id: payingGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
-            ball_count: 35, win_pattern_mask: UInt64.from(WIN_PATTERNS.ROW_0.toString()),
+            ball_count: 35, win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: 0,
         });
         expect(await getGameStatus(payingGameStr)).toBe('paying');
