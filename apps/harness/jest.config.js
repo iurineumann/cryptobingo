@@ -7,5 +7,6 @@ module.exports = {
     transform: {
         ...tsJestTransformCfg,
     },
+    testMatch: ['<rootDir>/tests/**/*.ts'],
     setupFiles: ["./jest.setup.js"],
 };

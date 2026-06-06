@@ -38,7 +38,7 @@ const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
     rules_summary:   { type: String, default: '' },
     sort_order:      { type: Number, default: 0 },
     rules:           { type: [{ pattern_id: String, weight: Number, type: String }], default: [] },
-    combinations:    { type: [Schema.Types.Mixed], default: [] },
+    combinations:    { type: [Object], default: [] },
 }, { timestamps: true });
 
 const GametypeMetadataModel = mongoose.model<GametypeMetadataDocument>('GametypeMetadata', GametypeMetadataSchema);
