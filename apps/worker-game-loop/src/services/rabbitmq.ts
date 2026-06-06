@@ -372,6 +372,7 @@ async function processRefundAll(gameId: string): Promise<void> {
             code:        CONTRACT_ACCOUNT,
             scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
+            key_type:    'i64',
             limit:       GC_BATCH_SIZE,
             lower_bound: lowerBound as any,
             json:        true,

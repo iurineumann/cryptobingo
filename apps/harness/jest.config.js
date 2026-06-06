@@ -9,4 +9,8 @@ module.exports = {
     },
     testMatch: ['<rootDir>/tests/**/*.ts'],
     setupFiles: ["./jest.setup.js"],
+    moduleNameMapper: {
+        '^@cryptobingo/blockchain-core$': '<rootDir>/../../packages/blockchain-core/src/index.ts',
+        '^@cryptobingo/shared-types$':    '<rootDir>/../../packages/shared-types/src/index.ts',
+    },
 };
