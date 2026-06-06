@@ -20,6 +20,8 @@ import {
   Pattern, BINGO_COLORS, getCol,
   fetchGamePatterns, sortTickets, sortPatterns,
   groupTicketsByCategory, isCombinationSatisfied,
+  computePatternUserProximity,
+  getCombinationCells, computeCombinationProximity, detectComboWinsForTicket,
   type CombinationRuleInput, type ExtendedRule,
 } from './ticketUtils';
 import { fetchPublicGametypeMetadata } from '../services/api';
@@ -216,7 +218,18 @@ export default function GameRoom({
           const val = flat[i];
           return val === null || drawnSet.has(val as number);
         });
-        if (done) result.push({ ticket_id: ticket.id, win_pattern: p.name, payouts: [] });
+        if (done) {
+          // Computa prêmio a partir do pricePaid da cartela × multiplicador do padrão
+          const pricePaidStr  = (ticket as any).pricePaid ?? '';
+          const pricePaidNum  = parseFloat(pricePaidStr.split(' ')[0]) || 0;
+          const multiplier    = parseFloat(p.prize) || 0;
+          const prizeAmount   = pricePaidNum * multiplier;
+          const currency      = pricePaidStr.trim().split(' ')[1] ?? '';
+          const payoutStr     = prizeAmount > 0 && currency
+            ? `${prizeAmount.toFixed(4)} ${currency}`
+            : '';
+          result.push({ ticket_id: ticket.id, win_pattern: p.name, payouts: payoutStr ? [payoutStr] : [] });
+        }
       }
     }
     return result;
@@ -251,7 +264,6 @@ export default function GameRoom({
   }, [gamePatterns]);
 
   // mapa patternId → nome  e  nome → tipo — usados para resolver cláusulas de combinação
-  // Usa p.id (ID blockchain) para mapear corretamente, sem depender de ordem de listas.
   const { patternNameById, patternTypeByName } = useMemo(() => {
     const byId   = new Map<string, string>();
     const byType = new Map<string, string>();
@@ -263,16 +275,89 @@ export default function GameRoom({
     return { patternNameById: byId, patternTypeByName: byType };
   }, [gamePatterns, extendedRules]);
 
-  // Combinações vencidas — win_pattern pode ser nome de combinação
-  const combinationWinCount = useMemo(() => {
-    const count = new Map<string, number>();
+  // vitórias do próprio jogador: combinações primeiro, depois padrões individuais
+  // padrões absorvidos por combinações são excluídos da listagem individual
+  const playerWinEntries = useMemo(() => {
+    const playerTicketIds = new Set(playerTickets.map(t => t.id));
+    // agrupa por cartela
+    const byTicket = new Map<string, Array<{ pattern: string; payout: string }>>();
     for (const w of localWinners) {
-      if (gameCombinations.some(c => c.name === w.win_pattern)) {
-        count.set(w.win_pattern, (count.get(w.win_pattern) || 0) + 1);
+      if (!playerTicketIds.has(w.ticket_id)) continue;
+      const arr = byTicket.get(w.ticket_id) ?? [];
+      arr.push({ pattern: w.win_pattern, payout: w.payouts[0] ?? '' });
+      byTicket.set(w.ticket_id, arr);
+    }
+    const comboMap   = new Map<string, { total: number; currency: string }>();
+    const patternMap = new Map<string, { total: number; currency: string }>();
+    for (const [ticketId, wins] of byTicket) {
+      const patNames  = wins.map(w => w.pattern);
+      const comboWins = detectComboWinsForTicket(patNames, gameCombinations, patternTypeByName, patternNameById);
+      const subsumed  = new Set<string>();
+      for (const { comboName, subsumedPatterns } of comboWins) {
+        for (const sp of subsumedPatterns) subsumed.add(sp);
+        // Prêmio da combinação: usa soma dos payouts dos padrões absorvidos (live mode)
+        // ou pricePaid × multiplicador (static mode, payouts podem ser 0)
+        const ticket      = playerTickets.find(t => t.id === ticketId);
+        const combo       = gameCombinations.find(c => c.name === comboName);
+        const pricePaidStr = (ticket as any)?.pricePaid ?? '';
+        const pricePaidNum = parseFloat(pricePaidStr.split(' ')[0]) || 0;
+        const currency     = pricePaidStr.trim().split(' ')[1] ?? '';
+        const fromPayouts  = wins
+          .filter(w => subsumedPatterns.includes(w.pattern))
+          .reduce((s, w) => s + (parseFloat(w.payout.split(' ')[0]) || 0), 0);
+        const comboTotal   = fromPayouts > 0
+          ? fromPayouts
+          : pricePaidNum * (combo ? combo.weight / 100 : 0);
+        const existing = comboMap.get(comboName);
+        if (existing) existing.total += comboTotal;
+        else comboMap.set(comboName, { total: comboTotal, currency });
+      }
+      for (const w of wins) {
+        if (subsumed.has(w.pattern)) continue;
+        const parts    = w.payout.trim().split(' ');
+        const amount   = parseFloat(parts[0]) || 0;
+        const currency = parts[1] ?? '';
+        const existing = patternMap.get(w.pattern);
+        if (existing) existing.total += amount;
+        else patternMap.set(w.pattern, { total: amount, currency });
       }
     }
-    return count;
-  }, [localWinners, gameCombinations]);
+    const combos   = [...comboMap.entries()]
+      .map(([name, v]) => ({ name, ...v, isCombination: true }))
+      .sort((a, b) => b.total - a.total);
+    const patterns = [...patternMap.entries()]
+      .map(([name, v]) => ({ name, ...v, isCombination: false }))
+      .sort((a, b) => b.total - a.total);
+    return [...combos, ...patterns];
+  }, [localWinners, playerTickets, gameCombinations, patternTypeByName, patternNameById]);
+
+  // Detecta combinações satisfeitas em localWinners e constrói contagens ajustadas.
+  // Padrões absorvidos por uma combinação são excluídos da contagem individual.
+  const { adjustedPatternWinCount, allGameCombinationWinCount } = useMemo(() => {
+    const byTicket = new Map<string, string[]>();
+    for (const w of localWinners) {
+      const arr = byTicket.get(w.ticket_id) ?? [];
+      arr.push(w.win_pattern);
+      byTicket.set(w.ticket_id, arr);
+    }
+    const comboCount = new Map<string, number>();
+    const subsumedByTicket = new Map<string, Set<string>>();
+    for (const [ticketId, patterns] of byTicket) {
+      const comboWins = detectComboWinsForTicket(patterns, gameCombinations, patternTypeByName, patternNameById);
+      const subsumed  = new Set<string>();
+      for (const { comboName, subsumedPatterns } of comboWins) {
+        comboCount.set(comboName, (comboCount.get(comboName) ?? 0) + 1);
+        for (const sp of subsumedPatterns) subsumed.add(sp);
+      }
+      subsumedByTicket.set(ticketId, subsumed);
+    }
+    const patCount = new Map<string, number>();
+    for (const w of localWinners) {
+      if (subsumedByTicket.get(w.ticket_id)?.has(w.win_pattern)) continue;
+      patCount.set(w.win_pattern, (patCount.get(w.win_pattern) ?? 0) + 1);
+    }
+    return { adjustedPatternWinCount: patCount, allGameCombinationWinCount: comboCount };
+  }, [localWinners, gameCombinations, patternTypeByName, patternNameById]);
 
   // Combinações completadas nas cartelas do jogador (ao vivo)
   const completedCombinationsPerTicket = useMemo(() => {
@@ -315,14 +400,32 @@ export default function GameRoom({
     return result;
   }, [gameCombinations, playerTickets, gamePatterns, drawnSet, patternNameById, patternTypeByName]);
 
-  // contagem de cartelas que completaram cada padrão
-  const patternWinCount = useMemo(() => {
-    const count = new Map<string, number>();
-    for (const w of localWinners) {
-      count.set(w.win_pattern, (count.get(w.win_pattern) || 0) + 1);
+  // Células visuais de cada combinação (union dos padrões membros, ordenados por ID)
+  const combinationCells = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const c of gameCombinations) {
+      map.set(c.name, getCombinationCells(c, gamePatterns, extendedRules, patternNameById));
     }
-    return count;
-  }, [localWinners]);
+    return map;
+  }, [gameCombinations, gamePatterns, extendedRules, patternNameById]);
+
+  // Proximidade (0–1) de cada padrão nas cartelas do jogador, para barra de progresso
+  const patternProximityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of gamePatterns) {
+      map.set(p.name, computePatternUserProximity(playerTickets, drawnSet, p).maxCompletionPct);
+    }
+    return map;
+  }, [gamePatterns, playerTickets, drawnSet]);
+
+  // Proximidade (0–1) de cada combinação nas cartelas do jogador
+  const combinationProximityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of gameCombinations) {
+      map.set(c.name, computeCombinationProximity(c, playerTickets, drawnSet, gamePatterns, patternNameById, patternTypeByName));
+    }
+    return map;
+  }, [gameCombinations, playerTickets, drawnSet, gamePatterns, patternNameById, patternTypeByName]);
 
   // patterns ordenados por nº de cartelas que completaram (decrescente)
 
@@ -465,7 +568,7 @@ export default function GameRoom({
         allTickets.map(r => ({
           id:        r.ticket_id,
           matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
-          pricePaid: r.price?.quantity,
+          pricePaid: loadedGame?.ticket_price?.quantity,
         }))
       );
     } catch (err) {
@@ -495,8 +598,8 @@ export default function GameRoom({
   const ticketPrice  = game?.ticket_price as ExtendedAsset | undefined;
   const roomPatterns: Pattern[] = gamePatterns;
   const sortedPatterns = useMemo(
-    () => sortPatterns(roomPatterns, playerTickets, drawnSet, patternWinCount),
-    [roomPatterns, playerTickets, drawnSet, patternWinCount],
+    () => sortPatterns(roomPatterns, playerTickets, drawnSet, adjustedPatternWinCount),
+    [roomPatterns, playerTickets, drawnSet, adjustedPatternWinCount],
   );
 
   const currencySymbol = (() => {
@@ -786,65 +889,76 @@ export default function GameRoom({
                 >✕</button>
               </div>
               <div className="gr-patterns-list">
-                {loadingGame ? (
+                {roomPatterns.length === 0 ? (
                   <div className="gr-summary-empty" style={{ margin: '0.5rem 0' }}>
-                    {t('game_room.patterns_loading')}
-                  </div>
-                ) : roomPatterns.length === 0 ? (
-                  <div className="gr-summary-empty" style={{ margin: '0.5rem 0' }}>
-                    {t('game_room.patterns_empty')}
+                    {loadingGame ? t('game_room.patterns_loading') : t('game_room.patterns_empty')}
                   </div>
                 ) : (
-                  sortedPatterns.map(p => {
-                    const patternWon = localWinners.some(w => w.win_pattern === p.name);
-                    const winCount = patternWinCount.get(p.name) || 0;
-                    return (
-                      <div key={p.name} className={`gr-pattern${patternWon ? ' is-close' : ''}`}>
-                        <div className="gr-pattern-mini">
-                          {p.cells.map((on, j) => (
-                            <i key={j} className={on ? 'on' : ''} />
-                          ))}
-                        </div>
-                        <div className="gr-pattern-info">
-                          <span className="name">{p.name}</span>
-                          <div className="mini-progress">
-                            <i style={{ width: patternWon ? '100%' : '0%' }} />
-                          </div>
-                          <span className="meta">
-                            {patternWon
-                              ? `${t('game_room.pattern_completed')} (${winCount})`
-                              : `${p.cells.filter(Boolean).length} cells`}
-                          </span>
-                        </div>
-                        <div className="gr-pattern-prize">
-                          <span className="amt">{p.prize}x</span>
-                          <span className="hits">{currencySymbol}</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                {gameCombinations.length > 0 && (
-                  <div className="gr-patterns-combos">
-                    <span className="gr-patterns-combos-head">Combinações</span>
-                    {gameCombinations.map(c => {
-                      const won      = combinationWinCount.get(c.name);
-                      const myTicket = [...completedCombinationsPerTicket.values()].some(v => v.includes(c.name));
+                  <>
+                    {sortedPatterns.map(p => {
+                      const winCount  = adjustedPatternWinCount.get(p.name) ?? 0;
+                      const patternWon = winCount > 0;
+                      const proxPct   = patternProximityMap.get(p.name) ?? 0;
                       return (
-                        <div key={c.name} className={`gr-pattern-combo${won ? ' is-close' : ''}`}>
-                          <span className="name">
-                            {myTicket && <span title="Sua cartela completou">⭐ </span>}
-                            {c.name}
-                          </span>
-                          <span className="amt">{(c.weight / 100).toFixed(2)}x</span>
-                          {won
-                            ? <span className="cnt">✅ {won} cartela{won > 1 ? 's' : ''}</span>
-                            : <span className="cnt">—</span>
-                          }
+                        <div key={p.name} className={`gr-pattern${patternWon ? ' is-close' : ''}`}>
+                          <div className="gr-pattern-mini">
+                            {p.cells.map((on, j) => <i key={j} className={on ? 'on' : ''} />)}
+                          </div>
+                          <div className="gr-pattern-info">
+                            <span className="name">{p.name}</span>
+                            <div className="mini-progress">
+                              <i style={{ width: patternWon ? '100%' : `${Math.round(proxPct * 100)}%` }} />
+                            </div>
+                            <span className="meta">
+                              {patternWon
+                                ? `${t('game_room.pattern_completed')} (${winCount})`
+                                : proxPct > 0
+                                  ? t('game_room.pattern_progress', { pct: Math.round(proxPct * 100) })
+                                  : `${p.cells.filter(Boolean).length} cells`}
+                            </span>
+                          </div>
+                          <div className="gr-pattern-prize">
+                            <span className="amt">{p.prize}x</span>
+                            <span className="hits">{currencySymbol}</span>
+                          </div>
                         </div>
                       );
                     })}
-                  </div>
+                    {gameCombinations.map(c => {
+                      const winCount  = allGameCombinationWinCount.get(c.name) ?? 0;
+                      const comboWon  = winCount > 0;
+                      const proxPct   = combinationProximityMap.get(c.name) ?? 0;
+                      const cells     = combinationCells.get(c.name) ?? new Array(25).fill(0);
+                      const myCombo   = [...completedCombinationsPerTicket.values()].some(v => v.includes(c.name));
+                      return (
+                        <div key={c.name} className={`gr-pattern gr-pattern--combo${comboWon ? ' is-close' : ''}`}>
+                          <div className="gr-pattern-mini">
+                            {cells.map((on: number, j: number) => <i key={j} className={on ? 'on' : ''} />)}
+                          </div>
+                          <div className="gr-pattern-info">
+                            <span className="name">
+                              {myCombo && <span title={t('game_room.my_combo_badge')}>⭐ </span>}
+                              🔗 {c.name}
+                            </span>
+                            <div className="mini-progress">
+                              <i style={{ width: comboWon ? '100%' : `${Math.round(proxPct * 100)}%` }} />
+                            </div>
+                            <span className="meta">
+                              {comboWon
+                                ? `${t('game_room.pattern_completed')} (${winCount})`
+                                : proxPct > 0
+                                  ? t('game_room.pattern_progress', { pct: Math.round(proxPct * 100) })
+                                  : t('game_room.combo_meta')}
+                            </span>
+                          </div>
+                          <div className="gr-pattern-prize">
+                            <span className="amt">{(c.weight / 100).toFixed(2)}x</span>
+                            <span className="hits">{currencySymbol}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
               </div>
             </aside>
@@ -889,22 +1003,53 @@ export default function GameRoom({
 
             {/* ADR-014: Game Ended */}
             {isEffectiveGameEnded && (
-              <div className="gr-ended-banner" role="status" aria-live="polite">
-                <span className="gr-ended-icon">🏁</span>
+              <div
+                className={`gr-ended-banner${playerWinEntries.length > 0 ? ' gr-ended-banner--winner' : ''}`}
+                role="status"
+                aria-live="polite"
+              >
+                <span className="gr-ended-icon">
+                  {playerWinEntries.length > 0 ? '🏆' : '🏁'}
+                </span>
                 <div className="gr-ended-text">
                   <strong>{t('game_room.game_ended_title')}</strong>
                   <span>
-                    {localWinners.length > 0
-                      ? t('game_room.game_ended_winners', { count: localWinners.length })
-                      : t('game_room.game_ended_no_winners')}
+                    {playerWinEntries.length > 0
+                      ? t('game_room.game_ended_you_won')
+                      : localWinners.length > 0
+                        ? t('game_room.game_ended_winners', { count: localWinners.length })
+                        : t('game_room.game_ended_no_winners')}
                   </span>
+
+                  {playerWinEntries.length > 0 && (
+                    <div className="gr-ended-breakdown">
+                      {playerWinEntries.map(({ name, total, currency, isCombination }) => (
+                        <div key={name} className="gr-ended-breakdown-row">
+                          <span className="gr-ended-breakdown-pattern">
+                            {isCombination && '🔗 '}{name}
+                          </span>
+                          <span className="gr-ended-breakdown-prize">
+                            {total.toFixed(4)} {currency}
+                          </span>
+                        </div>
+                      ))}
+                      {playerWinEntries.length > 1 && (
+                        <div className="gr-ended-breakdown-row gr-ended-breakdown-total">
+                          <span>{t('game_room.game_ended_total')}</span>
+                          <span>
+                            {playerWinEntries.reduce((s, e) => s + e.total, 0).toFixed(4)}{' '}
+                            {playerWinEntries[0]?.currency}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {nextGame && nextGame.status === 'funding' ? (
                     <span className="gr-ended-next">
                       {t('game_room.next_game_funding', { time: nextGameTimer })}
                     </span>
                   ) : (() => {
-                    // Estima quando a próxima partida inicia com base em
-                    // game.end_time + auto_start_delay_sec da sala
                     const endMs   = (game?.end_time ?? 0) * 1000;
                     const delayMs = ((room?.metadata as any)?.auto_start_delay_sec ?? 30) * 1000;
                     const estMs   = endMs > 0 ? endMs + delayMs - now : 0;
@@ -997,6 +1142,24 @@ export default function GameRoom({
         </div>
 
       </div>
+
+      {/* ── Confetti de vitória ────────────────────────────────────────────── */}
+      {isEffectiveGameEnded && playerWinEntries.length > 0 && (
+        <div className="gr-confetti-overlay" aria-hidden="true">
+          {Array.from({ length: 24 }, (_, i) => (
+            <span
+              key={i}
+              className="gr-confetti"
+              style={{
+                left:             `${(i * 4.17) % 100}%`,
+                '--dx':           `${Math.round(Math.sin(i * 2.399) * 70)}px`,
+                animationDelay:   `${((i * 0.37) % 2.8).toFixed(2)}s`,
+                background:       ['#f59e0b','#8b5cf6','#06b6d4','#10b981','#ef4444','#ec4899'][i % 6],
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      )}
 
       {/* ── Chat Panel ─────────────────────────────────────────────────────── */}
       {showChat && room && (
