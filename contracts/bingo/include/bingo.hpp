@@ -5,6 +5,7 @@
 #include <eosio/singleton.hpp>
 #include <eosio/crypto.hpp>
 #include <eosio/system.hpp>
+#include <eosio/binary_extension.hpp>
 #include <vector>
 #include <string>
 
@@ -142,6 +143,17 @@ namespace bingo {
         uint16_t weight;             // peso do prêmio em hundredths (100 = 1×)
     };
 
+    // ADR-016: combinação de padrões como tier de prêmio superior.
+    // A SATISFAÇÃO das cláusulas (all_of/any_of/n_of_type + tipos de padrão) é
+    // computada OFF-CHAIN pelo worker (microservice) — assim como o match de
+    // padrão em claimwin. On-chain guardamos apenas combo_id → weight: o
+    // contrato VALIDA o weight do combo reclamado, impedindo que um worker
+    // comprometido infle o prêmio. combo_id = índice canônico na lista off-chain.
+    struct combo_rule {
+        uint64_t combo_id;           // índice estável (0..n-1), espelha o off-chain
+        uint16_t weight;             // peso do prêmio em hundredths (100 = 1×)
+    };
+
     // ==========================================
     // GAMETYPES (ADR-004 Fase 2, ADR-012 Draw Modes)
     //
@@ -163,6 +175,9 @@ namespace bingo {
         uint8_t                   golden_ball_after  = 0;
         uint8_t                   master_weight_ovrd = 0;
         std::vector<stage_rule>   stages;             // ADR-013: vazio = não é MULTI_MATCH
+        // ADR-016: binary_extension → compatível com linhas existentes (sem este
+        // campo) escritas antes do upgrade. Ausente = sem combinações.
+        eosio::binary_extension<std::vector<combo_rule>> combinations;
         uint64_t primary_key() const { return gametype_id; }
     };
     typedef multi_index<"gametypes"_n, gametype_record> gametypes_table;
@@ -331,6 +346,7 @@ namespace bingo {
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
         [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
+        [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived
         [[eosio::action]] void abortgame(uint64_t game_id, std::string reason);
         [[eosio::action]] void refundticket(uint64_t game_id, uint64_t ticket_id);
@@ -345,6 +361,7 @@ namespace bingo {
         [[eosio::action]] void delpattern(uint64_t pattern_id);
         [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd);
         [[eosio::action]] void setstages(uint64_t gametype_id, std::vector<stage_rule> stages); // ADR-013
+        [[eosio::action]] void setcombos(uint64_t gametype_id, std::vector<combo_rule> combinations); // ADR-016
         [[eosio::action]] void delgametype(uint64_t gametype_id);
 
         // ── Compra de Cartelas ───────────────────────────────────────────────
