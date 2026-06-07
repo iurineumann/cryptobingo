@@ -16,6 +16,7 @@
 //   Passo 8   — abortgame + refundticket (fail-safe, jogo separado; aceita PAYING)
 //   Passo 9   — cleargame (GC após quarentena — bypassa 24h em teste)
 //   Suite 2   — MULTI_MATCH: setstages + claimstage + closegame (ADR-013)
+//   Suite 8   — COMBINAÇÕES: setcombos + claimcombo + validação (ADR-016)
 
 import { PrivateKey, Session }                              from '@wharfkit/session';
 import { WalletPluginPrivateKey }                                       from '@wharfkit/wallet-plugin-privatekey';
@@ -981,5 +982,150 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         });
         expect(r.response).toBeDefined();
         console.log('   ✅ requested_price=20 WAX in [10,50] WAX → cartela comprada');
+    });
+});
+
+// ==========================================
+// SUITE 8 — COMBINAÇÕES (ADR-016)
+// Valida: setcombos (registro on-chain), claimcombo (payout = price ×
+// base_multiplier × combo_weight / 100) e validação de combo_id inexistente.
+// ==========================================
+
+const GAMETYPE_ID_COMBO = UInt64.from(8);
+const COMBO_WEIGHT       = 250; // 2.50× (hundredths)
+const COMBO_TICKET_PRICE = 10;  // WAX
+
+let comboGameId:    UInt64;
+let comboGameIdStr: string;
+
+// Lê o saldo in-contract (tabela balances) de uma conta para um símbolo.
+async function getContractBalance(account: string, symbolCode = 'WAX'): Promise<number> {
+    const res = await rpcClient.v1.chain.get_table_rows({
+        code: 'bingo.game', scope: account, table: 'balances', limit: 50, json: true,
+    });
+    for (const row of res.rows as Array<{ balance: { quantity: string } }>) {
+        const [amount, sym] = row.balance.quantity.split(' ');
+        if (sym === symbolCode) return parseFloat(amount);
+    }
+    return 0;
+}
+
+describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
+
+    beforeAll(() => {
+        const n = Name.from(randomGameName());
+        comboGameId    = n.value;
+        comboGameIdStr = n.toString();
+        console.log(`\n🔗 Jogo COMBO: ${comboGameIdStr} (${comboGameId})\n`);
+    });
+
+    test('CB-0: addgametype + setcombos → combinações on-chain', async () => {
+        // Garante patterns ROW_0/ROW_1 (idempotente entre suites)
+        for (const [id, name, mask] of [[PATTERN_ID_ROW0, 'ROW_0', MASK_ROW0], [PATTERN_ID_ROW1, 'ROW_1', MASK_ROW1]] as const) {
+            try {
+                await transact(bingoSession, 'bingo.game', 'addpattern', { pattern_id: id, name, mask: Number(mask) });
+            } catch { /* já existe */ }
+        }
+
+        await transact(bingoSession, 'bingo.game', 'addgametype', {
+            gametype_id:        GAMETYPE_ID_COMBO,
+            name:               'Combos',
+            base_multiplier:    1,
+            rules:              [
+                { pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT },
+                { pattern_id: PATTERN_ID_ROW1, weight: GAMETYPE_WEIGHT },
+            ],
+            draw_mode:          'standard',
+            max_balls:          35,
+            golden_ball_after:  0,
+            master_weight_ovrd: 0,
+        });
+
+        const r = await transact(bingoSession, 'bingo.game', 'setcombos', {
+            gametype_id:  GAMETYPE_ID_COMBO,
+            combinations: [{ combo_id: 0, weight: COMBO_WEIGHT }],
+        });
+        expect(r.response).toBeDefined();
+
+        // Verifica on-chain
+        const gtRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingo.game', scope: 'bingo.game', table: 'gametypes',
+            lower_bound: '8', upper_bound: '8', limit: 1, json: true,
+        });
+        const combos = (gtRes.rows[0] as { combinations: Array<{ combo_id: number; weight: number }> }).combinations;
+        expect(combos).toEqual([{ combo_id: 0, weight: COMBO_WEIGHT }]);
+        console.log(`   ✅ setcombos → combinations on-chain: ${JSON.stringify(combos)}`);
+    });
+
+    test('CB-1: creategame → fund → deposit → buy → lock → draw', async () => {
+        await transact(bingoSession, 'bingo.game', 'creategame', {
+            game_id:      comboGameId,
+            ticket_price: ExtendedAsset.from({ quantity: `${COMBO_TICKET_PRICE}.0000 WAX`, contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_COMBO,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingo.game', 'fundgame', { game_id: comboGameId });
+        await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingo.game', quantity: '100.0000 WAX', memo: 'Combo deposit',
+        });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner       = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: comboGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
+        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        await transact(playerSession, 'bingo.game', 'buytickets', {
+            buyer: owner, game_id: comboGameId, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        await transact(microSession, 'bingo.game', 'lockgame', { game_id: comboGameId });
+        await transact(microSession, 'bingo.game', 'startdraw', { game_id: comboGameId });
+        await waitForDrawn(comboGameIdStr);
+        console.log('   ✅ jogo COMBO em drawn');
+    }, 90_000);
+
+    test('CB-2: claimcombo paga price × base × combo_weight/100 (= 25 WAX)', async () => {
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingo.game', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
+        });
+        const ticketId = UInt64.from((ticketRes.rows[0] as BlockchainTicketRecord).ticket_id);
+
+        const balBefore = await getContractBalance('jogador1');
+
+        const r = await transact(microSession, 'bingo.game', 'claimcombo', {
+            game_id:           comboGameId,
+            ticket_id:         ticketId,
+            ball_count:        35,
+            combo_id:          0,
+            golden_multiplier: 0,
+        });
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(comboGameIdStr)).toBe('paying');
+
+        const balAfter = await getContractBalance('jogador1');
+        const expected = COMBO_TICKET_PRICE * 1 * COMBO_WEIGHT / 100; // 25.0000
+        expect(Math.round((balAfter - balBefore) * 10000) / 10000).toBe(expected);
+        console.log(`   ✅ claimcombo pagou ${(balAfter - balBefore).toFixed(4)} WAX (esperado ${expected})`);
+    });
+
+    test('CB-3: claimcombo com combo_id inexistente → revert', async () => {
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingo.game', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
+        });
+        const ticketId = UInt64.from((ticketRes.rows[0] as BlockchainTicketRecord).ticket_id);
+
+        await expect(
+            transact(microSession, 'bingo.game', 'claimcombo', {
+                game_id: comboGameId, ticket_id: ticketId, ball_count: 35, combo_id: 99, golden_multiplier: 0,
+            }),
+        ).rejects.toThrow(/combo_id nao encontrado/);
+        console.log('   ✅ combo_id inexistente rejeitado on-chain');
+    });
+
+    test('CB-4: closegame → PAYING → ARCHIVED', async () => {
+        await transact(microSession, 'bingo.game', 'closegame', { game_id: comboGameId });
+        expect(await getGameStatus(comboGameIdStr)).toBe('archived');
+        console.log('   ✅ status: archived');
     });
 });
