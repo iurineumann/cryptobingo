@@ -1050,7 +1050,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         // Verifica on-chain
         const gtRes = await rpcClient.v1.chain.get_table_rows({
             code: 'bingo.game', scope: 'bingo.game', table: 'gametypes',
-            lower_bound: '8', upper_bound: '8', limit: 1, json: true,
+            lower_bound: GAMETYPE_ID_COMBO, upper_bound: GAMETYPE_ID_COMBO, limit: 1, json: true,
         });
         const combos = (gtRes.rows[0] as { combinations: Array<{ combo_id: number; weight: number }> }).combinations;
         expect(combos).toEqual([{ combo_id: 0, weight: COMBO_WEIGHT }]);
@@ -1081,9 +1081,9 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         });
         await transact(microSession, 'bingo.game', 'lockgame', { game_id: comboGameId });
         await transact(microSession, 'bingo.game', 'startdraw', { game_id: comboGameId });
-        await waitForDrawn(comboGameIdStr);
+        await waitForDrawn(comboGameIdStr, 45); // ~90s — tolera oracle daemon lento
         console.log('   ✅ jogo COMBO em drawn');
-    }, 90_000);
+    }, 120_000);
 
     test('CB-2: claimcombo paga price × base × combo_weight/100 (= 25 WAX)', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
