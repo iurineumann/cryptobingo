@@ -103,6 +103,18 @@ cd apps/harness && npx jest tests/fsm.test.ts -t '<Suite>'; kill $OPID
 ```
 Bounds de `get_table_rows` por chave i64: use `UInt64.from(id)`, não string.
 
+## E2E de UI (Cypress — `apps/e2e-ui`, ADR-017)
+
+Valida a **jornada visual** do usuário (player/admin/sponsor) no navegador — complementa o harness
+(que é E2E de contrato/FSM). Modelo em **camadas**:
+- **Tier 1 (determinístico, PR-gate):** `cy.intercept` + fixtures (sem WAX). `pnpm --filter
+  @cryptobingo/frontend dev` + `pnpm --filter @cryptobingo/e2e-ui e2e`. Seletores só por
+  `data-testid` (nunca por texto i18n); auth via `cy.devLogin(role)` (dev-login real interceptado).
+- **Tier 2 (real, nightly/manual):** stack completo (`docker compose` + `init_dev_env.sh`).
+  `pnpm --filter @cryptobingo/e2e-ui e2e:tier2`.
+
+Use a skill `e2e-ui-cypress` (procedimentos + gotchas) e o revisor `e2e-reviewer`.
+
 ## Git flow
 
 - Branch de feature `feature/<slug>` a partir da branch de integração ativa. Commits lógicos e
@@ -122,7 +134,8 @@ Use a **skill** da camada que você for tocar (procedimentos + gotchas) e delegu
 | Worker / payouts | `worker-game-resolution` | `worker-reviewer` |
 | API-gateway | `api-endpoint` | `api-reviewer` |
 | Frontend | `frontend-feature` | `frontend-reviewer` |
-| Harness/E2E · DevOps · Economia | `harness-e2e`, `weights-calibration` | `platform-reviewer` |
+| E2E de UI (Cypress) | `e2e-ui-cypress` | `e2e-reviewer` |
+| Harness/E2E on-chain · DevOps · Economia | `harness-e2e`, `weights-calibration` | `platform-reviewer` |
 
 ## Invariantes de domínio
 
