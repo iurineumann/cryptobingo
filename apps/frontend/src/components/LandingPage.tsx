@@ -38,6 +38,19 @@ function getCol(n: number) {
   if (n <= 60) return 'G'; return 'O';
 }
 
+// Mapeia o label do perfil dev → role canônica de E2E (ADR-017). A ordem dos
+// devAccounts em App.tsx é estável; o label é a chave de mapeamento confiável.
+function devRoleFromLabel(label: string): string {
+  switch (label) {
+    case 'Jogador 1':       return 'player';
+    case 'Jogador 2':       return 'player2';
+    case 'Game Admin':      return 'admin';
+    case 'Contract Admin':  return 'contract-admin';
+    case 'Sponsor':         return 'sponsor';
+    default:                return label.toLowerCase().replace(/\s+/g, '-');
+  }
+}
+
 function isWithinSlowReveal(gameId: string): boolean {
   return Date.now() - Number(gameId) < SLOW_REVEAL_WINDOW;
 }
@@ -233,9 +246,10 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
             <a href="#sponsors" className="no-underline text-inherit">{t('nav.sponsors')}</a>
           </nav>
           <div className="flex items-center gap-3">
-            <div className="flex gap-1">
+            <div className="flex gap-1" data-testid="lang-select">
               {(['pt-BR', 'en-US', 'zh-CN'] as const).map(lang => (
                 <button key={lang} onClick={() => i18n.changeLanguage(lang)}
+                  data-testid={`lang-opt-${lang === 'pt-BR' ? 'pt' : lang === 'en-US' ? 'en' : 'zh'}`}
                   className={`cb-btn cb-btn-ghost cb-btn-sm ${i18n.language === lang ? 'font-bold text-[--cb-brand]' : 'text-[--cb-text-tertiary]'}`}
                   aria-pressed={i18n.language === lang} aria-label={`${t('common.language')} ${lang}`}>
                   {lang === 'pt-BR' ? 'PT' : lang === 'en-US' ? 'EN' : '中'}
@@ -272,7 +286,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
               </h1>
               <p className="text-lg text-[--cb-text-secondary] leading-relaxed mb-10">{t('landing.hero_desc')}</p>
               <div className="flex gap-4 flex-wrap">
-                <button className="cb-btn cb-btn-primary cb-btn-xl cb-btn-pill" onClick={onConnect}>
+                <button className="cb-btn cb-btn-primary cb-btn-xl cb-btn-pill" onClick={onConnect} data-testid="landing-connect">
                   ◆ {t('landing.hero_cta')}
                 </button>
                 <a href="#como" className="cb-btn cb-btn-ghost cb-btn-lg no-underline">
@@ -483,6 +497,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                   <div className="absolute bottom-full right-0 mb-1 bg-[--cb-bg-elevated] border border-[--cb-border-subtle] rounded-lg p-1 min-w-[11rem] shadow-lg z-50">
                     {devAccounts.map(acc => (
                       <button key={acc.actor} className="cb-btn cb-btn-ghost block w-full text-left text-[0.7rem] px-2.5 py-1.5 whitespace-nowrap"
+                        data-testid={`dev-login-${devRoleFromLabel(acc.label)}`}
                         onClick={() => { setDevOpen(false); onDevLogin(acc.actor, acc.key); }}>
                         <span className="font-mono text-[--cb-brand] mr-1.5">◆</span>
                         <strong>{acc.label}</strong>

@@ -163,6 +163,7 @@ export default function SponsorVault() {
                             <span className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_deposit_id')}</span>
                             <select
                                 className="cb-input cb-select"
+                                data-testid="sponsor-vault-field-deposit_id"
                                 value={allocForm.deposit_id}
                                 onChange={e => setAllocForm(f => ({ ...f, deposit_id: e.target.value }))}
                             >

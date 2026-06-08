@@ -218,13 +218,13 @@ export default function RoomsAdmin() {
         <section>
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-[--cb-text-primary]">{t('admin.rooms_title')}</h2>
-                <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={() => setShowCreate(s => !s)}>
+                <button className="cb-btn cb-btn-primary cb-btn-sm" data-testid="rooms-new" onClick={() => setShowCreate(s => !s)}>
                     {showCreate ? t('admin.rooms_cancel') : t('admin.rooms_new')}
                 </button>
             </div>
 
-            {error && <div className="cb-alert cb-alert-error mb-3">{error}</div>}
-            {success && <div className="cb-alert cb-alert-success mb-3">{success}</div>}
+            {error && <div className="cb-alert cb-alert-error mb-3" data-testid="rooms-toast-error">{error}</div>}
+            {success && <div className="cb-alert cb-alert-success mb-3" data-testid="rooms-toast-success">{success}</div>}
 
             {/* ── Create Form ── */}
             {showCreate && (
@@ -233,17 +233,17 @@ export default function RoomsAdmin() {
                     <div className="grid grid-cols-2 gap-3">
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_room_id')}
-                            <input className="cb-input w-full mt-1" type="number" value={form.room_id || ''}
+                            <input className="cb-input w-full mt-1" type="number" data-testid="rooms-field-room_id" value={form.room_id || ''}
                                 onChange={e => setForm(f => ({ ...f, room_id: parseInt(e.target.value) || 0 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_sponsor')}
-                            <input className="cb-input w-full mt-1" value={form.sponsor}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-sponsor" value={form.sponsor}
                                 onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_gametype')}
-                            <select className="cb-input w-full mt-1" value={form.gametype_id}
+                            <select className="cb-input w-full mt-1" data-testid="rooms-field-gametype_id" value={form.gametype_id}
                                 onChange={e => setForm(f => ({ ...f, gametype_id: parseInt(e.target.value) || 0 }))}
                             >
                                 <option value={0}>— {t('admin.rooms_form_gametype_select')} —</option>
@@ -266,46 +266,46 @@ export default function RoomsAdmin() {
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_min')}
-                            <input className="cb-input w-full mt-1" value={form.ticket_price_min_quantity}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_min" value={form.ticket_price_min_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_min_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_max')}
-                            <input className="cb-input w-full mt-1" value={form.ticket_price_max_quantity}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_max" value={form.ticket_price_max_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_max_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_default')}
-                            <input className="cb-input w-full mt-1" value={form.ticket_price_default_quantity}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_default" value={form.ticket_price_default_quantity}
                                 onChange={e => setForm(f => ({ ...f, ticket_price_default_quantity: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_max_tickets')}
-                            <input className="cb-input w-full mt-1" type="number" value={form.max_tickets_per_player}
+                            <input className="cb-input w-full mt-1" type="number" data-testid="rooms-field-max_tickets" value={form.max_tickets_per_player}
                                 onChange={e => setForm(f => ({ ...f, max_tickets_per_player: parseInt(e.target.value) || 0 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_meta_name')}
-                            <input className="cb-input w-full mt-1" value={form.name}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-name" value={form.name}
                                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_meta_description')}
-                            <input className="cb-input w-full mt-1" value={form.description}
+                            <input className="cb-input w-full mt-1" data-testid="rooms-field-description" value={form.description}
                                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_auto_start')}
-                            <input className="cb-input w-full mt-1" type="number" value={form.auto_start_delay_sec}
+                            <input className="cb-input w-full mt-1" type="number" data-testid="rooms-field-auto_start_delay" value={form.auto_start_delay_sec}
                                 onChange={e => setForm(f => ({ ...f, auto_start_delay_sec: parseInt(e.target.value) || 30 }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary] flex items-center gap-2 mt-4">
-                            <input type="checkbox" checked={form.chat_enabled}
+                            <input type="checkbox" data-testid="rooms-field-chat_enabled" checked={form.chat_enabled}
                                 onChange={e => setForm(f => ({ ...f, chat_enabled: e.target.checked }))} />
                             {t('admin.rooms_form_chat')}
                         </label>
                     </div>
-                    <button className="cb-btn cb-btn-primary mt-2" onClick={handleCreate} disabled={submitting}>
+                    <button className="cb-btn cb-btn-primary mt-2" data-testid="rooms-create" onClick={handleCreate} disabled={submitting}>
                         {submitting ? t('admin.rooms_creating') : t('admin.rooms_create')}
                     </button>
                 </div>
@@ -319,7 +319,7 @@ export default function RoomsAdmin() {
             ) : (
                 <div className="space-y-3">
                     {rooms.map(room => (
-                        <div key={room.room_id} className="cb-card p-4">
+                        <div key={room.room_id} data-testid={`room-card-${room.room_id}`} className="cb-card p-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h3 className="font-bold text-[--cb-text-primary]">
@@ -334,22 +334,22 @@ export default function RoomsAdmin() {
                                 </div>
                                 <div className="flex gap-2">
                                     {(room.status === 'inactive' || room.status === 'paused') && (
-                                        <button className="cb-btn cb-btn-primary cb-btn-xs" onClick={() => handleActivate(room.room_id)}>
+                                        <button className="cb-btn cb-btn-primary cb-btn-xs" data-testid={`room-activate-${room.room_id}`} onClick={() => handleActivate(room.room_id)}>
                                             {t('admin.rooms_activate')}
                                         </button>
                                     )}
                                     {room.status === 'active' && (
-                                        <button className="cb-btn cb-btn-outline cb-btn-xs" onClick={() => handlePause(room.room_id)}>
+                                        <button className="cb-btn cb-btn-outline cb-btn-xs" data-testid={`room-pause-${room.room_id}`} onClick={() => handlePause(room.room_id)}>
                                             {t('admin.rooms_pause')}
                                         </button>
                                     )}
                                     {(room.status === 'active' || room.status === 'paused') && (
-                                        <button className="cb-btn cb-btn-ghost cb-btn-xs text-[--cb-danger]" onClick={() => setCloseTarget(room)}>
+                                        <button className="cb-btn cb-btn-ghost cb-btn-xs text-[--cb-danger]" data-testid={`room-close-${room.room_id}`} onClick={() => setCloseTarget(room)}>
                                             {t('admin.rooms_close')}
                                         </button>
                                     )}
                                     {room.status !== 'closed' && (
-                                        <button className="cb-btn cb-btn-outline cb-btn-xs" onClick={() => openEdit(room)}>
+                                        <button className="cb-btn cb-btn-outline cb-btn-xs" data-testid={`room-edit-${room.room_id}`} onClick={() => openEdit(room)}>
                                             {t('admin.rooms_edit')}
                                         </button>
                                     )}
@@ -426,7 +426,7 @@ export default function RoomsAdmin() {
                             <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setCloseTarget(null)}>
                                 {t('admin.rooms_cancel')}
                             </button>
-                            <button className="cb-btn cb-btn-danger cb-btn-sm" onClick={() => { handleClose(closeTarget.room_id); setCloseTarget(null); }}>
+                            <button className="cb-btn cb-btn-danger cb-btn-sm" data-testid="room-close-confirm" onClick={() => { handleClose(closeTarget.room_id); setCloseTarget(null); }}>
                                 {t('admin.rooms_close_confirm')}
                             </button>
                         </div>

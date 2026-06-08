@@ -128,7 +128,7 @@ export default function SponsorRooms() {
                         const drops   = dropsCount(room);
 
                         return (
-                            <div key={roomId} className="cb-card p-5 flex flex-col gap-4">
+                            <div key={roomId} data-testid={`sponsor-room-card-${roomId}`} className="cb-card p-5 flex flex-col gap-4">
                                 {/* ── Cabeçalho ── */}
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
@@ -137,7 +137,7 @@ export default function SponsorRooms() {
                                                 {room.metadata?.name ?? `Sala #${roomId}`}
                                             </span>
                                             <span className="text-xs font-mono text-[--cb-text-tertiary]">#{roomId}</span>
-                                            <span className="text-sm">{STATUS_EMOJI[room.status] ?? '⚫'} {room.status}</span>
+                                            <span className="text-sm" data-testid={`sponsor-room-badge-${roomId}`}>{STATUS_EMOJI[room.status] ?? '⚫'} {room.status}</span>
                                             {hasNftDrop(room) && (
                                                 <span className="cb-badge text-xs" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
                                                     🎁 NFT Drop
@@ -164,6 +164,7 @@ export default function SponsorRooms() {
                                         </button>
                                         <button
                                             className={`cb-btn cb-btn-sm ${isEditing ? 'cb-btn-ghost' : 'cb-btn-primary'}`}
+                                            data-testid={`sponsor-room-edit-${roomId}`}
                                             onClick={() => isEditing ? setEditingId(null) : startEdit(room)}
                                         >
                                             {isEditing ? t('common.cancel') : t('sponsor.btn_edit')}
@@ -202,6 +203,7 @@ export default function SponsorRooms() {
                                             <span className="text-xs text-[--cb-text-tertiary]">{t('sponsor.field_name')}</span>
                                             <input
                                                 className="cb-input"
+                                                data-testid="sponsor-room-field-name"
                                                 value={editForm.name}
                                                 onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                                                 placeholder={`Sala #${roomId}`}
@@ -211,6 +213,7 @@ export default function SponsorRooms() {
                                             <span className="text-xs text-[--cb-text-tertiary]">{t('sponsor.field_description')}</span>
                                             <textarea
                                                 className="cb-input"
+                                                data-testid="sponsor-room-field-description"
                                                 rows={2}
                                                 value={editForm.description}
                                                 onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
@@ -222,6 +225,7 @@ export default function SponsorRooms() {
                                                 <span className="text-xs text-[--cb-text-tertiary]">{t('sponsor.field_delay')}</span>
                                                 <input
                                                     className="cb-input"
+                                                    data-testid="sponsor-room-field-auto_start_delay"
                                                     type="number"
                                                     min={0}
                                                     max={300}
@@ -232,6 +236,7 @@ export default function SponsorRooms() {
                                             <label className="flex items-center gap-2 mt-5">
                                                 <input
                                                     type="checkbox"
+                                                    data-testid="sponsor-room-field-chat_enabled"
                                                     checked={editForm.chat_enabled}
                                                     onChange={e => setEditForm(f => ({ ...f, chat_enabled: e.target.checked }))}
                                                     style={{ width: '1rem', height: '1rem' }}
@@ -242,6 +247,7 @@ export default function SponsorRooms() {
                                         <div className="flex gap-2">
                                             <button
                                                 className="cb-btn cb-btn-primary cb-btn-sm"
+                                                data-testid="sponsor-room-save"
                                                 disabled={saving}
                                                 onClick={() => saveEdit(roomId)}
                                             >
