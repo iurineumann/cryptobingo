@@ -1120,6 +1120,7 @@ export default function GameRoom({
             {game?.status === 'funding' && ticketPrice && (
               <button
                 className="cb-btn cb-btn-primary cb-btn-sm"
+                data-testid="gr-buy-more"
                 onClick={() => setShowBuyModal(true)}
               >
                 {t('game_room.buy_more')}

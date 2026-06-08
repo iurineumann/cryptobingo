@@ -1,0 +1,12 @@
+{
+  "rows": [
+    {
+      "ticket_id": "2001",
+      "owner": "jogador1",
+      "matrix": [3, 7, 11, 5, 14, 16, 21, 26, 28, 30, 31, 40, 33, 44, 46, 49, 54, 57, 60, 61, 66, 70, 73, 75],
+      "price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" }
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

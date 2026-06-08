@@ -1,0 +1,10 @@
+{
+  "rows": [
+    { "pattern_id": "1", "name": "ROW_1", "mask": 31 },
+    { "pattern_id": "2", "name": "ROW_2", "mask": 992 },
+    { "pattern_id": "10", "name": "DIAG_TL_BR", "mask": 17043521 },
+    { "pattern_id": "99", "name": "MASTER", "mask": 33554431 }
+  ],
+  "more": false,
+  "next_key": ""
+}
