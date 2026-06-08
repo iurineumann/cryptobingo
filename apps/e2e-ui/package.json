@@ -7,6 +7,8 @@
     "e2e": "cypress run --env tier=1",
     "e2e:open": "cypress open",
     "e2e:tier2": "cypress run --env tier=2",
+    "e2e:docker": "bash run-docker.sh tier=1",
+    "e2e:docker:tier2": "bash run-docker.sh tier=2",
     "clean": "rm -rf cypress/screenshots cypress/videos"
   },
   "devDependencies": {
