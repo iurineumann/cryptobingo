@@ -51,19 +51,27 @@ arquivo.**
 
 ## Comandos
 
+> **Rodar local = via Docker.** O Cypress nativo **não** sobe neste host (Ubuntu 24.04/WSL2):
+> a restrição de user-namespaces do AppArmor quebra o sandbox do Electron
+> (`bad option: --no-sandbox`). Use a imagem oficial `cypress/included` (script `run-docker.sh`,
+> com `--network host` para alcançar o `vite dev` da 5173). Em CI (ubuntu-latest) o nativo funciona
+> via `cypress-io/github-action`.
+
 - **Rodar Tier 1 (local, sem WAX):**
   ```bash
-  pnpm --filter @cryptobingo/frontend dev      # vite na 5173 (DEV=true → dev-login presente)
-  pnpm --filter @cryptobingo/e2e-ui e2e        # cypress run --env tier=1
+  pnpm --filter @cryptobingo/frontend dev      # vite na 5173 (DEV=true → dev-login presente) — deixe rodando
+  pnpm --filter @cryptobingo/e2e-ui e2e:docker # cypress/included via Docker (tier=1)
+  # 1 spec só: pnpm --filter @cryptobingo/e2e-ui e2e:docker --spec 'cypress/e2e/tier1/player/lobby.cy.ts'
   ```
-- **Abrir runner interativo:** `pnpm --filter @cryptobingo/e2e-ui e2e:open`.
 - **Rodar Tier 2 (exige WAX + oracle):**
   ```bash
   docker compose up -d postgres mongodb redis rabbitmq api-gateway worker-game-loop
   bash init_dev_env.sh                          # nodeos + deploy + oracle daemon
   pnpm --filter @cryptobingo/frontend dev
-  pnpm --filter @cryptobingo/e2e-ui e2e:tier2
+  pnpm --filter @cryptobingo/e2e-ui e2e:docker:tier2
   ```
+- **Scripts nativos** (`e2e`, `e2e:open`, `e2e:tier2`) existem para CI/ambientes onde o Electron sobe;
+  localmente prefira os `:docker`.
 - **Pré-PR (CoVe):** se tocou `apps/frontend/src/**`, `npx tsc --noEmit` (no frontend) limpo +
   `pnpm --filter @cryptobingo/frontend test` (vitest) verde — instrumentar `data-testid` **não pode**
   regredir os testes existentes. Tier 1 verde.

@@ -69,7 +69,16 @@ são fallback secundário; texto traduzido é proibido como seletor.
   de forma confiável → tratado como **SMOKE** no Tier 1 (só listagem) e exercido de verdade no
   **Tier 2** (`admin-onchain`).
 
-### 6. CI: Tier 1 bloqueia PR; Tier 2 nightly
+### 6. Execução local via Docker (`cypress/included`)
+
+Em hosts Linux modernos (Ubuntu 24.04 / WSL2) a restrição de user-namespaces do AppArmor quebra o
+sandbox do Electron do Cypress nativo (`bad option: --no-sandbox`). A execução **local** usa a imagem
+oficial `cypress/included` (`apps/e2e-ui/run-docker.sh`, scripts `e2e:docker[:tier2]`), com
+`--network host` para alcançar o `vite dev` da 5173 e montando a raiz do monorepo (resolve os
+symlinks do pnpm). Em CI (ubuntu-latest) o Cypress nativo sobe normalmente via
+`cypress-io/github-action`. Harness validado: `cy.devLogin('player')` → `/lobby` verde no container.
+
+### 7. CI: Tier 1 bloqueia PR; Tier 2 nightly
 
 - Job `e2e-ui` em `pull_request`: sobe services + api-gateway/worker + `vite dev`, roda
   `cypress run --env tier=1`. **Obrigatório** (bloqueia merge). Artefatos (vídeo/screenshot) em falha.

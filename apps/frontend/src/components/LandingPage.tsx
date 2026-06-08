@@ -490,6 +490,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
             {import.meta.env.DEV && devAccounts && onDevLogin && (
               <div ref={devRef} className="relative">
                 <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setDevOpen(o => !o)}
+                  data-testid="dev-login-toggle"
                   style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', color: 'var(--cb-text-tertiary)' }}>
                   🧪 {t('auth.dev_login')} ▾
                 </button>

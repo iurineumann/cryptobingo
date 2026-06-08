@@ -114,6 +114,10 @@ Cypress.Commands.add('devLogin', (role: DevRole) => {
     stubRpcTableRows();
 
     cy.visit('/');
+    // O dev-login fica num dropdown colapsado no rodapé: abrir o toggle e então
+    // clicar no perfil. Os botões `dev-login-${role}` só existem no DOM com o
+    // dropdown aberto (devOpen) — LandingPage.tsx.
+    cy.get('[data-testid="dev-login-toggle"]').click();
     cy.get(`[data-testid="dev-login-${role}"]`).click();
 });
 
