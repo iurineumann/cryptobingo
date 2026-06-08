@@ -106,7 +106,7 @@
 - [x] Documentação de conformidade (Lei 14.790/2023, LGPD)
 - [x] Contratos Ricardianos com cláusulas legais
 - [ ] CI/CD (GitHub Actions): lint → test → build → deploy
-- [ ] E2E de UI (Cypress, `apps/e2e-ui` — ADR-017): jornada visual player/admin/sponsor; Tier 1 determinístico (PR-gate) + Tier 2 real (nightly)
+- [x] E2E de UI (Cypress, `apps/e2e-ui` — ADR-017): 17 specs, 112 testes Tier 1 PR-gate + 21 Tier 2 nightly; player/admin/sponsor; CI `e2e-ui` (PR) + `e2e-ui-real` (nightly 03:00 UTC)
 - [ ] Manifests Kubernetes (Helm charts)
 - [ ] KYC on-chain via provedor terceiro
 - [ ] Monitoramento de RAM do contrato (WAX)
