@@ -1,0 +1,16 @@
+{
+  "wallet_address": "contractad1",
+  "nickname": "Contract Admin",
+  "role": "contract_admin",
+  "avatar_nft_asset_id": null,
+  "preferences": {
+    "locale": "pt-BR",
+    "currency_display": "BINGO",
+    "sound_enabled": false
+  },
+  "progression": {
+    "xp": 9999,
+    "tier": "Diamond",
+    "games_played": 0
+  }
+}

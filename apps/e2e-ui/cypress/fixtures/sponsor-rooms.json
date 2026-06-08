@@ -1,0 +1,30 @@
+{
+  "rooms": [
+    {
+      "room_id": "7",
+      "sponsor": "sponsor1111",
+      "gametype_id": "1",
+      "currency": { "quantity": "0.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_min": { "quantity": "5.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_max": { "quantity": "50.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_default": { "quantity": "10.0000 BINGO", "contract": "bingo.token" },
+      "weight": "150",
+      "max_tickets_per_player": 20,
+      "current_game_id": "0",
+      "nft_template_allowlist": [],
+      "sponsor_room": true,
+      "status": "active",
+      "created_at": 1717000000,
+      "metadata": {
+        "room_id": "7",
+        "name": "Sala do Sponsor",
+        "description": "Sala patrocinada (E2E sponsor).",
+        "cover_image_url": "",
+        "rules_summary": "Bingo patrocinado com drops.",
+        "chat_enabled": true,
+        "auto_start_delay_sec": 60,
+        "drops": []
+      }
+    }
+  ]
+}

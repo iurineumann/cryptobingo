@@ -1,0 +1,39 @@
+{
+  "gametype_name": "Bingo Padrão",
+  "target_rtp": 0.85,
+  "algebraic_rtp": 0.848,
+  "algebraic_rtp_pct": "84.80%",
+  "iterations": 4,
+  "converged": true,
+  "pattern_weights": { "ROW_1": 100, "MASTER": 2000 },
+  "combo_weights": { "Duas Linhas": 800 },
+  "calibrations": [
+    { "name": "ROW_1", "probability": 0.21, "weight": 100 },
+    { "name": "MASTER", "probability": 0.012, "weight": 2000 }
+  ],
+  "validation": {
+    "gametype_name": "Bingo Padrão",
+    "simulations": 5000,
+    "tickets_per_game": 100,
+    "ticket_price": 10,
+    "base_multiplier": 100,
+    "rtp": 0.849,
+    "rtp_pct": "84.90%",
+    "ggr": 0.151,
+    "ggr_pct": "15.10%",
+    "total_wagered": 5000000,
+    "total_paid_out": 4245000,
+    "avg_payout_per_game": 849,
+    "avg_winners_per_game": 3.2,
+    "pattern_stats": [],
+    "alerts": [],
+    "is_viable": true,
+    "duration_ms": 1234,
+    "computed_at": "2026-06-07T00:00:00.000Z"
+  },
+  "refinement_iters": 2,
+  "refinement_converged": true,
+  "retries": 0,
+  "duration_ms": 4567,
+  "computed_at": "2026-06-07T00:00:00.000Z"
+}

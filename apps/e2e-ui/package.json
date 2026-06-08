@@ -1,0 +1,19 @@
+{
+  "name": "@cryptobingo/e2e-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Testes E2E de UI (Cypress) do CryptoBingo — jornada visual player/admin/sponsor. Ref: ADR-017.",
+  "scripts": {
+    "e2e": "cypress run --env tier=1",
+    "e2e:open": "cypress open",
+    "e2e:tier2": "cypress run --env tier=2",
+    "clean": "rm -rf cypress/screenshots cypress/videos"
+  },
+  "devDependencies": {
+    "@cryptobingo/shared-types": "workspace:*",
+    "@types/node": "^20.0.0",
+    "cypress": "^13.0.0",
+    "mock-socket": "^9.0.0",
+    "typescript": "^5.0.0"
+  }
+}

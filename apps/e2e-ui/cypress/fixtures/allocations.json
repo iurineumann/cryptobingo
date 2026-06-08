@@ -1,0 +1,22 @@
+{
+  "allocations": [
+    {
+      "alloc_id": "1",
+      "deposit_id": "1",
+      "owner": "sponsor1111",
+      "room_id": "1",
+      "asset_type": "token",
+      "token_contract": "bingo.token",
+      "token_symbol": "BINGO",
+      "quantity_per_drop": { "quantity": "25.0000 BINGO", "contract": "bingo.token" },
+      "quantity_distributed": { "quantity": "250.0000 BINGO", "contract": "bingo.token" },
+      "nft_asset_id": "0",
+      "nft_template_id": 0,
+      "nft_collection": "",
+      "drop_chance_bps": 500,
+      "drops_executed": 10,
+      "status": "active",
+      "allocated_at": 1717000000
+    }
+  ]
+}

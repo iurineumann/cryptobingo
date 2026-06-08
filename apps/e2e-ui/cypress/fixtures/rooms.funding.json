@@ -1,0 +1,30 @@
+{
+  "rooms": [
+    {
+      "room_id": "1",
+      "sponsor": "bingo.game",
+      "gametype_id": "1",
+      "currency": { "quantity": "0.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_min": { "quantity": "5.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_max": { "quantity": "50.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price_default": { "quantity": "10.0000 BINGO", "contract": "bingo.token" },
+      "weight": "100",
+      "max_tickets_per_player": 10,
+      "current_game_id": "1717000000000",
+      "nft_template_allowlist": [],
+      "sponsor_room": false,
+      "status": "active",
+      "created_at": 1717000000,
+      "metadata": {
+        "room_id": "1",
+        "name": "Sala Principal",
+        "description": "Sala de bingo vendável (E2E funding).",
+        "cover_image_url": "",
+        "rules_summary": "Bingo padrão — RTP 85%.",
+        "chat_enabled": true,
+        "auto_start_delay_sec": 30,
+        "drops": []
+      }
+    }
+  ]
+}

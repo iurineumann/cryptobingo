@@ -1,0 +1,25 @@
+{
+  "gametype_id": "1",
+  "rules": [
+    { "pattern_id": "1", "weight": 100, "type": "simple" },
+    { "pattern_id": "2", "weight": 100, "type": "simple" },
+    { "pattern_id": "10", "weight": 500, "type": "special" },
+    { "pattern_id": "99", "weight": 2000, "type": "master" }
+  ],
+  "combinations": [
+    {
+      "name": "Duas Linhas",
+      "weight": 800,
+      "clauses": [
+        { "type": "n_of_type", "pattern_type": "simple", "count": 2 }
+      ]
+    },
+    {
+      "name": "Linha + Diagonal",
+      "weight": 1200,
+      "clauses": [
+        { "type": "all_of", "pattern_ids": ["1", "10"] }
+      ]
+    }
+  ]
+}

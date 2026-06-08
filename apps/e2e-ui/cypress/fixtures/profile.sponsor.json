@@ -1,0 +1,16 @@
+{
+  "wallet_address": "sponsor1111",
+  "nickname": "Sponsor",
+  "role": "sponsor",
+  "avatar_nft_asset_id": null,
+  "preferences": {
+    "locale": "pt-BR",
+    "currency_display": "WAX",
+    "sound_enabled": true
+  },
+  "progression": {
+    "xp": 0,
+    "tier": "Bronze",
+    "games_played": 0
+  }
+}

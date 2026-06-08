@@ -1,0 +1,18 @@
+{
+  "gametypes": [
+    {
+      "gametype_id": "1",
+      "name": "Bingo Padrão",
+      "base_multiplier": 100,
+      "rules": [
+        { "pattern_id": "1", "weight": 100 },
+        { "pattern_id": "99", "weight": 2000 }
+      ],
+      "draw_mode": "standard",
+      "max_balls": 75,
+      "golden_ball_after": 0,
+      "master_weight_ovrd": 0,
+      "stages": []
+    }
+  ]
+}

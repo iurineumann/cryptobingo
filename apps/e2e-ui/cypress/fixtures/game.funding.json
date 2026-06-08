@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "game_id": "1717000000000",
+      "status": "funding",
+      "ticket_price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" },
+      "total_wagered": { "quantity": "30.0000 BINGO", "contract": "bingo.token" },
+      "sponsor_pool": [],
+      "drawn_balls": [],
+      "end_time": "2099-01-01T00:00:00",
+      "room_id": "1",
+      "gametype_id": "1",
+      "campaign_id": "0",
+      "golden_ball_num": 0,
+      "golden_multiplier": 0
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

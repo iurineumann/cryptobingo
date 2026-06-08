@@ -1,0 +1,18 @@
+{
+  // Isola a suíte Cypress dos runners jest/vitest do monorepo: só os tipos do
+  // Cypress + node entram aqui, e o `include` cobre apenas os arquivos do pacote.
+  // Estende a base da raiz para herdar strict/target, mas sobrescreve module
+  // resolution para o padrão que o Cypress/bundler espera (sem NodeNext rígido).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["cypress", "node"],
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "include": ["cypress/**/*.ts", "cypress.config.ts"],
+  "exclude": ["node_modules"]
+}
