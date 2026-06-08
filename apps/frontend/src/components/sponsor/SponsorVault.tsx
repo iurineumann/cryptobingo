@@ -134,18 +134,21 @@ export default function SponsorVault() {
             <div className="flex gap-2 mb-6 flex-wrap">
                 <button
                     className={`cb-btn cb-btn-sm ${tab === 'deposits' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                    data-testid="sponsor-vault-tab-deposits"
                     onClick={() => setTab('deposits')}
                 >
                     {t('admin.vault_deposits')} ({deposits.length})
                 </button>
                 <button
                     className={`cb-btn cb-btn-sm ${tab === 'allocations' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                    data-testid="sponsor-vault-tab-allocations"
                     onClick={() => setTab('allocations')}
                 >
                     {t('admin.vault_allocations')} ({allocations.length})
                 </button>
                 <button
                     className="cb-btn cb-btn-primary cb-btn-sm ml-auto"
+                    data-testid="sponsor-vault-allocate-toggle"
                     onClick={() => setShowAllocate(!showAllocate)}
                     disabled={rooms.length === 0}
                 >
@@ -181,6 +184,7 @@ export default function SponsorVault() {
                             <span className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_room_id')}</span>
                             <select
                                 className="cb-input cb-select"
+                                data-testid="sponsor-vault-room-select"
                                 value={allocForm.room_id}
                                 onChange={e => setAllocForm(f => ({ ...f, room_id: e.target.value }))}
                             >
@@ -197,6 +201,7 @@ export default function SponsorVault() {
                             <span className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_qty_per_drop')}</span>
                             <input
                                 className="cb-input"
+                                data-testid="sponsor-vault-field-quantity_per_drop"
                                 placeholder="10.0000 WAX (vazio = 1 NFT)"
                                 value={allocForm.quantity_per_drop}
                                 onChange={e => setAllocForm(f => ({ ...f, quantity_per_drop: e.target.value }))}
@@ -209,6 +214,7 @@ export default function SponsorVault() {
                             </span>
                             <input
                                 className="cb-input"
+                                data-testid="sponsor-vault-field-drop_chance_bps"
                                 type="range"
                                 min={100}
                                 max={10000}
@@ -224,6 +230,7 @@ export default function SponsorVault() {
 
                         <button
                             className="cb-btn cb-btn-primary"
+                            data-testid="sponsor-vault-allocate"
                             disabled={allocSubmitting || !allocForm.deposit_id || !allocForm.room_id}
                             onClick={handleAllocate}
                         >
