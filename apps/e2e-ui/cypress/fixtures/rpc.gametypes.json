@@ -1,0 +1,23 @@
+{
+  "rows": [
+    {
+      "gametype_id": "1",
+      "name": "Bingo Padrao",
+      "base_multiplier": 100,
+      "max_balls": 75,
+      "draw_mode": "standard",
+      "rules": [
+        { "pattern_id": "1", "weight": 100 },
+        { "pattern_id": "2", "weight": 100 },
+        { "pattern_id": "10", "weight": 500 },
+        { "pattern_id": "99", "weight": 2000 }
+      ],
+      "combinations": [
+        { "combo_id": "0", "weight": 800 },
+        { "combo_id": "1", "weight": 1200 }
+      ]
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

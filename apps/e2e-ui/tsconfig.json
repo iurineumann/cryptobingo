@@ -11,6 +11,7 @@
     "types": ["cypress", "node"],
     "noEmit": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true
   },
   "include": ["cypress/**/*.ts", "cypress.config.ts"],

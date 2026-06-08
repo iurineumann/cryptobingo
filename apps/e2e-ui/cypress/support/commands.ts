@@ -14,7 +14,19 @@
 // Os testids `dev-login-${role}` são instrumentados no frontend na Fase 1 — aqui
 // já os assumimos como contrato estável.
 
-import { Server as MockServer } from 'mock-socket';
+import { Server as MockServer, WebSocket as MockWebSocket } from 'mock-socket';
+
+// Fixtures que precisam de acesso SÍNCRONO dentro de um resolver de cy.intercept
+// (resolver não pode ser async). Importadas estaticamente — o bundler do Cypress
+// resolve o JSON em tempo de build. As demais fixtures usam o roteamento por
+// { fixture } padrão (carregamento assíncrono do Cypress).
+import rpcPatternsFixture from '../fixtures/rpc.patterns.json';
+import roomsFundingFixture from '../fixtures/rooms.funding.json';
+
+const SYNC_FIXTURES: Record<string, unknown> = {
+    'rpc.patterns.json':  rpcPatternsFixture,
+    'rooms.funding.json': roomsFundingFixture,
+};
 
 // ==========================================
 // TIPOS
@@ -56,7 +68,7 @@ declare global {
              * a raiz e clica em [data-testid="dev-login-${role}"]. O JWT é gravado
              * pelo próprio app — NÃO fabricamos token.
              */
-            devLogin(role: DevRole): Chainable<void>;
+            devLogin(role: DevRole, scenario?: StubScenario): Chainable<void>;
 
             /**
              * Carrega o conjunto de fixtures e registra os intercepts REST/RPC do
@@ -75,6 +87,12 @@ declare global {
 
             /** Emite um evento winner_found no socket mockado. */
             emitWinner(payload: EmitWinnerPayload): Chainable<void>;
+
+            /**
+             * Emite um evento socket.io arbitrário (envelope cru) no socket mockado.
+             * Útil para eventos sem comando dedicado (game_ended, golden_ball, etc.).
+             */
+            emitSocketEvent(event: string, payload: unknown): Chainable<void>;
         }
     }
 }
@@ -98,7 +116,7 @@ const PROFILE_FIXTURE_BY_ROLE: Record<DevRole, string> = {
 // cy.devLogin(role)
 // ==========================================
 
-Cypress.Commands.add('devLogin', (role: DevRole) => {
+Cypress.Commands.add('devLogin', (role: DevRole, scenario?: StubScenario) => {
     const profileFixture = PROFILE_FIXTURE_BY_ROLE[role];
 
     // ── Auth: challenge → verify → profile ────────────────────────────────────
@@ -111,7 +129,15 @@ Cypress.Commands.add('devLogin', (role: DevRole) => {
 
     // ── RPC mínimo: a UI pós-login (lobby) lê tabelas on-chain via proxy /v1 ──
     // Roteamos por nome de tabela para a fixture certa; default = linhas vazias.
+    // Se um `scenario` for informado, registramos seus intercepts REST/RPC DEPOIS
+    // (e ANTES do visit) — o último cy.intercept de cada rota vence, garantindo que
+    // o cenário sobrescreva o stub RPC vazio default sem condição de corrida.
     stubRpcTableRows();
+    if (scenario) {
+        const register = SCENARIO_INTERCEPTS[scenario];
+        if (!register) throw new Error(`[devLogin] cenário desconhecido: ${scenario}`);
+        register();
+    }
 
     cy.visit('/');
     // O dev-login fica num dropdown colapsado no rodapé: abrir o toggle e então
@@ -131,17 +157,33 @@ Cypress.Commands.add('devLogin', (role: DevRole) => {
  */
 const SCENARIO_INTERCEPTS: Record<StubScenario, () => void> = {
     'funding': () => {
-        cy.intercept('GET', '**/api/v1/rooms',     { fixture: 'rooms.funding.json' }).as('rooms');
-        cy.intercept('GET', '**/api/v1/rooms/*',   { fixture: 'rooms.funding.json' }).as('room');
-        stubRpcTableRows({ games: 'game.funding.json', tickets: 'tickets.json' });
+        cy.intercept('GET', '**/api/v1/rooms',   { fixture: 'rooms.funding.json' }).as('rooms');
+        cy.intercept('GET', '**/api/v1/rooms/1', { body: roomFromFixtureById('1') }).as('room');
+        // RPC: balances (chip da carteira), games (sala em funding), gametypes (prêmio máx).
+        // tickets devolve vazio por jogador (sem cartelas) — a query usa índice secundário.
+        stubRpcTableRows({
+            balances:  'balances.json',
+            games:     'game.funding.json',
+            gametypes: 'rpc.gametypes.json',
+        });
     },
     'archived-combo-win': () => {
+        // fetchRoom() resolve a sala da partida encerrada (nome/metadata no crumb).
         cy.intercept('GET', '**/api/v1/rooms',   { fixture: 'rooms.funding.json' }).as('rooms');
-        cy.intercept('GET', '**/api/v1/rooms/*', { fixture: 'rooms.funding.json' }).as('room');
-        // Metadados de combinação (ADR-016) + estatísticas públicas do jogo encerrado.
+        cy.intercept('GET', '**/api/v1/rooms/1', { body: roomFromFixtureById('1') }).as('room');
+        // Metadados de combinação (ADR-016): combinations + rules+tipos vêm do endpoint
+        // PÚBLICO /gametypes/:id/metadata (fetchPublicGametypeMetadata) — consumido pelo
+        // GameRoom para montar gameCombinations/extendedRules.
         cy.intercept('GET', '**/api/v1/gametypes/*/metadata', { fixture: 'gametype-meta.json' }).as('gametypeMeta');
         cy.intercept('GET', '**/api/v1/player/winnings/*',    { fixture: 'tx-result.json' }).as('winnings');
-        stubRpcTableRows({ games: 'game.archived-combo-win.json', tickets: 'tickets.json' });
+        // RPC: games (archived com drawn_balls), tickets (cartela vencedora de combo) e
+        // as tabelas gametypes/patterns que fetchGamePatterns lê por pattern_id (keyed).
+        stubRpcTableRows({
+            games:     'game.archived-combo-win.json',
+            tickets:   'tickets.combo-win.json',
+            gametypes: 'rpc.gametypes.json',
+            patterns:  keyedByLowerBound('rpc.patterns.json', 'pattern_id'),
+        });
     },
     'admin-rooms': () => {
         cy.intercept('GET',  '**/api/v1/admin/gametypes', { fixture: 'gametypes.json' }).as('gametypes');
@@ -177,19 +219,79 @@ Cypress.Commands.add('stubBackend', (scenario: StubScenario) => {
 // ==========================================
 
 /**
+ * Resolver de uma resposta de get_table_rows. Recebe o corpo da requisição
+ * (com table/lower_bound/upper_bound) e devolve o nome de uma fixture OU um body
+ * inline `{ rows, more, next_key }`. Permite respostas KEYED por chave primária —
+ * necessário quando o frontend varre uma tabela 1-linha-por-vez (ex.: patterns).
+ */
+type RpcResolver = (body: Record<string, unknown>) => { fixture: string } | { body: unknown };
+
+/**
+ * Normaliza o corpo de uma requisição de get_table_rows. O Wharfkit serializa o
+ * payload como STRING JSON; o Cypress não o parseia automaticamente. Aceitamos
+ * tanto string quanto objeto (defensivo) e devolvemos sempre um objeto.
+ */
+function parseRpcBody(raw: unknown): Record<string, unknown> {
+    if (typeof raw === 'string') {
+        try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+    }
+    return (raw ?? {}) as Record<string, unknown>;
+}
+
+/** Aceita fixture estática (string) ou resolver dinâmico (keyed). */
+type RpcTableEntry = string | RpcResolver;
+
+/**
+ * Devolve um resolver que carrega `fixtureName` (shape `{ rows: [...] }`) e filtra
+ * a linha cujo `pkField` casa com o `lower_bound` da query (lookup por PK). Espelha
+ * o padrão de `fetchGamePatterns`/`GameRoom`, que pedem 1 pattern_id por vez com
+ * `lower_bound == upper_bound == id` e leem `rows[0]`. Sem `lower_bound`, devolve
+ * todas as linhas (varredura).
+ */
+function keyedByLowerBound(fixtureName: string, pkField: string): RpcResolver {
+    return (body) => {
+        const lb = body.lower_bound != null ? String(body.lower_bound) : undefined;
+        // O carregamento é assíncrono; resolvemos via body inline lendo a fixture
+        // pelo cache do Cypress no momento da resposta (cy.fixture é assíncrono, então
+        // pré-carregamos via require do JSON empacotado pelo bundler do support).
+        const all = (loadFixtureSync(fixtureName) as { rows?: Array<Record<string, unknown>> }).rows ?? [];
+        const rows = lb == null ? all : all.filter(r => String(r[pkField]) === lb);
+        return { body: { rows, more: false, next_key: '' } };
+    };
+}
+
+// Acesso síncrono às fixtures importadas estaticamente (ver topo do arquivo).
+function loadFixtureSync(name: string): unknown {
+    const data = SYNC_FIXTURES[name];
+    if (!data) throw new Error(`[loadFixtureSync] fixture não importada estaticamente: ${name}`);
+    return data;
+}
+
+/** Lê a fixture de rooms e devolve a sala cujo room_id casa (shape de fetchRoom). */
+function roomFromFixtureById(roomId: string): unknown {
+    const data = loadFixtureSync('rooms.funding.json') as { rooms: Array<Record<string, unknown>> };
+    return data.rooms.find(r => String(r.room_id) === roomId) ?? data.rooms[0];
+}
+
+/**
  * Intercepta `POST **\/v1/chain/get_table_rows` e roteia por `req.body.table`
- * para a fixture certa. Tabelas sem mapeamento respondem `{ rows: [], more: false }`.
+ * para a fixture/resolver certo. Tabelas sem mapeamento respondem `{ rows: [] }`.
  *
  * O frontend (utils/rpc.ts) pode chamar via session.client OU via fetch direto no
  * proxy; ambos batem na mesma URL `/v1/chain/get_table_rows`, então um único
  * intercept cobre os dois caminhos.
  */
-function stubRpcTableRows(tableMap: Record<string, string> = {}): void {
+function stubRpcTableRows(tableMap: Record<string, RpcTableEntry> = {}): void {
     cy.intercept('POST', '**/v1/chain/get_table_rows', (req) => {
-        const table = (req.body as { table?: string })?.table ?? '';
-        const fixture = tableMap[table];
-        if (fixture) {
-            req.reply({ fixture });
+        // Wharfkit envia o corpo como STRING JSON (não objeto). Sem este parse,
+        // req.body.table fica undefined e toda tabela cai no fallback vazio.
+        const body  = parseRpcBody(req.body);
+        const table = (body.table as string) ?? '';
+        const entry = tableMap[table];
+        if (typeof entry === 'string') {
+            req.reply({ fixture: entry });
+        } else if (typeof entry === 'function') {
+            req.reply(entry(body) as never);
         } else {
             // Resposta vazia coerente com o formato de get_table_rows.
             req.reply({ statusCode: 200, body: { rows: [], more: false, next_key: '' } });
@@ -211,26 +313,93 @@ function activeGameId(): number {
     return Number(Cypress.env('gameId') ?? 0);
 }
 
+// Referência ao mock server ativo — mock-socket mantém um registro global por URL
+// e lança "already listening" se criarmos dois na mesma URL. Paramos o anterior
+// antes de criar um novo (defesa contra retries e múltiplos testes na mesma suíte).
+let _currentMockServer: MockServer | null = null;
+
+// Flag: o WebSocket mock deve ser injetado no PRÓXIMO window:before:load (ver abaixo).
+let _injectMockWs = false;
+
+function stopMockSocket(): void {
+    if (_currentMockServer) {
+        try { _currentMockServer.stop(); } catch { /* idempotente */ }
+        _currentMockServer = null;
+    }
+    _injectMockWs = false;
+}
+
+// Conexões mock-socket ativas — usadas para enviar frames Engine.IO/Socket.IO.
+const _mockClients = new Set<{ send: (data: string) => void }>();
+
+/**
+ * O frontend usa socket.io-client (Engine.IO v4). Um `server.emit` cru do
+ * mock-socket NÃO é decodificado pelo parser do socket.io. Por isso falamos o
+ * protocolo na mão sobre o WebSocket mockado:
+ *   - handshake EIO: `0{...}` (open) + `40` (connect ao namespace default);
+ *   - eventos: `42["<evento>",<payload>]`.
+ * Assim os handlers `socket.on('ball_drawn', ...)` do useSlowReveal são acionados.
+ */
+function emitSocketIoEvent(event: string, payload: unknown): void {
+    const frame = `42${JSON.stringify([event, payload])}`;
+    for (const client of _mockClients) client.send(frame);
+}
+
+// Injeção do WebSocket mock no PRÓXIMO window:before:load.
+// Necessário porque o engine.io-client captura o WebSocket global no carregamento
+// do bundle — patchar depois (ou no realm do runner) não intercepta. mock-socket
+// vive no realm do runner; injetamos a CLASSE mock no window da app (mesmo Network
+// singleton do módulo), antes do bundle avaliar. mockSocket DEVE ser chamado ANTES
+// do devLogin (que faz o cy.visit inicial). A SPA não recarrega → o patch persiste.
+Cypress.on('window:before:load', (win) => {
+    if (_injectMockWs) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (win as any).WebSocket = MockWebSocket;
+    }
+});
+
 Cypress.Commands.add('mockSocket', () => {
     // socket.io sobre o endpoint de origin; o transport 'websocket' usa o caminho
     // /socket.io/. mock-socket intercepta a URL de WebSocket no window do app.
-    // Injetamos no window ANTES do visit via cy.on('window:before:load').
     const wsUrl = `ws://127.0.0.1:5173/socket.io/?EIO=4&transport=websocket`;
 
-    return cy.window({ log: false }).then(() => {
-        const server = new MockServer(wsUrl);
-        // Guarda o server como alias para emissões posteriores.
-        cy.wrap(server, { log: false }).as('mockSocket');
-        return server;
+    stopMockSocket();
+    _mockClients.clear();
+    _injectMockWs = true;
+
+    const server = new MockServer(wsUrl);
+    _currentMockServer = server;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.on('connection', (socket: any) => {
+        _mockClients.add(socket);
+        // Handshake Engine.IO v4: open packet (sid + parâmetros de ping). NÃO
+        // enviamos o `40` aqui — esperamos o cliente pedir conexão de namespace.
+        socket.send('0{"sid":"e2e-mock","upgrades":[],"pingInterval":25000,"pingTimeout":20000}');
+        socket.on('message', (raw: string) => {
+            // `40` (connect ao namespace) → respondemos com o sid do namespace.
+            if (String(raw).startsWith('40')) socket.send('40{"sid":"e2e-mock-ns"}');
+            // ping `2` → pong `3` (mantém a conexão viva).
+            else if (raw === '2') socket.send('3');
+        });
     });
+
+    // Guarda o server como alias. NÃO retornamos o server (misturaria sync/async).
+    return cy.wrap(server, { log: false }).as('mockSocket');
+});
+
+// Garante limpeza entre testes — evita "already listening" no beforeEach seguinte.
+afterEach(() => {
+    stopMockSocket();
+    _mockClients.clear();
 });
 
 Cypress.Commands.add('emitBall', (n: number) => {
-    cy.get<MockServer>('@mockSocket').then((server) => {
+    cy.get<MockServer>('@mockSocket').then(() => {
         const order = (Cypress.env('__ballOrder') ?? 0) + 1;
         Cypress.env('__ballOrder', order);
         // Espelha o handler ball_drawn: { event, game_id, payload: DrawnBall }.
-        server.emit('ball_drawn', {
+        emitSocketIoEvent('ball_drawn', {
             event:   'ball_drawn',
             game_id: activeGameId(),
             payload: {
@@ -243,13 +412,19 @@ Cypress.Commands.add('emitBall', (n: number) => {
 });
 
 Cypress.Commands.add('emitWinner', (payload: EmitWinnerPayload) => {
-    cy.get<MockServer>('@mockSocket').then((server) => {
+    cy.get<MockServer>('@mockSocket').then(() => {
         // Espelha o handler winner_found: { event, game_id, payload: { winning_ball, winners } }.
-        server.emit('winner_found', {
+        emitSocketIoEvent('winner_found', {
             event:   'winner_found',
             game_id: activeGameId(),
             payload,
         });
+    });
+});
+
+Cypress.Commands.add('emitSocketEvent', (event: string, payload: unknown) => {
+    cy.get<MockServer>('@mockSocket').then(() => {
+        emitSocketIoEvent(event, payload);
     });
 });
 
