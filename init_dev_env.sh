@@ -608,20 +608,40 @@ ORACLE_LOG="$(pwd)/logs/orng-oracle.log"
 mkdir -p "$(pwd)/logs"
 
 echo "[*] Iniciando oracle daemon ORNG em background..."
-if command -v npx &>/dev/null && [ -f "$(pwd)/scripts/orng-oracle.ts" ]; then
+ORACLE_SCRIPT="$(pwd)/scripts/orng-oracle.ts"
+
+# Resolve um ts-node determinístico. `npx ts-node` falha no monorepo pnpm
+# (binário não-hoisted → exit 127) e o ts-node padrão type-checa o script
+# contra o tsconfig raiz (sem @types/node no escopo → 'Buffer/console not
+# found'). Preferimos o binário hoisted do pnpm e SEMPRE usamos
+# --transpile-only (ignora type-check; o daemon só precisa executar).
+ORACLE_TSNODE="$(pwd)/node_modules/.pnpm/node_modules/.bin/ts-node"
+[ -x "$ORACLE_TSNODE" ] || ORACLE_TSNODE="$(command -v ts-node 2>/dev/null || true)"
+[ -x "$ORACLE_TSNODE" ] || ORACLE_TSNODE="npx ts-node"
+
+if [ -f "$ORACLE_SCRIPT" ]; then
     RPC_URL="http://127.0.0.1:8888" \
     CHAIN_ID="${CHAIN_ID:-8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f}" \
     ORNG_WAX_KEY="${ORNG_WAX_KEY:-}" \
     ORNG_RSA_PRIVATE_KEY_PATH="${ORNG_RSA_PRIVATE_KEY_PATH:-$(pwd)/contracts/orng/dev-rsa-private.pem}" \
     ORNG_POLL_INTERVAL_MS="2000" \
-    npx ts-node --project tsconfig.json "$(pwd)/scripts/orng-oracle.ts" \
-        >> "$ORACLE_LOG" 2>&1 &
+    nohup $ORACLE_TSNODE --transpile-only "$ORACLE_SCRIPT" \
+        < /dev/null >> "$ORACLE_LOG" 2>&1 &
     ORACLE_PID=$!
     echo "$ORACLE_PID" > .orng-oracle.pid
-    echo "[✓] Oracle daemon iniciado (PID $ORACLE_PID). Log: $ORACLE_LOG"
+
+    # Health check: confirma que o daemon permaneceu vivo (não morreu no boot).
+    sleep 3
+    if kill -0 "$ORACLE_PID" 2>/dev/null; then
+        echo "[✓] Oracle daemon iniciado (PID $ORACLE_PID). Log: $ORACLE_LOG"
+    else
+        echo "[!] Oracle daemon NÃO permaneceu vivo. Últimas linhas do log:"
+        tail -n 8 "$ORACLE_LOG" 2>/dev/null | sed 's/^/      /'
+        echo "    Inicie manualmente: $ORACLE_TSNODE --transpile-only $ORACLE_SCRIPT"
+        rm -f .orng-oracle.pid
+    fi
 else
-    echo "[!] Aviso: npx não encontrado ou scripts/orng-oracle.ts ausente."
-    echo "    Inicie manualmente: npx ts-node scripts/orng-oracle.ts"
+    echo "[!] Aviso: scripts/orng-oracle.ts ausente — oracle daemon não iniciado."
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────

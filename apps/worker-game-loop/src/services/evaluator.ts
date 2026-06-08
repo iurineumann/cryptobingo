@@ -9,11 +9,12 @@
 // antes de enviar claimwin — conforme ADR-005.
 
 import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@cryptobingo/blockchain-core';
-import { UInt64 } from '@wharfkit/antelope';
+import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
-import { executeClaimWin, executeClaimStage, executeCloseGame }               from './blockchain';
+import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
+import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -80,9 +81,30 @@ const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
 
 export interface WinResult {
     ticket:      BlockchainTicketRecord;
-    patternName: string;
-    patternMask: bigint;
-    weight:      number; // weight do padrão vencedor no gametype
+    patternName: string;  // nome do padrão OU da combinação (p/ payload/notify)
+    patternMask: bigint;  // mask do melhor padrão (golden ball check); combo herda a do melhor padrão
+    weight:      number;  // weight do padrão OU da combinação vencedora (maior peso)
+    comboId?:    number;  // ADR-016: se definido, paga via claimcombo (tier combinação)
+}
+
+/**
+ * ADR-016: dado o conjunto de padrões vencedores de uma cartela e o melhor padrão,
+ * decide se uma COMBINAÇÃO satisfeita tem peso maior — e, em caso afirmativo,
+ * promove o WinResult para o tier de combinação (max_weight global, ADR-005).
+ */
+function selectBestPayout(
+    ticket:          BlockchainTicketRecord,
+    winningPatterns: PatternEntry[],
+    comboCtx:        ComboContext | null,
+): WinResult {
+    const best = winningPatterns.reduce((prev, curr) => curr.weight > prev.weight ? curr : prev);
+    if (comboCtx) {
+        const combo = bestSatisfiedCombo(winningPatterns.map(p => p.name), comboCtx);
+        if (combo && combo.weight > best.weight) {
+            return { ticket, patternName: combo.name, patternMask: best.mask, weight: combo.weight, comboId: combo.combo_id };
+        }
+    }
+    return { ticket, patternName: best.name, patternMask: best.mask, weight: best.weight };
 }
 
 /** Par de padrão + weight para avaliação dinâmica. */
@@ -155,6 +177,7 @@ export async function findAllWinners(
     gametypeId: string,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
+    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
 
     const winners:    WinResult[] = [];
     let lowerBound:   string | undefined = undefined;
@@ -164,8 +187,9 @@ export async function findAllWinners(
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:         CONTRACT_ACCOUNT,
-            scope:        gameId,
+            scope:        Name.from(UInt64.from(gameId)),
             table:        'tickets',
+            key_type:     'i64',
             limit:        PAGE_SIZE,
             lower_bound:  lowerBound as any,
             json:         true,
@@ -178,15 +202,7 @@ export async function findAllWinners(
             const winningPatterns = checkWinPatterns(finalState, patterns);
 
             if (winningPatterns.length > 0) {
-                const best = winningPatterns.reduce(
-                    (prev, curr) => curr.weight > prev.weight ? curr : prev
-                );
-                winners.push({
-                    ticket,
-                    patternName: best.name,
-                    patternMask: best.mask,
-                    weight:      best.weight,
-                });
+                winners.push(selectBestPayout(ticket, winningPatterns, comboCtx));
             }
         }
 
@@ -214,6 +230,7 @@ async function findAllWinnersWithIndex(
     gametypeId: string,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
+    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
 
     const stateMap = new Map<string, number>();
 
@@ -230,15 +247,9 @@ async function findAllWinnersWithIndex(
     for (const [ticketId, finalState] of stateMap) {
         const winningPatterns = checkWinPatterns(finalState, patterns);
         if (winningPatterns.length > 0) {
-            const best = winningPatterns.reduce((a, b) => b.weight > a.weight ? b : a);
             const ticketData = await fetchTicketById(gameId, ticketId);
             if (ticketData) {
-                winners.push({
-                    ticket:      ticketData,
-                    patternName: best.name,
-                    patternMask: best.mask,
-                    weight:      best.weight,
-                });
+                winners.push(selectBestPayout(ticketData, winningPatterns, comboCtx));
             }
         }
     }
@@ -257,8 +268,9 @@ async function fetchTicketById(
     try {
         const res = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       gameId,
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
+            key_type:    'i64',
             lower_bound: ticketId as any,
             upper_bound: ticketId as any,
             limit:       1,
@@ -335,8 +347,9 @@ export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]):
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       gameId,
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
+            key_type:    'i64',
             limit:       100,
             lower_bound: lowerBound as any,
             json:        true,
@@ -409,7 +422,7 @@ export async function preComputeMultiMatchCutoffs(
     let hasMore = true;
     while (hasMore) {
         const res = await rpcClient.v1.chain.get_table_rows({
-            code: CONTRACT_ACCOUNT, scope: gameId, table: 'tickets',
+            code: CONTRACT_ACCOUNT, scope: Name.from(UInt64.from(gameId)), table: 'tickets',
             limit: 100, lower_bound: lowerBound as any, json: true,
         });
         allTickets.push(...normalizeTickets(res.rows));
@@ -600,7 +613,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
     } else {
         console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
 
-        for (const { ticket, patternName, patternMask, weight } of winners) {
+        for (const { ticket, patternName, patternMask, weight, comboId } of winners) {
             // GOLDEN_BALL: verifica se a bola dourada está coberta pelo padrão vencedor
             let appliedMultiplier = 0;
             if (drawMode === 'goldenball' && goldenBallNum > 0) {
@@ -608,18 +621,28 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                 if (inPattern) appliedMultiplier = goldenMultiplierGlobal;
             }
 
+            const isCombo = comboId !== undefined;
             console.log(
-                `🏆 [Avaliador] Liquidando #${ticket.ticket_id} ` +
-                `(${ticket.owner}, padrão: ${patternName}, weight: ${weight}` +
+                `${isCombo ? '🔗' : '🏆'} [Avaliador] Liquidando #${ticket.ticket_id} ` +
+                `(${ticket.owner}, ${isCombo ? `combinação: ${patternName} (#${comboId})` : `padrão: ${patternName}`}, weight: ${weight}` +
                 (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
             );
-            const txHash = await executeClaimWin(
-                gameId,
-                ticket.ticket_id,
-                effectiveBalls.length,
-                patternMask,
-                appliedMultiplier,
-            );
+            // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
+            const txHash = isCombo
+                ? await executeClaimCombo(
+                    gameId,
+                    ticket.ticket_id,
+                    effectiveBalls.length,
+                    comboId as number,
+                    appliedMultiplier,
+                )
+                : await executeClaimWin(
+                    gameId,
+                    ticket.ticket_id,
+                    effectiveBalls.length,
+                    patternMask,
+                    appliedMultiplier,
+                );
 
             if (txHash) {
                 const actualPrice = ticket.price?.quantity ?? game.ticket_price.quantity;

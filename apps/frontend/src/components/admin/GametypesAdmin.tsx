@@ -172,6 +172,70 @@ export default function GametypesAdmin() {
         setCombinations(prev => prev.filter((_, i) => i !== idx));
     };
 
+    // ── Edição de combinações de um gametype JÁ existente ────────────────────
+    // Combinações só podiam ser definidas na criação. Este fluxo permite
+    // adicionar/editar combinações (e persistir no MongoDB) de gametypes existentes.
+    const [editComboGtId, setEditComboGtId] = useState<string | null>(null);
+    const [savingCombos, setSavingCombos] = useState(false);
+
+    const buildExtendedRules = (): ExtendedRule[] =>
+        Object.entries(selectedRules)
+            .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0)
+            .map(([pattern_id, v]) => ({ pattern_id, weight: Math.round(parseFloat(v.weight) * 100), type: v.type as ExtendedRule['type'] }));
+
+    const startEditCombinations = (gt: BlockchainGametype) => {
+        const meta = metadataMap[gt.gametype_id];
+        // Reconstrói selectedRules a partir das regras on-chain (+ tipo do metadata),
+        // para que o seletor de padrões das cláusulas funcione.
+        const rebuilt: Record<string, { weight: string; type: string }> = {};
+        for (const r of gt.rules) {
+            const ruleMeta = meta?.rules?.find(m => m.pattern_id === r.pattern_id);
+            rebuilt[r.pattern_id] = {
+                weight: (r.weight / 100).toFixed(2),
+                type:   ruleMeta?.type ?? 'simple',
+            };
+        }
+        setSelectedRules(rebuilt);
+        setCombinations(meta?.combinations ? meta.combinations.map(c => ({ ...c, clauses: c.clauses.map(cl => ({ ...cl })) })) : []);
+        setComboName('');
+        setComboWeight('1.00');
+        setComboClauses([{ type: 'all_of', pattern_ids: [] }]);
+        setEditingComboIdx(null);
+        setError(null);
+        setEditComboGtId(gt.gametype_id);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const cancelEditCombinations = () => {
+        setEditComboGtId(null);
+        setCombinations([]);
+        setSelectedRules({});
+        setComboName('');
+        setComboWeight('1.00');
+        setComboClauses([{ type: 'all_of', pattern_ids: [] }]);
+        setEditingComboIdx(null);
+        setError(null);
+    };
+
+    const saveEditedCombinations = async () => {
+        if (!editComboGtId) return;
+        setSavingCombos(true);
+        setError(null);
+        try {
+            // Preserva as regras estendidas (tipos) existentes; sobrescreve combinações.
+            const existingRules = metadataMap[editComboGtId]?.rules?.length
+                ? metadataMap[editComboGtId].rules
+                : buildExtendedRules();
+            await upsertGametypeMetadata(editComboGtId, { rules: existingRules, combinations });
+            await load();
+            cancelEditCombinations();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('admin.gametypes_error_combos_save'));
+        } finally {
+            setSavingCombos(false);
+        }
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name) return;
@@ -198,7 +262,16 @@ export default function GametypesAdmin() {
                 golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
                 master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
             });
-            await upsertGametypeMetadata(String(gametype_id), { rules: rules_extended, combinations }).catch(() => {});
+            // Persiste combinações + tipos no MongoDB. NÃO engolir erro: se falhar, o
+            // gametype existe on-chain mas sem combinações — o admin precisa saber para
+            // reeditá-las pelo fluxo de edição de combinações.
+            try {
+                await upsertGametypeMetadata(String(gametype_id), { rules: rules_extended, combinations });
+            } catch {
+                setError(t('admin.gametypes_error_metadata_failed', { id: gametype_id }));
+                await load();
+                return;
+            }
             setName('');
             setBaseMultiplier('1.0');
             setSelectedRules({});
@@ -667,6 +740,16 @@ export default function GametypesAdmin() {
             )}
 
             <form onSubmit={handleCreate} className="cb-card p-4 mb-6 flex flex-col gap-4">
+                {editComboGtId && (
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[--cb-brand]/10 border border-[--cb-brand]">
+                        <span className="text-sm text-[--cb-text-primary] font-medium">
+                            🔗 {t('admin.gametypes_editing_combos', { id: editComboGtId })}
+                        </span>
+                        <button type="button" className="text-xs text-[--cb-text-tertiary] hover:underline" onClick={cancelEditCombinations}>
+                            {t('admin.gametypes_cancel_edit')}
+                        </button>
+                    </div>
+                )}
                 {/* Nome e Base Multiplier */}
                 <div className="flex flex-wrap gap-3">
                     <div className="flex flex-col gap-1">
@@ -994,9 +1077,20 @@ export default function GametypesAdmin() {
                     }
                 </button>
 
-                <button type="submit" className="cb-btn cb-btn-primary self-start" disabled={saving}>
-                    {saving ? t('common.saving') : t('admin.gametypes_create')}
-                </button>
+                {editComboGtId ? (
+                    <div className="flex gap-2 self-start">
+                        <button type="button" className="cb-btn cb-btn-primary" disabled={savingCombos} onClick={saveEditedCombinations}>
+                            {savingCombos ? t('common.saving') : t('admin.gametypes_save_combos', { id: editComboGtId })}
+                        </button>
+                        <button type="button" className="cb-btn cb-btn-ghost" disabled={savingCombos} onClick={cancelEditCombinations}>
+                            {t('admin.gametypes_cancel_edit')}
+                        </button>
+                    </div>
+                ) : (
+                    <button type="submit" className="cb-btn cb-btn-primary self-start" disabled={saving}>
+                        {saving ? t('common.saving') : t('admin.gametypes_create')}
+                    </button>
+                )}
             </form>
 
             {loading ? (
@@ -1012,7 +1106,10 @@ export default function GametypesAdmin() {
                                         <span className="font-bold text-[--cb-text-primary]">{gt.name}</span>
                                         <span className="text-xs text-[--cb-text-tertiary] ml-2 font-mono">#{gt.gametype_id}</span>
                                     </div>
-                                    <button className="text-xs text-[--cb-danger] hover:underline" onClick={() => handleDelete(gt.gametype_id)}>{t('admin.gametypes_delete_btn')}</button>
+                                    <div className="flex gap-3">
+                                        <button className="text-xs text-[--cb-brand] hover:underline" onClick={() => startEditCombinations(gt)}>{t('admin.gametypes_edit_combos_btn')}</button>
+                                        <button className="text-xs text-[--cb-danger] hover:underline" onClick={() => handleDelete(gt.gametype_id)}>{t('admin.gametypes_delete_btn')}</button>
+                                    </div>
                                 </div>
                                 <span className="text-xs text-[--cb-text-secondary]">{t('admin.gametypes_multiplier_display')}<strong>{gt.base_multiplier}x</strong></span>
 

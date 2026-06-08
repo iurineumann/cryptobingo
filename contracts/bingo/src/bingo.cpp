@@ -243,6 +243,102 @@ namespace bingo {
     }
 
     // ==========================================
+    // SET COMBOS — Combinações de padrões (ADR-016)
+    //
+    // Registra/atualiza o vetor de combinações (combo_id → weight) de um gametype.
+    // Substitui o vetor inteiro (igual a setstages). A lógica de cláusulas vive
+    // off-chain; aqui só guardamos o peso para validação em claimcombo.
+    // ==========================================
+
+    void bingo_contract::setcombos(uint64_t gametype_id, std::vector<combo_rule> combinations) {
+        require_auth(get_self());
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto itr = gametypes.require_find(gametype_id, "gametype_id nao encontrado.");
+
+        // Valida: combo_id unico, weight no intervalo valido (1.00–255.00 hundredths)
+        for (size_t i = 0; i < combinations.size(); i++) {
+            check(combinations[i].weight > 0,      "combo weight deve ser maior que zero.");
+            check(combinations[i].weight <= 25500, "combo weight max 255.00 (hundredths).");
+            for (size_t j = i + 1; j < combinations.size(); j++) {
+                check(combinations[i].combo_id != combinations[j].combo_id,
+                    "combo_id duplicado.");
+            }
+        }
+
+        gametypes.modify(itr, get_self(), [&](auto& row) {
+            row.combinations.emplace(combinations);
+        });
+    }
+
+    // ==========================================
+    // CLAIM COMBO — Combinação de padrões (ADR-016)
+    //
+    // Paga um ticket por uma COMBINAÇÃO satisfeita (tier superior ao padrão).
+    // A satisfação das cláusulas é avaliada off-chain pelo worker; o contrato
+    // valida que o combo_id existe no gametype e usa o weight registrado —
+    // impedindo inflar o prêmio. Espelha claimwin (aceita golden_multiplier).
+    // Aceita drawn|paying; transiciona drawn→paying na primeira chamada.
+    // ==========================================
+
+    void bingo_contract::claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier) {
+        require_auth("microservice"_n);
+
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.require_find(game_id, "Game not found.");
+        check(
+            game_itr->status == "drawn"_n || game_itr->status == "paying"_n,
+            "Game deve estar em DRAWN ou PAYING para pagar combinacoes."
+        );
+
+        // Transição drawn → paying na primeira chamada
+        if (game_itr->status == "drawn"_n) {
+            games.modify(game_itr, same_payer, [&](auto& g) { g.status = "paying"_n; });
+            game_itr = games.find(game_id);
+        }
+
+        // Busca o combo_rule no gametype e valida o peso on-chain
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
+        check(gt_itr->combinations.has_value() && !gt_itr->combinations.value().empty(),
+            "Gametype nao tem combinacoes definidas.");
+
+        uint16_t combo_weight = 0;
+        for (const auto& c : gt_itr->combinations.value()) {
+            if (c.combo_id == combo_id) { combo_weight = c.weight; break; }
+        }
+        check(combo_weight > 0, "combo_id nao encontrado nas combinacoes do gametype.");
+
+        // Calcula payout: ticket.price × base_multiplier × combo_weight / 100
+        tickets_table tickets(get_self(), game_id);
+        auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
+        name winner = ticket_itr->owner;
+
+        extended_asset payout = ticket_itr->price.quantity.amount > 0
+            ? ticket_itr->price
+            : game_itr->ticket_price;  // fallback para tickets legados sem price
+        payout.quantity.amount =
+            payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)combo_weight / 100;
+
+        if (golden_multiplier > 1) {
+            payout.quantity.amount *= (int64_t)golden_multiplier;
+        }
+
+        // Credita o vencedor
+        if (payout.quantity.amount > 0) {
+            balances_table balances(get_self(), winner.value);
+            auto bal_itr = balances.find(payout.quantity.symbol.code().raw());
+            if (bal_itr == balances.end()) {
+                balances.emplace(get_self(), [&](auto& b) { b.balance = payout; });
+            } else {
+                balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
+            }
+            // ADR-005: acumula payout para cálculo do GGR em closegame
+            games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+        }
+        // Jogo permanece em "paying". Worker chama closegame() após o lote.
+    }
+
+    // ==========================================
     // CLAIM STAGE — MULTI_MATCH (ADR-013)
     //
     // Paga um ticket por um estágio específico.

@@ -557,6 +557,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                         prize={w?.prize ?? null}
                         density={density}
                         patterns={patterns}
+                        pricePaid={ticket.pricePaid}
                       />
                     );
                   })}
