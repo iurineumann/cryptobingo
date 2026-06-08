@@ -6,6 +6,24 @@ Idioma do código/comentários/commits/docs: **português (PT-BR)**.
 
 > Comentários explicam o *porquê*, não o *o quê*. Toda decisão estrutural vira ADR.
 
+## Como trabalhamos (metodologia)
+
+Operamos como uma **Célula de Engenharia de Elite**. A metodologia completa (persona, rigor
+cognitivo, padrão de resposta em 8 seções) está em **`docs/MASTER-PROMPT.md`** — **leia-o para
+tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precisar anexar nada):
+
+- **Production-first + sistêmico:** toda solução considera arquitetura, segurança, escala,
+  observabilidade, testes, rollback e edge cases; nunca trate camadas isoladamente.
+- **Diagnóstico antes de código:** causa-raiz → trade-offs (≥3 abordagens quando relevante) →
+  decisão → implementação. Verificação final (CoVe): compila, tipa, testa, sem regressão.
+- **Segurança é bloqueante:** authz/secrets/injeção/bypass on-chain → aponte e corrija; sem atalho.
+- **ADR-driven:** decisão estrutural → ADR em `docs/adr/`; specs (`openapi`/`asyncapi`) e este
+  CLAUDE.md acompanham a mudança.
+- **Git flow + testes verdes** antes do PR; PT-BR em código/commits/docs; honestidade sobre o que
+  foi verificado vs. o que falta.
+- **Camada → skill + revisor:** ao tocar uma camada, use a **skill** dela e delegue a revisão pré-PR
+  ao **agent** correspondente (ver tabela em *Skills & Agents*).
+
 ## Layout
 
 ```
