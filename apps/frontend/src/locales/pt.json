@@ -106,6 +106,7 @@
     "combo_meta": "combinação",
     "my_combo_badge": "Sua cartela completou esta combinação",
     "game_ended_no_winners": "Nenhum vencedor nesta partida",
+    "game_ended_archived": "Partida encerrada",
     "game_ended_next": "Aguardando próxima partida…",
     "next_game_funding": "Nova partida disponível! Vendas encerram em {{time}}",
     "go_to_next": "Ir para nova partida",

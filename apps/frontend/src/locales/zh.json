@@ -106,6 +106,7 @@
     "combo_meta": "组合",
     "my_combo_badge": "您的卡完成了此组合",
     "game_ended_no_winners": "本局无获奖者",
+    "game_ended_archived": "游戏已结束",
     "game_ended_next": "等待下一局…",
     "next_game_funding": "新一局已开启！销售将在{{time}}后结束",
     "go_to_next": "前往新一局",

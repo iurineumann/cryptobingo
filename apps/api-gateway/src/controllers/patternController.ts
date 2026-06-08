@@ -352,7 +352,7 @@ export async function getGametypeMetadataPublic(req: Request, res: Response): Pr
  * Retorna padrões on-chain + combinações off-chain em uma única chamada,
  * com cache Redis (TTL 1h).
  *
- * Cache key: pattern:gametype:{gametypeId} (alinhado ao worker patternCache.ts)
+ * Cache key: pattern:gametype:{gametypeId} (formato rico — o worker usa worker:pattern:gametype:{id})
  *
  * Response: {
  *   patterns:     { name, mask, weight }[]   — on-chain

@@ -117,19 +117,6 @@ export default function GameRoom({
     return () => clearInterval(id);
   }, []);
 
-  const timeRemaining = useMemo(() => {
-    if (!game) return '';
-    if (game.status === 'funding') {
-      const closeAt = Number(game.game_id) + AUTO_LOCK_SEC * 1000;
-      const diff = closeAt - now;
-      if (diff <= 0) return '🔒 Fechando...';
-      const s = Math.ceil(diff / 1000);
-      if (s < 60) return `🔒 ${s}s`;
-      return `🔒 ${Math.floor(s / 60)}m ${s % 60}s`;
-    }
-    return '';
-  }, [game, now]);
-
   const nextGameTimer = useMemo(() => {
     if (!nextGame || nextGame.status !== 'funding') return '';
     const closeAt = Number(nextGame.game_id) + AUTO_LOCK_SEC * 1000;
@@ -146,6 +133,20 @@ export default function GameRoom({
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
     isGameEnded, goldenBall, clearedStages, drawMode,
   } = useSlowReveal(gameId);
+
+  const timeRemaining = useMemo(() => {
+    if (!game) return '';
+    // Não mostrar contador se bolas já chegaram via WS — effectiveDisplayStatus já é 'drawing'
+    if (game.status === 'funding' && drawnBalls.length === 0 && !isDrawing) {
+      const closeAt = Number(game.game_id) + AUTO_LOCK_SEC * 1000;
+      const diff = closeAt - now;
+      if (diff <= 0) return '🔒 Fechando...';
+      const s = Math.ceil(diff / 1000);
+      if (s < 60) return `🔒 ${s}s`;
+      return `🔒 ${Math.floor(s / 60)}m ${s % 60}s`;
+    }
+    return '';
+  }, [game, now, drawnBalls.length, isDrawing]);
 
   // ── Fallback para jogos archived/drawn sem eventos do WebSocket ───────────
   // O WS só envia eventos ao vivo; quando o jogo já encerrou, drawnBalls
@@ -279,7 +280,9 @@ export default function GameRoom({
   // padrões absorvidos por combinações são excluídos da listagem individual
   const playerWinEntries = useMemo(() => {
     const playerTicketIds = new Set(playerTickets.map(t => t.id));
-    // agrupa por cartela
+    // nomes dos combos configurados neste gametype (para detectar wins diretos via WS)
+    const comboNameSet    = new Set(gameCombinations.map(c => c.name));
+
     const byTicket = new Map<string, Array<{ pattern: string; payout: string }>>();
     for (const w of localWinners) {
       if (!playerTicketIds.has(w.ticket_id)) continue;
@@ -290,36 +293,57 @@ export default function GameRoom({
     const comboMap   = new Map<string, { total: number; currency: string }>();
     const patternMap = new Map<string, { total: number; currency: string }>();
     for (const [ticketId, wins] of byTicket) {
-      const patNames  = wins.map(w => w.pattern);
-      const comboWins = detectComboWinsForTicket(patNames, gameCombinations, patternTypeByName, patternNameById);
-      const subsumed  = new Set<string>();
-      for (const { comboName, subsumedPatterns } of comboWins) {
-        for (const sp of subsumedPatterns) subsumed.add(sp);
-        // Prêmio da combinação: usa soma dos payouts dos padrões absorvidos (live mode)
-        // ou pricePaid × multiplicador (static mode, payouts podem ser 0)
-        const ticket      = playerTickets.find(t => t.id === ticketId);
-        const combo       = gameCombinations.find(c => c.name === comboName);
-        const pricePaidStr = (ticket as any)?.pricePaid ?? '';
-        const pricePaidNum = parseFloat(pricePaidStr.split(' ')[0]) || 0;
-        const currency     = pricePaidStr.trim().split(' ')[1] ?? '';
-        const fromPayouts  = wins
-          .filter(w => subsumedPatterns.includes(w.pattern))
-          .reduce((s, w) => s + (parseFloat(w.payout.split(' ')[0]) || 0), 0);
-        const comboTotal   = fromPayouts > 0
-          ? fromPayouts
-          : pricePaidNum * (combo ? combo.weight / 100 : 0);
-        const existing = comboMap.get(comboName);
-        if (existing) existing.total += comboTotal;
-        else comboMap.set(comboName, { total: comboTotal, currency });
-      }
+      const ticket       = playerTickets.find(t => t.id === ticketId);
+      const pricePaidStr = (ticket as any)?.pricePaid ?? '';
+      const pricePaidNum = parseFloat(pricePaidStr.split(' ')[0]) || 0;
+      const priceCurrency = pricePaidStr.trim().split(' ')[1] ?? '';
+
+      // caso 1: WS enviou nome do combo diretamente (worker chamou claimcombo)
+      // — o payout já é o valor real do combo, não dos padrões membros
+      const directComboNames = new Set<string>();
       for (const w of wins) {
-        if (subsumed.has(w.pattern)) continue;
-        const parts    = w.payout.trim().split(' ');
-        const amount   = parseFloat(parts[0]) || 0;
-        const currency = parts[1] ?? '';
-        const existing = patternMap.get(w.pattern);
+        if (!comboNameSet.has(w.pattern)) continue;
+        directComboNames.add(w.pattern);
+        const parts  = w.payout.trim().split(' ');
+        const amount = parseFloat(parts[0]) || 0;
+        const curr   = parts[1] || priceCurrency;
+        const existing = comboMap.get(w.pattern);
         if (existing) existing.total += amount;
-        else patternMap.set(w.pattern, { total: amount, currency });
+        else comboMap.set(w.pattern, { total: amount, currency: curr });
+      }
+
+      // caso 2: padrões individuais → detecta combos e aplica max_weight
+      const patternWins = wins.filter(w => !directComboNames.has(w.pattern));
+      if (patternWins.length > 0) {
+        const patNames  = patternWins.map(w => w.pattern);
+        const comboWins = detectComboWinsForTicket(patNames, gameCombinations, patternTypeByName, patternNameById);
+        const subsumed  = new Set<string>();
+        for (const { comboName, subsumedPatterns } of comboWins) {
+          for (const sp of subsumedPatterns) subsumed.add(sp);
+          const combo = gameCombinations.find(c => c.name === comboName);
+          // Em modo estático, fromPayouts reflete prizes individuais dos padrões membros
+          // (não o prêmio real do combo) — usar combo.weight diretamente.
+          const fromPayouts = isStaticFinalState
+            ? 0
+            : patternWins
+                .filter(w => subsumedPatterns.includes(w.pattern))
+                .reduce((s, w) => s + (parseFloat(w.payout.split(' ')[0]) || 0), 0);
+          const comboTotal = fromPayouts > 0
+            ? fromPayouts
+            : pricePaidNum * (combo ? combo.weight / 100 : 0);
+          const existing = comboMap.get(comboName);
+          if (existing) existing.total += comboTotal;
+          else comboMap.set(comboName, { total: comboTotal, currency: priceCurrency });
+        }
+        for (const w of patternWins) {
+          if (subsumed.has(w.pattern)) continue;
+          const parts    = w.payout.trim().split(' ');
+          const amount   = parseFloat(parts[0]) || 0;
+          const currency = parts[1] ?? '';
+          const existing = patternMap.get(w.pattern);
+          if (existing) existing.total += amount;
+          else patternMap.set(w.pattern, { total: amount, currency });
+        }
       }
     }
     const combos   = [...comboMap.entries()]
@@ -329,7 +353,7 @@ export default function GameRoom({
       .map(([name, v]) => ({ name, ...v, isCombination: false }))
       .sort((a, b) => b.total - a.total);
     return [...combos, ...patterns];
-  }, [localWinners, playerTickets, gameCombinations, patternTypeByName, patternNameById]);
+  }, [localWinners, playerTickets, gameCombinations, patternTypeByName, patternNameById, isStaticFinalState]);
 
   // Detecta combinações satisfeitas em localWinners e constrói contagens ajustadas.
   // Padrões absorvidos por uma combinação são excluídos da contagem individual.
@@ -1018,7 +1042,9 @@ export default function GameRoom({
                       ? t('game_room.game_ended_you_won')
                       : localWinners.length > 0
                         ? t('game_room.game_ended_winners', { count: localWinners.length })
-                        : t('game_room.game_ended_no_winners')}
+                        : isStaticFinalState && playerTickets.length === 0
+                          ? t('game_room.game_ended_archived')
+                          : t('game_room.game_ended_no_winners')}
                   </span>
 
                   {playerWinEntries.length > 0 && (
