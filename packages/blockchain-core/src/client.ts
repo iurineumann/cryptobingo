@@ -93,7 +93,7 @@ export async function fetchPlayerTickets(gameId: string, playerWallet: string): 
 export async function fetchPlayerBalance(playerWallet: string): Promise<BlockchainBalance[]> {
     const response = await rpcClient.v1.chain.get_table_rows({
         code: CONTRACT_ACCOUNT,
-        scope: Name.from(playerWallet).value.toString(), // Scope = uint64 do name
+        scope: playerWallet,
         table: 'balances',
         json: true,
         limit: 20, // Um usuário raramente terá mais de 20 tokens diferentes

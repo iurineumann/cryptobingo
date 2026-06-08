@@ -110,6 +110,7 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
             code:        CONTRACT_ACCOUNT,
             scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
+            key_type:    'i64',
             limit:       100,
             lower_bound: lowerBound as any,
             json:        true,
