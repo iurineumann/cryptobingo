@@ -5,6 +5,8 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  schedule:
+    - cron: '0 3 * * *'   # nightly às 03:00 UTC
 
 jobs:
   test:
@@ -110,6 +112,179 @@ jobs:
       - name: Security audit
         run: pnpm audit --audit-level=high
         continue-on-error: true
+
+  # E2E de UI Tier 1 (Cypress determinístico) — bloqueia PR
+  e2e-ui:
+    name: E2E UI Tier 1 (Cypress)
+    runs-on: ubuntu-latest
+    needs: test   # só roda se unit tests passarem
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      postgres:
+        image: postgres:15-alpine
+        ports: ['5432:5432']
+        env:
+          POSTGRES_USER: bingo_admin
+          POSTGRES_PASSWORD: bingo_secure_pass_2026
+          POSTGRES_DB: cryptobingo_ledger
+        options: >-
+          --health-cmd "pg_isready -U bingo_admin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongodb:
+        image: mongo:6.0
+        ports: ['27017:27017']
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongo_admin
+          MONGO_INITDB_ROOT_PASSWORD: mongo_secure_pass_2026
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      JWT_SECRET: ci-test-secret-32chars-xxxxxxxxxx
+      REDIS_URL: redis://localhost:6379
+      POSTGRES_URL: postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger
+      MONGO_URL: mongodb://mongo_admin:mongo_secure_pass_2026@localhost:27017/cryptobingo_edge?authSource=admin
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      RPC_URL: http://localhost:8888
+      CHAIN_ID: 8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f
+      CONTRACT_ACCOUNT: bingo.game
+      MICROSERVICE_PRIVATE_KEY: 5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+      VERIFY_KEY_ONCHAIN: "false"
+      VITE_API_URL: http://localhost:3000
+      VITE_WS_URL: ws://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm turbo run build --filter=frontend --filter=api-gateway --filter=worker-game-loop
+
+      - name: Start api-gateway in background
+        run: pnpm --filter api-gateway start &
+
+      - name: Start frontend dev server in background
+        run: pnpm --filter @cryptobingo/frontend dev &
+
+      - name: Wait for services to be ready
+        run: sleep 10
+
+      - name: Run Cypress Tier 1
+        run: pnpm --filter @cryptobingo/e2e-ui e2e
+
+      - name: Upload Cypress screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots-tier1
+          path: apps/e2e-ui/cypress/screenshots
+
+      - name: Upload Cypress videos on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-videos-tier1
+          path: apps/e2e-ui/cypress/videos
+
+  # E2E de UI Tier 2 (Cypress real) — nightly + manual; não bloqueia PR
+  e2e-ui-real:
+    name: E2E UI Tier 2 Real (Cypress)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start WAX dev environment (nodeos + deploy + oracle daemon)
+        run: bash init_dev_env.sh
+
+      - name: Start frontend dev server in background
+        run: pnpm --filter @cryptobingo/frontend dev &
+
+      - name: Wait for frontend and services to be ready
+        run: sleep 15
+
+      - name: Run Cypress Tier 2
+        run: pnpm --filter @cryptobingo/e2e-ui e2e:tier2
+
+      - name: Upload Cypress screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots-tier2
+          path: apps/e2e-ui/cypress/screenshots
+
+      - name: Upload Cypress videos on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-videos-tier2
+          path: apps/e2e-ui/cypress/videos
 
   # E2E com DUNE (nó Antelope) — trigger manual, não roda no CI padrão
   e2e-harness:
