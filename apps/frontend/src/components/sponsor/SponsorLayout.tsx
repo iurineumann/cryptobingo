@@ -96,6 +96,7 @@ export default function SponsorLayout({
               <a
                 key={item.path}
                 href={item.path}
+                data-testid={`sponsor-nav-${item.path.split('/').pop()}`}
                 className={`site-sidebar-item${pathname === item.path ? ' is-active' : ''}`}
                 aria-current={pathname === item.path ? 'page' : undefined}
                 onClick={e => { e.preventDefault(); navigate(item.path); }}

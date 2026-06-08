@@ -133,18 +133,21 @@ export default function VaultAdmin(_props: VaultAdminProps) {
             <div className="flex gap-2 mb-6">
                 <button
                     className={`cb-btn ${tab === 'deposits' ? 'cb-btn-primary' : 'cb-btn-outline'} cb-btn-sm`}
+                    data-testid="vault-tab-deposits"
                     onClick={() => setTab('deposits')}
                 >
                     {t('admin.vault_deposits')} ({deposits.length})
                 </button>
                 <button
                     className={`cb-btn ${tab === 'allocations' ? 'cb-btn-primary' : 'cb-btn-outline'} cb-btn-sm`}
+                    data-testid="vault-tab-allocations"
                     onClick={() => setTab('allocations')}
                 >
                     {t('admin.vault_allocations')} ({allocations.length})
                 </button>
                 <button
                     className="cb-btn cb-btn-primary cb-btn-sm ml-auto"
+                    data-testid="vault-tab-allocate"
                     onClick={() => setShowAllocate(!showAllocate)}
                 >
                     {showAllocate ? t('common.cancel') : t('admin.vault_allocate_new')}
@@ -156,18 +159,18 @@ export default function VaultAdmin(_props: VaultAdminProps) {
                     <h3 className="font-bold text-[--cb-text-primary] mb-3">{t('admin.vault_allocate_title')}</h3>
                     <div className="grid gap-3">
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_deposit_id')}
-                            <input className="cb-input w-full mt-1" value={allocForm.deposit_id} onChange={e => setAllocForm(f => ({ ...f, deposit_id: e.target.value }))} />
+                            <input className="cb-input w-full mt-1" data-testid="vault-field-deposit_id" value={allocForm.deposit_id} onChange={e => setAllocForm(f => ({ ...f, deposit_id: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_room_id')}
-                            <input className="cb-input w-full mt-1" value={allocForm.room_id} onChange={e => setAllocForm(f => ({ ...f, room_id: e.target.value }))} />
+                            <input className="cb-input w-full mt-1" data-testid="vault-field-room_id" value={allocForm.room_id} onChange={e => setAllocForm(f => ({ ...f, room_id: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_qty_per_drop')}
-                            <input className="cb-input w-full mt-1" placeholder="10.0000 WAX" value={allocForm.quantity_per_drop} onChange={e => setAllocForm(f => ({ ...f, quantity_per_drop: e.target.value }))} />
+                            <input className="cb-input w-full mt-1" data-testid="vault-field-qty_per_drop" placeholder="10.0000 WAX" value={allocForm.quantity_per_drop} onChange={e => setAllocForm(f => ({ ...f, quantity_per_drop: e.target.value }))} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.vault_chance_bps')}
-                            <input className="cb-input w-full mt-1" type="number" min={1} max={10000} value={allocForm.drop_chance_bps} onChange={e => setAllocForm(f => ({ ...f, drop_chance_bps: parseInt(e.target.value, 10) || 0 }))} />
+                            <input className="cb-input w-full mt-1" data-testid="vault-field-drop_chance_bps" type="number" min={1} max={10000} value={allocForm.drop_chance_bps} onChange={e => setAllocForm(f => ({ ...f, drop_chance_bps: parseInt(e.target.value, 10) || 0 }))} />
                         </label>
-                        <button className="cb-btn cb-btn-primary" disabled={allocSubmitting} onClick={handleAllocate}>
+                        <button className="cb-btn cb-btn-primary" data-testid="vault-allocate" disabled={allocSubmitting} onClick={handleAllocate}>
                             {allocSubmitting ? t('common.saving') : t('admin.vault_allocate_confirm')}
                         </button>
                     </div>
@@ -183,7 +186,7 @@ export default function VaultAdmin(_props: VaultAdminProps) {
                     {deposits.map(d => {
                         const remaining = parseFloat(d.quantity_remaining.quantity.split(' ')[0]) || 0;
                         return (
-                            <div key={d.deposit_id} className="cb-card p-4 flex flex-col gap-2">
+                            <div key={d.deposit_id} data-testid={`deposit-card-${d.deposit_id}`} className="cb-card p-4 flex flex-col gap-2">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <span className="font-bold text-[--cb-text-primary]">#{d.deposit_id}</span>
@@ -214,6 +217,7 @@ export default function VaultAdmin(_props: VaultAdminProps) {
                                 <div className="mt-2">
                                     <button
                                         className="cb-btn cb-btn-outline cb-btn-sm text-xs"
+                                        data-testid={`vault-reclaim-${d.deposit_id}`}
                                         disabled={reclaiming === d.deposit_id}
                                         onClick={() => handleReclaim(d.deposit_id)}
                                     >
@@ -228,7 +232,7 @@ export default function VaultAdmin(_props: VaultAdminProps) {
             ) : (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(28rem, 1fr))' }}>
                     {allocations.map(a => (
-                        <div key={a.alloc_id} className="cb-card p-4 flex flex-col gap-2">
+                        <div key={a.alloc_id} data-testid={`alloc-card-${a.alloc_id}`} className="cb-card p-4 flex flex-col gap-2">
                             <div className="flex items-start justify-between">
                                 <div>
                                     <span className="font-bold text-[--cb-text-primary]">Alloc #{a.alloc_id}</span>
@@ -262,6 +266,7 @@ export default function VaultAdmin(_props: VaultAdminProps) {
                                 <div className="mt-2">
                                     <button
                                         className="cb-btn cb-btn-danger cb-btn-sm text-xs"
+                                        data-testid={`vault-deallocate-${a.alloc_id}`}
                                         disabled={deallocating === a.alloc_id}
                                         onClick={() => handleDeallocate(a.alloc_id)}
                                     >

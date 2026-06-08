@@ -262,7 +262,7 @@ export default function BuyTicketModal({
             aria-modal="true"
             aria-labelledby="modal-buy-title"
         >
-            <div className="cb-modal" style={{ maxWidth: step === 'preview' ? '44rem' : '26rem' }}>
+            <div className="cb-modal" data-testid="buy-modal" style={{ maxWidth: step === 'preview' ? '44rem' : '26rem' }}>
 
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <div className="cb-modal-header">
@@ -320,6 +320,7 @@ export default function BuyTicketModal({
                                 <span
                                     className="text-3xl font-black text-[--cb-text-primary] min-w-[3rem] text-center tabular-nums"
                                     aria-live="polite"
+                                    data-testid="buy-count"
                                 >{count}</span>
                                 <button
                                     className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
@@ -352,6 +353,7 @@ export default function BuyTicketModal({
                                     onChange={e => setCustomPrice(e.target.value)}
                                     disabled={generating}
                                     aria-label={t('buy_ticket.price_aria')}
+                                    data-testid="buy-price"
                                 />
                                 {roomPriceMin && roomPriceMax && (
                                     <span className="text-xs text-[--cb-text-tertiary] whitespace-nowrap">
@@ -392,6 +394,7 @@ export default function BuyTicketModal({
                                 onClick={handleGenerate}
                                 disabled={generating || count < 1 || !!priceError}
                                 aria-busy={generating}
+                                data-testid="buy-preview"
                             >
                                 {generating
                                     ? t('buy_ticket.generating')
@@ -457,7 +460,7 @@ export default function BuyTicketModal({
                         )}
 
                         {(purchaseError || localGenError) && (
-                            <div className="cb-alert cb-alert-error mb-4" role="alert">
+                            <div className="cb-alert cb-alert-error mb-4" role="alert" data-testid="buy-error">
                                 <span aria-hidden="true">⚠️</span>
                                 <span>{purchaseError || localGenError}</span>
                             </div>
@@ -479,6 +482,7 @@ export default function BuyTicketModal({
                                 onClick={handleBuy}
                                 disabled={isPurchasing || generating || totalCount === 0}
                                 aria-busy={isPurchasing}
+                                data-testid="buy-confirm"
                             >
                                 {isPurchasing
                                     ? t('buy_ticket.processing')

@@ -84,6 +84,7 @@ export default function AdminLayout({
         <a
           key={item.id}
           href={`/admin/${item.id}`}
+          data-testid={`admin-nav-${item.id}`}
           className={`site-sidebar-item${section === item.id ? ' is-active' : ''}`}
           aria-current={section === item.id ? 'page' : undefined}
           onClick={e => { e.preventDefault(); navigate(`/admin/${item.id}`); }}

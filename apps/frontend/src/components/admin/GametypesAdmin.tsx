@@ -754,11 +754,11 @@ export default function GametypesAdmin() {
                 <div className="flex flex-wrap gap-3">
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_name')}</label>
-                        <input className="cb-input" value={name} onChange={e => setName(e.target.value)} placeholder={t('admin.gametypes_name_placeholder')} required />
+                        <input className="cb-input" data-testid="gt-field-name" value={name} onChange={e => setName(e.target.value)} placeholder={t('admin.gametypes_name_placeholder')} required />
                     </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_multiplier')}</label>
-                        <input className="cb-input font-mono w-28" type="number" step="0.1" min="0.1" value={baseMultiplier} onChange={e => setBaseMultiplier(e.target.value)} required />
+                        <input className="cb-input font-mono w-28" data-testid="gt-field-base_multiplier" type="number" step="0.1" min="0.1" value={baseMultiplier} onChange={e => setBaseMultiplier(e.target.value)} required />
                     </div>
                 </div>
 
@@ -768,6 +768,7 @@ export default function GametypesAdmin() {
                         <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_draw_mode')}</label>
                         <select
                             className="cb-input"
+                            data-testid="gt-draw-mode"
                             value={drawMode}
                             onChange={e => setDrawMode(e.target.value as DrawMode)}
                         >
@@ -866,6 +867,7 @@ export default function GametypesAdmin() {
                                 return (
                                     <div
                                         key={p.pattern_id}
+                                        data-testid={`gt-rule-${p.pattern_id}`}
                                         className={`cb-chip flex flex-col gap-1 px-3 py-2 rounded-lg text-sm border transition-colors ${
                                             sel
                                                 ? 'border-[--cb-brand] bg-[--cb-brand]/5'
@@ -962,11 +964,11 @@ export default function GametypesAdmin() {
                         <div className="flex flex-wrap gap-2">
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_combo_name')}</label>
-                                <input className="cb-input text-xs w-28" value={comboName} onChange={e => setComboName(e.target.value)} placeholder={t('admin.gametypes_combo_name_placeholder')} />
+                                <input className="cb-input text-xs w-28" data-testid="gt-combo-name" value={comboName} onChange={e => setComboName(e.target.value)} placeholder={t('admin.gametypes_combo_name_placeholder')} />
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[--cb-text-tertiary]">{t('admin.gametypes_combo_weight')}</label>
-                                <input className="cb-input text-xs w-20 font-mono" type="number" min="0.5" step="0.01" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
+                                <input className="cb-input text-xs w-20 font-mono" data-testid="gt-combo-weight" type="number" min="0.5" step="0.01" value={comboWeight} onChange={e => setComboWeight(e.target.value)} />
                             </div>
                         </div>
 
@@ -974,7 +976,7 @@ export default function GametypesAdmin() {
                         <div className="flex flex-col gap-2">
                             <span className="text-xs text-[--cb-text-tertiary] font-semibold">{t('admin.gametypes_clauses')}</span>
                             {comboClauses.map((clause, ci) => (
-                                <div key={ci} className="flex flex-wrap items-start gap-2 p-2 rounded border border-[--cb-border-default] bg-[--cb-bg-elevated]">
+                                <div key={ci} data-testid={`gt-combo-clause-${ci}`} className="flex flex-wrap items-start gap-2 p-2 rounded border border-[--cb-border-default] bg-[--cb-bg-elevated]">
                                     <select
                                         className="text-xs px-1 py-0.5 rounded border border-[--cb-border-default] bg-[--cb-bg-elevated] text-[--cb-text-primary]"
                                         value={clause.type}
@@ -1048,10 +1050,10 @@ export default function GametypesAdmin() {
                         </div>
 
                         <div className="flex gap-2">
-                            <button type="button" className="cb-btn cb-btn-ghost cb-btn-xs" onClick={addClause}>
+                            <button type="button" className="cb-btn cb-btn-ghost cb-btn-xs" data-testid="gt-combo-add-clause" onClick={addClause}>
                                 {t('admin.gametypes_clause_add')}
                             </button>
-                            <button type="button" className="cb-btn cb-btn-outline cb-btn-xs" onClick={addCombination}
+                            <button type="button" className="cb-btn cb-btn-outline cb-btn-xs" data-testid="gt-combo-add" onClick={addCombination}
                                 disabled={!comboName || !comboWeight || comboClauses.length === 0}
                             >
                                 {editingComboIdx !== null ? t('admin.gametypes_combo_update') : t('admin.gametypes_combo_add')}
@@ -1070,7 +1072,7 @@ export default function GametypesAdmin() {
                     </div>
                 </div>
 
-                <button type="button" className="cb-btn cb-btn-outline self-start" onClick={handleSuggest} disabled={suggesting}>
+                <button type="button" className="cb-btn cb-btn-outline self-start" data-testid="gt-suggest" onClick={handleSuggest} disabled={suggesting}>
                     {suggesting
                         ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('common.loading')}</>
                         : `✨ ${t('admin.gametypes_suggest')}`
@@ -1079,7 +1081,7 @@ export default function GametypesAdmin() {
 
                 {editComboGtId ? (
                     <div className="flex gap-2 self-start">
-                        <button type="button" className="cb-btn cb-btn-primary" disabled={savingCombos} onClick={saveEditedCombinations}>
+                        <button type="button" className="cb-btn cb-btn-primary" data-testid="gt-save-combos" disabled={savingCombos} onClick={saveEditedCombinations}>
                             {savingCombos ? t('common.saving') : t('admin.gametypes_save_combos', { id: editComboGtId })}
                         </button>
                         <button type="button" className="cb-btn cb-btn-ghost" disabled={savingCombos} onClick={cancelEditCombinations}>
@@ -1087,7 +1089,7 @@ export default function GametypesAdmin() {
                         </button>
                     </div>
                 ) : (
-                    <button type="submit" className="cb-btn cb-btn-primary self-start" disabled={saving}>
+                    <button type="submit" className="cb-btn cb-btn-primary self-start" data-testid="gt-create" disabled={saving}>
                         {saving ? t('common.saving') : t('admin.gametypes_create')}
                     </button>
                 )}

@@ -341,6 +341,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
             <div className="flex gap-2 mb-6 flex-wrap">
                 {TABS.map(tb => (
                     <button key={tb.id}
+                        data-testid={`nft-tab-${tb.id}`}
                         className={`cb-btn cb-btn-sm ${tab === tb.id ? 'cb-btn-primary' : 'cb-btn-outline'}`}
                         onClick={() => { setTab(tb.id); setError(null); setSuccess(null); }}>
                         {tb.label}
@@ -585,7 +586,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
 
                     <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(24rem, 1fr))' }}>
                         {templates.map(tpl => (
-                            <div key={tpl.template_id} className="cb-card p-4">
+                            <div key={tpl.template_id} data-testid={`nft-row-${tpl.template_id}`} className="cb-card p-4">
                                 <div className="flex items-start justify-between mb-2">
                                     <div>
                                         <span className="font-bold">#{tpl.template_id}</span>

@@ -264,6 +264,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
             <div className="flex gap-2 mb-6 flex-wrap">
                 {TABS.map(tb => (
                     <button key={tb.id}
+                        data-testid={`token-tab-${tb.id}`}
                         className={`cb-btn cb-btn-sm ${tab === tb.id ? 'cb-btn-primary' : 'cb-btn-outline'}`}
                         onClick={() => { setTab(tb.id); setError(null); setSuccess(null); }}>
                         {tb.label}
@@ -332,7 +333,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
                 <div className="space-y-4" style={{ maxWidth: '38rem' }}>
                     <div className="grid gap-3">
                         {/* Admin wallet */}
-                        <div className="cb-card p-4 flex items-center justify-between gap-4">
+                        <div className="cb-card p-4 flex items-center justify-between gap-4" data-testid={`token-row-${actor || 'admin'}`}>
                             <div>
                                 <p className="text-xs text-[--cb-text-tertiary]">{t('admin.token_admin_wallet')}</p>
                                 <p className="text-sm text-[--cb-text-tertiary] font-mono mt-0.5">{actor || '—'}</p>

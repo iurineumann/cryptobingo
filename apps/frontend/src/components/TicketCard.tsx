@@ -59,6 +59,7 @@ export function TicketCard({
 
   return (
     <article
+      data-testid={`gr-ticket-${ticketId}`}
       className={[
         'gr-ticket',
         isWinner ? 'is-winner' : '',
@@ -98,6 +99,7 @@ export function TicketCard({
                 return (
                   <div
                     key={ci}
+                    data-testid={`tc-cell-${gridIdx}`}
                     role="gridcell"
                     aria-selected={isMarked}
                     aria-label={

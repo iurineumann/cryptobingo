@@ -98,6 +98,7 @@ function GridEditor({ mask, onChange }: { mask: number; onChange: (v: number) =>
                             <button
                                 key={bit}
                                 type="button"
+                                data-testid={`pattern-cell-${row}-${col}`}
                                 disabled={isCenter}
                                 title={isCenter ? 'FREE SPACE' : BIT_NAMES[bit] ?? `bit ${bit}`}
                                 className={[
@@ -258,7 +259,7 @@ export default function PatternsAdmin() {
                             {t('admin.patterns_editor')}
                         </span>
                         <GridEditor mask={editMask} onChange={setEditMask} />
-                            <span className="text-xs text-[--cb-text-tertiary] font-mono">
+                            <span className="text-xs text-[--cb-text-tertiary] font-mono" data-testid="pattern-bitmask">
                                 {t('admin.patterns_mask')}<strong>{editMask}</strong>
                             </span>
                     </div>
@@ -278,7 +279,7 @@ export default function PatternsAdmin() {
                                 <span className="text-xs text-[--cb-danger]">{nameError}</span>
                             )}
                         </div>
-                        <button type="submit" className="cb-btn cb-btn-primary self-start" disabled={saving || !name || editMask <= (1 << 12) || !!nameError}>
+                        <button type="submit" className="cb-btn cb-btn-primary self-start" data-testid="pattern-create" disabled={saving || !name || editMask <= (1 << 12) || !!nameError}>
                             {saving ? t('common.saving') : t('admin.patterns_create')}
                         </button>
                     </div>

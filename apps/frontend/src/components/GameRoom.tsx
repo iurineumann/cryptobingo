@@ -747,6 +747,7 @@ export default function GameRoom({
                 >
                   <button
                     role="menuitem"
+                    data-testid="gr-nav-lobby"
                     className="cb-btn cb-btn-ghost cb-btn-sm"
                     style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                     onClick={() => { setShowMenu(false); onLeave(); }}
@@ -757,6 +758,7 @@ export default function GameRoom({
                   {onGoToHistory && (
                     <button
                       role="menuitem"
+                      data-testid="gr-nav-history"
                       className="cb-btn cb-btn-ghost cb-btn-sm"
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToHistory(); }}
@@ -768,6 +770,7 @@ export default function GameRoom({
                   {onGoToWallet && (
                     <button
                       role="menuitem"
+                      data-testid="gr-nav-wallet"
                       className="cb-btn cb-btn-ghost cb-btn-sm"
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToWallet(); }}
@@ -848,6 +851,7 @@ export default function GameRoom({
 
                 <div
                   ref={heroRef}
+                  data-testid="gr-ball-hero"
                   className="gr-ball-hero"
                   role="status"
                   aria-live="polite"
@@ -872,7 +876,7 @@ export default function GameRoom({
 
               {/* Footer: histórico + progress */}
               <div className="gr-stage-footer">
-                <div ref={seqRef} className="gr-sequence" aria-label={t('game_room.history_aria')}>
+                <div ref={seqRef} data-testid="gr-ball-history" className="gr-sequence" aria-label={t('game_room.history_aria')}>
                   {[...effectiveBalls].reverse().map((ball, idx) => {
                     const c   = getCol(ball.number);
                     const clr = BINGO_COLORS[c];
@@ -903,7 +907,7 @@ export default function GameRoom({
 
           {/* ── Painel de Padrões ──────────────────────────────────────────────── */}
           {showPatterns && (
-            <aside ref={patternsRef} className="gr-patterns" aria-label={t('game_room.patterns_heading')}>
+            <aside ref={patternsRef} data-testid="gr-patterns-panel" className="gr-patterns" aria-label={t('game_room.patterns_heading')}>
               <div className="gr-patterns-head">
                 <span className="title">{t('game_room.patterns_heading')}</span>
                 <button
@@ -1028,6 +1032,7 @@ export default function GameRoom({
             {/* ADR-014: Game Ended */}
             {isEffectiveGameEnded && (
               <div
+                data-testid="gr-ended-overlay"
                 className={`gr-ended-banner${playerWinEntries.length > 0 ? ' gr-ended-banner--winner' : ''}`}
                 role="status"
                 aria-live="polite"
@@ -1048,7 +1053,7 @@ export default function GameRoom({
                   </span>
 
                   {playerWinEntries.length > 0 && (
-                    <div className="gr-ended-breakdown">
+                    <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
                       {playerWinEntries.map(({ name, total, currency, isCombination }) => (
                         <div key={name} className="gr-ended-breakdown-row">
                           <span className="gr-ended-breakdown-pattern">
