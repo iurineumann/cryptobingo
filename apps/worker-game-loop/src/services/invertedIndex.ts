@@ -20,6 +20,7 @@
 
 import { redisClient }      from './redis';
 import { rpcClient, parseHexBytes }        from '@cryptobingo/blockchain-core';
+import { Name, UInt64 }                     from '@wharfkit/antelope';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
 
 function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[] {
@@ -107,8 +108,9 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
     while (hasMore) {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
-            scope:       gameId,
+            scope:       Name.from(UInt64.from(gameId)),
             table:       'tickets',
+            key_type:    'i64',
             limit:       100,
             lower_bound: lowerBound as any,
             json:        true,

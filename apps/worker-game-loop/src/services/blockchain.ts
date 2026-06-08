@@ -107,6 +107,37 @@ export async function executeClaimWin(
 }
 
 /**
+ * DRAWN|PAYING → PAYING: liquida o prêmio de um ticket por COMBINAÇÃO (ADR-016).
+ * O contrato valida o combo_id contra gametype.combinations e usa o weight
+ * registrado on-chain (impede inflar o prêmio). Aceita golden_multiplier.
+ * Worker chama executeCloseGame() após o lote completo.
+ *
+ * @param goldenMultiplier - 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode
+ */
+export async function executeClaimCombo(
+    gameId:           string,
+    ticketId:         string,
+    ballCount:        number,
+    comboId:          number,
+    goldenMultiplier: number = 0,
+): Promise<string | undefined> {
+    console.log(
+        `🔗 [Blockchain] claimcombo → jogo ${gameId}, cartela #${ticketId}, ` +
+        `combo #${comboId}, ${ballCount} bolas` +
+        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '')
+    );
+    const txId = await transact('claimcombo', {
+        game_id:           gameId,
+        ticket_id:         ticketId,
+        ball_count:        ballCount,
+        combo_id:          comboId,
+        golden_multiplier: goldenMultiplier,
+    }, true);
+    console.log(`✅ Combinação #${comboId} liquidada para cartela #${ticketId}. TX: ${txId}`);
+    return txId;
+}
+
+/**
  * DRAWN|PAYING → PAYING: liquida o prêmio de um ticket por estágio MULTI_MATCH.
  * ADR-013: cada ticket pode ganhar múltiplos estágios independentemente.
  * Worker chama executeCloseGame() após todos os claimstage do lote.

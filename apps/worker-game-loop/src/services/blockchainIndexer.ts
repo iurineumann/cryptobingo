@@ -1,5 +1,5 @@
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import { UInt64 } from '@wharfkit/antelope';
+import { Name, UInt64 } from '@wharfkit/antelope';
 import { Pool } from 'pg';
 import { redisClient } from './redis';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
@@ -92,7 +92,7 @@ async function indexGames(): Promise<void> {
             try {
                 const ticketRes = await rpcClient.v1.chain.get_table_rows({
                     code: CONTRACT_ACCOUNT,
-                    scope: game.game_id,
+                    scope: Name.from(UInt64.from(String(game.game_id))),
                     table: 'tickets',
                     limit: 1,
                     json: true,

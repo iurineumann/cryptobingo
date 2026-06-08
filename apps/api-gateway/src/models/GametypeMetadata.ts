@@ -1,6 +1,7 @@
 // apps/api-gateway/src/models/GametypeMetadata.ts
 // Metadados off-chain complementares aos gametypes on-chain.
 // Armazena tipo dos patterns (simple/special/master) e combinações pagantes.
+// Fonte de verdade do schema off-chain — NÃO duplicar em patternController.ts.
 import mongoose, { Schema, Document } from 'mongoose';
 import type { PatternType } from '@cryptobingo/shared-types';
 
@@ -18,9 +19,13 @@ export interface CombinationRuleDoc {
 }
 
 export interface GametypeMetadataDocument extends Document {
-    gametype_id:  string;
-    rules:        Array<{ pattern_id: string; weight: number; type: PatternType }>;
-    combinations: CombinationRuleDoc[];
+    gametype_id:     string;
+    description:     string;
+    cover_image_url: string;
+    rules_summary:   string;
+    sort_order:      number;
+    rules:           Array<{ pattern_id: string; weight: number; type: PatternType }>;
+    combinations:    CombinationRuleDoc[];
 }
 
 const RuleExtendedSchema = new Schema({
@@ -43,9 +48,13 @@ const CombinationSchema = new Schema({
 }, { _id: false });
 
 const GametypeMetadataSchema = new Schema({
-    gametype_id:  { type: String, required: true, unique: true, index: true },
-    rules:        { type: [RuleExtendedSchema], default: [] },
-    combinations: { type: [CombinationSchema],  default: [] },
+    gametype_id:     { type: String, required: true, unique: true, index: true },
+    description:     { type: String, default: '' },
+    cover_image_url: { type: String, default: '' },
+    rules_summary:   { type: String, default: '' },
+    sort_order:      { type: Number, default: 0 },
+    rules:           { type: [RuleExtendedSchema], default: [] },
+    combinations:    { type: [CombinationSchema],  default: [] },
 }, { timestamps: true });
 
 export const GametypeMetadata = mongoose.model<GametypeMetadataDocument>(

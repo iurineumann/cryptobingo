@@ -6,8 +6,8 @@
       "outputs": ["dist/**", ".next/**", "build/**"]
     },
     "test": {
-      "dependsOn": ["build"],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
+      "dependsOn": ["^build", "build"],
+      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "tests/**/*.ts"]
     },
     "bootstrap": {
       "cache": false

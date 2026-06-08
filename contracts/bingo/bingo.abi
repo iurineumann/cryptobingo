@@ -290,6 +290,10 @@
         {
           "name": "stages",
           "type": "stage_rule[]"
+        },
+        {
+          "name": "combinations",
+          "type": "combo_rule[]$"
         }
       ]
     },
@@ -1000,6 +1004,60 @@
       ]
     },
     {
+      "name": "combo_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "combo_id",
+          "type": "uint64"
+        },
+        {
+          "name": "weight",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "setcombos",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "combinations",
+          "type": "combo_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "claimcombo",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "combo_id",
+          "type": "uint64"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
       "name": "setstages",
       "base": "",
       "fields": [
@@ -1199,6 +1257,16 @@
     {
       "name": "claimstage",
       "type": "claimstage",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setcombos",
+      "type": "setcombos",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "claimcombo",
+      "type": "claimcombo",
       "ricardian_contract": ""
     },
     {

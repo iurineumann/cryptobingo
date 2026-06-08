@@ -12,8 +12,8 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import { UInt64 }            from '@wharfkit/antelope';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
-import mongoose, { Schema, Document } from 'mongoose';
-import { redisClient }       from '../database/redis';
+import { redisClient }          from '../database/redis';
+import GametypeMetadataModel from '../models/GametypeMetadata';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -21,27 +21,6 @@ const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 const PATTERN_CACHE_TTL     = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
 
-interface GametypeMetadataDocument extends Document {
-    gametype_id:  string;
-    description:  string;
-    cover_image_url: string;
-    rules_summary: string;
-    sort_order:   number;
-    rules:        Array<{ pattern_id: string; weight: number; type: string }>;
-    combinations: Array<Record<string, unknown>>;
-}
-
-const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
-    gametype_id:     { type: String, required: true, unique: true, index: true },
-    description:     { type: String, default: '' },
-    cover_image_url: { type: String, default: '' },
-    rules_summary:   { type: String, default: '' },
-    sort_order:      { type: Number, default: 0 },
-    rules:           { type: [{ pattern_id: String, weight: Number, type: String }], default: [] },
-    combinations:    { type: [Schema.Types.Mixed], default: [] },
-}, { timestamps: true });
-
-const GametypeMetadataModel = mongoose.model<GametypeMetadataDocument>('GametypeMetadata', GametypeMetadataSchema);
 
 // Sessão do microserviço para enviar transações admin ao contrato
 function getAdminSession(): Session {
@@ -51,6 +30,25 @@ function getAdminSession(): Session {
         chain:        { id: CHAIN_ID, url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
     });
+}
+
+// ADR-016: sincroniza as combinações (combo_id → weight) on-chain via setcombos.
+// O contrato valida o weight em claimcombo, então a fonte de verdade do PESO é
+// on-chain; as cláusulas permanecem off-chain (MongoDB). combo_id = índice canônico.
+async function pushSetCombosOnChain(
+    gametypeId: string,
+    combos:     Array<{ combo_id: number; weight: number }>,
+): Promise<string | undefined> {
+    const session = getAdminSession();
+    const result  = await session.transact({
+        actions: [{
+            account:       CONTRACT_ACCOUNT,
+            name:          'setcombos',
+            authorization: [session.permissionLevel],
+            data:          { gametype_id: gametypeId, combinations: combos },
+        }],
+    }, { broadcast: true });
+    return result.response?.transaction_id;
 }
 
 // ==========================================
@@ -333,7 +331,7 @@ export async function getGametypeMetadataPublic(req: Request, res: Response): Pr
  * Retorna padrões on-chain + combinações off-chain em uma única chamada,
  * com cache Redis (TTL 1h).
  *
- * Cache key: pattern:gametype:{gametypeId} (alinhado ao worker patternCache.ts)
+ * Cache key: pattern:gametype:{gametypeId} (formato rico — o worker usa worker:pattern:gametype:{id})
  *
  * Response: {
  *   patterns:     { name, mask, weight }[]   — on-chain
@@ -366,7 +364,7 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
         }
         const gametype = gtRes.rows[0] as BlockchainGametype;
 
-        const patterns: Array<{ name: string; mask: string; weight: number }> = [];
+        const patterns: Array<{ pattern_id: string; name: string; mask: string; weight: number }> = [];
         for (const rule of gametype.rules) {
             const patRes = await rpcClient.v1.chain.get_table_rows({
                 code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'patterns',
@@ -376,7 +374,9 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
             });
             if (patRes.rows.length) {
                 const p = patRes.rows[0] as BlockchainPattern;
-                patterns.push({ name: p.name, mask: String(p.mask), weight: rule.weight });
+                // pattern_id é necessário para o worker mapear tipo (simple/special/master)
+                // das rules estendidas (off-chain) às combinações n_of_type. ADR-016.
+                patterns.push({ pattern_id: String(rule.pattern_id), name: p.name, mask: String(p.mask), weight: rule.weight });
             }
         }
 
@@ -419,6 +419,24 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
     const { gametypeId } = req.params;
     const { description, cover_image_url, rules_summary, sort_order, rules, combinations } = req.body;
 
+    if (rules !== undefined && !Array.isArray(rules)) {
+        res.status(400).json({ error: 'rules deve ser um array de objetos { pattern_id, weight, type }.' });
+        return;
+    }
+
+    // ADR-016: atribui combo_id canônico (índice) e valida o peso on-chain (1.00–255.00).
+    let combosWithId: Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(combinations)) {
+        combosWithId = combinations.map((c: Record<string, unknown>, i: number) => ({ ...c, combo_id: i }));
+        for (const c of combosWithId) {
+            const w = Math.round(Number(c.weight));
+            if (!Number.isFinite(w) || w < 1 || w > 25500) {
+                res.status(400).json({ error: `combo "${c.name ?? '?'}" tem weight inválido (deve ser 1.00–255.00 / 1–25500 hundredths).` });
+                return;
+            }
+        }
+    }
+
     try {
         const $set: Record<string, unknown> = {
             description:     description ?? '',
@@ -426,8 +444,8 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
             rules_summary:   rules_summary ?? '',
             sort_order:      sort_order ?? 0,
         };
-        if (rules)        $set.rules        = rules;
-        if (combinations) $set.combinations  = combinations;
+        if (rules)         $set.rules        = rules;
+        if (combosWithId)  $set.combinations = combosWithId;
 
         const metadata = await GametypeMetadataModel.findOneAndUpdate(
             { gametype_id: gametypeId },
@@ -436,6 +454,29 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
         ).lean();
 
         console.log(`✅ [PatternCtrl] Metadados do gametype ${gametypeId} upsertados.`);
+
+        // ADR-016: sincroniza as combinações on-chain (fonte de verdade do peso).
+        // Se falhar, há DRIFT (Mongo salvo, chain não) — surface erro p/ retry via "Editar combinações".
+        if (combosWithId) {
+            const onchain = combosWithId.map((c, i) => ({ combo_id: i, weight: Math.round(Number(c.weight)) }));
+            try {
+                const txId = await pushSetCombosOnChain(gametypeId, onchain);
+                console.log(`🔗 [PatternCtrl] setcombos on-chain do gametype ${gametypeId}. TX: ${txId}`);
+                // Invalida o cache do worker para refletir os novos pesos
+                if (redisClient.isOpen) {
+                    await redisClient.del(`pattern:gametype:${gametypeId}`);
+                }
+            } catch (chainErr) {
+                const msg = chainErr instanceof Error ? chainErr.message : String(chainErr);
+                console.error('[PatternCtrl] Falha ao sincronizar combinações on-chain:', chainErr);
+                res.status(502).json({
+                    error:  'Metadados salvos, mas a sincronização das combinações on-chain falhou. Tente novamente.',
+                    detail: msg,
+                });
+                return;
+            }
+        }
+
         res.status(200).json(metadata);
     } catch (err) {
         console.error('[PatternCtrl] Erro ao upsert metadados do gametype:', err);

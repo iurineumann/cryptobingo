@@ -2,7 +2,7 @@
 // Cache Redis para padrões on-chain (PatternEntry[]).
 //
 // Estrutura:
-//   Chave: pattern:gametype:{gametypeId}
+//   Chave: worker:pattern:gametype:{gametypeId}  (≠ api-gateway: pattern:gametype:{id})
 //   Valor: JSON — PatternEntry[] com mask serializado como string
 //   TTL:   3600s (1h) — padrões mudam raramente
 //
@@ -31,7 +31,10 @@ interface PatternEntrySerialized {
 }
 
 function cacheKey(gametypeId: string): string {
-    return `pattern:gametype:${gametypeId}`;
+    // Chave exclusiva do worker (PatternEntry[]) — não colide com a chave
+    // do api-gateway (pattern:gametype:{id}) que grava o formato rico
+    // {patterns, rules, combinations} usado pelo combinationEvaluator.
+    return `worker:pattern:gametype:${gametypeId}`;
 }
 
 /**

@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "bootstrap": "ts-node scripts/bootstrap.ts",
-    "test": "jest tests/fsm.test.ts"
+    "test": "node run-tests.js"
   },
   "dependencies": {
+    "@cryptobingo/blockchain-core": "workspace:*",
+    "@cryptobingo/shared-types": "workspace:*",
     "@wharfkit/antelope": "^1.0.0",
     "@wharfkit/session": "^1.0.0",
     "@wharfkit/wallet-plugin-privatekey": "^1.0.0",

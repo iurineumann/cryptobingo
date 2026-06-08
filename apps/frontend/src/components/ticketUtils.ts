@@ -71,8 +71,9 @@ export interface WinnerInfo {
 }
 
 export interface TicketEntry {
-  id: string;
-  matrix: number[];
+  id:         string;
+  matrix:     number[];
+  pricePaid?: string;  // quantity string ADR-010, ex: "5.0000 BINGO"
 }
 
 function ticketFlat(matrix: number[]): (number | null)[] {
@@ -413,6 +414,150 @@ export function isCombinationSatisfied(
     }
     return false;
   });
+}
+
+// ── Utilitários de combinação ─────────────────────────────────────────────────
+
+/**
+ * Retorna o mapa de células (union) de uma combinação, compondo os padrões
+ * membros ordenados por pattern_id para coerência visual entre clientes.
+ */
+export function getCombinationCells(
+  combo:          CombinationRuleInput,
+  gamePatterns:   Pattern[],
+  extendedRules:  ExtendedRule[],
+  patternNameById: Map<string, string>,
+): number[] {
+  const cells = new Array<number>(25).fill(0);
+  for (const clause of combo.clauses) {
+    let ids: string[] = [];
+    if (clause.type === 'all_of') {
+      ids = clause.pattern_ids ?? [];
+    } else if (clause.type === 'n_of_type') {
+      const type   = clause.pattern_type ?? 'simple';
+      const needed = clause.count ?? 1;
+      ids = extendedRules
+        .filter(r => r.type === type)
+        .sort((a, b) => Number(a.pattern_id) - Number(b.pattern_id))
+        .slice(0, needed)
+        .map(r => r.pattern_id);
+    } else if (clause.type === 'any_of') {
+      ids = (clause.pattern_ids ?? []).slice(0, 1);
+    }
+    for (const id of ids) {
+      const name = patternNameById.get(id);
+      const p    = gamePatterns.find(gp => gp.id === id || gp.name === name);
+      if (p) p.cells.forEach((on, i) => { if (on) cells[i] = 1; });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Retorna a % de completude (0–1) da melhor cartela do jogador para
+ * a combinação dada. Usa lógica AND entre cláusulas (minimum).
+ */
+export function computeCombinationProximity(
+  combo:             CombinationRuleInput,
+  tickets:           TicketEntry[],
+  drawnSet:          Set<number>,
+  gamePatterns:      Pattern[],
+  patternNameById:   Map<string, string>,
+  patternTypeByName: Map<string, string>,
+): number {
+  if (!tickets.length) return 0;
+  let best = 0;
+  for (const ticket of tickets) {
+    const flat = ticketFlat(ticket.matrix);
+    const done = new Set<string>(
+      gamePatterns
+        .filter(p => p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number)))
+        .map(p => p.name),
+    );
+    const doneWithIds = new Set<string>(done);
+    for (const [id, name] of patternNameById) {
+      if (done.has(name)) doneWithIds.add(id);
+    }
+    // Proximidade = min das cláusulas (AND)
+    let minClause = 1;
+    for (const clause of combo.clauses) {
+      let clausePct = 0;
+      if (clause.type === 'all_of') {
+        const ids    = clause.pattern_ids ?? [];
+        if (!ids.length) { clausePct = 1; }
+        else clausePct = ids.filter(id => doneWithIds.has(id)).length / ids.length;
+      } else if (clause.type === 'n_of_type') {
+        const type   = clause.pattern_type ?? 'simple';
+        const needed = clause.count ?? 1;
+        const got    = [...done].filter(n => patternTypeByName.get(n) === type).length;
+        clausePct    = Math.min(1, got / needed);
+      } else if (clause.type === 'any_of') {
+        clausePct = (clause.pattern_ids ?? []).some(id => doneWithIds.has(id)) ? 1 : 0;
+      }
+      if (clausePct < minClause) minClause = clausePct;
+    }
+    if (minClause > best) best = minClause;
+  }
+  return best;
+}
+
+/**
+ * Para uma cartela que completou wonPatternNames, retorna as combinações
+ * satisfeitas e quais padrões são "subsumed" (absorvidos) por cada uma.
+ */
+export function detectComboWinsForTicket(
+  wonPatternNames:   string[],
+  gameCombinations:  CombinationRuleInput[],
+  patternTypeByName: Map<string, string>,
+  patternNameById:   Map<string, string>,
+): Array<{ comboName: string; subsumedPatterns: string[] }> {
+  const wonSet = new Set(wonPatternNames);
+  const wonWithIds = new Set<string>(wonSet);
+  for (const [id, name] of patternNameById) {
+    if (wonSet.has(name)) wonWithIds.add(id);
+  }
+  const result: Array<{ comboName: string; subsumedPatterns: string[] }> = [];
+  for (const combo of gameCombinations) {
+    if (!isCombinationSatisfied(combo, wonWithIds, patternTypeByName)) continue;
+    const subsumed: string[] = [];
+    for (const clause of combo.clauses) {
+      if (clause.type === 'all_of') {
+        for (const id of clause.pattern_ids ?? []) {
+          const name = patternNameById.get(id) ?? id;
+          if (wonSet.has(name)) subsumed.push(name);
+        }
+      } else if (clause.type === 'n_of_type') {
+        const type   = clause.pattern_type ?? 'simple';
+        const needed = clause.count ?? 1;
+        let   count  = 0;
+        for (const n of wonPatternNames) {
+          if (patternTypeByName.get(n) === type && count < needed) { subsumed.push(n); count++; }
+        }
+      } else if (clause.type === 'any_of') {
+        for (const id of clause.pattern_ids ?? []) {
+          const name = patternNameById.get(id) ?? id;
+          if (wonSet.has(name)) { subsumed.push(name); break; }
+        }
+      }
+    }
+    result.push({ comboName: combo.name, subsumedPatterns: subsumed });
+  }
+
+  // Resolve sobreposição entre combinações satisfeitas: paga apenas a de MAIOR peso
+  // quando elas compartilham padrões. Combinações aninhadas (ex.: "2 Simples" ⊂
+  // "6 Simples") são absorvidas — só a maior conta. Combinações independentes
+  // (que consomem padrões distintos) permanecem todas.
+  const weightByName = new Map(gameCombinations.map(c => [c.name, c.weight]));
+  result.sort((a, b) => (weightByName.get(b.comboName) ?? 0) - (weightByName.get(a.comboName) ?? 0));
+  const consumed = new Set<string>();
+  const resolved: Array<{ comboName: string; subsumedPatterns: string[] }> = [];
+  for (const r of result) {
+    // mantém apenas se contribui com ao menos um padrão ainda não consumido
+    if (!r.subsumedPatterns.some(p => !consumed.has(p))) continue;
+    for (const p of r.subsumedPatterns) consumed.add(p);
+    resolved.push(r);
+  }
+  return resolved;
 }
 
 export async function fetchGamePatterns(session: Session, gametypeId: string): Promise<Pattern[]> {
