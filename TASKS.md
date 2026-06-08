@@ -105,3 +105,4 @@
 - [x] 57 novos testes QA: `evaluator.payout.test.ts` (34), `ticketUtils.test.ts` +23, `gameOrchestrator.test.ts` +7.
 - [x] `patternCache.ts` — Redis TTL 1h, fail-open; `GET /api/v1/gametypes/:gametypeId/patterns`.
 - [x] Harness E2E 20/20 — ABI `orng.wax` corrigido (tabela `reqs` adicionada manualmente); `init_dev_env.sh` usa ABI hand-maintained. Total: 273 testes passando.
+- [ ] E2E de UI com Cypress (ADR-017) — pacote `apps/e2e-ui`, estratégia em camadas (Tier 1 determinístico PR-gate / Tier 2 real nightly). Jornadas player/admin/sponsor (vault, drops, gametypes/combos). Skill `e2e-ui-cypress` + revisor `e2e-reviewer`; seletores `data-testid`; CI `e2e-ui` (PR) + `e2e-ui-real` (nightly).
