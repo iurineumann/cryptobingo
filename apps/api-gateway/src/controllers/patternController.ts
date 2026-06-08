@@ -12,8 +12,8 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import { UInt64 }            from '@wharfkit/antelope';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
-import mongoose, { Schema, Document } from 'mongoose';
-import { redisClient }       from '../database/redis';
+import { redisClient }          from '../database/redis';
+import GametypeMetadataModel from '../models/GametypeMetadata';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -21,27 +21,6 @@ const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 const PATTERN_CACHE_TTL     = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
 
-interface GametypeMetadataDocument extends Document {
-    gametype_id:  string;
-    description:  string;
-    cover_image_url: string;
-    rules_summary: string;
-    sort_order:   number;
-    rules:        Array<{ pattern_id: string; weight: number; type: string }>;
-    combinations: Array<Record<string, unknown>>;
-}
-
-const GametypeMetadataSchema = new Schema<GametypeMetadataDocument>({
-    gametype_id:     { type: String, required: true, unique: true, index: true },
-    description:     { type: String, default: '' },
-    cover_image_url: { type: String, default: '' },
-    rules_summary:   { type: String, default: '' },
-    sort_order:      { type: Number, default: 0 },
-    rules:           { type: [{ pattern_id: String, weight: Number, type: String }], default: [] },
-    combinations:    { type: [Object], default: [] },
-}, { timestamps: true });
-
-const GametypeMetadataModel = mongoose.model<GametypeMetadataDocument>('GametypeMetadata', GametypeMetadataSchema);
 
 // Sessão do microserviço para enviar transações admin ao contrato
 function getAdminSession(): Session {
@@ -439,6 +418,11 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
 export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> {
     const { gametypeId } = req.params;
     const { description, cover_image_url, rules_summary, sort_order, rules, combinations } = req.body;
+
+    if (rules !== undefined && !Array.isArray(rules)) {
+        res.status(400).json({ error: 'rules deve ser um array de objetos { pattern_id, weight, type }.' });
+        return;
+    }
 
     // ADR-016: atribui combo_id canônico (índice) e valida o peso on-chain (1.00–255.00).
     let combosWithId: Array<Record<string, unknown>> | undefined;

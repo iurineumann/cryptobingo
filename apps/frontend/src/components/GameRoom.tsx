@@ -592,7 +592,7 @@ export default function GameRoom({
         allTickets.map(r => ({
           id:        r.ticket_id,
           matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
-          pricePaid: loadedGame?.ticket_price?.quantity,
+          pricePaid: r.price?.quantity ?? loadedGame?.ticket_price?.quantity,
         }))
       );
     } catch (err) {
