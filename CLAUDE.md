@@ -93,6 +93,19 @@ Bounds de `get_table_rows` por chave i64: use `UInt64.from(id)`, não string.
   removido; confirme o alvo com `git ls-remote --heads origin`). Branch principal: `master`.
 - Pré-PR: typecheck + testes dos pacotes tocados verdes. Toda mudança estrutural → ADR em `docs/adr/`.
 
+## Skills & Agents do projeto (`.claude/`)
+
+Use a **skill** da camada que você for tocar (procedimentos + gotchas) e delegue a revisão pré-PR ao
+**agent revisor** correspondente.
+
+| Camada | Skill | Agent revisor |
+|---|---|---|
+| Contrato C++ | `wax-contract` | `cryptobingo-reviewer` (contrato + cross-cutting) |
+| Worker / payouts | `worker-game-resolution` | `worker-reviewer` |
+| API-gateway | `api-endpoint` | `api-reviewer` |
+| Frontend | `frontend-feature` | `frontend-reviewer` |
+| Harness/E2E · DevOps · Economia | `harness-e2e`, `weights-calibration` | `platform-reviewer` |
+
 ## Invariantes de domínio
 
 - **max_weight (ADR-005):** por cartela paga-se o maior peso entre padrões/combinações/stages.
