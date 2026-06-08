@@ -1,0 +1,12 @@
+{
+  "rows": [
+    {
+      "balance": { "quantity": "500.0000 BINGO", "contract": "bingo.token" }
+    },
+    {
+      "balance": { "quantity": "1000.00000000 WAX", "contract": "eosio.token" }
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

@@ -1,0 +1,18 @@
+{
+  "rows": [
+    {
+      "ticket_id": "1001",
+      "owner": "jogador1",
+      "matrix": [5, 7, 2, 12, 9, 19, 23, 27, 38, 30, 31, 34, 44, 41, 46, 49, 55, 51, 60, 63, 67, 70, 75, 58],
+      "price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" }
+    },
+    {
+      "ticket_id": "1002",
+      "owner": "jogador1",
+      "matrix": [3, 8, 1, 15, 11, 16, 28, 22, 40, 25, 33, 37, 45, 42, 47, 50, 56, 53, 59, 61, 68, 71, 74, 65],
+      "price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" }
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

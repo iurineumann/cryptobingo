@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "game_id": "1716000000000",
+      "status": "archived",
+      "ticket_price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" },
+      "total_wagered": { "quantity": "100.0000 BINGO", "contract": "bingo.token" },
+      "sponsor_pool": [],
+      "drawn_balls": [5, 12, 23, 27, 31, 34, 41, 46, 52, 58, 63, 67, 7, 19, 38, 44, 55, 70, 2, 49],
+      "end_time": "2026-06-07T00:00:00",
+      "room_id": "1",
+      "gametype_id": "1",
+      "campaign_id": "0",
+      "golden_ball_num": 0,
+      "golden_multiplier": 0
+    }
+  ],
+  "more": false,
+  "next_key": ""
+}

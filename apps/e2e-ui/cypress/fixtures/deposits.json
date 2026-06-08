@@ -1,0 +1,18 @@
+{
+  "deposits": [
+    {
+      "deposit_id": "1",
+      "owner": "sponsor1111",
+      "asset_type": "token",
+      "token_contract": "bingo.token",
+      "token_symbol": "BINGO",
+      "quantity_original": { "quantity": "1000.0000 BINGO", "contract": "bingo.token" },
+      "quantity_remaining": { "quantity": "750.0000 BINGO", "contract": "bingo.token" },
+      "nft_asset_id": "0",
+      "nft_template_id": 0,
+      "nft_collection": "",
+      "status": "active",
+      "deposited_at": 1717000000
+    }
+  ]
+}

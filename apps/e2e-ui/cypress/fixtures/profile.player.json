@@ -1,0 +1,16 @@
+{
+  "wallet_address": "jogador1",
+  "nickname": "Jogador 1",
+  "role": "player",
+  "avatar_nft_asset_id": null,
+  "preferences": {
+    "locale": "pt-BR",
+    "currency_display": "BINGO",
+    "sound_enabled": true
+  },
+  "progression": {
+    "xp": 1200,
+    "tier": "Silver",
+    "games_played": 42
+  }
+}
