@@ -16,7 +16,8 @@ namespace swap_contract_ns {
 
     struct [[eosio::table("swapstate")]] swap_state {
         uint64_t next_pool_id  = 1;
-        uint64_t next_token_id = 1;  // contador da allowlist
+        uint64_t next_token_id = 1;   // contador da allowlist
+        name     treasury      = "bingo.game"_n; // destino das service fees (settreasury)
     };
     typedef singleton<"swapstate"_n, swap_state> swap_state_singleton;
 
@@ -49,12 +50,13 @@ namespace swap_contract_ns {
 
     struct [[eosio::table("pools")]] pool_record {
         uint64_t        pool_id;
-        extended_symbol sym_a;       // token com menor symbol_code.raw() (ordem canônica)
+        extended_symbol sym_a;            // token com menor symbol_code.raw() (ordem canônica)
         extended_symbol sym_b;
-        int64_t         reserve_a;   // reserva em unidades mínimas do token A
+        int64_t         reserve_a;        // reserva em unidades mínimas do token A
         int64_t         reserve_b;
-        int64_t         lp_supply;   // total de LP tokens emitidos
-        uint16_t        fee_bps;     // taxa de swap em bps (30 = 0.30%)
+        int64_t         lp_supply;        // total de LP tokens emitidos
+        uint16_t        fee_bps;          // taxa LP em bps (30 = 0.30%) — fica no pool
+        uint16_t        service_fee_bps;  // taxa de serviço em bps — vai para treasury
 
         uint64_t  primary_key() const { return pool_id; }
         uint128_t by_pair()     const {
@@ -103,6 +105,15 @@ namespace swap_contract_ns {
     public:
         using contract::contract;
 
+        // ── Configuração (admin-only) ────────────────────────────────────────────
+        // Define a conta treasury que recebe as service fees. Default: bingo.game.
+        [[eosio::action]] void settreasury(name account);
+
+        // Define a service_fee_bps do pool. Máximo: 500 (5%).
+        // A service fee é deduzida do amount_in ANTES da fórmula AMM e enviada ao treasury.
+        // Use 0 para desativar (campanhas de fee-zero).
+        [[eosio::action]] void setpoolfee(uint64_t pool_id, uint16_t service_fee_bps);
+
         // ── Allowlist de tokens (admin-only) ────────────────────────────────────
         // Adiciona um token à allowlist. Requer auth do próprio contrato (get_self()).
         [[eosio::action]] void addtoken(extended_symbol sym);
@@ -114,7 +125,8 @@ namespace swap_contract_ns {
         // Cria um novo pool AMM para um par de tokens.
         // Ambos os tokens devem estar previamente aprovados na allowlist.
         // Os tokens são ordenados canonicamente (menor symbol_code primeiro).
-        // fee_bps: taxa em bps; padrão recomendado 30 (0.30%); máximo 1000 (10%).
+        // fee_bps: taxa LP em bps; padrão recomendado 30 (0.30%); máximo 1000 (10%).
+        // service_fee_bps configurado separadamente via setpoolfee (default 0).
         [[eosio::action]] void createpool(
             name creator,
             extended_symbol sym_a,
