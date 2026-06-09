@@ -43,6 +43,7 @@ ACCOUNT_NAMES=(
     gameadmin11
     contractad1
     sponsor1111
+    bingo.swap
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -438,7 +439,7 @@ cleos push action bingo.token issue \
     -p bingo.game@active 2>/dev/null || true
 
 echo "[*] Distribuindo BINGO..."
-for dest in microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111; do
+for dest in microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingo.swap; do
     cleos push action bingo.token open \
         "[\"$dest\", \"4,BINGO\", \"bingo.game\"]" \
         -p bingo.game@active > /dev/null 2>&1 || true
@@ -448,7 +449,7 @@ for dest in microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111; 
 done
 
 echo "[*] Distribuindo WAX para contas de desenvolvimento..."
-for dest in bingo.game bingo.token microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111; do
+for dest in bingo.game bingo.token microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingo.swap; do
     cleos push action eosio.token transfer \
         "[\"eosio\", \"$dest\", \"100000.0000 WAX\", \"Dev WAX\"]" \
         -p eosio@active 2>/dev/null || true
@@ -566,6 +567,38 @@ cleos push action bingo.game setconfig \
     "{\"signer_key\": \"${BINGO_GAME_PUB}\"}" \
     -p bingo.game@active || \
     echo "[!] Aviso: setconfig falhou (pode executar manualmente depois)."
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8e. DEPLOY DO CONTRATO bingo.swap + ALLOWLIST INICIAL
+# ──────────────────────────────────────────────────────────────────────────────
+SWAP_SRC_HOST="$(pwd)/contracts/swap"
+SWAP_SRC_CONTAINER="/app/contracts/swap"
+
+echo "[*] Deploy do contrato bingo.swap..."
+if [ -f "${SWAP_SRC_HOST}/bingo.swap.wasm" ] && [ -f "${SWAP_SRC_HOST}/bingo.swap.abi" ]; then
+    if cleos set contract bingo.swap "$SWAP_SRC_CONTAINER" \
+            bingo.swap.wasm bingo.swap.abi -p bingo.swap@active; then
+        # eosio.code necessário para emitir inline transfers (addliq/remliq/swap devolvem tokens)
+        cleos set account permission bingo.swap active --add-code \
+            -p bingo.swap@active 2>/dev/null || true
+        echo "[✓] bingo.swap deployado."
+
+        echo "[*] Registrando tokens na allowlist do bingo.swap..."
+        cleos push action bingo.swap addtoken \
+            '{"sym":{"sym":"4,WAX","contract":"eosio.token"}}' \
+            -p bingo.swap@active 2>/dev/null && echo "[✓] WAX adicionado." || \
+            echo "[!] Aviso: addtoken WAX falhou."
+        cleos push action bingo.swap addtoken \
+            '{"sym":{"sym":"4,BINGO","contract":"bingo.token"}}' \
+            -p bingo.swap@active 2>/dev/null && echo "[✓] BINGO adicionado." || \
+            echo "[!] Aviso: addtoken BINGO falhou."
+    else
+        echo "[!] Aviso: deploy do bingo.swap falhou."
+    fi
+else
+    echo "[!] bingo.swap.wasm/bingo.swap.abi não encontrados em ${SWAP_SRC_HOST}"
+    echo "    Compile o contrato e execute novamente."
+fi
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 9. CAPTURA CHAIN_ID
