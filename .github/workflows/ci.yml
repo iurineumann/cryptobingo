@@ -207,7 +207,7 @@ jobs:
         run: pnpm --filter @cryptobingo/frontend dev &
 
       - name: Wait for services to be ready
-        run: sleep 10
+        run: npx wait-on http://127.0.0.1:5173 http://127.0.0.1:3000 --timeout 60000
 
       - name: Run Cypress Tier 1
         run: pnpm --filter @cryptobingo/e2e-ui e2e
@@ -266,8 +266,8 @@ jobs:
       - name: Start frontend dev server in background
         run: pnpm --filter @cryptobingo/frontend dev &
 
-      - name: Wait for frontend and services to be ready
-        run: sleep 15
+      - name: Wait for frontend to be ready
+        run: npx wait-on http://127.0.0.1:5173 --timeout 60000
 
       - name: Run Cypress Tier 2
         run: pnpm --filter @cryptobingo/e2e-ui e2e:tier2

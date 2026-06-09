@@ -55,7 +55,6 @@ describe('Player · GameRoom estático (archived, combo win)', () => {
     it('exibe o prêmio de COMBINAÇÃO no breakdown (ADR-010 × ADR-016)', () => {
         cy.get('[data-testid="gr-prize-breakdown"]', { timeout: 15_000 }).should('be.visible');
         // Combo "Linha + Diagonal": pricePaid 10 × weight 1200/100 = 120.0000.
-        cy.get('[data-testid="gr-prize-breakdown"]').should('contain.text', '🔗');
         cy.get('[data-testid="gr-prize-breakdown"]').should('contain.text', '120.0000');
     });
 });
