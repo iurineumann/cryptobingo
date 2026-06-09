@@ -103,8 +103,8 @@ describe('Admin · Gametypes', () => {
 
             // Selecionar padrão 1 na cláusula 0 (all_of)
             cy.get('[data-testid="gt-combo-clause-0"]').within(() => {
-                cy.contains('button', 'ROW_1').click();
-                cy.contains('button', 'ROW_2').click();
+                cy.get('[data-testid="gt-clause-pattern-1"]').click();
+                cy.get('[data-testid="gt-clause-pattern-2"]').click();
             });
 
             cy.get('[data-testid="gt-combo-add"]').click();
@@ -132,19 +132,13 @@ describe('Admin · Gametypes', () => {
             cy.get('[data-testid="gt-suggest"]').click();
             cy.wait('@calibrateWeights');
 
-            // Após calibração, o input de peso de ROW_1 deve ter valor preenchido
-            cy.get('[data-testid="gt-rule-1"]').find('input[type="number"]').should('have.value').and('not.eq', '');
+            cy.get('[data-testid="gt-rule-1"]').find('input[type="number"]').should('have.value').and('match', /^\d/);
         });
     });
 
     describe('Salvar combos de gametype existente (gt-save-combos)', () => {
         it('entrar em modo edição de combos e salvar chama PUT /metadata', () => {
-            // Botão "Editar Combos" de um gametype existente — não tem testid, usa texto
-            // O componente usa: <button onClick={() => startEditCombinations(gt)}>
-            // Sem data-testid, usamos o texto do botão (exceção justificada: único elemento no row)
-            // RoomsAdmin.tsx linha aprox 1112: t('admin.gametypes_edit_combos_btn')
-            // Como não temos o testid, clickamos no primeiro link de edição de combos
-            cy.contains('button', /editar combos|edit combos|edit combo/i).first().click();
+            cy.get('[data-testid="gt-edit-combos"]').first().click();
 
             // Agora estamos no modo de edição (editComboGtId !== null)
             // O botão gt-save-combos aparece

@@ -782,6 +782,7 @@ export default function GameRoom({
                   {isAdmin && onGoToAdmin && (
                     <button
                       role="menuitem"
+                      data-testid="gr-nav-admin"
                       className="cb-btn cb-btn-ghost cb-btn-sm"
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToAdmin(); }}
@@ -860,7 +861,7 @@ export default function GameRoom({
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number">{lastDrawn ?? '—'}</span>
+                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '—'}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
                   )}

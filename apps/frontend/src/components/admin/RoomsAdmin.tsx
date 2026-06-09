@@ -371,7 +371,7 @@ export default function RoomsAdmin() {
 
             {/* ── Edit Modal ── */}
             {editTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditTarget(null)}>
+                <div data-testid="modal-backdrop" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditTarget(null)}>
                     <div className="cb-card p-6 max-w-lg w-full mx-4 space-y-3" onClick={e => e.stopPropagation()}>
                         <h3 className="font-bold text-sm">{t('admin.rooms_edit_title', { id: editTarget.room_id })}</h3>
                         <div className="grid grid-cols-2 gap-3">
@@ -405,7 +405,7 @@ export default function RoomsAdmin() {
                             <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setEditTarget(null)}>
                                 {t('admin.rooms_cancel')}
                             </button>
-                            <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={handleEdit} disabled={editSubmitting}>
+                            <button data-testid="room-save" className="cb-btn cb-btn-primary cb-btn-sm" onClick={handleEdit} disabled={editSubmitting}>
                                 {editSubmitting ? t('admin.rooms_saving') : t('admin.rooms_save')}
                             </button>
                         </div>

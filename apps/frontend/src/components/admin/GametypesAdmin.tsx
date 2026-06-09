@@ -1023,6 +1023,7 @@ export default function GametypesAdmin() {
                                                     <button
                                                         key={p.pattern_id}
                                                         type="button"
+                                                        data-testid={`gt-clause-pattern-${p.pattern_id}`}
                                                         className={`text-xs px-2 py-0.5 rounded border transition-colors ${
                                                             isSelected
                                                                 ? 'bg-[--cb-brand] text-white border-[--cb-brand]'
@@ -1109,7 +1110,7 @@ export default function GametypesAdmin() {
                                         <span className="text-xs text-[--cb-text-tertiary] ml-2 font-mono">#{gt.gametype_id}</span>
                                     </div>
                                     <div className="flex gap-3">
-                                        <button className="text-xs text-[--cb-brand] hover:underline" onClick={() => startEditCombinations(gt)}>{t('admin.gametypes_edit_combos_btn')}</button>
+                                        <button data-testid="gt-edit-combos" className="text-xs text-[--cb-brand] hover:underline" onClick={() => startEditCombinations(gt)}>{t('admin.gametypes_edit_combos_btn')}</button>
                                         <button className="text-xs text-[--cb-danger] hover:underline" onClick={() => handleDelete(gt.gametype_id)}>{t('admin.gametypes_delete_btn')}</button>
                                     </div>
                                 </div>

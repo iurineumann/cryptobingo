@@ -76,16 +76,12 @@ describe('Admin · Salas (Rooms)', () => {
             cy.get('[data-testid="room-edit-1"]').click();
             // O modal de edição usa um overlay fullscreen — o botão de salvar deve aparecer
             cy.get('[data-testid="rooms-create"]').should('not.exist'); // garantia de escopo
-            // O modal contém campos de edição (sem data-testid específico, mas presença confirma abertura)
-            // Confirmamos pelo texto do botão de salvar que está dentro do modal
-            // (RoomsAdmin.tsx: botão cb-btn-primary dentro do modal de edição)
-            cy.contains('button', /salvar|save/i).should('be.visible');
+            cy.get('[data-testid="room-save"]').should('be.visible');
         });
 
         it('submeter edição chama PUT /metadata e exibe toast de sucesso', () => {
             cy.get('[data-testid="room-edit-1"]').click();
-            // Aguarda o modal aparecer — o botão cb-btn-primary dentro dele
-            cy.contains('button', /salvar|save/i).click();
+            cy.get('[data-testid="room-save"]').click();
 
             cy.wait('@updateMetadata');
             cy.get('[data-testid="rooms-toast-success"]').should('be.visible');
@@ -118,8 +114,7 @@ describe('Admin · Salas (Rooms)', () => {
             cy.get('[data-testid="room-close-1"]').click();
             cy.get('[data-testid="room-close-confirm"]').should('be.visible');
 
-            // Fechar clicando no backdrop (overlay escuro) — click fora do modal-card
-            cy.get('.fixed.inset-0').click({ force: true });
+            cy.get('[data-testid="modal-backdrop"]').click({ force: true });
             cy.get('[data-testid="room-close-confirm"]').should('not.exist');
 
             // Nenhuma chamada ao endpoint /close foi feita
