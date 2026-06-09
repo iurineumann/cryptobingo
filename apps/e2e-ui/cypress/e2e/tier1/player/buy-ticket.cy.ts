@@ -14,6 +14,7 @@
 const FUNDING_GAME = '1717000000000';
 
 function enterFundingRoomAndOpenModal() {
+    cy.mockSocket();
     cy.devLogin('player', 'funding');
     cy.location('pathname', { timeout: 15_000 }).should('eq', '/lobby');
     cy.get('[data-testid="lobby-buy-1"]').click();
