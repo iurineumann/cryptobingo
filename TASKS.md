@@ -17,6 +17,7 @@
 - [x] ABI v2.0 completo e sincronizado — 31 actions, 12 tabelas, 14 structs.
 - [x] Action `sweepggr` no contrato C++ + tabela `ggrpool` + `settreasury` (ADR-005 Fase 4).
 - [x] Contrato `bingo.swap` (DEX x*y=k) — AMM constant-product, allowlist de tokens aprovados (`allowedtoks` + `addtoken`/`deltoken`), 6 actions (addtoken/deltoken/createpool/addliq/remliq/canceldep), tabelas pools/pending/lpbalances/allowedtoks, fee_bps configurável, dead shares anti-manipulation. ADR-018.
+- [x] `bingo.swap` — taxa de serviço por pool (`service_fee_bps`, ADR-019): `setpoolfee` + `settreasury` (treasury=bingo.game); fee deduzida do `amount_in` antes do AMM, enviada inline para treasury; max 500 bps; campanha fee-zero via `setpoolfee(id, 0)`. Phase 2 (descontos por NFT) planejada no ADR-019.
 - [x] `init_dev_env.sh` — conta `bingo.swap` adicionada ao bootstrap; deploy automático do contrato; addtoken WAX+BINGO na allowlist; distribuição de WAX e BINGO ao contrato de swap.
 - [x] `shared-types` — tipos `BlockchainSwapState`, `BlockchainAllowedToken`, `BlockchainSwapPool`, `BlockchainPendingDeposit`, `BlockchainLpBalance` exportados.
 - [x] Harness E2E Suite 9 (`apps/harness/tests/swap.test.ts`) — addtoken → createpool → addliq → swap WAX→BINGO → swap BINGO→WAX → remliq parcial → canceldep + 7 security guards. ADR-018.
