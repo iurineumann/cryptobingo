@@ -782,6 +782,7 @@ export default function GameRoom({
                   {isAdmin && onGoToAdmin && (
                     <button
                       role="menuitem"
+                      data-testid="gr-nav-admin"
                       className="cb-btn cb-btn-ghost cb-btn-sm"
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToAdmin(); }}
