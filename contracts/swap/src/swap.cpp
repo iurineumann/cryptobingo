@@ -73,6 +73,33 @@ namespace swap_contract_ns {
     }
 
     // ──────────────────────────────────────────────
+    // CONFIGURAÇÃO — settreasury / setpoolfee
+    // ──────────────────────────────────────────────
+
+    void swap_contract::settreasury(name account) {
+        require_auth(get_self());
+        check(is_account(account), "conta treasury inválida");
+        swap_state_singleton ss(get_self(), get_self().value);
+        swap_state state = ss.exists() ? ss.get() : swap_state{};
+        state.treasury = account;
+        ss.set(state, get_self());
+    }
+
+    // service_fee_bps é deduzida do amount_in ANTES da fórmula AMM e enviada
+    // à treasury. Assim os provedores de liquidez não são penalizados: o k
+    // só vê o net_in (sem a fee), mantendo a fórmula justa.
+    void swap_contract::setpoolfee(uint64_t pool_id, uint16_t service_fee_bps) {
+        require_auth(get_self());
+        check(service_fee_bps <= 500, "service_fee_bps máximo 500 (5%)");
+        pools_table pools(get_self(), get_self().value);
+        auto it = pools.find(pool_id);
+        check(it != pools.end(), "pool não encontrado");
+        pools.modify(it, same_payer, [&](auto& r) {
+            r.service_fee_bps = service_fee_bps;
+        });
+    }
+
+    // ──────────────────────────────────────────────
     // ALLOWLIST — addtoken / deltoken
     // ──────────────────────────────────────────────
 
@@ -150,13 +177,14 @@ namespace swap_contract_ns {
         ss.set(state, get_self());
 
         pools.emplace(creator, [&](auto& r) {
-            r.pool_id   = pool_id;
-            r.sym_a     = sym_a;
-            r.sym_b     = sym_b;
-            r.reserve_a = 0;
-            r.reserve_b = 0;
-            r.lp_supply = 0;
-            r.fee_bps   = fee_bps;
+            r.pool_id          = pool_id;
+            r.sym_a            = sym_a;
+            r.sym_b            = sym_b;
+            r.reserve_a        = 0;
+            r.reserve_b        = 0;
+            r.lp_supply        = 0;
+            r.fee_bps          = fee_bps;
+            r.service_fee_bps  = 0;  // admin configura via setpoolfee
         });
     }
 
@@ -228,17 +256,39 @@ namespace swap_contract_ns {
                         pool.sym_b.get_symbol()   == quantity.symbol;
             check(is_a || is_b, "token não pertence a este pool");
 
+            // Deduz a service fee do amount_in ANTES da fórmula AMM.
+            // A fee vai para a treasury; o pool só vê o net_in → k não é inflacionado.
+            int64_t service_fee_amount = 0;
+            if (pool.service_fee_bps > 0) {
+                service_fee_amount = (int64_t)((int128_t)quantity.amount * pool.service_fee_bps / 10000);
+            }
+            int64_t net_amount_in = quantity.amount - service_fee_amount;
+            check(net_amount_in > 0, "amount_in insuficiente após dedução da service fee");
+
             int64_t reserve_in  = is_a ? pool.reserve_a : pool.reserve_b;
             int64_t reserve_out = is_a ? pool.reserve_b : pool.reserve_a;
-            int64_t amount_out  = _compute_out(reserve_in, reserve_out, quantity.amount, pool.fee_bps);
+            int64_t amount_out  = _compute_out(reserve_in, reserve_out, net_amount_in, pool.fee_bps);
 
             check(amount_out >= min_out,    "slippage excedido");
             check(amount_out < reserve_out, "liquidez insuficiente para este swap");
 
-            // Salva reservas ANTES de enviar — evita inconsistência em caso de falha da inline action.
-            if (is_a) { pool.reserve_a += quantity.amount; pool.reserve_b -= amount_out; }
-            else       { pool.reserve_b += quantity.amount; pool.reserve_a -= amount_out; }
+            // Salva reservas com net_amount_in ANTES das inline actions.
+            if (is_a) { pool.reserve_a += net_amount_in; pool.reserve_b -= amount_out; }
+            else       { pool.reserve_b += net_amount_in; pool.reserve_a -= amount_out; }
             _save_pool(pool);
+
+            // Envia a service fee para a treasury (se houver).
+            if (service_fee_amount > 0) {
+                swap_state_singleton ss(get_self(), get_self().value);
+                name treasury = ss.exists() ? ss.get().treasury : "bingo.game"_n;
+                action(
+                    permission_level{get_self(), "active"_n},
+                    token_contract,
+                    "transfer"_n,
+                    std::make_tuple(get_self(), treasury, asset{service_fee_amount, quantity.symbol},
+                                    std::string("service fee pool " + std::to_string(pool_id)))
+                ).send();
+            }
 
             extended_symbol sym_out = is_a ? pool.sym_b : pool.sym_a;
             action(

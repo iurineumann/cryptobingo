@@ -23,7 +23,8 @@
       "base": "",
       "fields": [
         { "name": "next_pool_id",  "type": "uint64" },
-        { "name": "next_token_id", "type": "uint64" }
+        { "name": "next_token_id", "type": "uint64" },
+        { "name": "treasury",      "type": "name"   }
       ]
     },
     {
@@ -38,13 +39,14 @@
       "name": "pool_record",
       "base": "",
       "fields": [
-        { "name": "pool_id",   "type": "uint64"          },
-        { "name": "sym_a",     "type": "extended_symbol" },
-        { "name": "sym_b",     "type": "extended_symbol" },
-        { "name": "reserve_a", "type": "int64"           },
-        { "name": "reserve_b", "type": "int64"           },
-        { "name": "lp_supply", "type": "int64"           },
-        { "name": "fee_bps",   "type": "uint16"          }
+        { "name": "pool_id",          "type": "uint64"          },
+        { "name": "sym_a",            "type": "extended_symbol" },
+        { "name": "sym_b",            "type": "extended_symbol" },
+        { "name": "reserve_a",        "type": "int64"           },
+        { "name": "reserve_b",        "type": "int64"           },
+        { "name": "lp_supply",        "type": "int64"           },
+        { "name": "fee_bps",          "type": "uint16"          },
+        { "name": "service_fee_bps",  "type": "uint16"          }
       ]
     },
     {
@@ -63,6 +65,21 @@
       "fields": [
         { "name": "pool_id", "type": "uint64" },
         { "name": "amount",  "type": "int64"  }
+      ]
+    },
+    {
+      "name": "settreasury",
+      "base": "",
+      "fields": [
+        { "name": "account", "type": "name" }
+      ]
+    },
+    {
+      "name": "setpoolfee",
+      "base": "",
+      "fields": [
+        { "name": "pool_id",         "type": "uint64" },
+        { "name": "service_fee_bps", "type": "uint16" }
       ]
     },
     {
@@ -119,8 +136,10 @@
     }
   ],
   "actions": [
-    { "name": "addtoken",   "type": "addtoken",   "ricardian_contract": "" },
-    { "name": "deltoken",   "type": "deltoken",   "ricardian_contract": "" },
+    { "name": "settreasury", "type": "settreasury", "ricardian_contract": "" },
+    { "name": "setpoolfee",  "type": "setpoolfee",  "ricardian_contract": "" },
+    { "name": "addtoken",    "type": "addtoken",    "ricardian_contract": "" },
+    { "name": "deltoken",    "type": "deltoken",    "ricardian_contract": "" },
     { "name": "createpool", "type": "createpool", "ricardian_contract": "" },
     { "name": "addliq",     "type": "addliq",     "ricardian_contract": "" },
     { "name": "remliq",     "type": "remliq",     "ricardian_contract": "" },
