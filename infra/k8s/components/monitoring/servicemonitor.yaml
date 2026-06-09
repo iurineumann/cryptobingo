@@ -1,0 +1,17 @@
+# ServiceMonitor para Prometheus Operator coletar métricas dos pods Node.js
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cryptobingo-metrics
+  namespace: cryptobingo
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: cryptobingo
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

@@ -1,0 +1,23 @@
+# RBAC mínimo: os pods da aplicação não precisam de acesso à API do Kubernetes.
+# ServiceAccounts já criados nos respectivos deployments com automountServiceAccountToken: false.
+# Este arquivo cria um ClusterRole de leitura para o Prometheus ServiceMonitor.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cryptobingo-metrics-reader
+rules:
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cryptobingo-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cryptobingo-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-server
+    namespace: monitoring
