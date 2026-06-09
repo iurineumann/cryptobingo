@@ -323,6 +323,7 @@ export interface BlockchainDropState {
 export interface BlockchainSwapState {
     next_pool_id:  string; // uint64 como string
     next_token_id: string; // uint64 como string
+    treasury:      string; // name — conta que recebe as service fees (default: bingo.game)
 }
 
 /** Espelha a tabela `allowedtoks` do swap.hpp. Scope: get_self(). */
@@ -339,13 +340,14 @@ export interface BlockchainAllowedToken {
  * sym_a tem menor symbol_code.raw() que sym_b (ordem canônica).
  */
 export interface BlockchainSwapPool {
-    pool_id:   string; // uint64 como string
-    sym_a:     { sym: string; contract: string };
-    sym_b:     { sym: string; contract: string };
-    reserve_a: string; // int64 como string — unidades mínimas do token A
-    reserve_b: string; // int64 como string — unidades mínimas do token B
-    lp_supply: string; // int64 como string — total LP emitido
-    fee_bps:   number; // uint16 — taxa de swap em bps (30 = 0.30%)
+    pool_id:          string; // uint64 como string
+    sym_a:            { sym: string; contract: string };
+    sym_b:            { sym: string; contract: string };
+    reserve_a:        string; // int64 como string — unidades mínimas do token A
+    reserve_b:        string; // int64 como string — unidades mínimas do token B
+    lp_supply:        string; // int64 como string — total LP emitido
+    fee_bps:          number; // uint16 — taxa LP em bps (30 = 0.30%), fica no pool
+    service_fee_bps:  number; // uint16 — taxa de serviço em bps, vai para treasury (ADR-019)
 }
 
 /**
