@@ -471,5 +471,107 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
                 }),
             ).rejects.toThrow();
         });
+
+        it('setpoolfee por não-admin é rejeitado', async () => {
+            await expect(
+                transact(playerSession, 'bingo.swap', 'setpoolfee', {
+                    pool_id:         poolId,
+                    service_fee_bps: 100,
+                }),
+            ).rejects.toThrow();
+        });
+
+        it('settreasury por não-admin é rejeitado', async () => {
+            await expect(
+                transact(playerSession, 'bingo.swap', 'settreasury', {
+                    account: 'jogador1',
+                }),
+            ).rejects.toThrow();
+        });
+
+        it('setpoolfee acima de 500 bps é rejeitado', async () => {
+            await expect(
+                transact(swapSession, 'bingo.swap', 'setpoolfee', {
+                    pool_id:         poolId,
+                    service_fee_bps: 501,
+                }),
+            ).rejects.toThrow();
+        });
+    });
+
+    // ── Passo 10 — service fee ────────────────────────────────────────────────
+    describe('Passo 10 — service_fee: settreasury + setpoolfee + dedução no swap', () => {
+
+        it('settreasury define bingo.game como treasury', async () => {
+            await transact(swapSession, 'bingo.swap', 'settreasury', {
+                account: 'bingo.game',
+            });
+            // Lê swapstate para confirmar
+            const rows = await getRows<{ next_pool_id: string; treasury: string }>(
+                'swapstate', 'bingo.swap',
+            );
+            expect(rows[0]?.treasury).toBe('bingo.game');
+        });
+
+        it('setpoolfee 100 bps (1%) configura service fee do pool', async () => {
+            await transact(swapSession, 'bingo.swap', 'setpoolfee', {
+                pool_id:         poolId,
+                service_fee_bps: 100,
+            });
+            const pool = await getPool(poolId);
+            expect(pool!.service_fee_bps).toBe(100);
+        });
+
+        it('swap WAX→BINGO com service_fee=1%: treasury recebe ~1% do input em WAX', async () => {
+            const SWAP_WAX = 1000_0000; // 100.0000 WAX em unidades mínimas
+            const SWAP_QTY = '100.0000 WAX';
+            const expectedFee = Math.floor(SWAP_WAX * 100 / 10000); // 1% = 10000 units = 1 WAX
+
+            // Saldo WAX da treasury (bingo.game) antes do swap
+            const treasuryBefore = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            const poolBefore = await getPool(poolId);
+            const k0 = Number(poolBefore!.reserve_a) * Number(poolBefore!.reserve_b);
+
+            await transact(playerSession, 'eosio.token', 'transfer', {
+                from:     'jogador1',
+                to:       'bingo.swap',
+                quantity: SWAP_QTY,
+                memo:     `swap,${poolId},0,jogador1`,
+            });
+
+            const treasuryAfter = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            // Treasury deve ter recebido exatamente a service fee
+            expect(treasuryAfter - treasuryBefore).toBeCloseTo(expectedFee, -2);
+
+            // Pool usa net_amount_in (sem a fee) → k ainda cresce, mas menos que sem service fee
+            const poolAfter = await getPool(poolId);
+            const k1 = Number(poolAfter!.reserve_a) * Number(poolAfter!.reserve_b);
+            expect(k1).toBeGreaterThanOrEqual(k0);
+
+            // reserve_a cresceu apenas pelo net_in (não pelo input total)
+            const expectedNetIn = SWAP_WAX - expectedFee;
+            expect(Number(poolAfter!.reserve_a) - Number(poolBefore!.reserve_a))
+                .toBe(expectedNetIn);
+        });
+
+        it('setpoolfee 0 desativa service fee (campanha fee-zero)', async () => {
+            await transact(swapSession, 'bingo.swap', 'setpoolfee', {
+                pool_id:         poolId,
+                service_fee_bps: 0,
+            });
+            const pool = await getPool(poolId);
+            expect(pool!.service_fee_bps).toBe(0);
+
+            // Swap sem service fee: treasury não recebe nada a mais
+            const treasuryBefore = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            await transact(playerSession, 'eosio.token', 'transfer', {
+                from:     'jogador1',
+                to:       'bingo.swap',
+                quantity: '10.0000 WAX',
+                memo:     `swap,${poolId},0,jogador1`,
+            });
+            const treasuryAfter = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            expect(treasuryAfter).toBe(treasuryBefore); // nenhuma fee transferida
+        });
     });
 });

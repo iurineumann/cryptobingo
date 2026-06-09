@@ -592,6 +592,22 @@ if [ -f "${SWAP_SRC_HOST}/bingo.swap.wasm" ] && [ -f "${SWAP_SRC_HOST}/bingo.swa
             '{"sym":{"sym":"4,BINGO","contract":"bingo.token"}}' \
             -p bingo.swap@active 2>/dev/null && echo "[✓] BINGO adicionado." || \
             echo "[!] Aviso: addtoken BINGO falhou."
+
+        # Configura treasury das service fees (ADR-019)
+        cleos push action bingo.swap settreasury \
+            '{"account":"bingo.game"}' \
+            -p bingo.swap@active 2>/dev/null && echo "[✓] Treasury configurado (bingo.game)." || \
+            echo "[!] Aviso: settreasury falhou."
+
+        # Cria pool padrão WAX/BINGO (fee LP 0.30%) e configura service fee 1%
+        cleos push action bingo.swap createpool \
+            '{"creator":"bingo.swap","sym_a":{"sym":"4,WAX","contract":"eosio.token"},"sym_b":{"sym":"4,BINGO","contract":"bingo.token"},"fee_bps":30}' \
+            -p bingo.swap@active 2>/dev/null && echo "[✓] Pool WAX/BINGO criado (pool_id=1)." || \
+            echo "[!] Aviso: createpool falhou (pool pode já existir)."
+        cleos push action bingo.swap setpoolfee \
+            '{"pool_id":1,"service_fee_bps":100}' \
+            -p bingo.swap@active 2>/dev/null && echo "[✓] Service fee 1% configurada no pool 1." || \
+            echo "[!] Aviso: setpoolfee falhou."
     else
         echo "[!] Aviso: deploy do bingo.swap falhou."
     fi
