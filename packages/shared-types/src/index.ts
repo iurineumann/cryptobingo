@@ -314,3 +314,53 @@ export interface BlockchainDropState {
     next_alloc_id:         string;
     player_base_chance_bps: number; // Chance base por jogador (default 5000 = 50%)
 }
+
+// ── bingo.swap — Tipos On-Chain (ADR-018) ─────────────────────────────────────
+// Correspondem às tabelas swapstate, allowedtoks, pools, pending e lpbalances
+// definidas em contracts/swap/include/swap.hpp.
+
+/** Espelha o singleton `swapstate` do swap.hpp. Scope: get_self(). */
+export interface BlockchainSwapState {
+    next_pool_id:  string; // uint64 como string
+    next_token_id: string; // uint64 como string
+}
+
+/** Espelha a tabela `allowedtoks` do swap.hpp. Scope: get_self(). */
+export interface BlockchainAllowedToken {
+    id:  string;          // uint64 como string
+    sym: {
+        sym:      string; // ex: "4,WAX"
+        contract: string; // ex: "eosio.token"
+    };
+}
+
+/**
+ * Espelha a tabela `pools` do swap.hpp. Scope: get_self(). Primary Key: pool_id.
+ * sym_a tem menor symbol_code.raw() que sym_b (ordem canônica).
+ */
+export interface BlockchainSwapPool {
+    pool_id:   string; // uint64 como string
+    sym_a:     { sym: string; contract: string };
+    sym_b:     { sym: string; contract: string };
+    reserve_a: string; // int64 como string — unidades mínimas do token A
+    reserve_b: string; // int64 como string — unidades mínimas do token B
+    lp_supply: string; // int64 como string — total LP emitido
+    fee_bps:   number; // uint16 — taxa de swap em bps (30 = 0.30%)
+}
+
+/**
+ * Espelha a tabela `pending` do swap.hpp. Scope: account.
+ * deposit_a.quantity.amount == "0" se o token A ainda não foi depositado.
+ */
+export interface BlockchainPendingDeposit {
+    pool_id:    string; // uint64 como string
+    deposit_a:  ExtendedAsset;
+    deposit_b:  ExtendedAsset;
+    expires_at: number; // Unix timestamp (seconds)
+}
+
+/** Espelha a tabela `lpbalances` do swap.hpp. Scope: account. */
+export interface BlockchainLpBalance {
+    pool_id: string; // uint64 como string
+    amount:  string; // int64 como string
+}
