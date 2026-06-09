@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-game-loop
+  namespace: cryptobingo
+  labels:
+    app: worker-game-loop
+    app.kubernetes.io/part-of: cryptobingo
+spec:
+  # Worker processa jogos sequencialmente via RabbitMQ; múltiplas réplicas são seguras
+  # porque cada worker consome mensagens distintas (at-least-once + idempotência no contrato).
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker-game-loop
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: worker-game-loop
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: cryptobingo-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker-game-loop
+          image: cryptobingo/worker-game-loop:latest
+          imagePullPolicy: Always
+          ports:
+            - name: ws
+              containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: cryptobingo-config
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-secrets
+                  key: JWT_SECRET
+            - name: CONTRACT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-secrets
+                  key: CONTRACT_PRIVATE_KEY
+            - name: MICROSERVICE_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-secrets
+                  key: MICROSERVICE_PRIVATE_KEY
+            - name: MONGO_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-db-urls
+                  key: MONGO_URL
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-db-urls
+                  key: POSTGRES_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-db-urls
+                  key: REDIS_URL
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cryptobingo-db-urls
+                  key: RABBITMQ_URL
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: worker-game-loop
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cryptobingo-worker
+  namespace: cryptobingo
+  labels:
+    app: worker-game-loop
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker-svc
+  namespace: cryptobingo
+  labels:
+    app: worker-game-loop
+spec:
+  selector:
+    app: worker-game-loop
+  ports:
+    - name: ws
+      port: 8081
+      targetPort: ws
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-hpa
+  namespace: cryptobingo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker-game-loop
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

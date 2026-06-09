@@ -1,0 +1,170 @@
+{
+  "version": "eosio::abi/1.2",
+  "types": [],
+  "structs": [
+    {
+      "name": "extended_symbol",
+      "base": "",
+      "fields": [
+        { "name": "sym",      "type": "symbol" },
+        { "name": "contract", "type": "name"   }
+      ]
+    },
+    {
+      "name": "extended_asset",
+      "base": "",
+      "fields": [
+        { "name": "quantity", "type": "asset" },
+        { "name": "contract", "type": "name"  }
+      ]
+    },
+    {
+      "name": "swap_state",
+      "base": "",
+      "fields": [
+        { "name": "next_pool_id",  "type": "uint64" },
+        { "name": "next_token_id", "type": "uint64" }
+      ]
+    },
+    {
+      "name": "allowed_token",
+      "base": "",
+      "fields": [
+        { "name": "id",  "type": "uint64"          },
+        { "name": "sym", "type": "extended_symbol" }
+      ]
+    },
+    {
+      "name": "pool_record",
+      "base": "",
+      "fields": [
+        { "name": "pool_id",   "type": "uint64"          },
+        { "name": "sym_a",     "type": "extended_symbol" },
+        { "name": "sym_b",     "type": "extended_symbol" },
+        { "name": "reserve_a", "type": "int64"           },
+        { "name": "reserve_b", "type": "int64"           },
+        { "name": "lp_supply", "type": "int64"           },
+        { "name": "fee_bps",   "type": "uint16"          }
+      ]
+    },
+    {
+      "name": "pending_deposit",
+      "base": "",
+      "fields": [
+        { "name": "pool_id",    "type": "uint64"         },
+        { "name": "deposit_a",  "type": "extended_asset" },
+        { "name": "deposit_b",  "type": "extended_asset" },
+        { "name": "expires_at", "type": "uint32"         }
+      ]
+    },
+    {
+      "name": "lp_balance",
+      "base": "",
+      "fields": [
+        { "name": "pool_id", "type": "uint64" },
+        { "name": "amount",  "type": "int64"  }
+      ]
+    },
+    {
+      "name": "addtoken",
+      "base": "",
+      "fields": [
+        { "name": "sym", "type": "extended_symbol" }
+      ]
+    },
+    {
+      "name": "deltoken",
+      "base": "",
+      "fields": [
+        { "name": "sym", "type": "extended_symbol" }
+      ]
+    },
+    {
+      "name": "createpool",
+      "base": "",
+      "fields": [
+        { "name": "creator", "type": "name"            },
+        { "name": "sym_a",   "type": "extended_symbol" },
+        { "name": "sym_b",   "type": "extended_symbol" },
+        { "name": "fee_bps", "type": "uint16"          }
+      ]
+    },
+    {
+      "name": "addliq",
+      "base": "",
+      "fields": [
+        { "name": "provider", "type": "name"   },
+        { "name": "pool_id",  "type": "uint64" },
+        { "name": "min_lp",   "type": "int64"  }
+      ]
+    },
+    {
+      "name": "remliq",
+      "base": "",
+      "fields": [
+        { "name": "provider",  "type": "name"   },
+        { "name": "pool_id",   "type": "uint64" },
+        { "name": "lp_amount", "type": "int64"  },
+        { "name": "min_a",     "type": "int64"  },
+        { "name": "min_b",     "type": "int64"  }
+      ]
+    },
+    {
+      "name": "canceldep",
+      "base": "",
+      "fields": [
+        { "name": "provider", "type": "name"   },
+        { "name": "pool_id",  "type": "uint64" }
+      ]
+    }
+  ],
+  "actions": [
+    { "name": "addtoken",   "type": "addtoken",   "ricardian_contract": "" },
+    { "name": "deltoken",   "type": "deltoken",   "ricardian_contract": "" },
+    { "name": "createpool", "type": "createpool", "ricardian_contract": "" },
+    { "name": "addliq",     "type": "addliq",     "ricardian_contract": "" },
+    { "name": "remliq",     "type": "remliq",     "ricardian_contract": "" },
+    { "name": "canceldep",  "type": "canceldep",  "ricardian_contract": "" }
+  ],
+  "tables": [
+    {
+      "name":       "swapstate",
+      "index_type": "i64",
+      "key_names":  [],
+      "key_types":  [],
+      "type":        "swap_state"
+    },
+    {
+      "name":       "allowedtoks",
+      "index_type": "i64",
+      "key_names":  ["id"],
+      "key_types":  ["uint64"],
+      "type":        "allowed_token"
+    },
+    {
+      "name":       "pools",
+      "index_type": "i64",
+      "key_names":  ["pool_id"],
+      "key_types":  ["uint64"],
+      "type":        "pool_record"
+    },
+    {
+      "name":       "pending",
+      "index_type": "i64",
+      "key_names":  ["pool_id"],
+      "key_types":  ["uint64"],
+      "type":        "pending_deposit"
+    },
+    {
+      "name":       "lpbalances",
+      "index_type": "i64",
+      "key_names":  ["pool_id"],
+      "key_types":  ["uint64"],
+      "type":        "lp_balance"
+    }
+  ],
+  "ricardian_clauses": [],
+  "error_messages":    [],
+  "abi_extensions":    [],
+  "variants":          []
+}

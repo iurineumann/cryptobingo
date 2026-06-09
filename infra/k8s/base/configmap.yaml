@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cryptobingo-config
+  namespace: cryptobingo
+data:
+  NODE_ENV: "production"
+  PORT: "8080"
+  WS_PORT: "8081"
+  METRICS_PORT: "9090"
+  RPC_URL: "https://wax.greymass.com"
+  CHAIN_ID: "1064487b3cd1a897ce03ae5b6a865651747e2e152090f99c1d19d44e01aea5a4"
+  CONTRACT_ACCOUNT: "bingo.game"
+  VERIFY_KEY_ONCHAIN: "true"
+  AUTO_LOCK_DELAY_SEC: "300"
+  DROP_PROCESS_TTL_SEC: "600"
+  GOLDEN_BALL_PAUSE_MS: "3000"
+  STAGE_PAUSE_MS: "2000"
+  REVEAL_INTERVAL: "3000"
+  INDEXER_INTERVAL_MS: "2000"
+  RABBITMQ_MAX_RETRIES: "5"
+  WS_MAX_CONNECTIONS_PER_IP: "10"
+  ALLOWED_ORIGINS: "https://cryptobingo.io,https://www.cryptobingo.io"
