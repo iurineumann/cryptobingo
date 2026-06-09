@@ -16,7 +16,7 @@
 - [x] Actions de drop vault no contrato C++: `allocatedrop`, `deallocdrop`, `reclaimasset`, `execdrop` + `on_notify` para token deposits (memo 'vault') e NFT transfers (atomicassets).
 - [x] ABI v2.0 completo e sincronizado — 31 actions, 12 tabelas, 14 structs.
 - [x] Action `sweepggr` no contrato C++ + tabela `ggrpool` + `settreasury` (ADR-005 Fase 4).
-- [ ] Contrato `bingo.swap` (DEX x*y=k).
+- [x] Contrato `bingo.swap` (DEX x*y=k) — AMM constant-product, 4 actions (createpool/addliq/remliq/canceldep), tabelas pools/pending/lpbalances, fee_bps configurável, dead shares anti-manipulation. ADR-018.
 
 ## Épico 2: API Gateway & Infraestrutura Off-Chain
 - [x] Express + MongoDB + PostgreSQL + Redis.
@@ -95,6 +95,7 @@
 - [x] Testes api-gateway (Jest) — 105 testes: authController (func + security + onchain), roomController, monteCarloController, statisticsController (func + security), winningsController, dropController.security, auth.security, rateLimiter.security, helmet.security.
 - [x] Testes worker-game-loop (Jest) — 92 testes: evaluator.drawmodes, gameOrchestrator, rabbitmq, roomManager, invertedIndex.
 - [x] CI/CD — `.github/workflows/ci.yml` (GitHub Actions: unit + frontend + E2E DUNE manual).
+- [x] K8s hardening — `infra/k8s/`: namespace, secrets template, configmap, RBAC mínimo, NetworkPolicies (default-deny + regras por serviço), Deployments com securityContext (runAsNonRoot/readOnly/drop ALL caps), HPA (api+worker+frontend), PodDisruptionBudget, Ingress TLS+rate-limit, ServiceMonitor Prometheus, overlays dev/prod (Kustomize).
 - [x] Testes de carga k6 — `tests/k6/smoke.js` + `tests/k6/load.js`.
 - [x] `NftAdmin.tsx` + `TokenAdmin.tsx` — painéis de assets na seção 'assets' do AdminLayout.
 - [x] `healthController.ts` — probes Kubernetes `/health/live` e `/health/ready` (5 testes).

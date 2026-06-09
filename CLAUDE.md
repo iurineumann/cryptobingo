@@ -117,10 +117,10 @@ Use a skill `e2e-ui-cypress` (procedimentos + gotchas) e o revisor `e2e-reviewer
 
 ## Git flow
 
-- Branch de feature `feature/<slug>` a partir da branch de integração ativa. Commits lógicos e
-  pequenos, mensagem PT-BR no padrão `tipo(escopo): ...`, terminando com
-  `Co-Authored-By: Claude ...`. PR com corpo estruturado → branch de integração (o `develop` foi
-  removido; confirme o alvo com `git ls-remote --heads origin`). Branch principal: `master`.
+- Branch de feature `feature/<slug>` a partir de **`develop`**. Commits lógicos e pequenos,
+  mensagem PT-BR no padrão `tipo(escopo): ...`, terminando com `Co-Authored-By: Claude ...`.
+  PR com corpo estruturado → **`develop`** (branch de integração). `master` recebe apenas PRs
+  de `develop` quando estável. Branch principal: `master`.
 - Pré-PR: typecheck + testes dos pacotes tocados verdes. Toda mudança estrutural → ADR em `docs/adr/`.
 
 ## Skills & Agents do projeto (`.claude/`)
