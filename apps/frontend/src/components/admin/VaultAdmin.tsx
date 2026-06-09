@@ -238,7 +238,7 @@ export default function VaultAdmin(_props: VaultAdminProps) {
                                     <span className="font-bold text-[--cb-text-primary]">Alloc #{a.alloc_id}</span>
                                     {statusBadge(a.status)}
                                 </div>
-                                <span className="font-mono text-xs text-[--cb-text-tertiary">{a.owner}</span>
+                                <span className="font-mono text-xs text-[--cb-text-tertiary]">{a.owner}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div className="bg-[--cb-bg-surface] p-2 rounded">

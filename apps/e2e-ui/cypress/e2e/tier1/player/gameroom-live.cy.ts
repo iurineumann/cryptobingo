@@ -32,9 +32,9 @@ describe('Player · GameRoom ao vivo (socket mock)', () => {
     });
 
     it('atualiza a bola hero ao emitir ball_drawn', () => {
-        cy.get('[data-testid="gr-ball-hero"] .ball-number').should('contain.text', '—');
+        cy.get('[data-testid="gr-ball-hero-number"]').should('contain.text', '—');
         cy.emitBall(42);
-        cy.get('[data-testid="gr-ball-hero"] .ball-number', { timeout: 10_000 })
+        cy.get('[data-testid="gr-ball-hero-number"]', { timeout: 10_000 })
             .should('contain.text', '42');
     });
 
