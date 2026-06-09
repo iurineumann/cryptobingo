@@ -126,4 +126,9 @@ cobrindo os 64 bits completos de cada campo — sem colisão possível entre con
 - A API-gateway pode chamar `on_transfer` indiretamente via cleos/Wharfkit para facilitar swaps
   no fluxo de compra de cartelas.
 - Integração com o frontend fica fora do escopo desta ADR (ADR-019 se necessário).
-- Harness E2E: Suite 9 (a criar) valida addtoken → createpool → addliq → swap → remliq.
+- Harness E2E: Suite 9 (`apps/harness/tests/swap.test.ts`) valida addtoken → createpool →
+  addliq → swap WAX→BINGO → swap BINGO→WAX → remliq parcial → canceldep + 7 security guards.
+- `init_dev_env.sh` cria conta `bingo.swap`, deploya o contrato e registra WAX+BINGO na allowlist
+  automaticamente no bootstrap completo do ambiente de desenvolvimento.
+- `shared-types` exporta `BlockchainSwapState`, `BlockchainAllowedToken`, `BlockchainSwapPool`,
+  `BlockchainPendingDeposit`, `BlockchainLpBalance` para uso cross-package.
