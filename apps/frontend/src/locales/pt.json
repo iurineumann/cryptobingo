@@ -262,7 +262,17 @@
     "cost_preview": "Custo: {{total}}",
     "closes_in": "Vendas encerram em {{time}}",
     "closes_soon": "Vendas encerram em breve!",
-    "sales_closed": "🔒 Vendas encerradas"
+    "sales_closed": "🔒 Vendas encerradas",
+    "swap_currency_label": "Pagar com",
+    "swap_quote_loading": "Calculando cotação...",
+    "swap_you_send": "Você envia",
+    "swap_service_fee": "Taxa de serviço + LP",
+    "swap_price_impact": "Impacto no pool",
+    "swap_quote_expires": "Cotação expira em",
+    "swap_quote_expired": "Cotação expirada — aguarde recálculo",
+    "swap_cost_preview": "Custo: {{roomTotal}} (≈ {{altAmount}})",
+    "swap_via": "Via swap",
+    "error_slippage": "Variação de preço excessiva. Tente novamente."
   },
   "admin": {
     "dashboard": "Dashboard",

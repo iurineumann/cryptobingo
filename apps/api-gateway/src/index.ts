@@ -52,6 +52,7 @@ import {
     listAllocations,
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
+import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 
 dotenv.config();
 
@@ -272,6 +273,10 @@ function registerRoutes(): void {
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
     app.post('/api/v1/player/winnings/batch', playerLimiter, requireAuth, getPlayerWinningsBatch);
+
+    // ── Swap Quote (ADR-021) — público, somente leitura ──────────────────
+    app.get('/api/v1/swap/pools',  playerLimiter, listSwapPools);
+    app.get('/api/v1/swap/quote',  playerLimiter, getSwapQuote);
 
     // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
     app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);
