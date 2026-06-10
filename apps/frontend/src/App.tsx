@@ -390,6 +390,18 @@ function AppRoot() {
                         </button>
                     )}
 
+                    {import.meta.env.VITE_SWAP_URL && (
+                        <a
+                            href={import.meta.env.VITE_SWAP_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="cb-btn cb-btn-outline cb-btn-sm"
+                            data-testid="nav-swap-link"
+                        >
+                            Swap ↗
+                        </a>
+                    )}
+
                     <select
                         value={i18n.language}
                         onChange={(e) => handleLanguageChange(e.target.value)}
