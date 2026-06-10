@@ -861,6 +861,90 @@ paths:
           description: Jogo não encontrado on-chain
 
   # ══════════════════════════════════════════
+  # SWAP QUOTE — ADR-021 (Checkout Multi-Moeda)
+  # ══════════════════════════════════════════
+  /swap/pools:
+    get:
+      summary: Lista pools ativas do bingo.swap
+      description: >
+        Retorna pools AMM ativas com reservas e taxas. Cache de 10s no servidor.
+        Usado pelo BuyTicketModal para filtrar tokens alternativos disponíveis.
+      tags: [Swap]
+      parameters: []
+      responses:
+        '200':
+          description: Lista de pools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SwapPoolSummary'
+        '502':
+          description: Falha ao ler pools do nodeos
+
+  /swap/quote:
+    get:
+      summary: Cotação para swap de moeda alternativa na compra de cartelas
+      description: >
+        Dado o custo total em moeda da sala (`amount_out`) e um par de tokens,
+        calcula quantos tokens alternativos o usuário precisa enviar (`amount_in`)
+        usando a fórmula reverse AMM: considera `fee_bps` (LP) e `service_fee_bps`.
+        TTL limitado por `min(30s, game_end_time - now - 5s)`.
+        A transação é construída e assinada pelo cliente via Wharfkit — este endpoint
+        é somente-leitura e não custodia fundos.
+      tags: [Swap]
+      parameters:
+        - in: query
+          name: from_contract
+          required: true
+          schema: { type: string }
+          description: Contrato do token de origem (ex. "bingo.token")
+        - in: query
+          name: from_symbol
+          required: true
+          schema: { type: string }
+          description: Símbolo com precisão (ex. "4,BINGO")
+        - in: query
+          name: to_contract
+          required: true
+          schema: { type: string }
+          description: Contrato do token de destino
+        - in: query
+          name: to_symbol
+          required: true
+          schema: { type: string }
+          description: Símbolo com precisão do token de destino
+        - in: query
+          name: amount_out
+          required: true
+          schema: { type: string }
+          description: Unidades mínimas do token de destino desejado (custo total das cartelas)
+        - in: query
+          name: game_end_time
+          required: false
+          schema: { type: integer }
+          description: Unix timestamp (segundos) do fim do funding — limita TTL da cotação
+      responses:
+        '200':
+          description: Cotação calculada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwapQuote'
+        '400':
+          description: Parâmetros obrigatórios ausentes ou amount_out inválido
+        '404':
+          description: Par de tokens sem pool disponível
+        '422':
+          description: Liquidez insuficiente para o volume solicitado
+        '502':
+          description: Falha ao ler estado do nodeos
+
+  # ══════════════════════════════════════════
   # DROP VAULT (ADR-011)
   # ══════════════════════════════════════════
   /vault/deposits:
@@ -1400,3 +1484,45 @@ components:
         clauses:
           type: array
           items: { $ref: '#/components/schemas/CombinationClauseInput' }
+
+    SwapPoolSummary:
+      type: object
+      description: Pool AMM resumida do bingo.swap (ADR-021)
+      properties:
+        pool_id:         { type: string, description: "uint64 como string" }
+        token_a:
+          type: object
+          properties:
+            contract:  { type: string }
+            symbol:    { type: string }
+            precision: { type: integer }
+        token_b:
+          type: object
+          properties:
+            contract:  { type: string }
+            symbol:    { type: string }
+            precision: { type: integer }
+        reserve_a:       { type: string, description: "int64 como string" }
+        reserve_b:       { type: string, description: "int64 como string" }
+        fee_bps:         { type: integer, description: "Taxa LP em bps (30 = 0.30%)" }
+        service_fee_bps: { type: integer, description: "Taxa de serviço em bps — ADR-019" }
+
+    SwapQuote:
+      type: object
+      description: Cotação para swap de moeda alternativa (ADR-021)
+      properties:
+        quote_id:           { type: string, description: "UUID — rastreabilidade" }
+        pool_id:            { type: string }
+        from_contract:      { type: string }
+        from_symbol:        { type: string }
+        to_contract:        { type: string }
+        to_symbol:          { type: string }
+        amount_in:          { type: string, description: "Unidades mínimas a enviar" }
+        amount_in_display:  { type: string, description: "Ex: '123.4567 BINGO'" }
+        amount_out:         { type: string, description: "Unidades mínimas a receber" }
+        amount_out_display: { type: string, description: "Ex: '10.00000000 WAX'" }
+        min_out:            { type: string, description: "amount_out com slippage 0.5%" }
+        fee_bps:            { type: integer }
+        service_fee_bps:    { type: integer }
+        price_impact_pct:   { type: number, description: "Impacto no pool em %" }
+        expires_at:         { type: integer, description: "Unix timestamp (seconds)" }
