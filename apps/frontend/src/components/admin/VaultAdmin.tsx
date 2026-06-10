@@ -114,7 +114,6 @@ export default function VaultAdmin(_props: VaultAdminProps) {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.vault_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">{t('admin.vault_desc')}</p>
 
             {error && (

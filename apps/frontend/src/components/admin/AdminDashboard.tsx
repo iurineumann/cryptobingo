@@ -66,7 +66,6 @@ export default function AdminDashboard({ session }: AdminDashboardProps = {}) {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.dash_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">{t('admin.dash_subtitle')}</p>
 
             {loading ? (

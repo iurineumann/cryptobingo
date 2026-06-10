@@ -230,7 +230,6 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
             {/* Header */}
             <div className="flex items-baseline justify-between mb-1 gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('admin.token_title')}</h2>
                     <p className="text-sm text-[--cb-text-tertiary]">
                         {t('admin.token_desc')} ·{' '}
                         <span className="font-mono text-[--cb-brand]">{TOKEN_CONTRACT}</span>
