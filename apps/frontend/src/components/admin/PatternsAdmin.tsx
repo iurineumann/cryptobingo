@@ -239,7 +239,6 @@ export default function PatternsAdmin() {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.patterns_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">
                 {t('admin.patterns_desc')}
             </p>

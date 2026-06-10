@@ -310,7 +310,6 @@ export default function NftAdmin({ session }: NftAdminProps) {
         <div>
             <div className="flex items-baseline justify-between mb-1 gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('admin.nft_title')}</h2>
                     <p className="text-sm text-[--cb-text-tertiary]">
                         {t('admin.nft_desc')} · {t('admin.nft_collection_label')}: <span className="font-mono text-[--cb-brand]">{COLLECTION}</span>
                     </p>
