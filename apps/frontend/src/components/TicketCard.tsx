@@ -7,6 +7,11 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BINGO_COLORS, COLS, type Pattern } from './ticketUtils';
 
+interface CompletedComboInfo {
+  name:   string;
+  weight: number; // hundredths (100 = 1.00x)
+}
+
 interface TicketCardProps {
   ticketId:               string;
   matrix:                 number[];
@@ -16,7 +21,7 @@ interface TicketCardProps {
   prize:                  string | null;
   density:                'comfortable' | 'compact';
   patterns:               Pattern[];
-  completedCombinations?: string[];
+  completedCombinations?: CompletedComboInfo[];
   pricePaid?:             string;  // preço pago por esta cartela (ADR-010)
 }
 
@@ -127,20 +132,30 @@ export function TicketCard({
         </div>
       </div>
 
-      {(completedPatterns.length > 0 || (completedCombinations && completedCombinations.length > 0)) && (
-        <div className="gr-ticket-patterns">
-          {completedPatterns.map(p => (
-            <span key={p.name} className="gr-ticket-pattern-badge">
-              <span>⭐</span>{p.name}
+      {(() => {
+        // max_weight (ADR-005): exibe apenas a entrada de maior peso
+        let best: { label: string; isCombo: boolean } | null = null;
+        let bestMultiplier = 0;
+        for (const p of completedPatterns) {
+          const m = parseFloat(p.prize) || 0;
+          if (m > bestMultiplier) { bestMultiplier = m; best = { label: p.name, isCombo: false }; }
+        }
+        for (const c of completedCombinations ?? []) {
+          const m = c.weight / 100;
+          if (m > bestMultiplier) { bestMultiplier = m; best = { label: c.name, isCombo: true }; }
+        }
+        if (!best) return null;
+        return (
+          <div className="gr-ticket-patterns">
+            <span
+              key={best.label}
+              className={`gr-ticket-pattern-badge${best.isCombo ? ' gr-ticket-combo-badge' : ''}`}
+            >
+              <span>{best.isCombo ? '🔗' : '⭐'}</span>{best.label}
             </span>
-          ))}
-          {completedCombinations?.map(name => (
-            <span key={`combo:${name}`} className="gr-ticket-pattern-badge gr-ticket-combo-badge">
-              <span>🔗</span>{name}
-            </span>
-          ))}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       <div className="gr-ticket-foot">
         <span className="best">
