@@ -736,7 +736,7 @@ _upsert_env "$F" "CONTRACT_ACCOUNT"         "bingo.game"
 _upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGO_GAME_KEY:-}"
 _upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGO_GAME_KEY:-}"
 _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
-_upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3000"
+_upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3001"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
 
 F="apps/worker-game-loop/.env"
