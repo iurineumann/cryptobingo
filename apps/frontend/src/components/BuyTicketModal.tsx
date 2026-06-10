@@ -95,9 +95,12 @@ export default function BuyTicketModal({
                 : null)
         : null;
 
-    const maxLocal = maxTicketsPerPlayer && maxTicketsPerPlayer > 0
+    const MAX_UX_UNLIMITED = 200;
+    const maxLocal = maxTicketsPerPlayer !== undefined && maxTicketsPerPlayer !== null && maxTicketsPerPlayer > 0
         ? maxTicketsPerPlayer
-        : 50;
+        : maxTicketsPerPlayer === 0
+        ? MAX_UX_UNLIMITED  // sala sem limite — cap UX de 200
+        : 50;               // jogo avulso (sem sala) — padrão conservador
 
     // ── Tickets disponíveis (excluindo removidos) ──────────────────────────
     const availableTickets = useCallback(() => {

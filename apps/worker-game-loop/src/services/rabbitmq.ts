@@ -464,6 +464,29 @@ export async function autoLockFundingGames(): Promise<void> {
             if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
 
             processedGames.add(gameId);
+
+            // Verifica se o jogo tem cartelas vendidas (evita oracle em jogos vazios)
+            const wagered = (game as any).total_wagered;
+            const amount  = parseFloat(wagered?.quantity ?? '0') || 0;
+            const hasTickets = amount > 0;
+
+            if (!hasTickets) {
+                console.log(`[AutoAdvance] 🗑️ Jogo ${gameId} sem cartelas. Abortando...`);
+                try {
+                    await executeLockGame(gameId);    // FUNDING → LOCKED (pré-requisito do abort)
+                    await executeAbortGame(gameId, 'NO_TICKETS');  // LOCKED → ABORTED
+                    notifyGameAborted(gameId, 'NO_TICKETS');
+                    // Cria próxima partida da sala (se houver)
+                    onGameResolved(gameId).catch(err =>
+                        console.error(`[AutoAdvance] onGameResolved error (abort vazio, jogo ${gameId}):`, err)
+                    );
+                } catch (err) {
+                    console.error(`[AutoAdvance] Erro ao abortar jogo vazio ${gameId}:`, err);
+                    processedGames.delete(gameId);
+                }
+                continue;
+            }
+
             console.log(`[AutoAdvance] 🔒 Travando jogo ${gameId} (funding >${AUTO_LOCK_DELAY_SEC}s)...`);
 
             try {

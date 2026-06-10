@@ -40,7 +40,6 @@ export default function UsersAdmin() {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.users_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">{t('admin.users_desc')}</p>
 
             {error && (

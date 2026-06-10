@@ -213,24 +213,34 @@ export default function GameRoom({
       const flat: (number | null)[] = [];
       for (let r = 0; r < 5; r++) flat.push(B[r], I[r], N[r], G[r], O[r]);
 
+      // ADR-005 max_weight: seleciona apenas o padrão de maior peso por cartela
+      const pricePaidStr  = (ticket as any).pricePaid ?? '';
+      const pricePaidNum  = parseFloat(pricePaidStr.split(' ')[0]) || 0;
+      const currency      = pricePaidStr.trim().split(' ')[1] ?? '';
+
+      let bestPayout = '';
+      let bestPattern = '';
+      let bestMultiplier = 0;
+
       for (const p of gamePatterns) {
         const done = p.cells.every((req, i) => {
           if (!req) return true;
           const val = flat[i];
           return val === null || drawnSet.has(val as number);
         });
-        if (done) {
-          // Computa prêmio a partir do pricePaid da cartela × multiplicador do padrão
-          const pricePaidStr  = (ticket as any).pricePaid ?? '';
-          const pricePaidNum  = parseFloat(pricePaidStr.split(' ')[0]) || 0;
-          const multiplier    = parseFloat(p.prize) || 0;
-          const prizeAmount   = pricePaidNum * multiplier;
-          const currency      = pricePaidStr.trim().split(' ')[1] ?? '';
-          const payoutStr     = prizeAmount > 0 && currency
-            ? `${prizeAmount.toFixed(4)} ${currency}`
-            : '';
-          result.push({ ticket_id: ticket.id, win_pattern: p.name, payouts: payoutStr ? [payoutStr] : [] });
-        }
+        if (!done) continue;
+        const multiplier = parseFloat(p.prize) || 0;
+        if (multiplier <= bestMultiplier) continue;
+        bestMultiplier = multiplier;
+        bestPattern    = p.name;
+        const prizeAmount = pricePaidNum * multiplier;
+        bestPayout = prizeAmount > 0 && currency
+          ? `${prizeAmount.toFixed(4)} ${currency}`
+          : '';
+      }
+
+      if (bestPattern) {
+        result.push({ ticket_id: ticket.id, win_pattern: bestPattern, payouts: bestPayout ? [bestPayout] : [] });
       }
     }
     return result;
@@ -385,8 +395,8 @@ export default function GameRoom({
 
   // Combinações completadas nas cartelas do jogador (ao vivo)
   const completedCombinationsPerTicket = useMemo(() => {
-    if (!gameCombinations.length) return new Map<string, string[]>();
-    const result = new Map<string, string[]>();
+    if (!gameCombinations.length) return new Map<string, Array<{ name: string; weight: number }>>();
+    const result = new Map<string, Array<{ name: string; weight: number }>>();
     for (const ticket of playerTickets) {
       const flat = (() => {
         const B    = ticket.matrix.slice(0, 5);
@@ -417,7 +427,7 @@ export default function GameRoom({
 
       const combos = gameCombinations
         .filter(c => isCombinationSatisfied(c, doneNamesResolved, patternTypeByName))
-        .map(c => c.name);
+        .map(c => ({ name: c.name, weight: c.weight }));
 
       if (combos.length) result.set(ticket.id, combos);
     }
@@ -958,7 +968,7 @@ export default function GameRoom({
                       const comboWon  = winCount > 0;
                       const proxPct   = combinationProximityMap.get(c.name) ?? 0;
                       const cells     = combinationCells.get(c.name) ?? new Array(25).fill(0);
-                      const myCombo   = [...completedCombinationsPerTicket.values()].some(v => v.includes(c.name));
+                      const myCombo   = [...completedCombinationsPerTicket.values()].some(v => v.some(cc => cc.name === c.name));
                       return (
                         <div key={c.name} className={`gr-pattern gr-pattern--combo${comboWon ? ' is-close' : ''}`}>
                           <div className="gr-pattern-mini">

@@ -402,7 +402,7 @@ export function notifyGameLocked(gameId: string): void {
  */
 export function notifyGameAborted(
     gameId: string,
-    reason: 'ORACLE_TIMEOUT' | 'LOW_QUORUM' | 'ADMIN_HALT'
+    reason: 'ORACLE_TIMEOUT' | 'LOW_QUORUM' | 'ADMIN_HALT' | 'NO_TICKETS'
 ): void {
     const session = activeSessions.get(gameId);
     if (session?.timer) {
