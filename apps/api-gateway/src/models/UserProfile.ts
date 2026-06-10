@@ -16,7 +16,7 @@ const UserProfileSchema = new Schema({
     //   db.userprofiles.updateOne({ wallet_address: 'mywallet' }, { $set: { role: 'admin' } })
     role: {
         type:    String,
-        enum:    ['player', 'moderator', 'sponsor', 'admin'],
+        enum:    ['player', 'moderator', 'sponsor', 'admin', 'contract_admin'],
         default: 'player',
         index:   true,
     },

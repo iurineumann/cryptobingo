@@ -47,7 +47,6 @@ export default function ComplianceAdmin() {
         <div>
             <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
                 <div>
-                    <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.compliance_title')}</h2>
                     <p className="text-sm text-[--cb-text-tertiary">{t('admin.compliance_desc')}</p>
                 </div>
                 <div className="flex items-center gap-2">

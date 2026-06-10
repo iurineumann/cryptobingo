@@ -27,6 +27,8 @@ import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 import { fileURLToPath } from 'url';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { generateCombos, priceCombosByDifficulty, recalibrateComboWeights } from '../services/comboGenerator';
+import type { PatternInfo, ComboCandidate } from '../services/comboGenerator';
 
 // ==========================================
 // CONFIGURAÇÃO
@@ -42,6 +44,8 @@ const RTP_MAX_THRESHOLD  = 0.98;
 
 // ── Calibração algébrica (separação descoberta × ajuste) ─────────────────────
 const DISCOVERY_SIMS     = 100_000;   // Fase 1: lote único de descoberta de P_i
+const SUGGEST_DISCOVERY  = 10_000;   // Fase 1 no endpoint suggest (interativo, rápido o suficiente)
+const SUGGEST_VALIDATION = 1_000;    // Fase 4 no endpoint suggest (amostra menor = CI-friendly)
 const CALIB_ALPHA        = 0.1;       // Fase 3: taxa de aprendizado inicial
 const CALIB_ALPHA_DECAY  = 0.99;      // Fase 3: decaimento de alpha por iteração
 const CALIB_MAX_ITER     = 300;       // Fase 3: máx de iterações
@@ -175,6 +179,32 @@ export interface CalibrateWeightsResult {
     retries:              number;   // quantas retentativas foram necessárias
     duration_ms:          number;
     computed_at:          string;
+}
+
+// ── Tipos do endpoint de sugestão unificada ────────────────────────────────────
+
+export interface SuggestCombosInput {
+    gametype_name:     string;
+    base_multiplier:   number;
+    patterns:          PatternRuleInput[];
+    draw_mode?:        string;        // 'standard' | 'fixed' | 'firstfull' | 'goldenball' | 'multimatch'
+    tickets_per_game?: number;
+    ticket_price?:     number;
+    max_balls?:        number;
+    /** @deprecated pattern weights não são mais calibrados — ignorado */
+    target_rtp?:       number;
+}
+
+export interface SuggestCombosResult {
+    gametype_name:      string;
+    pattern_weights:    Record<string, number>;  // name → hundredths (inalterados)
+    combos:             ComboCandidate[];         // combos gerados + precificados
+    combo_weights:      Record<string, number>;
+    validation:         SimulationResult;
+    is_viable:          boolean;
+    alerts:             string[];
+    duration_ms:        number;
+    computed_at:        string;
 }
 
 // ==========================================
@@ -670,12 +700,22 @@ function runAlgebraicCalibration(
 
     // ── Inicialização inversa: w_i = 1/P_i ────────────────────────────────
     // Propriedade: Σ(P_i × 1/P_i) = N → RTP_inicial = (baseMul/100) × N.
-    // O rácio de escala da 1ª iteração corrige para targetRtp em um único passo
-    // quando nenhum peso é clampado; o loop lida com os clamps residuais.
     for (const name of Object.keys(weights)) {
         const p = probs[name];
         const w_inv = 1 / p;
         weights[name] = Math.max(CALIB_WEIGHT_MIN, Math.min(CALIB_WEIGHT_MAX, w_inv));
+    }
+
+    // ── Escalonamento direto em 1 passo ──────────────────────────────────
+    // Leva do RTP inicial (que pode ser N × baseMul/100, muito acima do target)
+    // diretamente ao target, evitando centenas de iterações de gradiente lento.
+    const initRtp   = computeAlgebraicRtp(probs, weights, baseMul);
+    const oneShot   = targetRtp / (initRtp || 1e-9);
+    for (const name of Object.keys(weights)) {
+        const w_ideal = weights[name] * oneShot;
+        weights[name] = Math.max(CALIB_WEIGHT_MIN, Math.min(CALIB_WEIGHT_MAX,
+            Math.round(w_ideal)
+        ));
     }
 
     let iterations = 0;
@@ -700,7 +740,6 @@ function runAlgebraicCalibration(
         }
 
         // ── Decaimento de alpha ────────────────────────────────────────────
-        // Evita oscillação nas iterações tardias quando os pesos estão próximos do alvo.
         currentAlpha *= CALIB_ALPHA_DECAY;
 
         rtp       = computeAlgebraicRtp(probs, weights, baseMul);
@@ -775,14 +814,172 @@ function runStochasticRefinement(
 }
 
 // ==========================================
-// CONTROLLER — calibrateWeights
-// POST /api/v1/admin/calibrate-weights
-//
-// Implementa as 4 fases do motor de calibração:
-//   Fase 1 — descoberta empírica (lote massivo único, sem max_weight)
-//   Fase 2 — suavização de Laplace (injeta epsilon em P_i = 0)
-//   Fase 3 — calibração algébrica em memória (sem RNG)
-//   Fase 4 — validação estocástica final (prova dos nove)
+// PIPELINE INTERNA — calibração reutilizável
+// ==========================================
+
+interface CalibrationPipelineInput {
+    gametype_name:     string;
+    base_multiplier:   number;
+    patterns:          PatternRuleInput[];
+    combinations:      CombinationRuleInput[];
+    target_rtp:        number;
+    numTickets:        number;
+    tPrice:            number;
+    numBalls:          number | undefined;
+    discSims:          number;
+    valSims:           number;
+    alpha:             number;
+    tolerance:         number;
+    max_iter:          number;
+    startMs:           number;
+}
+
+interface CalibrationPipelineResult {
+    pattern_weights:      Record<string, number>;
+    combo_weights:        Record<string, number>;
+    calibrations:         ItemCalibration[];
+    algebraic_rtp:        number;
+    iterations:           number;
+    converged:            boolean;
+    refinement_iters:     number;
+    refinement_converged: boolean;
+    retries:              number;
+    validation:           SimulationResult;
+}
+
+async function runCalibrationPipeline(
+    params: CalibrationPipelineInput,
+): Promise<CalibrationPipelineResult> {
+    const {
+        gametype_name, base_multiplier, patterns, combinations,
+        target_rtp, numTickets, tPrice, numBalls,
+        discSims, valSims, alpha, tolerance, max_iter, startMs,
+    } = params;
+
+    // ── FASE 1: Descoberta Empírica ───────────────────────────────────────
+    console.log(`   ⚗️  Fase 1: descoberta de probabilidades (${discSims} rodadas)...`);
+    const rawRates: Record<string, number> = discSims > 5_000
+        ? await discoverInWorker(patterns, combinations, discSims, numTickets, numBalls)
+        : discoverHitRates(patterns, combinations, discSims, numTickets, numBalls);
+
+    // ── FASE 2: Suavização de Laplace ─────────────────────────────────────
+    const epsilon = 1 / (discSims * numTickets);
+    const probs: Record<string, number> = {};
+    for (const [name, rate] of Object.entries(rawRates)) {
+        probs[name] = rate > 0 ? rate : epsilon;
+    }
+    const zeroItems = Object.values(rawRates).filter(r => r === 0).length;
+    if (zeroItems > 0) {
+        console.log(`   🧂 Fase 2: epsilon realista (${epsilon.toExponential(2)}) injetado em ${zeroItems} item(ns) com P=0.`);
+    }
+
+    // ── FASE 3: Calibração Algébrica ──────────────────────────────────────
+    console.log(`   📐 Fase 3: calibração algébrica (α=${alpha}, decay=${CALIB_ALPHA_DECAY}, tol=${tolerance})...`);
+    const allNames    = Object.keys(probs);
+    const initWeights = Object.fromEntries(allNames.map(n => [n, 100]));
+
+    const cal = runAlgebraicCalibration(
+        probs, initWeights, base_multiplier, target_rtp, alpha, max_iter, tolerance,
+    );
+
+    console.log(
+        `   ✔  Fase 3: ${cal.iterations} iter, RTP algébrico = ${(cal.algebraicRtp * 100).toFixed(2)}%, ` +
+        `convergido = ${cal.converged}`
+    );
+
+    // ── FASE 3b: Refinamento Estocástico + FASE 4 ────────────────────────
+    let refinedWeights     = { ...cal.weights };
+    let bestRefineIter     = 0;
+    let bestRefineConvg    = false;
+    let retriesUsed        = 0;
+    let currentRefineSims  = REFINE_SIMS;
+    let currentValSims     = valSims;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const label = attempt === 0 ? '' : ` (retry ${attempt})`;
+
+        console.log(`   🔄 Fase 3b${label}: refinamento estocástico (${currentRefineSims} sims/iter, max ${REFINE_MAX_ITER} iters)...`);
+
+        const refinement = runStochasticRefinement(
+            refinedWeights, patterns, combinations,
+            base_multiplier, tPrice, numTickets, target_rtp, numBalls,
+            currentRefineSims, REFINE_MAX_ITER, REFINE_TOLERANCE,
+        );
+
+        refinedWeights  = refinement.weights;
+        bestRefineIter  = refinement.iterations;
+        bestRefineConvg = refinement.converged;
+
+        console.log(
+            `   ✔  Fase 3b${label}: ${refinement.iterations} iter, ` +
+            `RTP medido = ${(refinement.finalRtp * 100).toFixed(2)}%, ` +
+            `convergido = ${refinement.converged}`
+        );
+
+        const patternWeights: Record<string, number> = {};
+        const comboWeights:   Record<string, number> = {};
+        for (const p of patterns)    patternWeights[p.name] = refinedWeights[p.name] ?? 100;
+        for (const c of combinations) comboWeights[c.name]  = refinedWeights[c.name] ?? 100;
+
+        const calibratedPatterns     = patterns.map(p => ({ ...p, weight: patternWeights[p.name] }));
+        const calibratedCombinations = combinations.map(c => ({ ...c, weight: comboWeights[c.name] }));
+
+        // ── FASE 4: Validação ─────────────────────────────────────────────
+        console.log(`   🎲 Fase 4${label}: validação Monte Carlo (${currentValSims} rodadas)...`);
+
+        const validationInput: SimulationInput = {
+            gametype_name,
+            base_multiplier,
+            patterns:        calibratedPatterns,
+            combinations:    calibratedCombinations,
+            simulations:     currentValSims,
+            tickets_per_game: numTickets,
+            ticket_price:    tPrice,
+            max_balls:       numBalls,
+        };
+
+        let validationRaw: Omit<SimulationResult, 'duration_ms' | 'computed_at'>;
+        if (currentValSims > 5_000) {
+            validationRaw = await runInWorker(validationInput);
+        } else {
+            validationRaw = runMonteCarlo(validationInput);
+        }
+
+        const validation: SimulationResult = {
+            ...validationRaw,
+            duration_ms:  Date.now() - startMs,
+            computed_at:  new Date().toISOString(),
+        };
+
+        if (validationRaw.is_viable || attempt >= MAX_RETRIES) {
+            return {
+                pattern_weights: patternWeights,
+                combo_weights: comboWeights,
+                calibrations: allNames.map(name => ({
+                    name, probability: probs[name], weight: refinedWeights[name] ?? 100,
+                })),
+                algebraic_rtp:      Math.round(cal.algebraicRtp * 1_000_000) / 1_000_000,
+                iterations:         cal.iterations,
+                converged:          cal.converged,
+                refinement_iters:     bestRefineIter,
+                refinement_converged: bestRefineConvg,
+                retries:              retriesUsed,
+                validation,
+            };
+        }
+
+        console.log(`   ⏫ Fase 4 não convergiu — retry ${attempt + 1} com amostras maiores (×${RETRY_SIM_MULTIPLIER})...`);
+        currentRefineSims = Math.min(currentRefineSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
+        currentValSims    = Math.min(currentValSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
+        retriesUsed       = attempt + 1;
+    }
+
+    // Should not reach here (loop always returns), but TS needs a return
+    throw new Error('runCalibrationPipeline: loop exaurido sem retorno');
+}
+
+// ==========================================
+// CONTROLLER — calibrateWeights (refatorado)
 // ==========================================
 
 export async function calibrateWeights(req: Request, res: Response): Promise<void> {
@@ -802,7 +999,6 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
         validation_sims = VALIDATION_SIMS,
     } = req.body as CalibrateWeightsInput;
 
-    // ── Validações básicas ────────────────────────────────────────────────────
     if (!gametype_name || !base_multiplier || !Array.isArray(patterns) || patterns.length === 0) {
         res.status(400).json({ error: 'gametype_name, base_multiplier e patterns são obrigatórios.' });
         return;
@@ -817,8 +1013,7 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
     const numBalls      = max_balls != null ? Math.max(1, Math.min(75, Number(max_balls))) : undefined;
     const discSims      = Math.min(Number(discovery_sims), MAX_SIMULATIONS);
     const valSims       = Math.min(Number(validation_sims), MAX_SIMULATIONS);
-
-    const startMs = Date.now();
+    const startMs       = Date.now();
 
     console.log(
         `🔬 [Calibração] "${gametype_name}": ` +
@@ -827,154 +1022,37 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
     );
 
     try {
-        // ── FASE 1: Descoberta Empírica ───────────────────────────────────────
-        console.log(`   ⚗️  Fase 1: descoberta de probabilidades (${discSims} rodadas)...`);
-        const rawRates: Record<string, number> = discSims > 5_000
-            ? await discoverInWorker(patterns, combinations, discSims, numTickets, numBalls)
-            : discoverHitRates(patterns, combinations, discSims, numTickets, numBalls);
+        const result = await runCalibrationPipeline({
+            gametype_name, base_multiplier, patterns, combinations,
+            target_rtp, numTickets, tPrice, numBalls,
+            discSims, valSims, alpha, tolerance, max_iter, startMs,
+        });
 
-        // ── FASE 2: Suavização de Laplace (epsilon realista) ──────────────────
-        // epsilon = 1 acerto no universo total de testes (não um valor fixo arbitrário).
-        // Para P_master ≈ 0, isso ancora o peso em ~100M — finito, mas maciço.
-        const epsilon = 1 / (discSims * numTickets);
-        const probs: Record<string, number> = {};
-        for (const [name, rate] of Object.entries(rawRates)) {
-            probs[name] = rate > 0 ? rate : epsilon;
-        }
-        const zeroItems = Object.values(rawRates).filter(r => r === 0).length;
-        if (zeroItems > 0) {
-            console.log(`   🧂 Fase 2: epsilon realista (${epsilon.toExponential(2)}) injetado em ${zeroItems} item(ns) com P=0.`);
-        }
-
-        // ── FASE 3: Calibração Algébrica (rácio de escala global) ────────────
-        console.log(`   📐 Fase 3: calibração algébrica (α=${alpha}, decay=${CALIB_ALPHA_DECAY}, tol=${tolerance})...`);
-        const allNames    = Object.keys(probs);
-        const initWeights = Object.fromEntries(allNames.map(n => [n, 100]));
-
-        const cal = runAlgebraicCalibration(
-            probs, initWeights, base_multiplier, target_rtp, alpha, max_iter, tolerance,
-        );
+        const response: CalibrateWeightsResult = {
+            gametype_name,
+            target_rtp,
+            algebraic_rtp:      result.algebraic_rtp,
+            algebraic_rtp_pct:  `${(result.algebraic_rtp * 100).toFixed(4)}%`,
+            iterations:         result.iterations,
+            converged:          result.converged,
+            pattern_weights:    result.pattern_weights,
+            combo_weights:      result.combo_weights,
+            calibrations:       result.calibrations,
+            validation:         result.validation,
+            refinement_iters:     result.refinement_iters,
+            refinement_converged: result.refinement_converged,
+            retries:              result.retries,
+            duration_ms:          Date.now() - startMs,
+            computed_at:          new Date().toISOString(),
+        };
 
         console.log(
-            `   ✔  Fase 3: ${cal.iterations} iter, RTP algébrico = ${(cal.algebraicRtp * 100).toFixed(2)}%, ` +
-            `convergido = ${cal.converged}`
+            `✅ [Calibração] "${gametype_name}" concluída em ${response.duration_ms}ms — ` +
+            `RTP validação: ${result.validation.rtp_pct}, Viável: ${result.validation.is_viable}` +
+            (result.retries > 0 ? ` (${result.retries} retentativa(s))` : '')
         );
 
-        // ── FASE 3b: Refinamento Estocástico Interno + FASE 4 c/ retentativas ──
-        // O RTP algébrico superestima porque trata padrões como independentes.
-        // Na prática (max_weight), cada cartela paga apenas o maior peso,
-        // então padrões que co-ocorrem "cancelam" contribuições uns dos outros.
-        // Fase 3b usa mini-sims reais (com max_weight) para medir o gap e aplicar
-        // escala corretiva. Se o resultado final não for viável, retenta c/ amostras maiores.
-
-        let refinedWeights     = { ...cal.weights };
-        let bestRefineIter     = 0;
-        let bestRefineConvg    = false;
-        let retriesUsed        = 0;
-        let currentRefineSims  = REFINE_SIMS;
-        let currentValSims     = valSims;
-
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            const label = attempt === 0 ? '' : ` (retry ${attempt})`;
-
-            // ── FASE 3b: Refinamento Estocástico ─────────────────────────────
-            console.log(`   🔄 Fase 3b${label}: refinamento estocástico (${currentRefineSims} sims/iter, max ${REFINE_MAX_ITER} iters)...`);
-
-            const refinement = runStochasticRefinement(
-                refinedWeights, patterns, combinations,
-                base_multiplier, tPrice, numTickets, target_rtp, numBalls,
-                currentRefineSims, REFINE_MAX_ITER, REFINE_TOLERANCE,
-            );
-
-            refinedWeights  = refinement.weights;
-            bestRefineIter  = refinement.iterations;
-            bestRefineConvg = refinement.converged;
-
-            console.log(
-                `   ✔  Fase 3b${label}: ${refinement.iterations} iter, ` +
-                `RTP medido = ${(refinement.finalRtp * 100).toFixed(2)}%, ` +
-                `convergido = ${refinement.converged}`
-            );
-
-            // Separa pesos de padrões e combinações para a validação
-            const patternWeights: Record<string, number> = {};
-            const comboWeights:   Record<string, number> = {};
-            for (const p of patterns)    patternWeights[p.name] = refinedWeights[p.name] ?? 100;
-            for (const c of combinations) comboWeights[c.name]  = refinedWeights[c.name] ?? 100;
-
-            const calibratedPatterns    = patterns.map(p => ({ ...p, weight: patternWeights[p.name] }));
-            const calibratedCombinations = combinations.map(c => ({ ...c, weight: comboWeights[c.name] }));
-
-            // ── FASE 4: Validação Estocástica ───────────────────────────────
-            console.log(`   🎲 Fase 4${label}: validação Monte Carlo (${currentValSims} rodadas)...`);
-
-            const validationInput: SimulationInput = {
-                gametype_name,
-                base_multiplier,
-                patterns:        calibratedPatterns,
-                combinations:    calibratedCombinations,
-                simulations:     currentValSims,
-                tickets_per_game: numTickets,
-                ticket_price:    tPrice,
-                max_balls:       numBalls,
-            };
-
-            let validationRaw: Omit<SimulationResult, 'duration_ms' | 'computed_at'>;
-            if (currentValSims > 5_000) {
-                validationRaw = await runInWorker(validationInput);
-            } else {
-                validationRaw = runMonteCarlo(validationInput);
-            }
-
-            const validation: SimulationResult = {
-                ...validationRaw,
-                duration_ms:  Date.now() - startMs,
-                computed_at:  new Date().toISOString(),
-            };
-
-            // Se viável ou última tentativa, monta resultado final e retorna
-            if (validationRaw.is_viable || attempt >= MAX_RETRIES) {
-                const calibrations: ItemCalibration[] = allNames.map(name => ({
-                    name,
-                    probability: probs[name],
-                    weight:      refinedWeights[name] ?? 100,
-                }));
-
-                const result: CalibrateWeightsResult = {
-                    gametype_name,
-                    target_rtp,
-                    algebraic_rtp:      Math.round(cal.algebraicRtp * 1_000_000) / 1_000_000,
-                    algebraic_rtp_pct:  `${(cal.algebraicRtp * 100).toFixed(4)}%`,
-                    iterations:         cal.iterations,
-                    converged:          cal.converged,
-                    pattern_weights:    patternWeights,
-                    combo_weights:      comboWeights,
-                    calibrations,
-                    validation,
-                    refinement_iters:     bestRefineIter,
-                    refinement_converged: bestRefineConvg,
-                    retries:              retriesUsed,
-                    duration_ms:          Date.now() - startMs,
-                    computed_at:          new Date().toISOString(),
-                };
-
-                console.log(
-                    `✅ [Calibração] "${gametype_name}" concluída em ${result.duration_ms}ms — ` +
-                    `RTP validação: ${validation.rtp_pct}, Viável: ${validation.is_viable}` +
-                    (retriesUsed > 0 ? ` (${retriesUsed} retentativa(s))` : '')
-                );
-
-                res.status(200).json(result);
-                return;
-            }
-
-            // Não viável → prepara próxima tentativa com amostras maiores
-            console.log(`   ⏫ Fase 4 não convergiu — retry ${attempt + 1} com amostras maiores (×${RETRY_SIM_MULTIPLIER})...`);
-            currentRefineSims = Math.min(currentRefineSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
-            currentValSims    = Math.min(currentValSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
-            retriesUsed       = attempt + 1;
-        }
-
+        res.status(200).json(response);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[Calibração] Erro:', err);
@@ -983,12 +1061,195 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
 }
 
 // ==========================================
-// CONTROLLER
+// CONTROLLER — suggestCombos (unificado)
+// POST /api/v1/admin/suggest-combos
+//
+// Pipeline completa (ADR-020):
+//   Fase 1 — descoberta empírica dos pattern hit_rates
+//   Fase 2 — geração hierárquica de combos + pesos iniciais
+//   Fase 3 — calibração algébrica (padrões + combos)
+//   Fase 3b — refinamento estocástico (mini-sims c/ max_weight)
+//   Fase 4 — validação final
+//
+// O frontend recebe tudo pronto para aplicar: pattern_weights + combos.
 // ==========================================
 
+export async function suggestCombos(req: Request, res: Response): Promise<void> {
+    const {
+        gametype_name,
+        base_multiplier,
+        patterns,
+        draw_mode       = 'standard',
+        tickets_per_game,
+        ticket_price,
+        max_balls,
+    } = req.body as SuggestCombosInput;
+
+    // ── Validações ──────────────────────────────────────────────────────────
+    if (!gametype_name || !base_multiplier || !Array.isArray(patterns) || patterns.length === 0) {
+        res.status(400).json({ error: 'gametype_name, base_multiplier e patterns são obrigatórios.' });
+        return;
+    }
+    for (const p of patterns) {
+        if (!p.name || typeof p.mask !== 'number' || p.mask <= 0 || p.mask >= (1 << 25)) {
+            res.status(400).json({ error: 'Cada pattern deve ter name, mask (uint32 ≤ 25 bits) e weight.' });
+            return;
+        }
+    }
+
+    const numBalls    = max_balls != null ? Math.max(1, Math.min(75, Number(max_balls))) : undefined;
+    const numTickets  = Math.min(Number(tickets_per_game ?? DEFAULT_TICKETS), 500);
+    const tPrice      = Number(ticket_price ?? DEFAULT_TICKET_PRICE);
+    const startMs     = Date.now();
+
+    const allAlerts: string[] = [];
+
+    console.log(
+        `🎯 [Suggest] "${gametype_name}": mode=${draw_mode}, ` +
+        `baseMul=${base_multiplier}, maxBalls=${numBalls ?? 75}`
+    );
+
+    try {
+        // ── Fase 1: Descoberta (apenas patterns) ─────────────────────────────
+        const discSims = Math.min(5_000, MAX_SIMULATIONS);
+
+        console.log(`   ⚗️  Fase 1: descoberta de hit_rates (${discSims} sims)...`);
+
+        const rawRates: Record<string, number> = discSims > 5_000
+            ? await discoverInWorker(patterns, [], discSims, numTickets, numBalls)
+            : discoverHitRates(patterns, [], discSims, numTickets, numBalls);
+
+        // ── Fase 2: Geração hierárquica de combos ─────────────────────────
+        console.log(`   🔗 Fase 2: gerando combos (hierarquia n_of_type > any_of > all_of)...`);
+
+        const patternInfo: PatternInfo[] = patterns.map(p => ({
+            pattern_id:   p.pattern_id,
+            name:         p.name,
+            mask:         p.mask,
+            weight:       p.weight,
+            pattern_type: p.pattern_type ?? 'simple',
+        }));
+
+        const { combos: generatedCombos, alerts: genAlerts } = generateCombos({
+            patterns:  patternInfo,
+            drawMode:  draw_mode,
+            maxCombos: 20,
+        });
+
+        allAlerts.push(...genAlerts);
+        console.log(`   ✔  Fase 2: ${generatedCombos.length} combos gerados.`);
+
+        const combos = generatedCombos.length > 0 ? generatedCombos : [];
+
+        // ── Teto do MASTER ──────────────────────────────────────────────
+        const masterPattern = patterns.find(p => p.pattern_type === 'master');
+        const masterWeight = masterPattern ? masterPattern.weight : null;
+        if (masterWeight !== null) {
+            console.log(`   🚫 MASTER "${masterPattern!.name}" = ${masterWeight} — usado como teto dos combos.`);
+        }
+
+        // ── Fase 3: Precificação por dificuldade ──────────────────────────
+        // Usa as hit_rates descobertas para precificar cada combo baseado
+        // na dificuldade relativa vs. os patterns individuais.
+        // PATTERN WEIGHTS NÃO SÃO MODIFICADOS — permanecem como o usuário definiu.
+        console.log(`   💰 Fase 3: precificando ${combos.length} combos por dificuldade...`);
+
+        const pricedCombos = combos.length > 0
+            ? priceCombosByDifficulty(combos, patternInfo, rawRates, masterWeight)
+            : [];
+
+        const comboWeights: Record<string, number> = {};
+        for (const c of pricedCombos) comboWeights[c.name] = c.weight;
+
+        // ── Fase 4: Validação ───────────────────────────────────────────-
+        // Simula com pattern weights ORIGINAIS + combos precificados.
+        console.log(`   🎲 Fase 4: validação Monte Carlo (${SUGGEST_VALIDATION} rodadas)...`);
+
+        const isFirstfull = draw_mode === 'firstfull';
+        const validationInput: SimulationInput = {
+            gametype_name,
+            base_multiplier,
+            patterns: isFirstfull
+                ? patterns
+                : patterns.filter(p => p.pattern_type !== 'master'),
+            combinations: pricedCombos.map(c => ({
+                name:    c.name,
+                weight:  c.weight,
+                clauses: c.clauses,
+            })),
+            simulations:     SUGGEST_VALIDATION,
+            tickets_per_game: numTickets,
+            ticket_price:    tPrice,
+            max_balls:       numBalls,
+        };
+
+        const validationRaw: Omit<SimulationResult, 'duration_ms' | 'computed_at'> =
+            SUGGEST_VALIDATION > 5_000
+                ? await runInWorker(validationInput)
+                : runMonteCarlo(validationInput);
+
+        // Se não-firstfull, adiciona MASTER de volta nas estatísticas com 0 hits
+        const masterName = masterPattern?.name;
+        const validation: SimulationResult = {
+            ...validationRaw,
+            pattern_stats: !isFirstfull && masterName
+                ? [...validationRaw.pattern_stats, {
+                    name:             masterName,
+                    mask:             0,
+                    weight:           masterWeight ?? 0,
+                    hit_count:        0,
+                    hit_rate:         0,
+                    avg_balls_needed: 0,
+                }]
+                : validationRaw.pattern_stats,
+            duration_ms: Date.now() - startMs,
+            computed_at: new Date().toISOString(),
+        };
+
+        // ── Pattern weights: usa os ORIGINAIS do usuário ────────────────
+        const finalPatternWeights: Record<string, number> = {};
+        for (const p of patterns) {
+            finalPatternWeights[p.name] = p.weight;
+        }
+
+        // ── Monta resultado ──────────────────────────────────────────────
+        const result: SuggestCombosResult = {
+            gametype_name,
+            pattern_weights: finalPatternWeights,
+            combos:          pricedCombos,
+            combo_weights:   comboWeights,
+            validation,
+            is_viable:       validation.is_viable,
+            alerts:          allAlerts,
+            duration_ms:     Date.now() - startMs,
+            computed_at:     new Date().toISOString(),
+        };
+
+        console.log(
+            `✅ [Suggest] "${gametype_name}" concluído em ${result.duration_ms}ms — ` +
+            `RTP: ${result.validation.rtp_pct}, Viável: ${result.is_viable}, ` +
+            `${result.combos.length} combos sugeridos`
+        );
+
+        console.log(
+            `   📋 Patterns: ${Object.entries(finalPatternWeights).map(([n, w]) => `${n}=${w}`).join(', ')}\n` +
+            `   📋 Combos: ${pricedCombos.map(c => `${c.name}=${c.weight}`).join(', ')}`
+        );
+
+        res.status(200).json(result);
+
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[Suggest] Erro:', err);
+        res.status(500).json({ error: `Erro durante sugestão: ${msg}` });
+    }
+}
+
+// ==========================================
+// CONTROLLER — simulateWeights
+// POST /api/v1/admin/simulate-weights
+// ==========================================
 /**
- * POST /api/v1/admin/simulate-weights
- *
  * Executa simulação Monte Carlo para um gametype e retorna métricas de RTP,
  * distribuição de padrões e alertas de sustentabilidade.
  *
