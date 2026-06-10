@@ -1,15 +1,25 @@
 // apps/frontend/src/components/BuyTicketModal.tsx
 // Modal de compra de cartelas — fluxo completo:
 //   form → generate preview → preview (remove/add more) → confirm → success
-// Ref: ADR-001, SPEC.md §2.1
+// ADR-021: seletor de moeda alternativa via bingo.swap
+// Ref: ADR-001, ADR-021, SPEC.md §2.1
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation }    from 'react-i18next';
 import { Session }           from '@wharfkit/session';
-import { useTicketPurchase, type PurchaseGroup } from '../hooks/useTicketPurchase';
+import { useTicketPurchase, type PurchaseGroup, type SwapAction } from '../hooks/useTicketPurchase';
 import TicketGrid            from './TicketGrid';
 import type { ExtendedAsset } from '@cryptobingo/shared-types';
 import type { SignedTicket } from '../services/api';
+import {
+    fetchSwapPools,
+    fetchSwapQuote,
+    getAlternativeToken,
+    poolRoutesTo,
+    fetchTokenBalance,
+    type QuoteParams,
+} from '../services/swapService';
+import type { SwapPoolSummary, SwapQuote } from '@cryptobingo/shared-types';
 
 interface ExtendedAssetInput {
     quantity: string;
@@ -26,6 +36,15 @@ interface BuyTicketModalProps {
     roomPriceMin?: ExtendedAssetInput;
     roomPriceMax?: ExtendedAssetInput;
     roomPriceDefault?: ExtendedAssetInput;
+    gameEndTime?: number; // Unix timestamp (seconds) — para limitar TTL da cotação
+}
+
+interface AltToken {
+    contract:  string;
+    symbol:    string;
+    precision: number;
+    poolId:    string;
+    balance:   bigint;
 }
 
 interface TicketBatch {
@@ -44,6 +63,25 @@ function fmtCountdown(ms: number): string {
     return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
 }
 
+/** Converte "10.0000 BINGO" em unidades mínimas bigint, dado precision */
+function toMinUnits(displayQty: string, precision: number): bigint {
+    const [amount] = displayQty.split(' ');
+    if (!amount) return 0n;
+    const [whole, frac = ''] = amount.split('.');
+    const fracPadded = frac.padEnd(precision, '0').slice(0, precision);
+    return BigInt(whole + fracPadded);
+}
+
+/** Extrai símbolo de "4,BINGO" → "BINGO" */
+function symCode(sym: string): string {
+    return sym.includes(',') ? (sym.split(',')[1] ?? sym) : sym;
+}
+
+/** Extrai símbolo de "10.0000 BINGO" → "BINGO" */
+function extractSymbol(quantity: string): string {
+    return quantity.split(' ')[1] ?? '';
+}
+
 type Step = 'form' | 'preview';
 
 let batchIdCounter = 0;
@@ -51,6 +89,7 @@ let batchIdCounter = 0;
 export default function BuyTicketModal({
     gameId, ticketPrice, session, onClose, onSuccess,
     maxTicketsPerPlayer, roomPriceMin, roomPriceMax, roomPriceDefault,
+    gameEndTime,
 }: BuyTicketModalProps) {
 
     const { t } = useTranslation();
@@ -74,9 +113,96 @@ export default function BuyTicketModal({
     const [step, setStep] = useState<Step>('form');
     const [batches, setBatches] = useState<TicketBatch[]>([]);
     const [generating, setGenerating] = useState(false);
-
-    // Conjunto de "${batchId}:${ticketIdx}" → tickets removidos
     const [removed, setRemoved] = useState<Set<string>>(new Set());
+    const [localGenError, setLocalGenError] = useState<string | null>(null);
+
+    // ── ADR-021: Seletor de moeda ─────────────────────────────────────────────
+    const roomSymbol   = extractSymbol(ticketPrice.quantity);
+    const roomContract = ticketPrice.contract;
+
+    const [altTokens,    setAltTokens]    = useState<AltToken[]>([]);
+    const [selectedAlt,  setSelectedAlt]  = useState<AltToken | null>(null);
+    const [swapQuote,    setSwapQuote]    = useState<SwapQuote | null>(null);
+    const [quoteLoading, setQuoteLoading] = useState(false);
+    const [quoteError,   setQuoteError]   = useState<string | null>(null);
+    const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Carrega pools e filtra tokens alternativos com saldo > 0
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            try {
+                const pools = await fetchSwapPools();
+                const wallet = String(session.actor);
+                const alts: AltToken[] = [];
+                for (const pool of pools) {
+                    const alt = getAlternativeToken(pool, roomContract, roomSymbol);
+                    if (!alt) continue;
+                    // evita duplicatas (caso haja múltiplos pools com o mesmo token)
+                    if (alts.some(a => a.contract === alt.contract && a.symbol === alt.symbol)) continue;
+                    const balance = await fetchTokenBalance(wallet, alt.contract, alt.symbol);
+                    if (balance > 0n) {
+                        alts.push({ ...alt, poolId: pool.pool_id, balance });
+                    }
+                }
+                if (!cancelled) setAltTokens(alts);
+            } catch {
+                // falha silenciosa — seletor simplesmente não aparece
+            }
+        }
+        load();
+        return () => { cancelled = true; };
+    }, [session, roomContract, roomSymbol]);
+
+    // Debounce de cotação estimada ao selecionar moeda alternativa
+    useEffect(() => {
+        if (!selectedAlt) {
+            setSwapQuote(null);
+            setQuoteError(null);
+            return;
+        }
+        if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+        quoteTimerRef.current = setTimeout(async () => {
+            await refreshQuote(selectedAlt);
+        }, 400);
+        return () => { if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedAlt, customPrice, count]);
+
+    async function refreshQuote(alt: AltToken): Promise<SwapQuote | null> {
+        const priceNum    = parseFloat(customPrice.split(' ')[0] || '0');
+        const totalCost   = priceNum * count;
+        if (totalCost <= 0) return null;
+
+        // Extrai precisão da moeda da sala
+        const roomPrec = (() => {
+            const q = customPrice.split(' ')[0] ?? '';
+            const dot = q.indexOf('.');
+            return dot >= 0 ? q.length - dot - 1 : 0;
+        })();
+        const amountOut = toMinUnits(`${totalCost.toFixed(roomPrec)} ${roomSymbol}`, roomPrec);
+
+        setQuoteLoading(true);
+        setQuoteError(null);
+        try {
+            const q = await fetchSwapQuote({
+                fromContract: alt.contract,
+                fromSymbol:   `${alt.precision},${alt.symbol}`,
+                toContract:   roomContract,
+                toSymbol:     `${roomPrec},${roomSymbol}`,
+                amountOut:    amountOut.toString(),
+                gameEndTime,
+            });
+            setSwapQuote(q);
+            return q;
+        } catch (err) {
+            setQuoteError(err instanceof Error ? err.message : String(err));
+            setSwapQuote(null);
+            return null;
+        } finally {
+            setQuoteLoading(false);
+        }
+    }
 
     useEffect(() => {
         setCustomPrice(roomPriceDefault?.quantity ?? ticketPrice.quantity);
@@ -99,8 +225,8 @@ export default function BuyTicketModal({
     const maxLocal = maxTicketsPerPlayer !== undefined && maxTicketsPerPlayer !== null && maxTicketsPerPlayer > 0
         ? maxTicketsPerPlayer
         : maxTicketsPerPlayer === 0
-        ? MAX_UX_UNLIMITED  // sala sem limite — cap UX de 200
-        : 50;               // jogo avulso (sem sala) — padrão conservador
+        ? MAX_UX_UNLIMITED
+        : 50;
 
     // ── Tickets disponíveis (excluindo removidos) ──────────────────────────
     const availableTickets = useCallback(() => {
@@ -140,16 +266,11 @@ export default function BuyTicketModal({
         }
     };
 
-    // Fallback: se o purchaseError vier do generate, precisamos de um setter
-    // que não existe no hook. Usamos erro local.
-    const [localGenError, setLocalGenError] = useState<string | null>(null);
     const setPurchaseErrorRaw = (msg: string) => {
         setLocalGenError(msg);
-        // limpa após 5s
         setTimeout(() => setLocalGenError(null), 5000);
     };
 
-    // ── Remove um ticket ───────────────────────────────────────────────────
     const handleRemoveTicket = (batchId: string, idx: number) => {
         setRemoved(prev => {
             const next = new Set(prev);
@@ -158,10 +279,7 @@ export default function BuyTicketModal({
         });
     };
 
-    // ── Voltar ao form (preservando batches existentes) ────────────────────
-    const handleBackToForm = () => {
-        setStep('form');
-    };
+    const handleBackToForm = () => setStep('form');
 
     // ── Confirmar compra ───────────────────────────────────────────────────
     const handleBuy = async () => {
@@ -169,7 +287,6 @@ export default function BuyTicketModal({
         const avail = availableTickets();
         if (avail.length === 0) return;
 
-        // Agrupa por preço
         const priceMap = new Map<string, PurchaseGroup>();
         for (const item of avail) {
             const key = `${item.price.quantity}|${item.price.contract}`;
@@ -178,26 +295,42 @@ export default function BuyTicketModal({
             }
             priceMap.get(key)!.tickets.push(item.ticket);
         }
-
         const groups = Array.from(priceMap.values());
-        const result = await purchaseTickets(session, gameId, groups);
+
+        // ADR-021: se moeda alternativa selecionada, busca cotação final e constrói swapAction
+        let swapAction: SwapAction | undefined;
+        if (selectedAlt) {
+            const finalQuote = await refreshQuote(selectedAlt);
+            if (!finalQuote) return; // erro já exibido pelo refreshQuote
+            swapAction = {
+                fromContract: selectedAlt.contract,
+                amountIn:     finalQuote.amount_in_display,
+                minOut:       finalQuote.min_out,
+                poolId:       finalQuote.pool_id,
+                toContract:   roomContract,
+                amountOut:    finalQuote.amount_out_display,
+            };
+        }
+
+        const result = await purchaseTickets(session, gameId, groups, swapAction);
         if (result) onSuccess();
     };
 
     // ── Totais ─────────────────────────────────────────────────────────────
-    const avail = availableTickets();
-    const totalCount = avail.length;
-    const totalPrice = avail.reduce((sum, item) => {
-        const amt = parseFloat(item.price.quantity.split(' ')[0] || '0');
-        return sum + amt;
-    }, 0);
-    const totalSymbol = customPrice.split(' ')[1] || 'BINGO';
+    const avail        = availableTickets();
+    const totalCount   = avail.length;
+    const totalPrice   = avail.reduce((sum, item) => sum + parseFloat(item.price.quantity.split(' ')[0] || '0'), 0);
+    const totalSymbol  = customPrice.split(' ')[1] || 'BINGO';
     const totalDisplay = `${totalPrice.toFixed(4)} ${totalSymbol}`;
 
     const currentPriceAmount = parseFloat(customPrice.split(' ')[0] || '0');
     const currentCostDisplay = `${(currentPriceAmount * count).toFixed(4)} ${customPrice.split(' ')[1] || totalSymbol}`;
 
-    // ── Tela de sucesso (pós-compra) ───────────────────────────────────────
+    // Expiração da cotação ativa (countdown)
+    const quoteSecsLeft = swapQuote ? swapQuote.expires_at - Math.floor(Date.now() / 1000) : 0;
+    const quoteExpired  = swapQuote && quoteSecsLeft <= 0;
+
+    // ── Tela de sucesso ────────────────────────────────────────────────────
     if (lastPurchase) {
         return (
             <div
@@ -256,7 +389,7 @@ export default function BuyTicketModal({
         );
     }
 
-    // ── Tela principal ────────────────────────────────────────────────────
+    // ── Tela principal ─────────────────────────────────────────────────────
     return (
         <div
             className="cb-overlay"
@@ -307,6 +440,87 @@ export default function BuyTicketModal({
                 {/* ── Step: FORM ──────────────────────────────────────────── */}
                 {step === 'form' && (
                     <>
+                        {/* ADR-021: Seletor de moeda (só aparece quando há alternativas com saldo) */}
+                        {altTokens.length > 0 && (
+                            <fieldset className="mb-5" data-testid="swap-currency-selector">
+                                <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-2">
+                                    {t('buy_ticket.swap_currency_label')}
+                                </legend>
+                                <div className="flex gap-2 flex-wrap">
+                                    {/* opção padrão: moeda da sala */}
+                                    <button
+                                        type="button"
+                                        className={[
+                                            'cb-btn cb-btn-sm rounded-full',
+                                            !selectedAlt ? 'cb-btn-primary' : 'cb-btn-ghost',
+                                        ].join(' ')}
+                                        onClick={() => setSelectedAlt(null)}
+                                        data-testid="swap-currency-room"
+                                    >
+                                        {roomSymbol}
+                                    </button>
+                                    {altTokens.map(alt => (
+                                        <button
+                                            key={`${alt.contract}:${alt.symbol}`}
+                                            type="button"
+                                            className={[
+                                                'cb-btn cb-btn-sm rounded-full',
+                                                selectedAlt?.symbol === alt.symbol && selectedAlt?.contract === alt.contract
+                                                    ? 'cb-btn-primary'
+                                                    : 'cb-btn-ghost',
+                                            ].join(' ')}
+                                            onClick={() => setSelectedAlt(alt)}
+                                            data-testid={`swap-currency-${alt.symbol}`}
+                                        >
+                                            {alt.symbol}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Cotação estimada */}
+                                {selectedAlt && (
+                                    <div
+                                        className="mt-3 rounded-xl border border-[--cb-border-default] bg-[--cb-bg-sunken] p-3 text-sm space-y-1"
+                                        data-testid="swap-quote-box"
+                                    >
+                                        {quoteLoading && (
+                                            <p className="text-[--cb-text-tertiary] animate-pulse">
+                                                {t('buy_ticket.swap_quote_loading')}
+                                            </p>
+                                        )}
+                                        {quoteError && !quoteLoading && (
+                                            <p className="text-red-500 text-xs">{quoteError}</p>
+                                        )}
+                                        {swapQuote && !quoteLoading && !quoteExpired && (
+                                            <>
+                                                <div className="flex justify-between">
+                                                    <span className="text-[--cb-text-secondary]">{t('buy_ticket.swap_you_send')}</span>
+                                                    <span className="font-mono font-semibold text-[--cb-brand]">{swapQuote.amount_in_display}</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-[--cb-text-tertiary]">
+                                                    <span>{t('buy_ticket.swap_service_fee')}</span>
+                                                    <span>{(swapQuote.service_fee_bps / 100).toFixed(2)}% + LP {(swapQuote.fee_bps / 100).toFixed(2)}%</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-[--cb-text-tertiary]">
+                                                    <span>{t('buy_ticket.swap_price_impact')}</span>
+                                                    <span className={swapQuote.price_impact_pct > 2 ? 'text-orange-400' : ''}>
+                                                        {swapQuote.price_impact_pct.toFixed(2)}%
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-[--cb-text-tertiary]">
+                                                    <span>{t('buy_ticket.swap_quote_expires')}</span>
+                                                    <span>{fmtCountdown(quoteSecsLeft * 1000)}</span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {quoteExpired && !quoteLoading && (
+                                            <p className="text-orange-400 text-xs">{t('buy_ticket.swap_quote_expired')}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </fieldset>
+                        )}
+
                         <fieldset className="mb-5">
                             <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-3">
                                 {batches.length > 0
@@ -376,7 +590,12 @@ export default function BuyTicketModal({
                         )}
 
                         <p className="text-sm text-[--cb-text-secondary] text-center mb-4">
-                            {t('buy_ticket.cost_preview', { total: currentCostDisplay })}
+                            {selectedAlt && swapQuote
+                                ? t('buy_ticket.swap_cost_preview', {
+                                    roomTotal: currentCostDisplay,
+                                    altAmount: swapQuote.amount_in_display,
+                                  })
+                                : t('buy_ticket.cost_preview', { total: currentCostDisplay })}
                         </p>
 
                         <div className="flex gap-3">
@@ -459,6 +678,29 @@ export default function BuyTicketModal({
                                     <span className="text-[--cb-text-primary]">{t('buy_ticket.total')}</span>
                                     <span className="text-[--cb-brand] tabular-nums font-mono">{totalDisplay}</span>
                                 </div>
+                                {/* ADR-021: resumo do swap se moeda alternativa */}
+                                {selectedAlt && swapQuote && !quoteExpired && (
+                                    <div
+                                        className="border-t border-[--cb-border-default] pt-2 mt-2 text-xs space-y-1"
+                                        data-testid="swap-preview-summary"
+                                    >
+                                        <div className="flex justify-between text-[--cb-text-secondary]">
+                                            <span>{t('buy_ticket.swap_via')}</span>
+                                            <span className="font-semibold">{selectedAlt.symbol} → {roomSymbol}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-[--cb-text-tertiary]">{t('buy_ticket.swap_you_send')}</span>
+                                            <span className="font-mono font-bold text-[--cb-brand]">{swapQuote.amount_in_display}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[--cb-text-tertiary]">
+                                            <span>{t('buy_ticket.swap_quote_expires')}</span>
+                                            <span>{fmtCountdown(quoteSecsLeft * 1000)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {selectedAlt && quoteExpired && (
+                                    <p className="text-orange-400 text-xs mt-1">{t('buy_ticket.swap_quote_expired')}</p>
+                                )}
                             </div>
                         )}
 

@@ -366,3 +366,42 @@ export interface BlockchainLpBalance {
     pool_id: string; // uint64 como string
     amount:  string; // int64 como string
 }
+
+// ── bingo.swap — Cotação de Checkout Multi-Moeda (ADR-021) ────────────────────
+
+/**
+ * Resposta de GET /api/v1/swap/quote.
+ * Contém todos os dados necessários para o frontend exibir a cotação ao usuário
+ * e construir a transação Wharfkit de 3 ações (swap + deposit + buytickets).
+ */
+export interface SwapQuote {
+    quote_id:          string;   // UUID — rastreabilidade em logs
+    pool_id:           string;   // uint64 como string
+    from_contract:     string;   // ex: "bingo.token"
+    from_symbol:       string;   // ex: "4,BINGO"
+    to_contract:       string;   // ex: "eosio.token"
+    to_symbol:         string;   // ex: "8,WAX"
+    amount_in:         string;   // quantidade exata a enviar (unidades mínimas como string)
+    amount_in_display: string;   // ex: "123.4567 BINGO"
+    amount_out:        string;   // quantidade recebida (unidades mínimas como string)
+    amount_out_display: string;  // ex: "10.00000000 WAX"
+    min_out:           string;   // amount_out com margem de slippage 0.5%
+    fee_bps:           number;   // taxa LP em bps
+    service_fee_bps:   number;   // taxa de serviço em bps (ADR-019)
+    price_impact_pct:  number;   // impacto no pool em %
+    expires_at:        number;   // Unix timestamp (seconds)
+}
+
+/**
+ * Pool resumida retornada por GET /api/v1/swap/pools.
+ * Subconjunto de BlockchainSwapPool enriquecido com símbolos legíveis.
+ */
+export interface SwapPoolSummary {
+    pool_id:         string;
+    token_a:         { contract: string; symbol: string; precision: number };
+    token_b:         { contract: string; symbol: string; precision: number };
+    reserve_a:       string; // int64 como string
+    reserve_b:       string;
+    fee_bps:         number;
+    service_fee_bps: number;
+}
