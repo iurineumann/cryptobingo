@@ -143,9 +143,9 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
             const raw = err instanceof Error ? err.message : String(err);
             const message = raw.includes('overdrawn balance')
                 ? t('buy_ticket.error_overdrawn')
-                : raw.includes('funding')
+                : raw.includes('Game is not in FUNDING')
                 ? t('buy_ticket.error_funding_ended')
-                : raw.includes('assertion failure')
+                : raw.includes('assert_recover_key')
                 ? t('buy_ticket.error_invalid_signature')
                 : t('buy_ticket.error_generic', { raw });
 
