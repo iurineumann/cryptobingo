@@ -1,9 +1,11 @@
 // apps/api-gateway/src/controllers/newsController.ts
 // CRUD de publicações admin + listagem pública. Ref: ADR-024.
+// Tradução automática via provider chain híbrido (ADR-025).
 
 import { Request, Response } from 'express';
 import { redisClient } from '../database/redis';
 import { NewsFeed } from '../models/NewsFeed';
+import { translateNewsContent } from '../services/translation';
 import type { NewsItem } from '@cryptobingo/shared-types';
 
 const TTL_SECONDS = 120; // 2 min
@@ -63,11 +65,15 @@ export async function createNews(req: Request, res: Response): Promise<void> {
     }
 
     try {
+        // Se o admin já forneceu locale_overrides, respeitamos. Caso contrário, traduzimos.
+        const resolvedOverrides = locale_overrides
+            ?? await autoTranslate(title, content);
+
         const item = await NewsFeed.create({
             title,
             content,
             image_url:        image_url ?? null,
-            locale_overrides: locale_overrides ?? {},
+            locale_overrides: resolvedOverrides,
             active:           active !== false,
             pinned:           pinned === true,
             published_at:     new Date(),
@@ -79,6 +85,19 @@ export async function createNews(req: Request, res: Response): Promise<void> {
     } catch (err) {
         console.error('[News] Erro ao criar publicação:', err);
         res.status(500).json({ error: 'Erro ao criar publicação.' });
+    }
+}
+
+async function autoTranslate(
+    title:   string,
+    content: string,
+): Promise<Partial<Record<'en-US' | 'zh-CN', { title: string; content: string }>>> {
+    try {
+        return await translateNewsContent(title, content, 'pt', ['en-US', 'zh-CN']);
+    } catch (err) {
+        // Nunca bloqueia a publicação — falha silenciosa com log
+        console.warn('[News] Tradução automática falhou — publicando sem locale_overrides:', err);
+        return {};
     }
 }
 
