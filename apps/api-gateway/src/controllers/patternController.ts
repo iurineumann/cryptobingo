@@ -234,6 +234,7 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
             }],
         }, { broadcast: true });
 
+        await redisClient.del(`pattern:gametype:${gametype_id}`);
         console.log(`✅ [PatternCtrl] Gametype ${gametype_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Gametype "${name}" registrado com sucesso.`,

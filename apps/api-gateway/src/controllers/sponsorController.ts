@@ -127,7 +127,7 @@ export async function closeCampaign(req: Request, res: Response): Promise<void> 
         const result  = await session.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
-                name:          'closecampaign',
+                name:          'closecmpgn',
                 authorization: [session.permissionLevel],
                 data:          { campaign_id: campaignId },
             }],
