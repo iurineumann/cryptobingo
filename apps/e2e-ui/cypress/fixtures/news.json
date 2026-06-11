@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "id": "n001",
+      "title": "Grande Torneio de Bingo",
+      "content": "Participe do nosso torneio e concorra a prêmios exclusivos.",
+      "image_url": null,
+      "locale_overrides": {
+        "en-US": { "title": "Big Bingo Tournament", "content": "Join our tournament and compete for exclusive prizes." }
+      },
+      "active": true,
+      "pinned": true,
+      "published_at": "2026-01-10T10:00:00.000Z",
+      "published_by": "admin1"
+    },
+    {
+      "id": "n002",
+      "title": "Novos padrões disponíveis",
+      "content": "Adicionamos 5 novos padrões ao catálogo.",
+      "image_url": null,
+      "locale_overrides": {},
+      "active": true,
+      "pinned": false,
+      "published_at": "2026-01-05T08:00:00.000Z",
+      "published_by": "admin1"
+    }
+  ],
+  "total": 2,
+  "cached_at": "2026-01-11T00:00:00.000Z"
+}

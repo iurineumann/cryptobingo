@@ -1,0 +1,9 @@
+{
+  "entries": [
+    { "rank": 1, "wallet": "alice.wam",  "nickname": "Alice",   "total_won": 500.0, "currency": "WAX", "games_won": 5 },
+    { "rank": 2, "wallet": "bob.wam",    "nickname": null,       "total_won": 300.0, "currency": "WAX", "games_won": 3 },
+    { "rank": 3, "wallet": "carol.wam",  "nickname": "Carol",   "total_won": 100.0, "currency": "WAX", "games_won": 1 }
+  ],
+  "cached_at": "2026-01-01T12:00:00.000Z",
+  "currency_filter": null
+}
