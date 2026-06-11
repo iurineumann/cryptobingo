@@ -22,6 +22,8 @@ tags:
   - name: NFTs
   - name: Admin
   - name: Sponsors
+  - name: Leaderboard
+  - name: News
 
 paths:
 
@@ -1077,6 +1079,178 @@ paths:
                   message: { type: string }
                   transaction_id: { type: string }
 
+  # ══════════════════════════════════════════
+  # LEADERBOARD (ADR-024)
+  # ══════════════════════════════════════════
+  /leaderboard:
+    get:
+      summary: Top vencedores global
+      description: >
+        Ranking dos maiores vencedores de toda a plataforma, agregado sobre
+        `transactions_ledger` (action_type = 'claim_win'). Sem autenticação.
+        Cache Redis 5 min. Máx 50 entradas.
+      tags: [Leaderboard]
+      parameters:
+        - in: query
+          name: currency
+          required: false
+          schema: { type: string, example: "WAX" }
+          description: Filtra por moeda (WAX, BINGO, TLM…). Omitir = todos.
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+          description: Número de entradas retornadas (máx 50)
+      responses:
+        '200':
+          description: Ranking global
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/LeaderboardEntry' }
+                  cached_at: { type: string, format: date-time }
+                  currency_filter: { type: string, nullable: true }
+
+  /leaderboard/rooms/{roomId}:
+    get:
+      summary: Top vencedores por sala
+      description: >
+        Ranking dos maiores vencedores em uma sala específica.
+        Sem autenticação. Cache Redis 5 min. Máx 20 entradas.
+      tags: [Leaderboard]
+      parameters:
+        - in: path
+          name: roomId
+          required: true
+          schema: { type: string }
+          description: ID da sala (uint64 como string)
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+      responses:
+        '200':
+          description: Ranking da sala
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room_id: { type: string }
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/LeaderboardEntry' }
+                  cached_at: { type: string, format: date-time }
+        '404':
+          description: Sala não encontrada
+
+  # ══════════════════════════════════════════
+  # NEWS / PROMOÇÕES (ADR-024)
+  # ══════════════════════════════════════════
+  /news:
+    get:
+      summary: Lista publicações ativas
+      description: >
+        Retorna publicações ativas ordenadas por `published_at` desc.
+        Publicações `pinned=true` aparecem primeiro independentemente da data.
+        Sem autenticação. Cache Redis 2 min.
+      tags: [News]
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+        - in: query
+          name: offset
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Lista de publicações
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/NewsItem' }
+                  total: { type: integer }
+                  cached_at: { type: string, format: date-time }
+    post:
+      summary: Cria publicação (admin)
+      tags: [News]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewsItemInput' }
+      responses:
+        '201':
+          description: Publicação criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsItem' }
+        '400':
+          description: Payload inválido
+        '401':
+          description: Não autenticado
+        '403':
+          description: Apenas admins
+
+  /news/{id}:
+    patch:
+      summary: Edita publicação (admin)
+      tags: [News]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewsItemInput' }
+      responses:
+        '200':
+          description: Publicação atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsItem' }
+        '403':
+          description: Apenas admins
+        '404':
+          description: Publicação não encontrada
+    delete:
+      summary: Remove publicação (admin — soft delete)
+      tags: [News]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Publicação arquivada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        '403':
+          description: Apenas admins
+        '404':
+          description: Publicação não encontrada
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1526,3 +1700,66 @@ components:
         service_fee_bps:    { type: integer }
         price_impact_pct:   { type: number, description: "Impacto no pool em %" }
         expires_at:         { type: integer, description: "Unix timestamp (seconds)" }
+
+    LeaderboardEntry:
+      type: object
+      description: Entrada no ranking de vencedores (ADR-024)
+      properties:
+        rank:       { type: integer, description: "Posição no ranking (1-based)" }
+        wallet:     { type: string, description: "Conta WAX do jogador" }
+        nickname:   { type: string, nullable: true, description: "Apelido do perfil Mongo" }
+        total_won:  { type: number, description: "Soma dos claim_win em unidades da moeda" }
+        currency:   { type: string, description: "Símbolo da moeda (WAX, BINGO, TLM…)" }
+        games_won:  { type: integer, description: "Número de transações claim_win" }
+        room_id:    { type: string, nullable: true, description: "Presente só no leaderboard por sala" }
+
+    NewsItem:
+      type: object
+      description: Publicação de notícia/promoção (ADR-024)
+      properties:
+        id:               { type: string, description: "ObjectId do MongoDB como string" }
+        title:            { type: string }
+        content:          { type: string, description: "Markdown ou HTML sanitizado" }
+        image_url:        { type: string, nullable: true }
+        locale_overrides:
+          type: object
+          description: "Traduções opcionais por locale"
+          properties:
+            en-US:
+              type: object
+              properties:
+                title:   { type: string }
+                content: { type: string }
+            zh-CN:
+              type: object
+              properties:
+                title:   { type: string }
+                content: { type: string }
+        active:           { type: boolean }
+        pinned:           { type: boolean }
+        published_at:     { type: string, format: date-time }
+        published_by:     { type: string, description: "Wallet do admin que publicou" }
+
+    NewsItemInput:
+      type: object
+      description: Payload para criar/editar publicação (ADR-024)
+      required: [title, content]
+      properties:
+        title:            { type: string }
+        content:          { type: string }
+        image_url:        { type: string, nullable: true }
+        locale_overrides:
+          type: object
+          properties:
+            en-US:
+              type: object
+              properties:
+                title:   { type: string }
+                content: { type: string }
+            zh-CN:
+              type: object
+              properties:
+                title:   { type: string }
+                content: { type: string }
+        active:           { type: boolean, default: true }
+        pinned:           { type: boolean, default: false }
