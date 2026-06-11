@@ -54,12 +54,12 @@ bingogamectr
 | Categoria | Actions | Auth no contrato | Assinante nos serviços |
 |---|---|---|---|
 | Config crítica | `setconfig`, `settreasury`, `sweepggr` | `require_auth(get_self())` = `@active` | cleos direto (cold key) |
-| Admin operacional | `creategame`, `addpattern`, `delpattern`, `addgametype`, `delgametype`, `setstages`, `setcombos`, `setnftconf`, `delnftconf` | `require_auth2(get_self(), "admin"_n)` | api-gateway / worker como `bingogamectr@admin` com chave `bingogamesvc` |
-| Admin de sala | `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta` | `require_auth2(get_self(), "admin"_n)` | api-gateway como `bingogamectr@admin` com chave `bingogamesvc` |
-| Multi-party | `linkcampaign`, `closecmpgn` | `require_auth2(get_self(),"admin"_n)` OU `has_auth(sponsor)` | api-gateway (`bingogamectr@admin`) ou sponsor direto |
-| Multi-party drop | `allocatedrop`, `deallocdrop` | `require_auth2(get_self(),"admin"_n)` OU `has_auth(owner)` | api-gateway (`bingogamectr@admin`) ou owner direto |
+| Admin operacional | `creategame`, `addpattern`, `delpattern`, `addgametype`, `delgametype`, `setstages`, `setcombos`, `setnftconf`, `delnftconf` | `require_auth(permission_level{get_self(),"admin"_n})` | api-gateway / worker como `bingogamectr@admin` com chave `bingogamesvc` |
+| Admin de sala | `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta` | `require_auth(permission_level{get_self(),"admin"_n})` | api-gateway como `bingogamectr@admin` com chave `bingogamesvc` |
+| Multi-party | `linkcampaign`, `closecmpgn` | `require_auth(permission_level{get_self(),"admin"_n})` OU `has_auth(sponsor)` | api-gateway (`bingogamectr@admin`) ou sponsor direto |
+| Multi-party drop | `allocatedrop`, `deallocdrop` | `require_auth(permission_level{get_self(),"admin"_n})` OU `has_auth(owner)` | api-gateway (`bingogamectr@admin`) ou owner direto |
 | FSM microserviço | `fundgame`, `lockgame`, `startdraw`, `claimwin`, `claimcombo`, `claimstage`, `closegame`, `execdrop` | `require_auth("bingogamesvc"_n)` | worker como `bingogamesvc@active` |
-| Abort dual | `abortgame` | `has_auth(bingogamesvc) \|\| has_auth(get_self())` | worker (`bingogamesvc@active`) ou admin (cold key) |
+| Abort dual | `abortgame` | `has_auth(bingogamesvc)` OU `require_auth(permission_level{get_self(),"admin"_n})` | worker (`bingogamesvc@active`) ou `bingogamectr@admin` — cold key removida |
 | Permissionless | `refundticket`, `cleargame` | status check apenas | qualquer um |
 | Buyer/owner | `buytickets`, `withdraw`, `reclaimasset` | `require_auth(buyer/owner)` | player on-chain |
 | Oracle | `receiverand` | `require_auth("orng.wax"_n)` | oráculo |

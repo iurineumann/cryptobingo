@@ -826,9 +826,8 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::abortgame(uint64_t game_id, std::string reason) {
-        bool by_ms    = has_auth("bingogamesvc"_n);
-        bool by_admin = has_auth(get_self());
-        check(by_ms || by_admin, "Auth: bingogamesvc ou admin necessaria.");
+        bool by_ms = has_auth("bingogamesvc"_n);
+        if (!by_ms) require_auth(permission_level{get_self(), "admin"_n});
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");

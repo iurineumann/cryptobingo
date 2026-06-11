@@ -33,7 +33,7 @@ jest.mock('./blockchain', () => ({
     executeStartDraw:   jest.fn().mockResolvedValue('tx-draw'),
     executeAbortGame:   jest.fn().mockResolvedValue('tx-abort'),
     microserviceSession: {},
-    contractSession:    {},
+    adminSession:        {},
 }));
 jest.mock('./broadcaster', () => ({
     notifyGameLocked:  jest.fn(),
