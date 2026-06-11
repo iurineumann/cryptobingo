@@ -462,7 +462,21 @@ echo "[*] Deploy do contrato bingogamectr..."
 if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.abi" ]; then
     if cleos set contract bingogamectr "$CONTRACT_SRC_CONTAINER" -p bingogamectr@active; then
         cleos set account permission bingogamectr active --add-code -p bingogamectr@active 2>/dev/null || true
-        echo "[✓] bingogamectr deployado."
+
+        # ADR-026: permissão admin — bingogamectr@active OU bingogamesvc@active podem chamar actions operacionais
+        cleos set account permission bingogamectr admin \
+          '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"bingogamectr","permission":"active"},"weight":1},{"permission":{"actor":"bingogamesvc","permission":"active"},"weight":1}],"waits":[]}' \
+          active -p bingogamectr@active 2>/dev/null || true
+
+        # linkauth: restringe quais actions a permissão admin pode chamar (defesa em profundidade)
+        for ACTION in creategame setnftconf delnftconf addpattern delpattern \
+                      addgametype delgametype setstages setcombos \
+                      createroom activateroom pauseroom closeroom setroommeta \
+                      linkcampaign closecmpgn allocatedrop deallocdrop abortgame; do
+            cleos set action permission bingogamectr bingogamectr "$ACTION" admin \
+              -p bingogamectr@active 2>/dev/null || true
+        done
+        echo "[✓] bingogamectr deployado + permissão admin configurada (ADR-026)."
     else
         echo "[!] Aviso: deploy do bingogamectr falhou (WASM pode ter nomes inválidos)."
     fi
@@ -737,7 +751,7 @@ _upsert_env "$F" "REDIS_URL"                "redis://localhost:6379"
 _upsert_env "$F" "CONTRACT_ACCOUNT"         "bingogamectr"
 _upsert_env "$F" "SWAP_CONTRACT"            "bingogameswp"
 _upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGOGAMESVC_KEY:-}"
-_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGOGAMECTR_KEY:-}"
+# ADR-026: CONTRACT_PRIVATE_KEY removida dos serviços online — não é mais necessária
 _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
 _upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3001"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
@@ -747,7 +761,7 @@ _upsert_env "$F" "CHAIN_ID"                    "$CHAIN_ID"
 _upsert_env "$F" "RPC_URL"                     "http://127.0.0.1:8888"
 _upsert_env "$F" "CONTRACT_ACCOUNT"            "bingogamectr"
 _upsert_env "$F" "MICROSERVICE_PRIVATE_KEY"    "${BINGOGAMESVC_KEY:-}"
-_upsert_env "$F" "CONTRACT_PRIVATE_KEY"        "${BINGOGAMECTR_KEY:-}"
+# ADR-026: CONTRACT_PRIVATE_KEY removida dos serviços online — não é mais necessária
 _upsert_env "$F" "POSTGRES_URL"                "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
 _upsert_env "$F" "REDIS_URL"                   "redis://localhost:6379"
 _upsert_env "$F" "RABBITMQ_URL"                "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"

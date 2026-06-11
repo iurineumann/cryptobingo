@@ -405,3 +405,35 @@ export interface SwapPoolSummary {
     fee_bps:         number;
     service_fee_bps: number;
 }
+
+// ── Rankings & Conteúdo (ADR-024) ────────────────────────────────────────────
+
+/**
+ * Entrada no ranking de vencedores. Fonte: PostgreSQL transactions_ledger
+ * (action_type = 'claim_win') + nickname do perfil Mongo.
+ */
+export interface LeaderboardEntry {
+    rank:      number;
+    wallet:    string;
+    nickname:  string | null;
+    total_won: number;   // soma dos claim_win (unidades da moeda como number)
+    currency:  string;   // 'WAX', 'BINGO', 'TLM', etc.
+    games_won: number;   // número de transações claim_win
+    room_id?:  string;   // presente apenas no leaderboard por sala
+}
+
+/**
+ * Publicação de notícia/promoção. Armazenada em MongoDB (coleção news_feed).
+ * Soft delete: active=false oculta da listagem pública.
+ */
+export interface NewsItem {
+    id:               string;
+    title:            string;
+    content:          string;
+    image_url:        string | null;
+    locale_overrides: Partial<Record<'en-US' | 'zh-CN', { title: string; content: string }>>;
+    active:           boolean;
+    pinned:           boolean;
+    published_at:     string;   // ISO 8601
+    published_by:     string;   // wallet do admin
+}

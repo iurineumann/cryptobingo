@@ -35,7 +35,7 @@ jest.mock('./blockchain', () => ({
     executeCloseGame: jest.fn().mockResolvedValue('tx-close'),
     executeClaimWin:  jest.fn().mockResolvedValue('tx-claim'),
     microserviceSession: {},
-    contractSession:     {},
+    adminSession:        {},
 }));
 jest.mock('./invertedIndex', () => ({
     deleteIndex: jest.fn().mockResolvedValue(undefined),

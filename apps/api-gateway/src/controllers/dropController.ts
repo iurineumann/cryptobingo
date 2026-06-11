@@ -4,17 +4,18 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
-const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
-const CHAIN_ID              = process.env.CHAIN_ID!;
-const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
+const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
+const CHAIN_ID         = process.env.CHAIN_ID!;
+const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 
-function getSession(): Session {
+// ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
+function getAdminSession(): Session {
     return new Session({
         actor:        CONTRACT_ACCOUNT,
-        permission:   'active',
+        permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
-        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
+        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
     });
 }
 
@@ -109,7 +110,7 @@ export async function allocateDrop(req: Request, res: Response): Promise<void> {
     }
 
     try {
-        const session = getSession();
+        const session = getAdminSession();
         const result = await session.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
@@ -149,7 +150,7 @@ export async function deallocateDrop(req: Request, res: Response): Promise<void>
     }
 
     try {
-        const session = getSession();
+        const session = getAdminSession();
         const result = await session.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
@@ -174,33 +175,11 @@ export async function deallocateDrop(req: Request, res: Response): Promise<void>
 // ==========================================
 // POST /api/v1/vault/reclaim
 // ==========================================
-export async function reclaimAsset(req: Request, res: Response): Promise<void> {
-    const { deposit_id } = req.body;
-
-    if (!deposit_id) {
-        res.status(400).json({ error: 'Campo obrigatório: deposit_id.' });
-        return;
-    }
-
-    try {
-        const session = getSession();
-        const result = await session.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'reclaimasset',
-                authorization: [session.permissionLevel],
-                data:          { deposit_id: UInt64.from(deposit_id) },
-            }],
-        }, { broadcast: true });
-
-        console.log(`✅ [DropCtrl] Depósito #${deposit_id} reclaimado. TX: ${result.response?.transaction_id}`);
-        res.status(200).json({
-            message:        'Ativo reclaimado com sucesso.',
-            transaction_id: result.response?.transaction_id,
-        });
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao reclaimar:', err);
-        res.status(500).json({ error: `Erro ao reclaimar: ${msg}` });
-    }
+// reclaimasset exige require_auth(owner) no contrato — o backend não pode assinar
+// como o owner do depósito. Esta ação deve ser chamada pelo frontend com a wallet
+// do sponsor via Wharfkit. ADR-026: não expor ações owner-signed pelo backend.
+export async function reclaimAsset(_req: Request, res: Response): Promise<void> {
+    res.status(501).json({
+        error: 'reclaimasset deve ser assinada pelo owner do depósito via wallet. Use o frontend com Wharfkit.',
+    });
 }

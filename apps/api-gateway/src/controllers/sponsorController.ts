@@ -9,17 +9,18 @@ import { UInt64 }                from '@wharfkit/antelope';
 import { rpcClient }             from '@cryptobingo/blockchain-core';
 import type { BlockchainCampaign } from '@cryptobingo/shared-types';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
-const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
-const CHAIN_ID              = process.env.CHAIN_ID!;
-const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
+const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
+const CHAIN_ID         = process.env.CHAIN_ID!;
+const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 
+// ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 function getAdminSession(): Session {
     return new Session({
         actor:        CONTRACT_ACCOUNT,
-        permission:   'active',
+        permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
-        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
+        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
     });
 }
 
@@ -126,7 +127,7 @@ export async function closeCampaign(req: Request, res: Response): Promise<void> 
         const result  = await session.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
-                name:          'closecampaign',
+                name:          'closecmpgn',
                 authorization: [session.permissionLevel],
                 data:          { campaign_id: campaignId },
             }],

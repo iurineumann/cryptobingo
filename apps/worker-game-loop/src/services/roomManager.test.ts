@@ -9,7 +9,7 @@ process.env.API_GATEWAY_URL     = 'http://localhost:8083';
 
 const mockContractTransact   = jest.fn().mockResolvedValue({ response: { transaction_id: 'tx-create' } });
 const mockMicroTransact      = jest.fn().mockResolvedValue({ response: { transaction_id: 'tx-fund'   } });
-const mockPermission         = { actor: 'bingogamectr', permission: 'active' };
+const mockPermission         = { actor: 'bingogamectr', permission: 'admin' };
 
 jest.mock('@cryptobingo/blockchain-core', () => ({
     fetchGame: jest.fn(),
@@ -17,7 +17,7 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
 }));
 jest.mock('./blockchain', () => ({
     microserviceSession: { transact: mockMicroTransact, permissionLevel: { actor: 'bingogamesvc', permission: 'active' } },
-    contractSession:     { transact: mockContractTransact, permissionLevel: mockPermission },
+    adminSession:        { transact: mockContractTransact, permissionLevel: mockPermission },
     executeFundGame:     jest.fn().mockResolvedValue('tx-fund'),
 }));
 jest.mock('./redis', () => ({
@@ -157,7 +157,7 @@ describe('createNextGameForRoom', () => {
         expect(typeof gameId === 'string' || gameId === null).toBe(true);
     });
 
-    it('contractSession.transact lança → retorna null sem propagar', async () => {
+    it('adminSession.transact lança → retorna null sem propagar', async () => {
         mockContractTransact.mockRejectedValueOnce(new Error('Chain error'));
 
         const promise = createNextGameForRoom(makeRoom('1', '0') as any);
