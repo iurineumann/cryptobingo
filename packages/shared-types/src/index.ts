@@ -315,7 +315,7 @@ export interface BlockchainDropState {
     player_base_chance_bps: number; // Chance base por jogador (default 5000 = 50%)
 }
 
-// ── bingo.swap — Tipos On-Chain (ADR-018) ─────────────────────────────────────
+// ── bingogameswp — Tipos On-Chain (ADR-018) ─────────────────────────────────────
 // Correspondem às tabelas swapstate, allowedtoks, pools, pending e lpbalances
 // definidas em contracts/swap/include/swap.hpp.
 
@@ -323,7 +323,7 @@ export interface BlockchainDropState {
 export interface BlockchainSwapState {
     next_pool_id:  string; // uint64 como string
     next_token_id: string; // uint64 como string
-    treasury:      string; // name — conta que recebe as service fees (default: bingo.game)
+    treasury:      string; // name — conta que recebe as service fees (default: bingogamectr)
 }
 
 /** Espelha a tabela `allowedtoks` do swap.hpp. Scope: get_self(). */
@@ -367,7 +367,7 @@ export interface BlockchainLpBalance {
     amount:  string; // int64 como string
 }
 
-// ── bingo.swap — Cotação de Checkout Multi-Moeda (ADR-021) ────────────────────
+// ── bingogameswp — Cotação de Checkout Multi-Moeda (ADR-021) ────────────────────
 
 /**
  * Resposta de GET /api/v1/swap/quote.
@@ -377,7 +377,7 @@ export interface BlockchainLpBalance {
 export interface SwapQuote {
     quote_id:          string;   // UUID — rastreabilidade em logs
     pool_id:           string;   // uint64 como string
-    from_contract:     string;   // ex: "bingo.token"
+    from_contract:     string;   // ex: "bingogametkn"
     from_symbol:       string;   // ex: "4,BINGO"
     to_contract:       string;   // ex: "eosio.token"
     to_symbol:         string;   // ex: "8,WAX"

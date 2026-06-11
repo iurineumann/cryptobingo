@@ -1,4 +1,4 @@
-# ADR-018 — bingo.swap: DEX AMM x*y=k
+# ADR-018 — bingogameswp: DEX AMM x*y=k
 
 **Status:** Accepted
 **Data:** 2026-06-09
@@ -16,7 +16,7 @@ com WAX, e que o treasury do GGR recicle capital dentro do ecossistema.
 
 ## Decisão
 
-Implementar um contrato AMM separado `bingo.swap` (conta WAX: a definir em produção) com a fórmula
+Implementar um contrato AMM separado `bingogameswp` (conta WAX: a definir em produção) com a fórmula
 **constant product x*y=k** (tipo Uniswap v2).
 
 ### Allowlist de tokens aprovados
@@ -38,8 +38,8 @@ limitada a pares de tokens previamente aprovados — modelo adotado por Defibox 
 
 ### Conta do contrato
 
-Separada de `bingo.game` por princípio de menor privilégio — o swap não precisa de permissões de
-`microservice` nem acessa tabelas do bingo.
+Separada de `bingogamectr` por princípio de menor privilégio — o swap não precisa de permissões de
+`bingogamesvc` nem acessa tabelas do bingo.
 
 ### Fórmula de swap
 
@@ -120,7 +120,7 @@ cobrindo os 64 bits completos de cada campo — sem colisão possível entre con
 
 ## Consequências
 
-- O contrato `bingo.swap` deve ser deployado em conta separada (ex.: `bingo.swap11`).
+- O contrato `bingogameswp` deve ser deployado em conta separada (ex.: `bingogameswp11`).
 - A conta precisa da permissão `active` para enviar `transfer` inline (eosio.code).
 - Primeiro deploy requer chamadas `addtoken` para cada token aprovado (WAX, BINGO, etc.).
 - A API-gateway pode chamar `on_transfer` indiretamente via cleos/Wharfkit para facilitar swaps
@@ -128,7 +128,7 @@ cobrindo os 64 bits completos de cada campo — sem colisão possível entre con
 - Integração com o frontend fica fora do escopo desta ADR (ADR-019 se necessário).
 - Harness E2E: Suite 9 (`apps/harness/tests/swap.test.ts`) valida addtoken → createpool →
   addliq → swap WAX→BINGO → swap BINGO→WAX → remliq parcial → canceldep + 7 security guards.
-- `init_dev_env.sh` cria conta `bingo.swap`, deploya o contrato e registra WAX+BINGO na allowlist
+- `init_dev_env.sh` cria conta `bingogameswp`, deploya o contrato e registra WAX+BINGO na allowlist
   automaticamente no bootstrap completo do ambiente de desenvolvimento.
 - `shared-types` exporta `BlockchainSwapState`, `BlockchainAllowedToken`, `BlockchainSwapPool`,
   `BlockchainPendingDeposit`, `BlockchainLpBalance` para uso cross-package.

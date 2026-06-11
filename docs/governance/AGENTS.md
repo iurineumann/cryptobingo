@@ -234,7 +234,7 @@
 
 - `signer_key` on-chain: `EOS8Ke4HGnKjQV26sooEdYh5KnUsPMn88FY8kvod6xLXTGJN5TkXf` (corresponde a `BINGO_GAME_PUB` / `MICROSERVICE_PRIVATE_KEY`)
 - Container `bingo_waxdev` faz bind mount de `contracts/` em `/app/contracts:ro`
-- ABI redeploy: `cleos set contract bingo.game /app/contracts/bingo -p bingo.game@active`
+- ABI redeploy: `cleos set contract bingogamectr /app/contracts/bingo -p bingogamectr@active`
 
 ### Arquivos Relevantes
 

@@ -6,7 +6,7 @@
 //   3. Submete buytickets() para cada grupo de preço na confirmação
 //
 // Quando swapAction fornecida (ADR-021), a transação inclui 3 ações atômicas:
-//   transfer user→bingo.swap (swap)  →  transfer user→bingo.game (deposit)  →  buytickets
+//   transfer user→bingogameswp (swap)  →  transfer user→bingogamectr (deposit)  →  buytickets
 //
 // Ref: ADR-001, ADR-021, SPEC.md §2.1
 
@@ -15,28 +15,28 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { generateSignedTickets, type SignedTicket } from '../services/api';
 
-const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
-const SWAP_ACCOUNT     = import.meta.env.VITE_SWAP_CONTRACT    ?? 'bingo.swap';
+const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
+const SWAP_ACCOUNT     = import.meta.env.VITE_SWAP_CONTRACT    ?? 'bingogameswp';
 const BATCH_SIZE       = 50;
 
 /**
  * Quando o usuário paga com moeda alternativa (ADR-021), este bloco descreve
  * as duas actions extras que precedem `buytickets`:
- *   1. transfer user → bingo.swap  (executa o swap)
- *   2. transfer user → bingo.game  (deposita o token da sala para compra)
+ *   1. transfer user → bingogameswp  (executa o swap)
+ *   2. transfer user → bingogamectr  (deposita o token da sala para compra)
  */
 export interface SwapAction {
-    /** Contrato do token de origem (ex: "bingo.token") */
+    /** Contrato do token de origem (ex: "bingogametkn") */
     fromContract:  string;
     /** Quantidade total a enviar ao swap com fees (ex: "123.4567 BINGO") */
     amountIn:      string;
     /** min_out com margem de slippage 0.5% (unidades mínimas como string) */
     minOut:        string;
-    /** pool_id do bingo.swap */
+    /** pool_id do bingogameswp */
     poolId:        string;
     /** Contrato do token de destino (ex: "eosio.token") */
     toContract:    string;
-    /** Quantidade exata a depositar no bingo.game (ex: "10.00000000 WAX") */
+    /** Quantidade exata a depositar no bingogamectr (ex: "10.00000000 WAX") */
     amountOut:     string;
 }
 

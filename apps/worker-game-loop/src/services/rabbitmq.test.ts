@@ -3,7 +3,7 @@
 // indiretamente via exposição das funções de processamento.
 
 process.env.RABBITMQ_URL = 'amqp://guest:guest@localhost:5672';
-process.env.CONTRACT_ACCOUNT = 'bingo.game';
+process.env.CONTRACT_ACCOUNT = 'bingogamectr';
 process.env.RPC_URL = 'http://localhost:8888';
 process.env.CHAIN_ID = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 process.env.MICROSERVICE_PRIVATE_KEY = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3';

@@ -6,7 +6,7 @@
 
 ## Épico 1: Core de Blockchain & Tokenomics
 - [x] Contrato C++ completo (buytickets, lockgame, startdraw, claimwin, receiverand).
-- [x] Token dedicado `bingo.token`, Utility NFT via `nftconfigs`.
+- [x] Token dedicado `bingogametkn`, Utility NFT via `nftconfigs`.
 - [x] ADR-001 a ADR-015 definidos e documentados.
 - [x] Tabelas `patterns` e `gametypes` on-chain (ADR-004 Fase 2).
 - [x] Fórmula `max_weight` no claimwin (ADR-005 Fase 2).
@@ -16,9 +16,9 @@
 - [x] Actions de drop vault no contrato C++: `allocatedrop`, `deallocdrop`, `reclaimasset`, `execdrop` + `on_notify` para token deposits (memo 'vault') e NFT transfers (atomicassets).
 - [x] ABI v2.0 completo e sincronizado — 31 actions, 12 tabelas, 14 structs.
 - [x] Action `sweepggr` no contrato C++ + tabela `ggrpool` + `settreasury` (ADR-005 Fase 4).
-- [x] Contrato `bingo.swap` (DEX x*y=k) — AMM constant-product, allowlist de tokens aprovados (`allowedtoks` + `addtoken`/`deltoken`), 6 actions (addtoken/deltoken/createpool/addliq/remliq/canceldep), tabelas pools/pending/lpbalances/allowedtoks, fee_bps configurável, dead shares anti-manipulation. ADR-018.
-- [x] `bingo.swap` — taxa de serviço por pool (`service_fee_bps`, ADR-019): `setpoolfee` + `settreasury` (treasury=bingo.game); fee deduzida do `amount_in` antes do AMM, enviada inline para treasury; max 500 bps; campanha fee-zero via `setpoolfee(id, 0)`. Phase 2 (descontos por NFT) planejada no ADR-019.
-- [x] `init_dev_env.sh` — conta `bingo.swap` adicionada ao bootstrap; deploy automático do contrato; addtoken WAX+BINGO na allowlist; distribuição de WAX e BINGO ao contrato de swap.
+- [x] Contrato `bingogameswp` (DEX x*y=k) — AMM constant-product, allowlist de tokens aprovados (`allowedtoks` + `addtoken`/`deltoken`), 6 actions (addtoken/deltoken/createpool/addliq/remliq/canceldep), tabelas pools/pending/lpbalances/allowedtoks, fee_bps configurável, dead shares anti-manipulation. ADR-018.
+- [x] `bingogameswp` — taxa de serviço por pool (`service_fee_bps`, ADR-019): `setpoolfee` + `settreasury` (treasury=bingogamectr); fee deduzida do `amount_in` antes do AMM, enviada inline para treasury; max 500 bps; campanha fee-zero via `setpoolfee(id, 0)`. Phase 2 (descontos por NFT) planejada no ADR-019.
+- [x] `init_dev_env.sh` — conta `bingogameswp` adicionada ao bootstrap; deploy automático do contrato; addtoken WAX+BINGO na allowlist; distribuição de WAX e BINGO ao contrato de swap.
 - [x] `shared-types` — tipos `BlockchainSwapState`, `BlockchainAllowedToken`, `BlockchainSwapPool`, `BlockchainPendingDeposit`, `BlockchainLpBalance` exportados.
 - [x] Harness E2E Suite 9 (`apps/harness/tests/swap.test.ts`) — addtoken → createpool → addliq → swap WAX→BINGO → swap BINGO→WAX → remliq parcial → canceldep + 7 security guards. ADR-018.
 
@@ -111,3 +111,14 @@
 - [x] `patternCache.ts` — Redis TTL 1h, fail-open; `GET /api/v1/gametypes/:gametypeId/patterns`.
 - [x] Harness E2E 20/20 — ABI `orng.wax` corrigido (tabela `reqs` adicionada manualmente); `init_dev_env.sh` usa ABI hand-maintained. Total: 273 testes passando.
 - [x] E2E de UI com Cypress (ADR-017) — 17 specs, 112 testes Tier 1 (PR-gate) + 21 testes Tier 2 (nightly). Jornadas player/admin/sponsor (vault, drops, gametypes/combos). Skill `e2e-ui-cypress` + revisor `e2e-reviewer`; seletores `data-testid`; CI `e2e-ui` (PR) + `e2e-ui-real` (nightly 03:00 UTC).
+
+## Épico 6: Migração de Contas WAX Mainnet (ADR-023)
+- [x] Mapeamento oficial: `bingo.game→bingogamectr`, `bingo.token→bingogametkn`, `bingo.swap→bingogameswp`, `microservice→bingogamesvc`
+- [x] Chaves públicas WAX mainnet registradas (owner + active para cada conta)
+- [x] Contratos C++ atualizados (bingo.{hpp,cpp}, swap.{hpp,cpp})
+- [x] `init_dev_env.sh` atualizado com novos nomes + chaves geradas localmente
+- [x] Serviços backend (worker, api-gateway, blockchain-core, shared-types, infra) atualizados
+- [x] Frontend + swap-ui (env vars, componentes, branding) atualizados
+- [x] Testes (harness, e2e-ui fixtures) atualizados
+- [x] Documentação (CLAUDE.md, SPEC.md, ADRs, skills) atualizada
+- [x] ADR-023 criado documentando o mapeamento de contas mainnet

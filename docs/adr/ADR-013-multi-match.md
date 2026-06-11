@@ -47,7 +47,7 @@ Vazio (`stages = []`) = modo não é MULTI_MATCH.
 Action separada de `addgametype` para definir/atualizar os estágios de um gametype.
 Permite modificar os estágios sem recriar o gametype (on-chain update seguro).
 
-Auth: `get_self()` (bingo.game admin).
+Auth: `get_self()` (bingogamectr admin).
 
 ### 3. Action `claimstage(game_id, ticket_id, stage, ball_count, win_pattern_mask)` — Microservice
 
@@ -56,8 +56,8 @@ Paga um ticket por um estágio específico. Calculado como:
 payout = ticket_price × base_multiplier × stage.weight / 100
 ```
 
-**Sem proteção de duplicação on-chain:** o contrato confia no microservice
-(`require_auth("microservice"_n)`). O evaluator garante que cada (ticket, stage) seja pago
+**Sem proteção de duplicação on-chain:** o contrato confia no bingogamesvc
+(`require_auth("bingogamesvc"_n)`). O evaluator garante que cada (ticket, stage) seja pago
 no máximo uma vez. Risco documentado; aceitável dado o modelo de confiança existente.
 
 `claimstage` aceita `drawn | paying`, transiciona `drawn → paying` na primeira chamada
@@ -97,7 +97,7 @@ disponível para limitar o sorteio (default 35). Estágios que não acontecerem 
 **Positivas:**
 - Mantém jogadores engajados durante todo o sorteio (prêmios progressivos).
 - Acumulação de prêmios é mais justa e intuitiva que a regra de max-weight único.
-- `claimstage` reutiliza o modelo de confiança microservice existente.
+- `claimstage` reutiliza o modelo de confiança bingogamesvc existente.
 - `setstages` permite atualizar configurações de estágio sem migrar gametypes.
 
 **Negativas / Riscos:**
@@ -130,4 +130,4 @@ disponível para limitar o sorteio (default 35). Estágios que não acontecerem 
 
 - ADR-012: Draw Modes (FIXED, FIRST_FULL, GOLDEN_BALL, paying state, closegame)
 - ADR-005: Fixed-Odds Treasury — modelo de payout (weight em hundredths)
-- SPEC.md §2.2: claimwin e modelo de confiança microservice
+- SPEC.md §2.2: claimwin e modelo de confiança bingogamesvc

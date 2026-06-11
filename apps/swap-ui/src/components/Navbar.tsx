@@ -1,5 +1,5 @@
 // apps/swap-ui/src/components/Navbar.tsx
-// Navbar do bingo.swap: logo, navegação, wallet button, seletor de idioma.
+// Navbar do bingogameswp: logo, navegação, wallet button, seletor de idioma.
 // Link bidirecional: "← Jogar Bingo" aponta para VITE_GAME_URL (ADR-022).
 
 import { NavLink } from 'react-router-dom';

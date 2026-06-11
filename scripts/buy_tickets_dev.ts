@@ -34,7 +34,7 @@ async function deposit(playerKey: string, playerName: string) {
     actions: [{
       account: 'eosio.token', name: 'transfer',
       authorization: [session.permissionLevel],
-      data: { from: playerName, to: 'bingo.game', quantity: '10.0000 WAX', memo: 'deposit' },
+      data: { from: playerName, to: 'bingogamectr', quantity: '10.0000 WAX', memo: 'deposit' },
     }],
   }, { broadcast: true });
 }
@@ -55,7 +55,7 @@ async function buy(playerKey: string, playerName: string) {
 
   const r = await session.transact({
     actions: [{
-      account: 'bingo.game', name: 'buytickets',
+      account: 'bingogamectr', name: 'buytickets',
       authorization: [session.permissionLevel],
       data: {
         buyer:           owner,

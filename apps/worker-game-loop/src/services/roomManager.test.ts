@@ -2,21 +2,21 @@
 // createNextGameForRoom tem setTimeout(resolve, delayMs) onde delayMs vem de fetchRoomMetadata
 // (fetch HTTP ao API gateway). Mockamos global.fetch e usamos fake timers.
 
-process.env.CONTRACT_ACCOUNT    = 'bingo.game';
+process.env.CONTRACT_ACCOUNT    = 'bingogamectr';
 process.env.RPC_URL             = 'http://localhost:8888';
 process.env.CHAIN_ID            = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 process.env.API_GATEWAY_URL     = 'http://localhost:8083';
 
 const mockContractTransact   = jest.fn().mockResolvedValue({ response: { transaction_id: 'tx-create' } });
 const mockMicroTransact      = jest.fn().mockResolvedValue({ response: { transaction_id: 'tx-fund'   } });
-const mockPermission         = { actor: 'bingo.game', permission: 'active' };
+const mockPermission         = { actor: 'bingogamectr', permission: 'active' };
 
 jest.mock('@cryptobingo/blockchain-core', () => ({
     fetchGame: jest.fn(),
     rpcClient: { v1: { chain: { get_table_rows: jest.fn() } } },
 }));
 jest.mock('./blockchain', () => ({
-    microserviceSession: { transact: mockMicroTransact, permissionLevel: { actor: 'microservice', permission: 'active' } },
+    microserviceSession: { transact: mockMicroTransact, permissionLevel: { actor: 'bingogamesvc', permission: 'active' } },
     contractSession:     { transact: mockContractTransact, permissionLevel: mockPermission },
     executeFundGame:     jest.fn().mockResolvedValue('tx-fund'),
 }));
@@ -47,17 +47,17 @@ global.fetch = mockFetch as any;
 function makeGame(roomId = '1', gameId = '1') {
     return {
         game_id: gameId, status: 'archived', gametype_id: '1', room_id: roomId,
-        drawn_balls: [], ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-        total_wagered:  { quantity: '0.0000 BINGO', contract: 'bingo.token' },
+        drawn_balls: [], ticket_price: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+        total_wagered:  { quantity: '0.0000 BINGO', contract: 'bingogametkn' },
     };
 }
 
 function makeRoom(roomId = '1', currentGameId = '0') {
     return {
         room_id: roomId, sponsor: 'sponsor1', gametype_id: '1', status: 'active',
-        ticket_price_min:     { quantity: '5.0000 BINGO',  contract: 'bingo.token' },
-        ticket_price_max:     { quantity: '50.0000 BINGO', contract: 'bingo.token' },
-        ticket_price_default: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
+        ticket_price_min:     { quantity: '5.0000 BINGO',  contract: 'bingogametkn' },
+        ticket_price_max:     { quantity: '50.0000 BINGO', contract: 'bingogametkn' },
+        ticket_price_default: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
         max_tickets_per_player: 0, room_drop_chance_bps: 5000,
         current_game_id: currentGameId, weight: 100,
     };

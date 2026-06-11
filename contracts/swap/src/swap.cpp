@@ -280,7 +280,7 @@ namespace swap_contract_ns {
             // Envia a service fee para a treasury (se houver).
             if (service_fee_amount > 0) {
                 swap_state_singleton ss(get_self(), get_self().value);
-                name treasury = ss.exists() ? ss.get().treasury : "bingo.game"_n;
+                name treasury = ss.exists() ? ss.get().treasury : "bingogamectr"_n;
                 action(
                     permission_level{get_self(), "active"_n},
                     token_contract,
@@ -296,7 +296,7 @@ namespace swap_contract_ns {
                 sym_out.get_contract(),
                 "transfer"_n,
                 std::make_tuple(get_self(), recipient, asset{amount_out, sym_out.get_symbol()},
-                                std::string("bingo.swap"))
+                                std::string("bingogameswp"))
             ).send();
 
         } else {

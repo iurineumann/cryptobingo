@@ -45,10 +45,10 @@ interface EditForm {
 
 const defaultForm: CreateForm = {
     room_id: 0, sponsor: '', gametype_id: 0,
-    currency_quantity: '0.0000 BINGO', currency_contract: 'bingo.token',
-    ticket_price_min_quantity: '0.0000 BINGO', ticket_price_min_contract: 'bingo.token',
-    ticket_price_max_quantity: '0.0000 BINGO', ticket_price_max_contract: 'bingo.token',
-    ticket_price_default_quantity: '0.0000 BINGO', ticket_price_default_contract: 'bingo.token',
+    currency_quantity: '0.0000 BINGO', currency_contract: 'bingogametkn',
+    ticket_price_min_quantity: '0.0000 BINGO', ticket_price_min_contract: 'bingogametkn',
+    ticket_price_max_quantity: '0.0000 BINGO', ticket_price_max_contract: 'bingogametkn',
+    ticket_price_default_quantity: '0.0000 BINGO', ticket_price_default_contract: 'bingogametkn',
     max_tickets_per_player: 0,
     name: '', description: '',
     drops: [], auto_start_delay_sec: 30, chat_enabled: true,

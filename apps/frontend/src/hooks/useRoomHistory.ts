@@ -13,7 +13,7 @@ import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
 import { fetchBatchGameStats } from '../services/api';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 const PAGE_SIZE        = 15;
 const FETCH_BATCH      = 50;

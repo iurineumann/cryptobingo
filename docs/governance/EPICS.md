@@ -7,7 +7,7 @@
 
 ## Épico 1: Core Blockchain & Tokenomics
 
-**Objetivo:** Contrato inteligente bingo.game completo, autossuficiente e auditável.
+**Objetivo:** Contrato inteligente bingogamectr completo, autossuficiente e auditável.
 
 ### Features
 - [x] Contrato C++ com FSM (`funding → locked → drawing → drawn → archived → aborted`)
@@ -17,7 +17,7 @@
 - [x] Mock do oráculo WAX (`orng_mock`) para ambiente local
 - [ ] Tabelas `patterns` e `gametypes` on-chain (Bitmasking dinâmico — ADR-004)
 - [ ] Refatorar `claimwin` para regra `max_weight` (Ticket Price × Game Multiplier × Pattern Weight — ADR-005)
-- [ ] Implementar `bingo.swap` (DEX com razão constante x*y=k) para liquidez nativa
+- [ ] Implementar `bingogameswp` (DEX com razão constante x*y=k) para liquidez nativa
 - [ ] Contrato Ricardiano completo para todas as ações
 
 ### Critérios de Sucesso

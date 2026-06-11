@@ -6,10 +6,10 @@ exports.fetchPlayerTickets = fetchPlayerTickets;
 exports.fetchPlayerBalance = fetchPlayerBalance;
 const antelope_1 = require("@wharfkit/antelope");
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8888';
-const CONTRACT_ACCOUNT = 'bingo.game';
+const CONTRACT_ACCOUNT = 'bingogamectr';
 exports.rpcClient = new antelope_1.APIClient({ url: RPC_URL });
 /**
- * Busca o estado de um jogo na tabela `games` (scope: bingo.game).
+ * Busca o estado de um jogo na tabela `games` (scope: bingogamectr).
  * Retorna null se o jogo não existir.
  */
 async function fetchGame(gameId) {

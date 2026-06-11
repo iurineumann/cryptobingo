@@ -5,7 +5,7 @@ import type { Session } from '@wharfkit/session';
 import type { BlockchainGameState, ExtendedAsset } from '@cryptobingo/shared-types';
 import { fetchRtpReport, fetchGamesHistory, type RtpReport, type GameHistoryEntry } from '../../services/api';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 interface AdminDashboardProps {
     session?: Session;

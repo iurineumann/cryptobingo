@@ -30,7 +30,7 @@ let sessionKitInstance: SessionKit | null = null;
 function getSessionKit(): SessionKit {
     if (sessionKitInstance) return sessionKitInstance;
     sessionKitInstance = new SessionKit({
-        appName:  'bingo.swap',
+        appName:  'bingogameswp',
         chains:   [{ id: CHAIN_ID, url: RPC_URL }],
         ui:       new WebRenderer(),
         walletPlugins: [

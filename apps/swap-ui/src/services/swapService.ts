@@ -1,5 +1,5 @@
 // apps/swap-ui/src/services/swapService.ts
-// ADR-022 — bingo.swap DEX público.
+// ADR-022 — bingogameswp DEX público.
 // Superset do swapService do frontend: inclui cotações + liqidez (addliq/remliq/canceldep).
 // A execução é sempre on-chain via Wharfkit — sem custódia de chaves aqui.
 
@@ -9,7 +9,7 @@ import { Asset, Name } from '@wharfkit/session';
 
 const API_BASE = (import.meta.env.VITE_API_GATEWAY_URL ?? 'http://localhost:3000') + '/api/v1';
 const RPC_URL  = import.meta.env.VITE_WAX_RPC_URL ?? 'http://127.0.0.1:8888';
-const SWAP_ACCOUNT = import.meta.env.VITE_SWAP_CONTRACT ?? 'bingo.swap';
+const SWAP_ACCOUNT = import.meta.env.VITE_SWAP_CONTRACT ?? 'bingogameswp';
 
 async function handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
@@ -100,7 +100,7 @@ export interface PendingDeposit {
     amount_b:   string;
 }
 
-/** Posições LP do usuário (tabela `lppositions` do bingo.swap). */
+/** Posições LP do usuário (tabela `lppositions` do bingogameswp). */
 export async function fetchUserLpPositions(account: string): Promise<LpPosition[]> {
     try {
         const res = await fetch(`${RPC_URL}/v1/chain/get_table_rows`, {
@@ -168,7 +168,7 @@ export interface SwapParams {
     toContract:   string;
 }
 
-/** Executa swap via transfer para bingo.swap com memo "swap,{pool_id},{min_out},{actor}". */
+/** Executa swap via transfer para bingogameswp com memo "swap,{pool_id},{min_out},{actor}". */
 export async function executeSwap(session: Session, params: SwapParams): Promise<void> {
     const actor = String(session.actor);
     const memo  = `swap,${params.poolId},${params.minOut},${actor}`;
@@ -197,8 +197,8 @@ export interface AddLiquidityParams {
 
 /**
  * Adiciona liquidez em 2 passos:
- *  1. transfer tokenA → bingo.swap com memo "deposit,{pool_id}"
- *  2. transfer tokenB → bingo.swap com memo "deposit,{pool_id}"
+ *  1. transfer tokenA → bingogameswp com memo "deposit,{pool_id}"
+ *  2. transfer tokenB → bingogameswp com memo "deposit,{pool_id}"
  * Após os 2 depósitos, a posição LP é creditada ao usuário.
  */
 export async function executeAddLiquidity(
@@ -233,7 +233,7 @@ export interface RemoveLiquidityParams {
     lpAmount:   bigint;
 }
 
-/** Remove liquidez: envia fração do LP token para bingo.swap com memo "remliq,{pool_id}". */
+/** Remove liquidez: envia fração do LP token para bingogameswp com memo "remliq,{pool_id}". */
 export async function executeRemoveLiquidity(
     session: Session,
     params:  RemoveLiquidityParams,

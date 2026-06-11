@@ -66,16 +66,16 @@ read-only em `/app/contracts`. **Sempre** seguir este ciclo ao mexer no contrato
 3. **⚠️ CORRIGIR O ABI MANUALMENTE.** O ABI gerado pelo cdt-cpp é incompleto/instável. A fonte de
    verdade é o **`contracts/bingo/bingo.abi` mantido à mão**. Adicione lá, à mão, novos structs,
    campos de tabela e actions (espelhando o `.hpp`). NUNCA confie no `bingo_generated.abi`.
-4. **Deploy:** `cleos set contract bingo.game /app/contracts/bingo -p bingo.game@active`
-   (wallet `devwallet` destravada; chave de `bingo.game` = `CONTRACT_PRIVATE_KEY` no env do worker/api).
+4. **Deploy:** `cleos set contract bingogamectr /app/contracts/bingo -p bingogamectr@active`
+   (wallet `devwallet` destravada; chave de `bingogamectr` = `CONTRACT_PRIVATE_KEY` no env do worker/api).
 5. **Validar:** `bash -n`? não — verifique a action no ABI on-chain (`get_abi`) e rode o harness.
 
 **Migração de tabela (adicionar campo a struct de tabela com linhas existentes):** use
 `eosio::binary_extension<T>` no `.hpp` e tipo `T[]$` (sufixo `$`) no ABI. Sem isso, linhas antigas
 quebram com `unpack_exception` (não há action para limpar a tabela). Ex.: ADR-016 `combinations`.
 
-**Modelo de auth:** actions admin → `require_auth(get_self())` (= `bingo.game`); actions de jogo →
-`require_auth("microservice"_n)`. O contrato **confia no worker** para avaliação (match de padrão /
+**Modelo de auth:** actions admin → `require_auth(get_self())` (= `bingogamectr`); actions de jogo →
+`require_auth("bingogamesvc"_n)`. O contrato **confia no worker** para avaliação (match de padrão /
 satisfação de combo) mas **valida pesos on-chain** contra `gametypes` (anti-inflação de prêmio).
 
 **Pesos** são sempre **hundredths** (100 = 1.00×; máx 25500 = 255×).
@@ -83,7 +83,7 @@ satisfação de combo) mas **valida pesos on-chain** contra `gametypes` (anti-in
 ## Ambiente de dev local + Oracle
 
 - Subir/reset: `./init_dev_env.sh` (ou `--reset` para recriar o container/chain do zero).
-  Isso recria contas, deploya `bingo.game` (do wasm/abi do host) + `orng.wax`, e inicia o oracle daemon.
+  Isso recria contas, deploya `bingogamectr` (do wasm/abi do host) + `orng.wax`, e inicia o oracle daemon.
 - **Oracle daemon** (necessário para `startdraw` → `drawn`): roda `scripts/orng-oracle.ts`.
   `npx ts-node` FALHA no monorepo pnpm. Use o binário hoisted + transpile-only:
   `node_modules/.pnpm/node_modules/.bin/ts-node --transpile-only scripts/orng-oracle.ts`.

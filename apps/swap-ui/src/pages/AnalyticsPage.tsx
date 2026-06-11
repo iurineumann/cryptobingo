@@ -1,5 +1,5 @@
 // apps/swap-ui/src/pages/AnalyticsPage.tsx
-// ADR-022 — painel de analytics do bingo.swap (somente leitura).
+// ADR-022 — painel de analytics do bingogameswp (somente leitura).
 // Mostra TVL estimado, volume e tabela de pools com reservas.
 
 import { useState, useEffect } from 'react';

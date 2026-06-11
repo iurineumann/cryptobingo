@@ -27,7 +27,7 @@ actions de liquidação ao contrato. Testes: `npx jest <arquivo>` (em `apps/work
 - **`combinationEvaluator.ts`** — combos (ADR-016): `fetchComboContext` (busca cláusulas/tipos da
   API, cache 1min), `isComboSatisfied` (all_of/any_of/n_of_type), `bestSatisfiedCombo` (max_weight).
 - **`blockchain.ts`** — `executeClaimWin / executeClaimCombo / executeClaimStage / executeCloseGame`
-  etc. (assina como `microservice`).
+  etc. (assina como `bingogamesvc`).
 - **`patternCache.ts`** — pesos de padrão on-chain com cache Redis. **`invertedIndex.ts`** — índice
   ticket→bola. **`rabbitmq.ts`** — consumo de eventos + GC/refund. **`roomManager.ts`** — salas.
 

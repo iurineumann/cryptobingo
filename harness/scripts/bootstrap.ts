@@ -81,7 +81,7 @@ async function bootstrap() {
         // Passo 1: Criar contas do ecossistema
         await createAccount('eosio.token', testPubKey);
         await createAccount('orng.wax', testPubKey);
-        await createAccount('bingo.game', testPubKey);
+        await createAccount('bingogamectr', testPubKey);
         await createAccount('alien.worlds', testPubKey); // Conta patrocinadora B2B
         await createAccount('jogador1', testPubKey);
         await createAccount('jogador2', testPubKey);
@@ -127,7 +127,7 @@ async function bootstrap() {
         // Passo 4: Deploy do Mock do Oráculo e do nosso Contrato
         console.log('[+] Injetando Oráculo Mockado e Smart Contract do Bingo...');
         await deployContract('orng.wax', '../mocks/orng_mock.wasm', '../mocks/orng_mock.abi');
-        await deployContract('bingo.game', '../../contracts/bingo.wasm', '../../contracts/bingo.abi');
+        await deployContract('bingogamectr', '../../contracts/bingo.wasm', '../../contracts/bingo.abi');
 
         console.log('✅ Bootstrapping concluído! A blockchain local está estéril, financiada e pronta para os Testes Unitários.');
 

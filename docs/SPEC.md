@@ -40,7 +40,7 @@ CREATED → FUNDING → LOCKED → DRAWING → DRAWN → PAYING → ARCHIVED
 ```
 
 * `PAYING` — estado intermediário introduzido em ADR-012 para suportar múltiplos vencedores sem race condition. `claimwin` aceita `DRAWN | PAYING`; na primeira chamada (`DRAWN`) transita para `PAYING`.
-* `closegame` (auth: `microservice`) — transita `PAYING | DRAWN → ARCHIVED`.
+* `closegame` (auth: `bingogamesvc`) — transita `PAYING | DRAWN → ARCHIVED`.
 
 | Campo | Tipo CDT | Restrições / Notas |
 |---|---|---|
@@ -218,7 +218,7 @@ Sistema trustless para sponsors depositarem tokens/NFTs que são distribuídos c
 ### 2.2. Liquidação de Prêmios (Max Weight Payout)
 
 * **Assinatura:** `claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier)`
-* **Auth Exigido:** `microservice@active`
+* **Auth Exigido:** `bingogamesvc@active`
 * **Estados aceitos:** `drawn | paying` — na primeira chamada (`drawn`), transita para `paying`.
 * **Cálculo (gametype, `gametype_id > 0`):**
 
@@ -234,11 +234,11 @@ $$Prize = \frac{prize\_pool \times 85}{100}$$
 
 ### 2.3. Encerramento e Estágios (ADR-012/013)
 
-* **`closegame(uint64_t game_id)`** — Auth: `microservice@active`. Transita `paying | drawn → archived`. Chamado após todos os `claimwin`.
+* **`closegame(uint64_t game_id)`** — Auth: `bingogamesvc@active`. Transita `paying | drawn → archived`. Chamado após todos os `claimwin`.
 
-* **`setstages(uint64_t game_id, vector<stage_rule> stages)`** — Auth: `microservice@active`. Configura estágios para modo `multimatch`. Cada `stage_rule` define `{stage, patterns_required, weight}`.
+* **`setstages(uint64_t game_id, vector<stage_rule> stages)`** — Auth: `bingogamesvc@active`. Configura estágios para modo `multimatch`. Cada `stage_rule` define `{stage, patterns_required, weight}`.
 
-* **`claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint64_t win_pattern_mask)`** — Auth: `microservice@active`. Paga vencedor de estágio específico em modo `multimatch`. O jogo permanece em `paying` até `closegame`.
+* **`claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint64_t win_pattern_mask)`** — Auth: `bingogamesvc@active`. Paga vencedor de estágio específico em modo `multimatch`. O jogo permanece em `paying` até `closegame`.
 
 ---
 
@@ -264,7 +264,7 @@ Actions explícitas:
 * `allocatedrop(name caller, uint64_t deposit_id, uint64_t room_id, extended_asset qty_per_drop, uint64_t nft_asset_id, uint16_t drop_chance_bps)` — Vincula depósito a uma sala.
 * `deallocdrop(name caller, uint64_t alloc_id)` — Remove alocação; devolve depósito a `deposited`.
 * `reclaimasset(name owner, uint64_t deposit_id)` — Saca ativo não alocado de volta ao owner via `eosio.token::transfer` ou `atomicassets::transfer`.
-* `execdrop(uint64_t alloc_id, name winner, extended_asset quantity)` — Auth: `microservice`. Executa o drop para um vencedor específico. Credita token em `balances[winner]` ou transfere NFT diretamente.
+* `execdrop(uint64_t alloc_id, name winner, extended_asset quantity)` — Auth: `bingogamesvc`. Executa o drop para um vencedor específico. Credita token em `balances[winner]` ou transfere NFT diretamente.
 
 ---
 

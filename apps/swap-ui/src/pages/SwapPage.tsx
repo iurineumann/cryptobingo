@@ -1,5 +1,5 @@
 // apps/swap-ui/src/pages/SwapPage.tsx
-// ADR-022 — interface de swap do bingo.swap DEX público.
+// ADR-022 — interface de swap do bingogameswp DEX público.
 // Fluxo: usuário escolhe par → digita amount_out → recebe cotação → executa on-chain.
 
 import { useState, useEffect, useRef, useCallback } from 'react';

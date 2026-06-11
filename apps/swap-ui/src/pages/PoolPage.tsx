@@ -1,5 +1,5 @@
 // apps/swap-ui/src/pages/PoolPage.tsx
-// ADR-022 — gestão de liquidez do bingo.swap.
+// ADR-022 — gestão de liquidez do bingogameswp.
 // Fluxo: visualizar posições LP → adicionar (2 depósitos atômicos) → remover (slider) → cancelar dep pendente.
 
 import { useState, useEffect, useCallback } from 'react';
