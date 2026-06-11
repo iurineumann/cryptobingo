@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchTableRows } from './rpc';
 
 describe('fetchTableRows — sem sessão (acesso público)', () => {
-    const PARAMS = { code: 'bingo.game', scope: 'bingo.game', table: 'games', limit: 1 };
+    const PARAMS = { code: 'bingogamectr', scope: 'bingogamectr', table: 'games', limit: 1 };
 
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn());
@@ -30,7 +30,7 @@ describe('fetchTableRows — sem sessão (acesso público)', () => {
         expect(opts?.method).toBe('POST');
         const body = JSON.parse(opts?.body as string);
         expect(body.json).toBe(true);
-        expect(body.code).toBe('bingo.game');
+        expect(body.code).toBe('bingogamectr');
     });
 
     it('retorna rows e more da resposta JSON', async () => {

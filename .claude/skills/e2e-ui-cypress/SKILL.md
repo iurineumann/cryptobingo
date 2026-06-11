@@ -88,7 +88,7 @@ arquivo.**
   isola só a animação via socket mock.
 - **RBAC:** valide redirecionamentos dos guards — perfil não-admin em `/admin/*` → `/lobby`;
   não-sponsor em `/sponsor/*` → `/lobby` (`AdminGuard`/`SponsorGuard` em `App.tsx`).
-- **NftAdmin/TokenAdmin** usam `session.transact()` direto (atomicassets/bingo.token) — **não**
+- **NftAdmin/TokenAdmin** usam `session.transact()` direto (atomicassets/bingogametkn) — **não**
   stubáveis no Tier 1 → SMOKE (só listagem). Ação real só no Tier 2 (`admin-onchain`).
 - **`turbo` task `e2e`** é `cache:false` e **não** entra no `pnpm test` default (é disparada
   explicitamente / no job de CI próprio).

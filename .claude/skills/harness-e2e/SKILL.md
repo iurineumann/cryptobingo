@@ -10,14 +10,14 @@ description: >
 # Harness E2E + Dev Env
 
 `@cryptobingo/harness` roda a FSM completa contra o **nodeos real** (`127.0.0.1:8888`) usando o
-contrato `bingo.game` deployado + o **oracle daemon** (necessário p/ `startdraw` → `drawn`).
+contrato `bingogamectr` deployado + o **oracle daemon** (necessário p/ `startdraw` → `drawn`).
 Arquivo principal: `tests/fsm.test.ts` (suites por modo/feature). Runner: `node run-tests.js`
 (pula se faltam env keys).
 
 ## Ambiente de dev local (DevOps)
 
 - Subir/reset: **o usuário** roda `./init_dev_env.sh` (ou `--reset`). Não reinicie a chain por conta
-  própria — o reset zera estado on-chain. Cria contas, deploya `bingo.game`+`orng.wax`, inicia oracle.
+  própria — o reset zera estado on-chain. Cria contas, deploya `bingogamectr`+`orng.wax`, inicia oracle.
 - Serviços de apoio: `docker compose up -d` (Mongo, Redis, RabbitMQ, Postgres, Grafana...). Apps:
   `pnpm dev`. Container da chain/CDT: `bingo_waxdev`.
 - Verificar saúde: `curl -s http://127.0.0.1:8888/v1/chain/get_info` (nodeos);
@@ -60,4 +60,4 @@ Espelhe um `describe` existente (ex.: Standard/MULTI_MATCH/COMBINAÇÕES). Fluxo
 - Bounds de `get_table_rows` por chave i64 = `UInt64.from(id)` (string → `name_type_exception`).
 - `waitForDrawn` depende do oracle; use timeout do teste ≥ `attempts×2s + folga`.
 - gametype ids no harness: 1–4 e 8 já usados; escolha um livre para suites novos.
-- Verificar action deployada: `get_abi` de `bingo.game`.
+- Verificar action deployada: `get_abi` de `bingogamectr`.

@@ -22,7 +22,7 @@ Pacote `@cryptobingo/frontend` (React + Vite + TS). Testes: **vitest** —
    estenda o design system. Componentes de sala usam o prefixo `gr-`.
 3. **On-chain (Wharfkit).** Leituras via `session.client.v1.chain.get_table_rows` (use
    `UInt64.from(id)` em bounds i64; scope de tickets = game_id como name). Helpers em
-   `components/ticketUtils.ts` e `packages/blockchain-core`. `VITE_CONTRACT_ACCOUNT` = `bingo.game`.
+   `components/ticketUtils.ts` e `packages/blockchain-core`. `VITE_CONTRACT_ACCOUNT` = `bingogamectr`.
 4. **API.** Centralize chamadas REST em `src/services/api.ts` (tipadas). Não faça `fetch` solto em
    componente.
 5. **Fast Refresh.** Não exporte funções utilitárias junto com componentes no mesmo arquivo (quebra

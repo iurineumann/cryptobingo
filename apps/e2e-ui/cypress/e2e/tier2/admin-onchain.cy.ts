@@ -12,7 +12,7 @@
 //      que as alterações são refletidas no painel.
 //
 // O que NÃO está em escopo aqui (ver ADR-017 §5):
-//   - session.transact() direto de NftAdmin/TokenAdmin (atomicassets/bingo.token).
+//   - session.transact() direto de NftAdmin/TokenAdmin (atomicassets/bingogametkn).
 //
 // Auth: cy.devLogin('admin') — sem stubBackend.
 // Sem cy.wait(número) — retry-ability com timeout explícito nos asserts lentos.

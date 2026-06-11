@@ -1,7 +1,7 @@
 // apps/frontend/src/components/BuyTicketModal.tsx
 // Modal de compra de cartelas — fluxo completo:
 //   form → generate preview → preview (remove/add more) → confirm → success
-// ADR-021: seletor de moeda alternativa via bingo.swap
+// ADR-021: seletor de moeda alternativa via bingogameswp
 // Ref: ADR-001, ADR-021, SPEC.md §2.1
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -739,7 +739,7 @@ export default function BuyTicketModal({
 
                 <p className="text-xs text-center text-[--cb-text-tertiary] mt-3">
                     {t('buy_ticket.debited_from')}{' '}
-                    <span className="font-mono">bingo.game</span>
+                    <span className="font-mono">bingogamectr</span>
                 </p>
             </div>
         </div>

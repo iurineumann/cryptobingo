@@ -16,7 +16,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     return res.json() as Promise<T>;
 }
 
-/** Lista pools ativas do bingo.swap (cache 10s no servidor). */
+/** Lista pools ativas do bingogameswp (cache 10s no servidor). */
 export async function fetchSwapPools(): Promise<SwapPoolSummary[]> {
     const res = await fetch(`${API_BASE}/swap/pools`);
     const data = await handleResponse<{ pools: SwapPoolSummary[] }>(res);
@@ -24,7 +24,7 @@ export async function fetchSwapPools(): Promise<SwapPoolSummary[]> {
 }
 
 export interface QuoteParams {
-    fromContract:  string;   // ex: "bingo.token"
+    fromContract:  string;   // ex: "bingogametkn"
     fromSymbol:    string;   // ex: "4,BINGO"
     toContract:    string;   // ex: "eosio.token"
     toSymbol:      string;   // ex: "8,WAX"

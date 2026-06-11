@@ -1,6 +1,6 @@
 // Testes do swapController — ADR-021 Checkout Multi-Moeda
 
-process.env.SWAP_CONTRACT = 'bingo.swap';
+process.env.SWAP_CONTRACT = 'bingogameswp';
 
 const mockRedisGet = jest.fn().mockResolvedValue(null);
 const mockRedisSet = jest.fn().mockResolvedValue('OK');
@@ -21,7 +21,7 @@ const mockGetTableRows = rpcClient.v1.chain.get_table_rows as jest.Mock;
 
 const POOL_WAX_BINGO = {
     pool_id:         '1',
-    sym_a:           { sym: '4,BINGO', contract: 'bingo.token' },
+    sym_a:           { sym: '4,BINGO', contract: 'bingogametkn' },
     sym_b:           { sym: '8,WAX',   contract: 'eosio.token' },
     reserve_a:       '1000000000',  // 100000.0000 BINGO
     reserve_b:       '500000000',   // 5.00000000 WAX (escala 8 dec)
@@ -54,7 +54,7 @@ describe('GET /api/v1/swap/pools', () => {
         expect(res.body.pools).toHaveLength(1);
         expect(res.body.pools[0]).toMatchObject({
             pool_id:         '1',
-            token_a:         { contract: 'bingo.token', symbol: 'BINGO', precision: 4 },
+            token_a:         { contract: 'bingogametkn', symbol: 'BINGO', precision: 4 },
             token_b:         { contract: 'eosio.token', symbol: 'WAX',   precision: 8 },
             fee_bps:         30,
             service_fee_bps: 100,
@@ -86,7 +86,7 @@ describe('GET /api/v1/swap/quote', () => {
 
     it('retorna 400 se parâmetros obrigatórios ausentes', async () => {
         const res = await request(makeApp())
-            .get('/api/v1/swap/quote?from_contract=bingo.token&from_symbol=4,BINGO');
+            .get('/api/v1/swap/quote?from_contract=bingogametkn&from_symbol=4,BINGO');
 
         expect(res.status).toBe(400);
     });
@@ -96,7 +96,7 @@ describe('GET /api/v1/swap/quote', () => {
         const res = await request(makeApp())
             .get('/api/v1/swap/quote')
             .query({
-                from_contract: 'bingo.token',
+                from_contract: 'bingogametkn',
                 from_symbol:   '4,BINGO',
                 to_contract:   'eosio.token',
                 to_symbol:     '8,WAX',
@@ -119,7 +119,7 @@ describe('GET /api/v1/swap/quote', () => {
         const res = await request(makeApp())
             .get('/api/v1/swap/quote')
             .query({
-                from_contract: 'bingo.token',
+                from_contract: 'bingogametkn',
                 from_symbol:   '4,BINGO',
                 to_contract:   'eosio.token',
                 to_symbol:     '8,WAX',
@@ -140,7 +140,7 @@ describe('GET /api/v1/swap/quote', () => {
         const res = await request(makeApp())
             .get('/api/v1/swap/quote')
             .query({
-                from_contract: 'bingo.token',
+                from_contract: 'bingogametkn',
                 from_symbol:   '4,BINGO',
                 to_contract:   'eosio.token',
                 to_symbol:     '8,WAX',
@@ -171,7 +171,7 @@ describe('GET /api/v1/swap/quote', () => {
         const res = await request(makeApp())
             .get('/api/v1/swap/quote')
             .query({
-                from_contract: 'bingo.token',
+                from_contract: 'bingogametkn',
                 from_symbol:   '4,BINGO',
                 to_contract:   'eosio.token',
                 to_symbol:     '8,WAX',
@@ -187,7 +187,7 @@ describe('GET /api/v1/swap/quote', () => {
             .query({
                 from_contract: 'eosio.token',
                 from_symbol:   '8,WAX',
-                to_contract:   'bingo.token',
+                to_contract:   'bingogametkn',
                 to_symbol:     '4,BINGO',
                 amount_out:    '100000',  // 10.0000 BINGO
             });

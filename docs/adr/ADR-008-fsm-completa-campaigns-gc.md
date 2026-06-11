@@ -34,13 +34,13 @@ críticos no contrato C++ que bloqueiam o lançamento:
 ### 1. Estado `CREATED` na FSM
 
 `creategame()` agora inicia o jogo em `"created"_n`. A nova action `fundgame()`
-(auth: `microservice`) realiza a transição `CREATED → FUNDING`. Isso permite:
+(auth: `bingogamesvc`) realiza a transição `CREATED → FUNDING`. Isso permite:
 - Agendar rodadas futuras sem abri-las imediatamente para vendas
 - O worker controla o timing via cron/scheduler sem mexer no contrato
 
 ### 2. `abortgame(reason)` — LOCKED|DRAWING → ABORTED
 
-Aceita auth de `microservice` (timeout automático) ou `get_self()` (halt manual admin).
+Aceita auth de `bingogamesvc` (timeout automático) ou `get_self()` (halt manual admin).
 Seta `end_time` para base de auditoria. Após abort, `refundticket()` fica liberado.
 
 ### 3. `refundticket(game_id, ticket_id)` — Callable por qualquer conta

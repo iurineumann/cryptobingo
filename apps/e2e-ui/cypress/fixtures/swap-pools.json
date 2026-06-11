@@ -2,7 +2,7 @@
   "pools": [
     {
       "pool_id": "1",
-      "token_a": { "contract": "bingo.token", "symbol": "BINGO", "precision": 4 },
+      "token_a": { "contract": "bingogametkn", "symbol": "BINGO", "precision": 4 },
       "token_b": { "contract": "eosio.token", "symbol": "WAX",   "precision": 8 },
       "reserve_a": "1000000000",
       "reserve_b": "500000000",

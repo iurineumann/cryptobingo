@@ -12,6 +12,9 @@ interface ImportMetaEnv {
     readonly VITE_WS_URL:            string;
     readonly VITE_WS_URL_INTERNAL:   string;
 
+    // Link bidirecional para o DEX público (ADR-022)
+    readonly VITE_SWAP_URL:          string | undefined;
+
     // DEV-ONLY: tree-shaken pelo Vite em produção
     readonly VITE_DEV_ACTOR:         string | undefined;
     readonly VITE_DEV_PRIVATE_KEY:   string | undefined;

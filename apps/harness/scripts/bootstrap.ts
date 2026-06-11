@@ -16,8 +16,8 @@ const alienKey = PrivateKey.from(process.env.ALIEN_WORLDS_KEY!);
 const eosioTokenKey = PrivateKey.from(process.env.EOSIO_TOKEN_KEY!);
 
 const eosioTokenSession = new Session({ actor: 'eosio.token', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(eosioTokenKey) });
-const bingoSession = new Session({ actor: 'bingo.game', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
-const bingoOwnerSession = new Session({ actor: 'bingo.game', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
+const bingoSession = new Session({ actor: 'bingogamectr', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
+const bingoOwnerSession = new Session({ actor: 'bingogamectr', permission: 'owner', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(bingoKey) });
 const alienSession = new Session({ actor: 'alien.worlds', permission: 'active', chain: { id: chainId, url }, walletPlugin: new WalletPluginPrivateKey(alienKey) });
 
 const orngKey = PrivateKey.from(process.env.ORNG_WAX_KEY!); // A chave que está no .dune.env
@@ -61,21 +61,21 @@ async function bootstrap() {
         }, { broadcast: true });
 
         
-        await deployContractRaw('bingo.game', '../../contracts/bingo/bingo.wasm', '../../contracts/bingo/bingo.abi', bingoSession);
+        await deployContractRaw('bingogamectr', '../../contracts/bingo/bingo.wasm', '../../contracts/bingo/bingo.abi', bingoSession);
 
         console.log('[+] Configurando chave e permissão eosio.code...');
         await bingoSession.transact({
-            actions: [{ account: 'bingo.game', name: 'setconfig', authorization: [{ actor: 'bingo.game', permission: 'active' }], data: { signer_key: bingoKey.toPublic().toString() } }]
+            actions: [{ account: 'bingogamectr', name: 'setconfig', authorization: [{ actor: 'bingogamectr', permission: 'active' }], data: { signer_key: bingoKey.toPublic().toString() } }]
         }, { broadcast: true });
 
         await bingoOwnerSession.transact({
             actions: [{
-                account: 'eosio', name: 'updateauth', authorization: [{ actor: 'bingo.game', permission: 'owner' }],
+                account: 'eosio', name: 'updateauth', authorization: [{ actor: 'bingogamectr', permission: 'owner' }],
                 data: {
-                    account: 'bingo.game', permission: 'active', parent: 'owner',
+                    account: 'bingogamectr', permission: 'active', parent: 'owner',
                     auth: {
                         threshold: 1, keys: [{ key: bingoKey.toPublic().toString(), weight: 1 }],
-                        accounts: [{ permission: { actor: 'bingo.game', permission: 'eosio.code' }, weight: 1 }], waits: []
+                        accounts: [{ permission: { actor: 'bingogamectr', permission: 'eosio.code' }, weight: 1 }], waits: []
                     }
                 }
             }]
@@ -94,7 +94,7 @@ async function bootstrap() {
         await alienSession.transact({
             actions: [
                 { account: 'eosio.token', name: 'issue', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { to: 'alien.worlds', quantity: '50000.0000 TLM', memo: 'Init' } },
-                { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'bingo.game', quantity: '1000.0000 TLM', memo: 'Sponsor Pool' } },
+                { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'bingogamectr', quantity: '1000.0000 TLM', memo: 'Sponsor Pool' } },
                 { account: 'eosio.token', name: 'transfer', authorization: [{ actor: 'alien.worlds', permission: 'active' }], data: { from: 'alien.worlds', to: 'jogador1', quantity: '500.0000 TLM', memo: 'Airdrop Jogador 1' } }
             ]
         }, { broadcast: true });

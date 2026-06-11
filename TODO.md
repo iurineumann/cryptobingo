@@ -94,7 +94,7 @@
 ## [DONE] Sprint — game-admin-assets (2026-06-04)
 
 [DONE] `NftAdmin.tsx` — painel AtomicAssets: coleções, schemas, templates, assets (mint/burn/transfer).
-[DONE] `TokenAdmin.tsx` — painel bingo.token: supply, saldos internos/externos, issue/retire/transfer.
+[DONE] `TokenAdmin.tsx` — painel bingogametkn: supply, saldos internos/externos, issue/retire/transfer.
 [DONE] `AdminLayout.tsx` — integra NftAdmin + TokenAdmin na seção 'assets' (ADR-015 routing).
 [DONE] `useChat.ts` — hook extraído do ChatPanel; 12 testes Vitest.
 [DONE] Testes api-gateway — 105 passing (authController func+security+onchain, roomController, monteCarlo, statistics func+security, winnings, drop.security, auth.security, rateLimiter.security, helmet.security).
@@ -117,6 +117,16 @@
 [DONE] `broadcaster.ts` — `NO_PARTICIPANTS` abort reason; worker aborts 0-ticket games pre-lock.
 [DONE] Harness E2E 20/20 — root cause: `orng.wax` ABI missing `reqs` table (CDT bug). Fixed: hand-maintained `contracts/orng/orng.abi` with `request` struct + `reqs` table; `init_dev_env.sh` now copies hand-maintained ABI into container before deploy. Total: 273 tests (100 worker + 110 API + 43 frontend + 20 E2E).
 
-### Baixa prioridade / Futuro
+## [DONE] Sprint — Migração de Contas WAX Mainnet (ADR-023, 2026-06-11)
 
-[ ] `bingo.swap` — contrato DEX x*y=k (fora do escopo atual).
+[DONE] Mapeamento: `bingo.game→bingogamectr`, `bingo.token→bingogametkn`, `bingo.swap→bingogameswp`, `microservice→bingogamesvc`.
+[DONE] Chaves públicas mainnet registradas (4 contas × 2 pares de chaves).
+[DONE] Contratos C++ atualizados (12 ocorrências em 4 arquivos).
+[DONE] `init_dev_env.sh` atualizado (criação de contas, deploy, env vars, token distribution).
+[DONE] Backend (worker, api-gateway, blockchain-core, shared-types, infra) — ~25 arquivos.
+[DONE] Frontend + swap-ui (hooks, componentes, locales, branding) — ~25 arquivos.
+[DONE] Testes (harness FSM/swap, e2e-ui fixtures) — ~20 arquivos.
+[DONE] Documentação (CLAUDE.md, SPEC.md, ADRs, skills, openapi.yaml) — ~20 arquivos.
+[DONE] ADR-023 criado.
+
+### Baixa prioridade / Futuro

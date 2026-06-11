@@ -18,7 +18,7 @@
 //   - Legacy receiverand callback ativo por padrão
 //   - RSA 2048-bit (produção usa 4096-bit)
 //
-// Compatibilidade: bingo.game::receiverand(uint64_t, checksum256)
+// Compatibilidade: bingogamectr::receiverand(uint64_t, checksum256)
 // ============================================================
 
 #include <eosio/eosio.hpp>
@@ -109,7 +109,7 @@ namespace orng {
         [[eosio::action]]
         void setver(uint8_t ver);
 
-        // Chamado por bingo.game::startdraw — registra pedido na tabela reqs.
+        // Chamado por bingogamectr::startdraw — registra pedido na tabela reqs.
         [[eosio::action]]
         void requestrand(uint64_t assoc_id, uint64_t signing_value, name caller);
 
