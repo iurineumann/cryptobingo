@@ -1,216 +1,190 @@
-# SKILLS.md — Habilidades Reutilizáveis do CryptoBingo
+# SKILLS.md — Skills do CryptoBingo
 
-> Workflows reutilizáveis que os agentes podem carregar via `skill` tool.
-> Cada skill define passo a passo como executar uma tarefa comum.
-
----
-
-## Skill: `cpp-contract`
-
-**Descrição:** Compilar, testar e validar smart contracts C++ (EOSIO CDT)
-
-**Trigger:** Arquivos em `contracts/` alterados
-
-**Workflow:**
-1. Ler `contracts/bingo/include/bingo.hpp` — verificar se novas ações/tabelas foram declaradas
-2. Ler `contracts/bingo/src/bingo.cpp` — verificar se ações implementadas correspondem ao .hpp
-3. Compilar com CDT:
-   ```bash
-   cd contracts/bingo && cdt-cpp -abigen -o bingo.wasm src/bingo.cpp -I include/
-   ```
-4. Validar ABI gerado contra `docs/SPEC.md §1-2` (tabelas, ações, tipos)
-5. Executar testes de FSM no harness:
-   ```bash
-   pnpm --filter @cryptobingo/harness test
-   ```
-6. Verificar custo de CPU:
-   ```bash
-   wasm-objdump -d contracts/bingo/bingo.wasm | grep "func" | wc -l
-   ```
-7. Se `patterns` ou `gametypes` foram alterados, atualizar `docs/adr/ADR-004`
-
-**Contextos relacionados:** AGENTS.md → `smart-contract-engineer`, ADR-001, ADR-004, ADR-005
+> Mapeamento das skills disponíveis em `.claude/skills/`.
+> Cada skill encapsula procedimentos, gotchas e contexto de uma camada.
+> Invoque com `/skill-name` ou via `Skill` tool antes de editar a camada.
+>
+> Tabela completa camada → skill → agent revisor em `CLAUDE.md`.
 
 ---
 
-## Skill: `game-loop-worker`
+## Skill: `wax-contract`
 
-**Descrição:** Implementar ou depurar o worker de game loop
+**Arquivo:** `.claude/skills/wax-contract/`
 
-**Trigger:** Arquivos em `apps/worker-game-loop/` alterados
+**Camada:** `contracts/bingo/` e `contracts/swap/`
 
-**Workflow:**
-1. Ler `apps/worker-game-loop/src/services/rabbitmq.ts` — confirmar consumo da fila `game_loop_events`
-2. Ler `apps/worker-game-loop/src/services/blockchain.ts` — validar sessão WharfKit e transações
-3. Ler `apps/worker-game-loop/src/services/evaluator.ts` — verificar bitmasking:
-   - Constantes `WIN_PATTERNS` (12 máscaras)
-   - `applyDrawnBalls`: lookup O(1) com Set, mapeamento bit_index ↔ matrix_index
-   - `checkWinPattern`: Bitwise AND contra cada máscara
-   - `findAllWinners`: paginação com `get_table_rows`
-4. Executar worker em modo dev:
-   ```bash
-   pnpm --filter @cryptobingo/worker-game-loop dev
-   ```
-5. Testar fluxo completo via RabbitMQ:
-   ```bash
-   # Publicar evento de lockgame
-   amqp-publish -e "" -r game_loop_events -b '{"action":"lockgame","gameId":"1"}'
-   ```
+**Quando usar:** Qualquer edição em `.hpp`, `.cpp` ou `.abi`; compilação; deploy on-chain.
 
-**Contextos relacionados:** AGENTS.md → `worker-engineer`, SPEC.md §3-4, ADR-004
+**Principais procedimentos (resumo — leia a skill completa antes de agir):**
+1. Editar `.hpp` + `.cpp`
+2. Compilar no container `bingo_waxdev` em `/tmp` (mount é read-only)
+3. Copiar `bingo.wasm` de volta para o host
+4. **Corrigir o ABI manualmente** — `bingo.abi` é a fonte de verdade; NUNCA usar `bingo_generated.abi` para deploy
+5. Deploy via `cleos set contract bingogamectr /app/contracts/bingo -p bingogamectr@active`
+6. Validar com harness E2E (oracle daemon vivo)
+
+**Gotchas críticos:**
+- Migração de tabela com linhas existentes → `eosio::binary_extension<T>` + tipo `T[]$` no ABI
+- `require_auth("bingogamesvc"_n)` para actions de jogo (não `microservice`)
+- Pesos em hundredths (100 = 1.00×, máx 25500)
+- `orng.abi` também mantido à mão (bug CDT: tabela `reqs` ausente)
+
+**Agent revisor:** `cryptobingo-reviewer`
 
 ---
 
-## Skill: `react-frontend`
+## Skill: `worker-game-resolution`
 
-**Descrição:** Desenvolver ou depurar o frontend React
+**Arquivo:** `.claude/skills/worker-game-resolution/`
 
-**Trigger:** Arquivos em `apps/frontend/` alterados
+**Camada:** `apps/worker-game-loop/`
 
-**Workflow:**
-1. Verificar `.env` local: `VITE_DEV_ACTOR`, `VITE_DEV_PRIVATE_KEY`, `VITE_CHAIN_ID`, `VITE_RPC_URL`
-2. Iniciar dev server:
-   ```bash
-   pnpm --filter @cryptobingo/frontend dev
-   ```
-3. Verificar WharfKit:
-   - SessionKit com plugins: Anchor, CloudWallet, PrivateKey (dev-only)
-   - Login/restore/logout funcionando
-4. Verificar i18n:
-   - Arquivos em `locales/` (pt-BR, en-US, zh-CN)
-   - `useTranslation()` nos componentes
-   - Seletor de idioma persiste no MongoDB
-5. Verificar Lobby:
-   - Leitura de `games_table` e `balances_table` via RPC
-   - Polling de 10s
-   - Estados de loading/erro/vazio
-6. Tree-shaking:
-   - `WalletPluginPrivateKey` importado apenas com `import.meta.env.DEV`
-   - Botão de dev renderizado condicionalmente
+**Quando usar:** Edições no evaluator, orchestrator, draw modes, payouts, RabbitMQ, Redis cache, dropWorker.
 
-**Contextos relacionados:** AGENTS.md → `frontend-engineer`, PROJECT-DETAILS.md §7
+**Principais procedimentos:**
+- Evaluator: bitmasking O(1) com Bitwise AND; `findAllWinners` paginado (100/página)
+- Draw modes: `standard` / `fixed` / `firstfull` / `goldenball` / `multimatch` (ADR-012/013)
+- Payout: usa `ticket.price?.quantity` (ADR-010 pricePaid); `max_weight` (ADR-005)
+- RabbitMQ: `prefetch(1)`, DLQ, NACK sem requeue para falhas permanentes
+- Auto-advance: `autoLockFundingGames`, `autoStartLockedGames`, `autoClaimDrawnGames`
+- Testes: `pnpm --filter @cryptobingo/worker-game-loop test`
+
+**Gotchas críticos:**
+- `combo_id` = índice canônico alinhado Mongo↔chain
+- `patternCache.ts`: Redis TTL 1h, fail-open (nunca bloqueia resolução)
+- FREE SPACE = bit 12 do bitmask 5×5 (sempre setado: `0x00001000`)
+
+**Agent revisor:** `worker-reviewer`
 
 ---
 
-## Skill: `api-gateway`
+## Skill: `api-endpoint`
 
-**Descrição:** Implementar ou depurar rotas do API Gateway
+**Arquivo:** `.claude/skills/api-endpoint/`
 
-**Trigger:** Arquivos em `apps/api-gateway/` alterados
+**Camada:** `apps/api-gateway/`
 
-**Workflow:**
-1. Verificar `docs/openapi.yaml` — confirmar que a rota existe na spec
-2. Ler controllers e models atuais
-3. Se nova rota: adicionar no `openapi.yaml` PRIMEIRO, depois implementar
-4. Tipos: atualizar `packages/shared-types/src/index.ts` se necessário
-5. Conectar banco: MongoDB para perfis/gamificação, PostgreSQL para ledger
-6. Testar com curl:
-   ```bash
-   curl http://localhost:8083/api/v1/health
-   ```
-7. Segurança: rate limiting, Helmet, CORS configurado, JWT validado
+**Quando usar:** Novas rotas, controllers, middleware, auth, rate limiting, specs.
 
-**Contextos relacionados:** AGENTS.md → `backend-engineer`, openapi.yaml, ADR-002
+**Principais procedimentos:**
+- Spec-Driven: adicionar rota no `docs/openapi.yaml` ANTES de implementar
+- Controller em `apps/api-gateway/src/controllers/`
+- JWT challenge-response (ADR-006): `verifySignature` no middleware de auth
+- RBAC por role: `admin`, `sponsor`, `player`
+- Rate limiting obrigatório; Helmet + CORS restrito
+- Typecheck: `npx tsc --project tsconfig.build.json --noEmit`
+- Testes: `pnpm --filter @cryptobingo/api-gateway test`
 
----
+**Gotchas críticos:**
+- Tipos devem espelhar `@cryptobingo/shared-types` (não redefinir localmente)
+- Geração de cartelas usa ECDSA com `MICROSERVICE_PRIVATE_KEY` (ADR-001)
+- healthController pula rate limiter (`/health/live` e `/health/ready`)
 
-## Skill: `adr-docs`
-
-**Descrição:** Criar ou atualizar Architecture Decision Records e documentação
-
-**Trigger:** Decisão arquitetural de alto impacto
-
-**Workflow:**
-1. Identificar necessidade: nova tabela, novo fluxo, mudança de infraestrutura
-2. Criar arquivo `docs/adr/ADR-NNN-titulo-descritivo.md` com template:
-   ```markdown
-   # ADR-NNN: Título da Decisão
-
-   ## Status
-   [Proposto | Aceito | Depreciado | Substituído]
-
-   ## Contexto
-   [Problema que motivou a decisão]
-
-   ## Decisão
-   [O que foi decidido e por quê]
-
-   ## Consequências
-   ### Positivas
-   [Benefícios]
-
-   ### Negativas/Riscos
-   [Trade-offs e riscos]
-
-   ## Referências
-   [Links para SPEC.md, código, outros ADRs]
-   ```
-3. Atualizar `docs/SPEC.md` se a decisão afeta a especificação mestre
-4. Atualizar diagramas Mermaid em `docs/architecture.md`
-5. Se afeta API: atualizar `docs/openapi.yaml` ou `docs/asyncapi.yaml`
-6. Se afeta tipos: atualizar `packages/shared-types/src/index.ts`
-7. Registrar no `TRACE.md`
-
-**Contextos relacionados:** AGENTS.md → `docs-architect`, todos os ADRs em `docs/adr/`
+**Agent revisor:** `api-reviewer`
 
 ---
 
-## Skill: `test-harness`
+## Skill: `frontend-feature`
 
-**Descrição:** Executar testes de integração e bootstrap do ambiente
+**Arquivo:** `.claude/skills/frontend-feature/`
 
-**Trigger:** Necessidade de validar fluxo FSM completo
+**Camada:** `apps/frontend/` e `apps/swap-ui/`
 
-**Workflow:**
-1. Subir infraestrutura:
-   ```bash
-   docker compose up -d
-   ```
-2. Executar bootstrap (deploy contratos + criar tokens):
-   ```bash
-   pnpm --filter @cryptobingo/harness bootstrap
-   ```
-3. Executar testes de FSM:
-   ```bash
-   pnpm --filter @cryptobingo/harness test
-   ```
-4. Verificar cobertura:
-   - Fluxo completo: creategame → deposit → buytickets → lockgame → startdraw → receiverand → claimwin → withdraw
-   - Casos de erro: estado inválido, saldo insuficiente, replay attack
-5. Simulação Monte Carlo (ADR-005):
-   - Validar que pesos dos padrões mantêm RTP entre 85%-95%
+**Quando usar:** Novos componentes React, hooks, serviços, locales, Wharfkit, design system.
+Aplica-se a ambos os apps React — game frontend (5173) e swap DEX (5174).
 
-**Contextos relacionados:** AGENTS.md → `test-engineer`, ADR-004, ADR-005, SPEC.md
+**Principais procedimentos:**
+- Dev server: `pnpm --filter @cryptobingo/frontend dev` (ou `swap-ui`)
+- i18n: toda string visível em `src/locales/{pt,en,zh}.json`; `useTranslation()` nos componentes
+- WharfKit: `SessionKit` para login; sem custódia de chaves; `WalletPluginPrivateKey` somente em `DEV`
+- swapService.ts: `executeSwap/addLiquidity/removeLiquidity` via `session.transact()`
+- `pool_id` é `string` (uint64 serializado pelo WAX) — converter com `Number()` só na chamada on-chain
+- Design system: variáveis em `globals.design.css`; Tailwind v4 em `globals.css`
+- Typecheck: `npx tsc --noEmit` (dentro do app)
+- Testes: `pnpm --filter @cryptobingo/frontend test` (vitest)
+
+**Gotchas críticos:**
+- `t()` retorna `DefaultTFuncReturn` (inclui null) — usar `?? ''` em `placeholder` e attrs HTML
+- Seletores Cypress: somente `data-testid` (nunca texto i18n)
+- `VITE_SWAP_URL` / `VITE_GAME_URL` ligam os dois apps bidirecionalmente
+
+**Agent revisor:** `frontend-reviewer`
 
 ---
 
-## Skill: `infra-docker`
+## Skill: `e2e-ui-cypress`
 
-**Descrição:** Gerenciar infraestrutura Docker local
+**Arquivo:** `.claude/skills/e2e-ui-cypress/`
 
-**Trigger:** docker-compose.yml, infra/ alterados
+**Camada:** `apps/e2e-ui/`
 
-**Workflow:**
-1. Verificar `docker-compose.yml` — healthchecks, volumes, portas
-2. Subir serviços:
-   ```bash
-   docker compose up -d
-   ```
-3. Verificar healthchecks:
-   ```bash
-   docker compose ps
-   ```
-4. Acessar interfaces:
-   - PostgreSQL: `localhost:5432`
-   - MongoDB: `localhost:27017`
-   - RabbitMQ Management: `localhost:15672`
-   - Prometheus: `localhost:9090`
-   - Grafana: `localhost:3001` (admin/bingo_grafana_2026)
-   - cAdvisor: `localhost:8082`
-   - pgAdmin: `localhost:5050`
-5. Logs:
-   ```bash
-   docker compose logs -f [service_name]
-   ```
+**Quando usar:** Novos specs Cypress, fixtures, helpers, ou instrumentação `data-testid` no frontend.
 
-**Contextos relacionados:** AGENTS.md → `devops-engineer`, ADR-002
+**Principais procedimentos:**
+- Tier 1 (PR-gate, determinístico):
+  `pnpm --filter @cryptobingo/frontend dev` + `pnpm --filter @cryptobingo/e2e-ui e2e`
+  Usa `cy.intercept` + fixtures; sem WAX real; `cy.devLogin(role)` interceptado
+- Tier 2 (nightly/manual):
+  Stack completo (`docker compose` + `init_dev_env.sh`) + `pnpm --filter @cryptobingo/e2e-ui e2e:tier2`
+- Seletores: SOMENTE `data-testid` — nunca texto i18n, classes CSS ou estrutura DOM
+- Auth: `cy.devLogin('admin'|'player'|'sponsor')` — dev-login real interceptado
+
+**Gotchas críticos:**
+- `data-testid` deve estar no elemento raiz do componente, não em wrappers internos
+- Fixtures devem espelhar o contrato OpenAPI; atualizar junto com controllers
+- CI gating: Tier 1 obrigatório no pipeline; Tier 2 apenas nightly/manual
+
+**Agent revisor:** `e2e-reviewer`
+
+---
+
+## Skill: `harness-e2e`
+
+**Arquivo:** `.claude/skills/harness-e2e/`
+
+**Camada:** `apps/harness/`
+
+**Quando usar:** Novos testes E2E on-chain (FSM, swap), alterações no `init_dev_env.sh`, bootstrap.
+
+**Principais procedimentos:**
+- Requer: nodeos em `127.0.0.1:8888` + oracle daemon vivo durante os testes
+- Suba oracle e jest no mesmo comando para evitar que processos de background morram:
+  ```bash
+  node_modules/.pnpm/node_modules/.bin/ts-node --transpile-only scripts/orng-oracle.ts \
+    >> logs/orng-oracle.log & OPID=$!; sleep 4
+  cd apps/harness && npx jest tests/fsm.test.ts -t '<Suite>'; kill $OPID
+  ```
+- `node run-tests.js` para rodar todas as suites (pula se faltam env keys)
+- Bounds i64 em `get_table_rows`: use `UInt64.from(id)`, não string
+
+**Gotchas críticos:**
+- `orng.abi` mantido à mão — CDT não gera a tabela `reqs` corretamente
+- Reset com `init_dev_env.sh --reset` zera gametypes on-chain (recriar pela UI admin)
+- Oracle daemon: verificar vida com `pgrep -f orng-oracle.ts`; log em `logs/orng-oracle.log`
+
+**Agent revisor:** `platform-reviewer`
+
+---
+
+## Skill: `weights-calibration`
+
+**Arquivo:** `.claude/skills/weights-calibration/`
+
+**Camada:** Simulação Monte Carlo — `apps/api-gateway/src/controllers/monteCarloController.ts`
+
+**Quando usar:** Calibração de pesos de padrões/combinações para manter RTP 85% / GGR 15%.
+
+**Principais procedimentos:**
+- Endpoint: `POST /admin/calibrate-weights` (requer role `admin`)
+- Pesos em hundredths (100 = 1.00×, máx 25500 = 255×)
+- `max_weight` (ADR-005): prêmio usa o maior peso entre padrões/combinações/stages
+- Simular antes de ativar novo gametype em produção
+- Resultado deve manter RTP entre 83%–87% (tolerância ±2%)
+
+**Gotchas críticos:**
+- Nunca alterar pesos diretamente on-chain sem rodar a simulação
+- Combinações têm peso próprio — combinam com `max_weight`, não somam
+- Pesos off-chain (Mongo metadata) são separados dos pesos on-chain (`gametypes` table)
+
+**Agent revisor:** `platform-reviewer`

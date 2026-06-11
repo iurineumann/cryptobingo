@@ -115,13 +115,26 @@ Valida a **jornada visual** do usuário (player/admin/sponsor) no navegador — 
 
 Use a skill `e2e-ui-cypress` (procedimentos + gotchas) e o revisor `e2e-reviewer`.
 
-## Git flow
+## Git flow + GitHub Project
 
-- Branch de feature `feature/<slug>` a partir de **`develop`**. Commits lógicos e pequenos,
-  mensagem PT-BR no padrão `tipo(escopo): ...`, terminando com `Co-Authored-By: Claude ...`.
-  PR com corpo estruturado → **`develop`** (branch de integração). `master` recebe apenas PRs
-  de `develop` quando estável. Branch principal: `master`.
-- Pré-PR: typecheck + testes dos pacotes tocados verdes. Toda mudança estrutural → ADR em `docs/adr/`.
+**Início de feature (antes de criar a branch):**
+1. Criar issue: `gh issue create --repo iurineumann/cryptobingo --title "tipo(escopo): descrição" --label "enhancement"`
+2. Adicionar ao Kanban (#4): `gh project item-add 4 --owner iurineumann --url <issue-url>`
+3. Criar branch a partir de `develop`: `git checkout -b feature/<slug>`
+
+**Durante:**
+- Commits lógicos e pequenos, padrão PT-BR `tipo(escopo): ...`,
+  terminando com `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+
+**PR para `develop`:**
+- Corpo estruturado com **`Closes #N`** (fecha a issue automaticamente no merge → board move para Done)
+- Pré-PR: typecheck + testes dos pacotes tocados verdes
+- Toda mudança estrutural → ADR em `docs/adr/` antes do PR
+
+**`master`** recebe apenas PRs de `develop` quando estável. Branch principal: `master`.
+
+**Automação do board** (github.com/users/iurineumann/projects/4 → Workflows):
+Item adicionado → Backlog · PR aberto → In Progress · PR merged → Done
 
 ## Skills & Agents do projeto (`.claude/`)
 
