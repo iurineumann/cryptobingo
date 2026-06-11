@@ -57,6 +57,9 @@ import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
 import Logo             from './components/Logo';
+import LeaderboardPage  from './components/LeaderboardPage';
+import FaqPage          from './components/FaqPage';
+import NewsPage         from './components/NewsPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -478,8 +481,11 @@ function AppRoot() {
                 }
             />
 
-            {/* ── Rota pública: histórico de sala (sem auth — ADR-015) ── */}
+            {/* ── Rotas públicas sem auth (ADR-015 + ADR-024) ── */}
             <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session} />} />
+            <Route path="/leaderboard"          element={<LeaderboardPage />} />
+            <Route path="/faq"                  element={<FaqPage />} />
+            <Route path="/news"                 element={<NewsPage />} />
 
             {/* ── Rotas protegidas por autenticação ── */}
             <Route element={

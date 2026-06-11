@@ -744,6 +744,46 @@
     "footer_copyright": "© {{year}} CryptoBingo. Todos os direitos reservados.",
     "footer_tagline": "Provavelmente Justo · Bingo On-Chain"
   },
+  "leaderboard": {
+    "title_global": "Ranking Global",
+    "title_room": "Ranking da Sala",
+    "updated_at": "Atualizado às {{time}}",
+    "empty": "Nenhum vencedor registrado ainda.",
+    "col_player": "Jogador",
+    "col_total_won": "Total Ganho",
+    "col_games_won": "Partidas"
+  },
+  "faq": {
+    "title": "Perguntas Frequentes",
+    "subtitle": "Tudo o que você precisa saber sobre o CryptoBingo.",
+    "items": [
+      {
+        "question": "O que é o CryptoBingo?",
+        "answer": "CryptoBingo é uma plataforma de bingo on-chain na blockchain WAX. Cada partida é verificável publicamente e os prêmios são pagos automaticamente na sua carteira."
+      },
+      {
+        "question": "Como faço para jogar?",
+        "answer": "Conecte sua carteira WAX, escolha uma sala, compre suas cartelas e aguarde o sorteio. Se ganhar, o prêmio é enviado automaticamente."
+      },
+      {
+        "question": "Os sorteios são justos?",
+        "answer": "Sim. O CryptoBingo usa o oráculo de aleatoriedade da WAX (orng.wax), baseado em RSA-SHA256, cujo resultado é verificável on-chain por qualquer pessoa."
+      },
+      {
+        "question": "Quais tokens posso usar?",
+        "answer": "WAX é o token padrão. Salas podem aceitar BINGO, TLM ou outros tokens suportados. Você também pode usar a funcionalidade de swap para pagar com tokens alternativos."
+      },
+      {
+        "question": "Como funciona o pagamento de prêmios?",
+        "answer": "Após o sorteio, o contrato inteligente avalia automaticamente todas as cartelas e transfere os prêmios diretamente para as carteiras dos vencedores."
+      }
+    ]
+  },
+  "news": {
+    "title": "Notícias & Promoções",
+    "empty": "Nenhuma publicação disponível no momento.",
+    "pinned": "Destaque"
+  },
   "welcome": "Bem-vindo ao CryptoBingo",
   "loading": "Carregando perfil...",
   "language": "Idioma",
