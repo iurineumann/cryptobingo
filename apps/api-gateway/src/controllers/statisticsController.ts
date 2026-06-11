@@ -8,7 +8,7 @@ import { UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
 // ==========================================
 // GET /api/v1/statistics/rtp

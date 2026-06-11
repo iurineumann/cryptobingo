@@ -22,7 +22,7 @@ alta confiança, classificados por severidade.
   `T[]$` no ABI; senão linhas antigas quebram (`unpack_exception`). Bloqueante.
 - Alterou structs/actions? → o `bingo.abi` (mantido à MÃO) foi atualizado coerentemente? O ABI
   gerado pelo cdt-cpp não vale. Bloqueante se ABI divergir do `.hpp`.
-- Auth correta: actions admin = `require_auth(get_self())`; actions de jogo = `require_auth("microservice"_n)`.
+- Auth correta: actions admin = `require_auth(get_self())`; actions de jogo = `require_auth("bingogamesvc"_n)`.
 - Pesos em hundredths (1–25500). Payout = `price × base_multiplier × weight / 100 (× golden)`.
 - O contrato valida pesos on-chain (nunca confia no valor enviado pelo worker para o prêmio).
 

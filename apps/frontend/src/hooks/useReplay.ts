@@ -5,7 +5,7 @@ import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/s
 import { Pattern, fetchGamePatterns, isCombinationSatisfied, type CombinationRuleInput, type ExtendedRule } from '../components/ticketUtils';
 import { fetchPublicGametypeMetadata } from '../services/api';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 function parseHexBytes(hex: string): number[] {
   const raw = hex.startsWith('0x') ? hex.slice(2) : hex;

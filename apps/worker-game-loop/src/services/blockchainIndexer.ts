@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { redisClient } from './redis';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const INDEXER_INTERVAL_MS = parseInt(process.env.INDEXER_INTERVAL_MS ?? '15000', 10);
 const REDIS_CURSOR_KEY = 'indexer:last_game_name';
 

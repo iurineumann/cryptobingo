@@ -109,9 +109,9 @@ O campo `pattern_rule.weight` foi alterado de `uint8_t` (1–255) para `uint16_t
 
 ### Fase 4 — sweepggr + ggrpool (2026-06-04)
 
-Action `settreasury(name account)`: configura `config.treasury_account` (auth: `bingo.game`).
+Action `settreasury(name account)`: configura `config.treasury_account` (auth: `bingogamectr`).
 
-Action `sweepggr(name token_contract, symbol_code sym)` (auth: `bingo.game`):
+Action `sweepggr(name token_contract, symbol_code sym)` (auth: `bingogamectr`):
 
 1. Lê `ggrpool` para o símbolo solicitado
 2. Valida `treasury_account` configurado e diferente do próprio contrato

@@ -3,8 +3,8 @@
     {
       "game_id": "1716000000000",
       "status": "archived",
-      "ticket_price": { "quantity": "10.0000 BINGO", "contract": "bingo.token" },
-      "total_wagered": { "quantity": "100.0000 BINGO", "contract": "bingo.token" },
+      "ticket_price": { "quantity": "10.0000 BINGO", "contract": "bingogametkn" },
+      "total_wagered": { "quantity": "100.0000 BINGO", "contract": "bingogametkn" },
       "sponsor_pool": [],
       "drawn_balls": [3, 5, 7, 11, 14, 21, 57, 75, 23, 31, 42, 49, 63, 66, 70, 17, 28, 38, 54, 60],
       "end_time": "2026-06-07T00:00:00",

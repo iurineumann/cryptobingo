@@ -26,7 +26,7 @@ Pacote `@cryptobingo/api-gateway` (Express + TS). Testes: `npx jest <arquivo>`. 
 1. **Auth/RBAC/limite:** rota pública → `playerLimiter`. Rota admin → `adminLimiter, requireAuth,
    requireRole('admin')`. Nunca exponha mutação on-chain sem auth.
 2. **Transação on-chain:** use o padrão `getAdminSession()` (Wharfkit, assina como
-   `bingo.game@active` com `MICROSERVICE_PRIVATE_KEY`) → `session.transact({ actions:[{ account:
+   `bingogamectr@active` com `MICROSERVICE_PRIVATE_KEY`) → `session.transact({ actions:[{ account:
    CONTRACT_ACCOUNT, name, authorization:[session.permissionLevel], data }] }, { broadcast:true })`.
    Trate erro e retorne `transaction_id`. Veja `patternController.upsertGametype`.
 3. **Metadados off-chain:** MongoDB via Mongoose models (ex.: `GametypeMetadataModel`). On-chain é a

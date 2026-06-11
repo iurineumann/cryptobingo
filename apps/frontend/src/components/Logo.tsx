@@ -65,7 +65,7 @@ export default function Logo({
     if (variant === 'icon') {
         return (
             <img
-                src="/brand/icon.webp"
+                src="/brand/hexmark_violet.png"
                 alt={alt}
                 height={height}
                 width={height}
@@ -88,7 +88,7 @@ export default function Logo({
             aria-label={alt}
         >
             <img
-                src="/brand/icon.webp"
+                src="/brand/hexmark_violet.png"
                 alt=""
                 aria-hidden="true"
                 height={height}

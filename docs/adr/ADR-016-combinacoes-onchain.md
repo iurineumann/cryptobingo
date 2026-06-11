@@ -65,7 +65,7 @@ linhas escritas antes do upgrade leem `combinations` como ausente/vazio. Verific
   único e `weight` ∈ [1, 25500]. Auth `get_self()` (admin). Espelha `setstages`.
 - `claimcombo(game_id, ticket_id, ball_count, combo_id, golden_multiplier)` — paga o tier de
   combinação; valida `combo_id` contra `gametype.combinations` e usa o weight registrado on-chain.
-  Auth `microservice`. Espelha `claimwin`.
+  Auth `bingogamesvc`. Espelha `claimwin`.
 
 ### 4. Sincronização off-chain → on-chain (API)
 
@@ -104,7 +104,7 @@ Worker (resolução) ──GET /patterns──> cláusulas+tipos        gametype
 
 - **Anti-inflação de prêmio:** o worker não escolhe o valor — envia `combo_id`; o contrato deriva o
   peso do registro on-chain. Combo inexistente → revert (`combo_id nao encontrado`).
-- **Auth:** `setcombos` = admin (`get_self`); `claimcombo` = `microservice`. Idêntico ao restante.
+- **Auth:** `setcombos` = admin (`get_self`); `claimcombo` = `bingogamesvc`. Idêntico ao restante.
 - **Determinismo:** sem RNG; pagamento é função pura de (preço, base_multiplier, weight, golden).
 
 ---
@@ -127,7 +127,7 @@ consistência com stages/claimwin; persistência confiável + edição.
 **Trade-offs:** peso duplicado (Mongo + chain) exige sincronização — mitigada centralizando no
 `upsertGametypeMetadata` com erro explícito em caso de drift. A satisfação das cláusulas continua
 confiando no worker (mesma premissa de `claimwin`), aceitável pelo modelo de confiança do
-`microservice`.
+`bingogamesvc`.
 
 ---
 

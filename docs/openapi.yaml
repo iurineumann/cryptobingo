@@ -865,7 +865,7 @@ paths:
   # ══════════════════════════════════════════
   /swap/pools:
     get:
-      summary: Lista pools ativas do bingo.swap
+      summary: Lista pools ativas do bingogameswp
       description: >
         Retorna pools AMM ativas com reservas e taxas. Cache de 10s no servidor.
         Usado pelo BuyTicketModal para filtrar tokens alternativos disponíveis.
@@ -902,7 +902,7 @@ paths:
           name: from_contract
           required: true
           schema: { type: string }
-          description: Contrato do token de origem (ex. "bingo.token")
+          description: Contrato do token de origem (ex. "bingogametkn")
         - in: query
           name: from_symbol
           required: true
@@ -1487,7 +1487,7 @@ components:
 
     SwapPoolSummary:
       type: object
-      description: Pool AMM resumida do bingo.swap (ADR-021)
+      description: Pool AMM resumida do bingogameswp (ADR-021)
       properties:
         pool_id:         { type: string, description: "uint64 como string" }
         token_a:

@@ -3,7 +3,7 @@
 
 process.env.GOLDEN_BALL_PAUSE_MS = '0';
 process.env.STAGE_PAUSE_MS       = '0';
-process.env.CONTRACT_ACCOUNT     = 'bingo.game';
+process.env.CONTRACT_ACCOUNT     = 'bingogamectr';
 process.env.RPC_URL              = 'http://localhost:8888';
 process.env.CHAIN_ID             = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 
@@ -87,8 +87,8 @@ function makeGame(overrides: Partial<any> = {}) {
     return {
         game_id: '1', status: 'drawn', gametype_id: '0',
         drawn_balls: DRAWN_BALLS,
-        ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-        total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
+        ticket_price: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+        total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingogametkn' },
         room_id: '1',
         ...overrides,
     };
@@ -110,7 +110,7 @@ function makeWinResultWithPrice(price: string, ticketId = '1', weight = 100) {
         ...makeWinResult(ticketId),
         ticket: {
             ticket_id: ticketId, owner: 'jogador1', matrix: [], state: 0x1000, game_id: '1',
-            price: { quantity: price, contract: 'bingo.token' },
+            price: { quantity: price, contract: 'bingogametkn' },
         },
         weight,
     };
@@ -291,7 +291,7 @@ describe('buildWinnerPayloads — preço variável e baseMultiplier (ADR-010 + A
         jest.useFakeTimers();
         mockFetchGame.mockResolvedValue(makeGame({
             gametype_id: '1',
-            ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
+            ticket_price: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
         }));
         mockGetTableRows.mockResolvedValue(GT_ROWS());
         mockFindAllWinners.mockResolvedValue([makeWinResult()]);

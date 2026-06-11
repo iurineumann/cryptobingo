@@ -21,7 +21,7 @@ interface LobbyProps {
     onReplayGame?: (gameId: string) => void;
 }
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;

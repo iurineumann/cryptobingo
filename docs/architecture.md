@@ -64,17 +64,17 @@ stateDiagram-v2
         Aguarda fundgame() do worker.
     end note
 
-    CREATED --> FUNDING: fundgame()\n[microservice]
+    CREATED --> FUNDING: fundgame()\n[bingogamesvc]
     note right of FUNDING
         buytickets() liberado.\n        linkcampaign() disponível.\n        Cartelas alocadas em lote na RAM.
     end note
 
-    FUNDING --> LOCKED: lockgame()\n[microservice]
+    FUNDING --> LOCKED: lockgame()\n[bingogamesvc]
     note left of LOCKED
         Vendas encerradas.\n        Worker indexa Redis (Índice Invertido).
     end note
 
-    LOCKED --> DRAWING: startdraw()\n[microservice → orng.wax]
+    LOCKED --> DRAWING: startdraw()\n[bingogamesvc → orng.wax]
     note right of DRAWING
         Requisição de entropia enviada.\n        Aguardando receiverand().
     end note
@@ -84,12 +84,12 @@ stateDiagram-v2
         75 dezenas recebidas.\n        Worker inicia Slow Reveal.
     end note
 
-    DRAWN --> ARCHIVED: claimwin()\n[microservice]
+    DRAWN --> ARCHIVED: claimwin()\n[bingogamesvc]
     note right of ARCHIVED
         Payout Multidrop O(1) executado.\n        end_time registrado.\n        Quarentena de 24h iniciada.
     end note
 
-    LOCKED --> ABORTED: abortgame()\n[microservice / Admin]
+    LOCKED --> ABORTED: abortgame()\n[bingogamesvc / Admin]
     DRAWING --> ABORTED: abortgame()\n[timeout orng.wax]
     note left of ABORTED
         Fail-Safe ativado.\n        end_time registrado.\n        refundticket() liberado O(1).

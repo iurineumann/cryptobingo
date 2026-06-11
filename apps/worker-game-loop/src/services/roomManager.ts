@@ -5,7 +5,7 @@ import { contractSession, microserviceSession } from './blockchain';
 import { connectRedis } from './redis';
 import { processRoomDrops } from './dropWorker';
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const REDIS_ROOM_PREFIX = 'room:';
 
 interface RoomConfig {
@@ -93,7 +93,7 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
 
         const newGameId = generateGameId();
 
-        // Cria o jogo (requer bingo.game@active)
+        // Cria o jogo (requer bingogamectr@active)
         console.log(`[RoomManager] Sala ${room.room_id}: criando game ${newGameId}...`);
         const createResult = await contractSession.transact({
             actions: [{
@@ -113,7 +113,7 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         }, { broadcast: true });
         console.log(`✅ Game ${newGameId} criado. TX: ${createResult.response?.transaction_id}`);
 
-        // Funde o jogo (CREATED → FUNDING) — requer microservice@active
+        // Funde o jogo (CREATED → FUNDING) — requer bingogamesvc@active
         const fundResult = await microserviceSession.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,

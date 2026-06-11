@@ -6,7 +6,7 @@ import type {
 } from '@cryptobingo/shared-types';
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8888';
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
 export const rpcClient = new APIClient({ url: RPC_URL });
 
@@ -23,7 +23,7 @@ export function parseHexBytes(hex: string): number[] {
 }
 
 /**
- * Busca o estado de um jogo na tabela `games` (scope: bingo.game).
+ * Busca o estado de um jogo na tabela `games` (scope: bingogamectr).
  * Retorna null se o jogo não existir.
  *
  * IMPORTANTE: `drawn_balls` vem como hex string (`bytes` na ABI) e é convertida

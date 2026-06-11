@@ -1,7 +1,7 @@
 // apps/api-gateway/src/controllers/swapController.ts
-// ADR-021 — Checkout Multi-Moeda via bingo.swap
+// ADR-021 — Checkout Multi-Moeda via bingogameswp
 //
-// Endpoints somente-leitura: lêem o estado on-chain do bingo.swap e
+// Endpoints somente-leitura: lêem o estado on-chain do bingogameswp e
 // calculam cotações (reverse AMM). Nenhuma chave privada é usada aqui —
 // a transação é construída e assinada pelo cliente via Wharfkit.
 
@@ -11,7 +11,7 @@ import { rpcClient } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
 
-const SWAP_CONTRACT   = process.env.SWAP_CONTRACT  || 'bingo.swap';
+const SWAP_CONTRACT   = process.env.SWAP_CONTRACT  || 'bingogameswp';
 const POOLS_CACHE_TTL = 10; // segundos — pools mudam raramente
 const QUOTE_TTL_MAX   = 30; // segundos — cotação máxima antes de expirar
 
@@ -120,7 +120,7 @@ async function fetchPools(): Promise<RawPool[]> {
 
 /**
  * GET /api/v1/swap/pools
- * Lista pools ativas do bingo.swap. Cache de 10s no Redis.
+ * Lista pools ativas do bingogameswp. Cache de 10s no Redis.
  */
 export async function listSwapPools(req: Request, res: Response): Promise<void> {
     try {
@@ -147,7 +147,7 @@ export async function listSwapPools(req: Request, res: Response): Promise<void> 
         res.json({ pools: summaries });
     } catch (err) {
         console.error('[swapController] listSwapPools:', err);
-        res.status(502).json({ error: 'Falha ao ler pools do bingo.swap' });
+        res.status(502).json({ error: 'Falha ao ler pools do bingogameswp' });
     }
 }
 
@@ -155,7 +155,7 @@ export async function listSwapPools(req: Request, res: Response): Promise<void> 
  * GET /api/v1/swap/quote
  *
  * Query params:
- *   from_contract  — ex: "bingo.token"
+ *   from_contract  — ex: "bingogametkn"
  *   from_symbol    — ex: "4,BINGO"
  *   to_contract    — ex: "eosio.token"
  *   to_symbol      — ex: "8,WAX"

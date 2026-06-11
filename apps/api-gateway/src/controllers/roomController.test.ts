@@ -1,7 +1,7 @@
 // Testes funcionais do roomController.
 
 process.env.JWT_SECRET          = 'test-secret-32chars-xxxxxxxxxx!!';
-process.env.CONTRACT_ACCOUNT    = 'bingo.game';
+process.env.CONTRACT_ACCOUNT    = 'bingogamectr';
 process.env.CHAIN_ID            = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 process.env.RPC_URL             = 'http://localhost:8888';
 process.env.MICROSERVICE_PRIVATE_KEY = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3';
@@ -16,7 +16,7 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
 }));
 jest.mock('@wharfkit/session', () => ({
     Session: jest.fn().mockImplementation(() => ({
-        permissionLevel: { actor: 'bingo.game', permission: 'active' },
+        permissionLevel: { actor: 'bingogamectr', permission: 'active' },
         transact: mockTransact,
     })),
 }));
@@ -64,9 +64,9 @@ function makeApp() {
 function makeRoom(roomId = '1') {
     return {
         room_id: roomId, sponsor: 'sponsor1', gametype_id: '1', status: 'active',
-        ticket_price_min:     { quantity: '5.0000 BINGO', contract: 'bingo.token' },
-        ticket_price_max:     { quantity: '50.0000 BINGO', contract: 'bingo.token' },
-        ticket_price_default: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
+        ticket_price_min:     { quantity: '5.0000 BINGO', contract: 'bingogametkn' },
+        ticket_price_max:     { quantity: '50.0000 BINGO', contract: 'bingogametkn' },
+        ticket_price_default: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
         weight: 100, current_game_id: '0',
     };
 }
@@ -137,7 +137,7 @@ describe('createRoom', () => {
     beforeEach(() => jest.clearAllMocks());
 
     const VALID_BODY = {
-        room_id: '42', currency_quantity: '0.0000 BINGO', currency_contract: 'bingo.token',
+        room_id: '42', currency_quantity: '0.0000 BINGO', currency_contract: 'bingogametkn',
         sponsor: 'sponsor1', gametype_id: '1',
     };
 

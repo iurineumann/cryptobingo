@@ -1,5 +1,5 @@
 // apps/e2e-ui/cypress/e2e/tier1/player/buy-ticket-swap.cy.ts
-// Tier 1 — Checkout multi-moeda via bingo.swap (ADR-021).
+// Tier 1 — Checkout multi-moeda via bingogameswp (ADR-021).
 //
 // Cobre o fluxo do seletor de moeda no BuyTicketModal:
 //   - seletor aparece quando o usuário tem saldo em token alternativo
@@ -13,7 +13,7 @@
 const FUNDING_GAME = '1717000000000';
 
 function interceptSwapAPIs() {
-    // Pools do bingo.swap
+    // Pools do bingogameswp
     cy.intercept('GET', '**/api/v1/swap/pools', { fixture: 'swap-pools.json' }).as('swapPools');
 
     // Cotação reverse AMM
@@ -21,7 +21,7 @@ function interceptSwapAPIs() {
 
     // Saldo BINGO do usuário (get_table_rows direto no nodeos)
     cy.intercept('POST', '**/v1/chain/get_table_rows', (req) => {
-        if (req.body?.code === 'bingo.token') {
+        if (req.body?.code === 'bingogametkn') {
             req.reply({ fixture: 'rpc.token-balance-bingo.json' });
         } else {
             req.continue();

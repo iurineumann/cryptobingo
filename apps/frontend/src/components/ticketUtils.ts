@@ -561,7 +561,7 @@ export function detectComboWinsForTicket(
 }
 
 export async function fetchGamePatterns(session: Session, gametypeId: string): Promise<Pattern[]> {
-  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
   try {
     const gtRes = await session.client.v1.chain.get_table_rows({
       code: c, scope: c, table: 'gametypes',
