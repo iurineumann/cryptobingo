@@ -1,5 +1,5 @@
 // apps/swap-ui/src/services/swapService.test.ts
-// Testes unitários do swapService do bingo.swap DEX.
+// Testes unitários do swapService do bingogameswp DEX.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -19,7 +19,7 @@ import {
 
 const POOL: import('@cryptobingo/shared-types').SwapPoolSummary = {
     pool_id:         1,
-    token_a:         { contract: 'bingo.token', symbol: '4,BINGO', precision: 4 },
+        token_a:         { contract: 'bingogametkn', symbol: '4,BINGO', precision: 4 },
     token_b:         { contract: 'eosio.token', symbol: '8,WAX',   precision: 8 },
     reserve_a:       1_000_000_0000,
     reserve_b:         500_000_00000000,
@@ -30,7 +30,7 @@ const POOL: import('@cryptobingo/shared-types').SwapPoolSummary = {
 const QUOTE: import('@cryptobingo/shared-types').SwapQuote = {
     quote_id:          'q-abc',
     pool_id:           1,
-    from_contract:     'bingo.token',
+    from_contract:     'bingogametkn',
     from_symbol:       '4,BINGO',
     to_contract:       'eosio.token',
     to_symbol:         '8,WAX',
@@ -89,7 +89,7 @@ describe('fetchSwapQuote', () => {
     it('retorna cotação válida', async () => {
         mockFetch.mockReturnValueOnce(ok(QUOTE));
         const q = await fetchSwapQuote({
-            fromContract: 'bingo.token',
+            fromContract: 'bingogametkn',
             fromSymbol:   '4,BINGO',
             toContract:   'eosio.token',
             toSymbol:     '8,WAX',
@@ -111,14 +111,14 @@ describe('fetchSwapQuote', () => {
     it('inclui parâmetros na query string', async () => {
         mockFetch.mockReturnValueOnce(ok(QUOTE));
         await fetchSwapQuote({
-            fromContract: 'bingo.token',
+            fromContract: 'bingogametkn',
             fromSymbol:   '4,BINGO',
             toContract:   'eosio.token',
             toSymbol:     '8,WAX',
             amountOut:    '500000000',
         });
         const url = mockFetch.mock.calls[0][0] as string;
-        expect(url).toContain('from_contract=bingo.token');
+        expect(url).toContain('from_contract=bingogametkn');
         expect(url).toContain('amount_out=500000000');
     });
 });
@@ -130,19 +130,19 @@ describe('fetchTokenBalance', () => {
         mockFetch.mockReturnValueOnce(ok({
             rows: [{ balance: '10.0000 BINGO' }],
         }));
-        const bal = await fetchTokenBalance('user.wax', 'bingo.token', 'BINGO');
+        const bal = await fetchTokenBalance('user.wax', 'bingogametkn', 'BINGO');
         expect(bal).toBe(100000n);
     });
 
     it('retorna 0n quando conta sem saldo', async () => {
         mockFetch.mockReturnValueOnce(ok({ rows: [] }));
-        const bal = await fetchTokenBalance('user.wax', 'bingo.token', 'BINGO');
+        const bal = await fetchTokenBalance('user.wax', 'bingogametkn', 'BINGO');
         expect(bal).toBe(0n);
     });
 
     it('retorna 0n em caso de erro de rede', async () => {
         mockFetch.mockRejectedValueOnce(new Error('network error'));
-        const bal = await fetchTokenBalance('user.wax', 'bingo.token', 'BINGO');
+        const bal = await fetchTokenBalance('user.wax', 'bingogametkn', 'BINGO');
         expect(bal).toBe(0n);
     });
 

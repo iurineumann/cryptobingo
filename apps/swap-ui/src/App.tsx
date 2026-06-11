@@ -1,5 +1,5 @@
 // apps/swap-ui/src/App.tsx
-// ADR-022 — rotas do bingo.swap DEX público
+// ADR-022 — rotas do bingogameswp DEX público
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { WalletProvider } from './hooks/useWallet';

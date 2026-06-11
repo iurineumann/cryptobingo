@@ -24,7 +24,7 @@ todas as decisões de design tomadas em sessão de alinhamento com o product own
 
 ### 1. Conta Custodiante
 
-Todos os ativos destinados a drops residem na conta do contrato (`bingo.game`),
+Todos os ativos destinados a drops residem na conta do contrato (`bingogamectr`),
 capturados via `on_notify` de `eosio.token` (tokens fungíveis) e `atomicassets`
 (NFTs). O sponsor não precisa especificar memo de roteamento: qualquer ativo
 enviado ao contrato sem memo de jogo é automaticamente registrado como depósito
@@ -221,7 +221,7 @@ ACTION execdrop(
 ```
 
 **Validações:**
-- Requer autorização do microservice
+- Requer autorização do bingogamesvc
 - `alloc.status == "active"_n`
 - Para tokens: `deposit.quantity_remaining >= alloc.quantity_per_drop`
 - Para NFTs: `alloc.drops_executed == 0` (máximo 1 drop por NFT)

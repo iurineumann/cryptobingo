@@ -1,7 +1,7 @@
 // Testes funcionais do statisticsController.
 
 process.env.JWT_SECRET       = 'test-secret-32chars-xxxxxxxxxx!!';
-process.env.CONTRACT_ACCOUNT = 'bingo.game';
+process.env.CONTRACT_ACCOUNT = 'bingogamectr';
 process.env.RPC_URL          = 'http://localhost:8888';
 process.env.CHAIN_ID         = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 
@@ -142,8 +142,8 @@ describe('syncGameToLedger', () => {
         mockGetTableRows.mockResolvedValue({
             rows: [{
                 game_id: '1', status: 'archived', gametype_id: '0',
-                ticket_price: { quantity: '10.0000 BINGO', contract: 'bingo.token' },
-                total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingo.token' },
+                ticket_price: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+                total_wagered:   { quantity: '80.0000 BINGO', contract: 'bingogametkn' },
                 drawn_balls: [],
             }],
             more: false,

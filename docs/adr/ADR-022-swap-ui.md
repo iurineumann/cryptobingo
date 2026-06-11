@@ -1,4 +1,4 @@
-# ADR-022 — bingo.swap: App Público (`apps/swap-ui`)
+# ADR-022 — bingogameswp: App Público (`apps/swap-ui`)
 
 **Status:** Accepted
 **Data:** 2026-06-10
@@ -8,11 +8,11 @@
 
 ## Contexto
 
-O `bingo.swap` (ADR-018/019) é uma AMM x*y=k on-chain com pools públicos, taxa LP para
+O `bingogameswp` (ADR-018/019) é uma AMM x*y=k on-chain com pools públicos, taxa LP para
 provedores e taxa de serviço configurável. A ADR-021 integrou o swap ao checkout do jogo,
 mas a liquidez e o DEX em si ficaram invisíveis para o mercado externo.
 
-Para atrair provedores de liquidez e posicionar o `bingo.swap` como um DEX independente
+Para atrair provedores de liquidez e posicionar o `bingogameswp` como um DEX independente
 (similar ao Alcor/TACOCRYPTO na WAX), é necessário um app público separado do jogo.
 
 ---
@@ -40,7 +40,7 @@ Novo app Vite + React + TypeScript + Tailwind v4, com link bidirecional ao app d
 
 ### Fluxo de swap (público — qualquer usuário WAX)
 
-Igual ao ADR-021, porém com seleção livre de par (qualquer token aprovado no bingo.swap),
+Igual ao ADR-021, porém com seleção livre de par (qualquer token aprovado no bingogameswp),
 sem vinculação a compra de cartela:
 ```
 seleciona token A → digita amount → busca quote → aprova slippage → assina tx Wharfkit

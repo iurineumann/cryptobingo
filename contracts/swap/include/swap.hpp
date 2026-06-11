@@ -17,7 +17,7 @@ namespace swap_contract_ns {
     struct [[eosio::table("swapstate")]] swap_state {
         uint64_t next_pool_id  = 1;
         uint64_t next_token_id = 1;   // contador da allowlist
-        name     treasury      = "bingo.game"_n; // destino das service fees (settreasury)
+        name     treasury      = "bingogamectr"_n; // destino das service fees (settreasury)
     };
     typedef singleton<"swapstate"_n, swap_state> swap_state_singleton;
 
@@ -106,7 +106,7 @@ namespace swap_contract_ns {
         using contract::contract;
 
         // ── Configuração (admin-only) ────────────────────────────────────────────
-        // Define a conta treasury que recebe as service fees. Default: bingo.game.
+        // Define a conta treasury que recebe as service fees. Default: bingogamectr.
         [[eosio::action]] void settreasury(name account);
 
         // Define a service_fee_bps do pool. Máximo: 500 (5%).

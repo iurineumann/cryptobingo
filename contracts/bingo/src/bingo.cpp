@@ -89,7 +89,7 @@ namespace bingo {
     }
 
     void bingo_contract::fundgame(uint64_t game_id) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "created"_n, "Game is not in CREATED status.");
@@ -281,7 +281,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -347,7 +347,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage_num, uint8_t ball_count, uint64_t win_pattern_mask) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -625,7 +625,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::lockgame(uint64_t game_id) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "funding"_n, "Game is not in FUNDING status.");
@@ -633,7 +633,7 @@ namespace bingo {
     }
 
     void bingo_contract::startdraw(uint64_t game_id) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
@@ -699,7 +699,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -777,7 +777,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::closegame(uint64_t game_id) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
 
@@ -826,9 +826,9 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::abortgame(uint64_t game_id, std::string reason) {
-        bool by_ms    = has_auth("microservice"_n);
+        bool by_ms    = has_auth("bingogamesvc"_n);
         bool by_admin = has_auth(get_self());
-        check(by_ms || by_admin, "Auth: microservice ou admin necessaria.");
+        check(by_ms || by_admin, "Auth: bingogamesvc ou admin necessaria.");
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -1233,12 +1233,12 @@ namespace bingo {
 
     /**
      * execdrop: executa a transferência do drop ao vencedor.
-     * Chamada pelo worker (microservice) após seleção do vencedor (ADR-011 Fase 2).
+     * Chamada pelo worker (bingogamesvc) após seleção do vencedor (ADR-011 Fase 2).
      * Para tokens: credita na wallet interna do vencedor.
      * Para NFTs:   transfere o NFT diretamente para a wallet do vencedor.
      */
     void bingo_contract::execdrop(uint64_t alloc_id, name winner, extended_asset quantity) {
-        require_auth("microservice"_n);
+        require_auth("bingogamesvc"_n);
 
         drop_allocations_table allocs(get_self(), get_self().value);
         auto alloc_itr = allocs.require_find(alloc_id, "alloc_id nao encontrado.");
@@ -1324,7 +1324,7 @@ namespace bingo {
     // ==========================================
     // SWEEP GGR (ADR-005)
     // Transfere o GGR acumulado para o treasury_account configurado.
-    // Auth: apenas bingo.game (admin).
+    // Auth: apenas bingogamectr (admin).
     // Idempotente: se pool vazio, não faz nada.
     // ==========================================
 

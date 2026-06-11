@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Name } from '@wharfkit/session';
 import type { Session } from '@wharfkit/session';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 interface PlayerDashboardProps { session: Session }
 

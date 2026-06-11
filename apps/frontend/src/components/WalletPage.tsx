@@ -5,8 +5,8 @@ import type { BlockchainBalance } from '@cryptobingo/shared-types';
 
 interface WalletPageProps { session: Session }
 
-const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
-const BINGO_TOKEN_CONTRACT = 'bingo.token';
+const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
+const BINGO_TOKEN_CONTRACT = 'bingogametkn';
 
 export default function WalletPage({ session }: WalletPageProps) {
     const { t } = useTranslation();

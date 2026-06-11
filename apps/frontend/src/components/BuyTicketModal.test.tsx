@@ -43,7 +43,7 @@ const mockSession = {
   client:         {},
 } as any;
 
-const DEFAULT_PRICE = { quantity: '10.0000 BINGO', contract: 'bingo.token' };
+const DEFAULT_PRICE = { quantity: '10.0000 BINGO', contract: 'bingogametkn' };
 
 function renderModal(overrides: Partial<Parameters<typeof BuyTicketModal>[0]> = {}) {
   const onClose   = vi.fn();

@@ -73,7 +73,7 @@ function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[]
     return rows as unknown as BlockchainTicketRecord[];
 }
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
 // ==========================================
 // TIPOS

@@ -4,7 +4,7 @@
 Aceito — Fase 1 implementada (2026-05-25); Fase 2 (padrões dinâmicos on-chain) pendente
 
 ## Contexto
-Atualmente, o CryptoBingo opera de forma rígida em relação às condições de vitória. Para escalar como uma plataforma GameFi, precisamos permitir a criação dinâmica de modos de jogo (ex: "Linha Rápida", "Letra G", "Cartela Cheia") sem a necessidade de redeploy do Smart Contract `bingo.game` a cada novo evento. 
+Atualmente, o CryptoBingo opera de forma rígida em relação às condições de vitória. Para escalar como uma plataforma GameFi, precisamos permitir a criação dinâmica de modos de jogo (ex: "Linha Rápida", "Letra G", "Cartela Cheia") sem a necessidade de redeploy do Smart Contract `bingogamectr` a cada novo evento. 
 Validar posições X,Y (ex: `[1,2], [3,4]`) de forma iterativa no C++ (Smart Contract) durante a chamada `claimwin` consumiria excessivos recursos de CPU da blockchain Antelope/WAX, encarecendo a operação.
 
 ## Decisão

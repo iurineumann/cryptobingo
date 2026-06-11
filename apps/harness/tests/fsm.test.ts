@@ -49,9 +49,9 @@ function makeSession(actor: string, key: PrivateKey) {
 }
 
 const rootSession   = makeSession('eosio',        eosioKey);
-const bingoSession  = makeSession('bingo.game',   bingoKey);
+const bingoSession  = makeSession('bingogamectr',   bingoKey);
 const playerSession = makeSession('jogador1',     playerKey);
-const microSession  = makeSession('microservice', microserviceKey);
+const microSession  = makeSession('bingogamesvc', microserviceKey);
 
 const MASK_ROW0 = BigInt(1082401); // bits 0,5,10,15,20
 const MASK_ROW1 = BigInt(2164802); // bits 1,6,11,16,21
@@ -105,7 +105,7 @@ async function getGameStatus(gameIdStr: string): Promise<string> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            code: 'bingo.game', scope: 'bingo.game', table: 'games',
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
             lower_bound: gameIdStr, upper_bound: gameIdStr,
             limit: 1, json: true,
         }),
@@ -151,7 +151,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
         try {
             await transact(rootSession, 'eosio', 'newaccount', {
-                creator: 'eosio', name: 'microservice',
+                creator: 'eosio', name: 'bingogamesvc',
                 owner:  { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] },
                 active: { threshold: 1, keys: [{ key: eosioKey.toPublic().toString(), weight: 1 }], accounts: [], waits: [] },
             });
@@ -163,15 +163,15 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const row0Mask = Number(MASK_ROW0);
         const row1Mask = Number(MASK_ROW1);
 
-        await transact(bingoSession, 'bingo.game', 'addpattern', {
+        await transact(bingoSession, 'bingogamectr', 'addpattern', {
             pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: row0Mask,
         });
-        await transact(bingoSession, 'bingo.game', 'addpattern', {
+        await transact(bingoSession, 'bingogamectr', 'addpattern', {
             pattern_id: PATTERN_ID_ROW1, name: 'ROW_1', mask: row1Mask,
         });
 
         // ADR-012: addgametype agora exige draw_mode, max_balls, golden_ball_after, master_weight_ovrd
-        const r = await transact(bingoSession, 'bingo.game', 'addgametype', {
+        const r = await transact(bingoSession, 'bingogamectr', 'addgametype', {
             gametype_id:      GAMETYPE_ID_STD,
             name:             'Standard',
             base_multiplier:  1,
@@ -187,7 +187,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 1: creategame → status CREATED', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      mainGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_STD,
@@ -199,7 +199,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 1.5: fundgame → CREATED → FUNDING', async () => {
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: mainGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: mainGameId });
         expect(await getGameStatus(mainGameIdStr)).toBe('funding');
         console.log('   ✅ status: funding');
     });
@@ -207,7 +207,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 2: deposit via on_notify', async () => {
         const r = await transact(playerSession, 'eosio.token', 'transfer', {
-            from: 'jogador1', to: 'bingo.game',
+            from: 'jogador1', to: 'bingogamectr',
             quantity: '500.0000 WAX', memo: 'Deposito para jogar',
         });
         expect(r.response).toBeDefined();
@@ -223,7 +223,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        const r = await transact(playerSession, 'bingo.game', 'buytickets', {
+        const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         mainGameId,
             matrices:        [matrixBytes],
@@ -237,7 +237,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 4: lockgame → FUNDING → LOCKED', async () => {
-        await transact(microSession, 'bingo.game', 'lockgame', { game_id: mainGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame', { game_id: mainGameId });
         console.log('   ✅ status: locked');
     });
 
@@ -245,7 +245,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         // startdraw transita para DRAWING e emite requestrand para orng.wax.
         // O daemon oracle detecta o pedido, assina com RSA e chama setrand.
         // O contrato verifica, deriva as bolas e chama receiverand → DRAWN.
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: mainGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: mainGameId });
         expect(await getGameStatus(mainGameIdStr)).toBe('drawing');
         console.log('   ✅ status: drawing — aguardando daemon oracle...');
         await waitForDrawn(mainGameIdStr);
@@ -256,11 +256,11 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
     test('Passo 6: claimwin → DRAWN → PAYING (ADR-012: multi-winner)', async () => {
         const [gameRes, ticketRes] = await Promise.all([
             rpcClient.v1.chain.get_table_rows({
-                code: 'bingo.game', scope: 'bingo.game', table: 'games',
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
                 lower_bound: mainGameIdStr, upper_bound: mainGameIdStr, limit: 1, json: true,
             }),
             rpcClient.v1.chain.get_table_rows({
-                code: 'bingo.game', scope: mainGameIdStr, table: 'tickets', limit: 1, json: true,
+                code: 'bingogamectr', scope: mainGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
@@ -278,7 +278,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         }
 
         // ADR-012: claimwin agora exige golden_multiplier (0 = sem efeito)
-        const r = await transact(microSession, 'bingo.game', 'claimwin', {
+        const r = await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id:           mainGameId,
             ticket_id:         ticketId,
             ball_count:        35,
@@ -294,7 +294,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 6.5: closegame → PAYING → ARCHIVED (ADR-012)', async () => {
-        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: mainGameId });
+        const r = await transact(microSession, 'bingogamectr', 'closegame', { game_id: mainGameId });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mainGameIdStr)).toBe('archived');
         console.log('   ✅ status: archived');
@@ -302,7 +302,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 7: withdraw', async () => {
-        const r = await transact(playerSession, 'bingo.game', 'withdraw', {
+        const r = await transact(playerSession, 'bingogamectr', 'withdraw', {
             owner:  'jogador1',
             amount: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
         });
@@ -318,13 +318,13 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
 
     test('Setup: cria, funde, compra, trava jogo de abort', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      abortGameId,
             ticket_price: ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_STD,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: abortGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: abortGameId });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
         const owner       = Name.from('jogador1');
@@ -333,7 +333,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         abortGameId,
             matrices:        [matrixBytes],
@@ -341,12 +341,12 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
             nft_id:          0,
             requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame', { game_id: abortGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame', { game_id: abortGameId });
         console.log(`   ✅ Jogo abort ${abortGameIdStr} em LOCKED`);
     });
 
     test('abortgame → LOCKED → ABORTED (ADR-012: também aceita PAYING)', async () => {
-        const r = await transact(microSession, 'bingo.game', 'abortgame', {
+        const r = await transact(microSession, 'bingogamectr', 'abortgame', {
             game_id: abortGameId, reason: 'ORACLE_TIMEOUT',
         });
         expect(r.response).toBeDefined();
@@ -356,27 +356,27 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
 
     test('refundticket → estorno O(1)', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(ticketRes.rows.length).toBeGreaterThan(0);
 
-        await transact(playerSession, 'bingo.game', 'refundticket', {
+        await transact(playerSession, 'bingogamectr', 'refundticket', {
             game_id: abortGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
         });
 
         const check = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: abortGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(check.rows.length).toBe(0);
         console.log('   ✅ Cartela estornada e apagada');
     });
 
     test('cleargame → GC (ABORTED sem quarentena)', async () => {
-        await transact(microSession, 'bingo.game', 'cleargame', {
+        await transact(microSession, 'bingogamectr', 'cleargame', {
             game_id: abortGameId, max_rows: 100,
         });
         const check = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: 'bingo.game', table: 'games',
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
             lower_bound: abortGameIdStr, upper_bound: abortGameIdStr, limit: 1, json: true,
         });
         expect(check.rows.length).toBe(0);
@@ -393,7 +393,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
 
     test('MM-0: Gametype MULTI_MATCH com 2 estágios via setstages', async () => {
         // Cria gametype base com ROW_0 e ROW_1
-        await transact(bingoSession, 'bingo.game', 'addgametype', {
+        await transact(bingoSession, 'bingogamectr', 'addgametype', {
             gametype_id:       GAMETYPE_ID_MM,
             name:              'MultiMatch2',
             base_multiplier:   1,
@@ -408,7 +408,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         });
 
         // Define estágios: stage 1 = 1 padrão (peso 1.50×), stage 2 = 2 padrões (peso 5×)
-        const r = await transact(bingoSession, 'bingo.game', 'setstages', {
+        const r = await transact(bingoSession, 'bingogamectr', 'setstages', {
             gametype_id: GAMETYPE_ID_MM,
             stages: [
                 { stage: 1, patterns_required: 1, weight: 150 },  // 1.50×
@@ -420,13 +420,13 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
     });
 
     test('MM-1: Cria, funde, compra cartela, trava, sorteia', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      mmGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_MM,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: mmGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: mmGameId });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
         const owner       = Name.from('jogador1');
@@ -435,7 +435,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         mmGameId,
             matrices:        [matrixBytes],
@@ -443,8 +443,8 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             nft_id:          0,
             requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: mmGameId });
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: mmGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: mmGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: mmGameId });
         await waitForDrawn(mmGameIdStr);
 
         expect(await getGameStatus(mmGameIdStr)).toBe('drawn');
@@ -453,13 +453,13 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
 
     test('MM-2: claimstage stage 1 → DRAWN → PAYING', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         expect(ticketRes.rows.length).toBeGreaterThan(0);
         const ticketId = UInt64.from(ticketRes.rows[0].ticket_id);
 
         // claimstage estágio 1 (1 padrão)
-        const r = await transact(microSession, 'bingo.game', 'claimstage', {
+        const r = await transact(microSession, 'bingogamectr', 'claimstage', {
             game_id:          mmGameId,
             ticket_id:        ticketId,
             stage:            1,
@@ -473,12 +473,12 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
 
     test('MM-3: claimstage stage 2 mesmo ticket → ainda PAYING', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: mmGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         const ticketId = UInt64.from(ticketRes.rows[0].ticket_id);
 
         // claimstage estágio 2 (2 padrões) — mesmo ticket pode acumular stages
-        const r = await transact(microSession, 'bingo.game', 'claimstage', {
+        const r = await transact(microSession, 'bingogamectr', 'claimstage', {
             game_id:          mmGameId,
             ticket_id:        ticketId,
             stage:            2,
@@ -491,7 +491,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
     });
 
     test('MM-4: closegame → PAYING → ARCHIVED', async () => {
-        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: mmGameId });
+        const r = await transact(microSession, 'bingogamectr', 'closegame', { game_id: mmGameId });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(mmGameIdStr)).toBe('archived');
         console.log('   ✅ Jogo MULTI_MATCH arquivado → status: archived');
@@ -503,13 +503,13 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const payingGameId  = payingName.value;
         const payingGameStr = payingName.toString();
 
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      payingGameId,
             ticket_price: ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_STD,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame',   { game_id: payingGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame',   { game_id: payingGameId });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
         const owner       = Name.from('jogador1');
@@ -518,7 +518,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         payingGameId,
             matrices:        [matrixBytes],
@@ -526,15 +526,15 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
             nft_id:          0,
             requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: payingGameId });
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: payingGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: payingGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: payingGameId });
         await waitForDrawn(payingGameStr);
 
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: payingGameStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: payingGameStr, table: 'tickets', limit: 1, json: true,
         });
         // Leva jogo a PAYING via claimwin
-        await transact(microSession, 'bingo.game', 'claimwin', {
+        await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id: payingGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
             ball_count: 35, win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: 0,
@@ -542,7 +542,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         expect(await getGameStatus(payingGameStr)).toBe('paying');
 
         // Abort em estado paying deve ser aceito (ADR-012)
-        await transact(microSession, 'bingo.game', 'abortgame', {
+        await transact(microSession, 'bingogamectr', 'abortgame', {
             game_id: payingGameId, reason: 'MANUAL_HALT',
         });
         expect(await getGameStatus(payingGameStr)).toBe('aborted');
@@ -570,7 +570,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     });
 
     test('GB-0: addgametype GOLDEN_BALL (draw_mode=goldenball, golden_ball_after=4, max_balls=20)', async () => {
-        const r = await transact(bingoSession, 'bingo.game', 'addgametype', {
+        const r = await transact(bingoSession, 'bingogamectr', 'addgametype', {
             gametype_id:        GAMETYPE_ID_GB,
             name:               'GoldenBall',
             base_multiplier:    1,
@@ -585,13 +585,13 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     });
 
     test('GB-1: cria, funde, compra, trava, sorteia jogo GOLDEN_BALL', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      gbGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_GB,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: gbGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: gbGameId });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
         const owner       = Name.from('jogador1');
@@ -600,7 +600,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         gbGameId,
             matrices:        [matrixBytes],
@@ -608,8 +608,8 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
             nft_id:          0,
             requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: gbGameId });
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: gbGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: gbGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: gbGameId });
         await waitForDrawn(gbGameIdStr);
         expect(await getGameStatus(gbGameIdStr)).toBe('drawn');
         console.log('   ✅ Jogo GOLDEN_BALL sorteado → status: drawn');
@@ -618,11 +618,11 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     test('GB-2: claimwin com golden_multiplier derivado de drawn_balls → PAYING', async () => {
         const [gameRes, ticketRes] = await Promise.all([
             rpcClient.v1.chain.get_table_rows({
-                code: 'bingo.game', scope: 'bingo.game', table: 'games',
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
                 lower_bound: gbGameIdStr, upper_bound: gbGameIdStr, limit: 1, json: true,
             }),
             rpcClient.v1.chain.get_table_rows({
-                code: 'bingo.game', scope: gbGameIdStr, table: 'tickets', limit: 1, json: true,
+                code: 'bingogamectr', scope: gbGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
@@ -636,7 +636,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
         const ticket = ticketRes.rows[0];
         const ticketId = UInt64.from(ticket.ticket_id);
 
-        const r = await transact(microSession, 'bingo.game', 'claimwin', {
+        const r = await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id:           gbGameId,
             ticket_id:         ticketId,
             ball_count:        ballCount,
@@ -649,7 +649,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     });
 
     test('GB-3: closegame → PAYING → ARCHIVED', async () => {
-        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: gbGameId });
+        const r = await transact(microSession, 'bingogamectr', 'closegame', { game_id: gbGameId });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(gbGameIdStr)).toBe('archived');
         console.log('   ✅ Jogo GOLDEN_BALL arquivado → status: archived');
@@ -676,7 +676,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
     });
 
     test('FF-0: addgametype FIRST_FULL (draw_mode=firstfull, max_balls=75)', async () => {
-        const r = await transact(bingoSession, 'bingo.game', 'addgametype', {
+        const r = await transact(bingoSession, 'bingogamectr', 'addgametype', {
             gametype_id:        GAMETYPE_ID_FF,
             name:               'FirstFull',
             base_multiplier:    1,
@@ -691,13 +691,13 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
     });
 
     test('FF-1: cria, funde, compra, trava, sorteia jogo FIRST_FULL', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      ffGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_FF,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: ffGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: ffGameId });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
         const owner       = Name.from('jogador1');
@@ -706,7 +706,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         ffGameId,
             matrices:        [matrixBytes],
@@ -714,8 +714,8 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
             nft_id:          0,
             requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame',  { game_id: ffGameId });
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: ffGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: ffGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: ffGameId });
         await waitForDrawn(ffGameIdStr);
         expect(await getGameStatus(ffGameIdStr)).toBe('drawn');
         console.log('   ✅ Jogo FIRST_FULL sorteado (75 bolas) → status: drawn');
@@ -723,7 +723,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
 
     test('FF-2: computa cutoff ball e claimwin com ball_count=cutoff → PAYING', async () => {
         const gameRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: 'bingo.game', table: 'games',
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
             lower_bound: ffGameIdStr, upper_bound: ffGameIdStr, limit: 1, json: true,
         });
         const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
@@ -740,11 +740,11 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
         expect(cutoff).toBeLessThanOrEqual(75);
 
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: ffGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: ffGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         const ticketId = UInt64.from(ticketRes.rows[0].ticket_id);
 
-        const r = await transact(microSession, 'bingo.game', 'claimwin', {
+        const r = await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id:           ffGameId,
             ticket_id:         ticketId,
             ball_count:        cutoff,
@@ -757,7 +757,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
     });
 
     test('FF-3: closegame → PAYING → ARCHIVED', async () => {
-        const r = await transact(microSession, 'bingo.game', 'closegame', { game_id: ffGameId });
+        const r = await transact(microSession, 'bingogamectr', 'closegame', { game_id: ffGameId });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(ffGameIdStr)).toBe('archived');
         console.log('   ✅ Jogo FIRST_FULL arquivado → status: archived');
@@ -782,9 +782,9 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     test('DV-0: createroom id=999 para suportar allocatedrop', async () => {
         const price50 = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
-            const r = await transact(bingoSession, 'bingo.game', 'createroom', {
+            const r = await transact(bingoSession, 'bingogamectr', 'createroom', {
                 room_id:                 vaultRoomId,
-                sponsor:                 'bingo.game',
+                sponsor:                 'bingogamectr',
                 gametype_id:             GAMETYPE_ID_STD,
                 ticket_price_min:        price50,
                 ticket_price_max:        price50,
@@ -796,7 +796,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
         } catch {
             // sala pode já existir de uma execução anterior — ok
         }
-        await transact(microSession, 'bingo.game', 'activateroom', { room_id: vaultRoomId });
+        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
         console.log('   ✅ Sala 999 criada/ativa para DROP_VAULT');
     });
 
@@ -806,14 +806,14 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                code: 'bingo.game', scope: 'bingo.game', table: 'dropstate',
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'dropstate',
                 limit: 1, json: true,
             }),
         }).then(r => r.json() as any);
         const nextDepId = stateRes.rows?.[0]?.next_deposit_id ?? 1;
 
         const r = await transact(playerSession, 'eosio.token', 'transfer', {
-            from: 'jogador1', to: 'bingo.game',
+            from: 'jogador1', to: 'bingogamectr',
             quantity: '100.0000 WAX', memo: 'vault',
         });
         expect(r.response).toBeDefined();
@@ -823,7 +823,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                code: 'bingo.game', scope: 'bingo.game', table: 'dropdeposits',
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'dropdeposits',
                 lower_bound: nextDepId, upper_bound: nextDepId, limit: 1, json: true,
             }),
         }).then(r => r.json() as any);
@@ -839,13 +839,13 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                code: 'bingo.game', scope: 'bingo.game', table: 'dropstate',
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'dropstate',
                 limit: 1, json: true,
             }),
         }).then(r => r.json() as any);
         const nextAllocId = stateRes.rows?.[0]?.next_alloc_id ?? 1;
 
-        const r = await transact(playerSession, 'bingo.game', 'allocatedrop', {
+        const r = await transact(playerSession, 'bingogamectr', 'allocatedrop', {
             caller:            Name.from('jogador1'),
             deposit_id:        depositId,
             room_id:           vaultRoomId,
@@ -861,8 +861,8 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
 
     test('DV-3: deallocdrop por conta sem auth (microservice) → falha', async () => {
         await expect(
-            transact(microSession, 'bingo.game', 'deallocdrop', {
-                caller:   Name.from('microservice'),
+            transact(microSession, 'bingogamectr', 'deallocdrop', {
+                caller:   Name.from('bingogamesvc'),
                 alloc_id: allocId,
             })
         ).rejects.toThrow();
@@ -870,7 +870,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     });
 
     test('DV-4: execdrop → vencedor recebe 100 WAX no saldo interno', async () => {
-        const r = await transact(microSession, 'bingo.game', 'execdrop', {
+        const r = await transact(microSession, 'bingogamectr', 'execdrop', {
             alloc_id: allocId,
             winner:   Name.from('jogador1'),
             quantity: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
@@ -881,7 +881,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
 
     test('DV-5: segundo execdrop no mesmo alloc_id → falha (Alocacao nao esta ativa)', async () => {
         await expect(
-            transact(microSession, 'bingo.game', 'execdrop', {
+            transact(microSession, 'bingogamectr', 'execdrop', {
                 alloc_id: allocId,
                 winner:   Name.from('jogador1'),
                 quantity: ExtendedAsset.from({ quantity: '100.0000 WAX', contract: 'eosio.token' }),
@@ -913,9 +913,9 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const min = ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' });
         const max = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
-            const r = await transact(bingoSession, 'bingo.game', 'createroom', {
+            const r = await transact(bingoSession, 'bingogamectr', 'createroom', {
                 room_id:                 ROOM_ID,
-                sponsor:                 'bingo.game',
+                sponsor:                 'bingogamectr',
                 gametype_id:             GAMETYPE_ID_STD,
                 ticket_price_min:        min,
                 ticket_price_max:        max,
@@ -927,19 +927,19 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         } catch {
             // sala pode já existir — ok
         }
-        await transact(microSession, 'bingo.game', 'activateroom', { room_id: ROOM_ID });
+        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
         console.log('   ✅ Sala 42 criada/ativa (min=10 WAX, max=50 WAX)');
     });
 
     test('RP-1: creategame vinculado a room_id=42', async () => {
-        const r = await transact(bingoSession, 'bingo.game', 'creategame', {
+        const r = await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      pricedGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_STD,
             room_id:      ROOM_ID,
         });
         expect(r.response).toBeDefined();
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: pricedGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: pricedGameId });
         console.log('   ✅ Jogo criado e financiado em sala 42');
     });
 
@@ -952,7 +952,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await expect(
-            transact(playerSession, 'bingo.game', 'buytickets', {
+            transact(playerSession, 'bingogamectr', 'buytickets', {
                 buyer:           owner,
                 game_id:         pricedGameId,
                 matrices:        [matrixBytes],
@@ -972,7 +972,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
-        const r = await transact(playerSession, 'bingo.game', 'buytickets', {
+        const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
             game_id:         pricedGameId,
             matrices:        [matrixBytes],
@@ -1001,7 +1001,7 @@ let comboGameIdStr: string;
 // Lê o saldo in-contract (tabela balances) de uma conta para um símbolo.
 async function getContractBalance(account: string, symbolCode = 'WAX'): Promise<number> {
     const res = await rpcClient.v1.chain.get_table_rows({
-        code: 'bingo.game', scope: account, table: 'balances', limit: 50, json: true,
+        code: 'bingogamectr', scope: account, table: 'balances', limit: 50, json: true,
     });
     for (const row of res.rows as Array<{ balance: { quantity: string } }>) {
         const [amount, sym] = row.balance.quantity.split(' ');
@@ -1023,11 +1023,11 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         // Garante patterns ROW_0/ROW_1 (idempotente entre suites)
         for (const [id, name, mask] of [[PATTERN_ID_ROW0, 'ROW_0', MASK_ROW0], [PATTERN_ID_ROW1, 'ROW_1', MASK_ROW1]] as const) {
             try {
-                await transact(bingoSession, 'bingo.game', 'addpattern', { pattern_id: id, name, mask: Number(mask) });
+                await transact(bingoSession, 'bingogamectr', 'addpattern', { pattern_id: id, name, mask: Number(mask) });
             } catch { /* já existe */ }
         }
 
-        await transact(bingoSession, 'bingo.game', 'addgametype', {
+        await transact(bingoSession, 'bingogamectr', 'addgametype', {
             gametype_id:        GAMETYPE_ID_COMBO,
             name:               'Combos',
             base_multiplier:    1,
@@ -1041,7 +1041,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
             master_weight_ovrd: 0,
         });
 
-        const r = await transact(bingoSession, 'bingo.game', 'setcombos', {
+        const r = await transact(bingoSession, 'bingogamectr', 'setcombos', {
             gametype_id:  GAMETYPE_ID_COMBO,
             combinations: [{ combo_id: 0, weight: COMBO_WEIGHT }],
         });
@@ -1049,7 +1049,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
 
         // Verifica on-chain
         const gtRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: 'bingo.game', table: 'gametypes',
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'gametypes',
             lower_bound: GAMETYPE_ID_COMBO, upper_bound: GAMETYPE_ID_COMBO, limit: 1, json: true,
         });
         const combos = (gtRes.rows[0] as { combinations: Array<{ combo_id: number; weight: number }> }).combinations;
@@ -1058,15 +1058,15 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
     });
 
     test('CB-1: creategame → fund → deposit → buy → lock → draw', async () => {
-        await transact(bingoSession, 'bingo.game', 'creategame', {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      comboGameId,
             ticket_price: ExtendedAsset.from({ quantity: `${COMBO_TICKET_PRICE}.0000 WAX`, contract: 'eosio.token' }),
             gametype_id:  GAMETYPE_ID_COMBO,
             room_id:      UInt64.from(0),
         });
-        await transact(microSession, 'bingo.game', 'fundgame', { game_id: comboGameId });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: comboGameId });
         await transact(playerSession, 'eosio.token', 'transfer', {
-            from: 'jogador1', to: 'bingo.game', quantity: '100.0000 WAX', memo: 'Combo deposit',
+            from: 'jogador1', to: 'bingogamectr', quantity: '100.0000 WAX', memo: 'Combo deposit',
         });
 
         const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
@@ -1075,25 +1075,25 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         const gameBuf = Serializer.encode({ type: 'uint64', object: comboGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
         const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
-        await transact(playerSession, 'bingo.game', 'buytickets', {
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: comboGameId, matrices: [matrixBytes], signatures: [sig],
             nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
         });
-        await transact(microSession, 'bingo.game', 'lockgame', { game_id: comboGameId });
-        await transact(microSession, 'bingo.game', 'startdraw', { game_id: comboGameId });
+        await transact(microSession, 'bingogamectr', 'lockgame', { game_id: comboGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: comboGameId });
         await waitForDrawn(comboGameIdStr, 45); // ~90s — tolera oracle daemon lento
         console.log('   ✅ jogo COMBO em drawn');
     }, 120_000);
 
     test('CB-2: claimcombo paga price × base × combo_weight/100 (= 25 WAX)', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         const ticketId = UInt64.from((ticketRes.rows[0] as BlockchainTicketRecord).ticket_id);
 
         const balBefore = await getContractBalance('jogador1');
 
-        const r = await transact(microSession, 'bingo.game', 'claimcombo', {
+        const r = await transact(microSession, 'bingogamectr', 'claimcombo', {
             game_id:           comboGameId,
             ticket_id:         ticketId,
             ball_count:        35,
@@ -1111,12 +1111,12 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
 
     test('CB-3: claimcombo com combo_id inexistente → revert', async () => {
         const ticketRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingo.game', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
+            code: 'bingogamectr', scope: comboGameIdStr, table: 'tickets', limit: 1, json: true,
         });
         const ticketId = UInt64.from((ticketRes.rows[0] as BlockchainTicketRecord).ticket_id);
 
         await expect(
-            transact(microSession, 'bingo.game', 'claimcombo', {
+            transact(microSession, 'bingogamectr', 'claimcombo', {
                 game_id: comboGameId, ticket_id: ticketId, ball_count: 35, combo_id: 99, golden_multiplier: 0,
             }),
         ).rejects.toThrow(/combo_id nao encontrado/);
@@ -1124,7 +1124,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
     });
 
     test('CB-4: closegame → PAYING → ARCHIVED', async () => {
-        await transact(microSession, 'bingo.game', 'closegame', { game_id: comboGameId });
+        await transact(microSession, 'bingogamectr', 'closegame', { game_id: comboGameId });
         expect(await getGameStatus(comboGameIdStr)).toBe('archived');
         console.log('   ✅ status: archived');
     });

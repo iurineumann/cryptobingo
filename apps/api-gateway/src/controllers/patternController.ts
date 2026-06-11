@@ -15,7 +15,7 @@ import type { BlockchainPattern, BlockchainGametype, StageRule } from '@cryptobi
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
+const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';

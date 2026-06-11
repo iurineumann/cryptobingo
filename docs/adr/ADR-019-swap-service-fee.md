@@ -1,4 +1,4 @@
-# ADR-019 — bingo.swap: Taxa de Serviço por Pool (`service_fee_bps`)
+# ADR-019 — bingogameswp: Taxa de Serviço por Pool (`service_fee_bps`)
 
 **Status:** Accepted
 **Data:** 2026-06-09
@@ -8,12 +8,12 @@
 
 ## Contexto
 
-O contrato `bingo.swap` (ADR-018) implementa o AMM x*y=k com uma taxa LP (`fee_bps`) que
+O contrato `bingogameswp` (ADR-018) implementa o AMM x*y=k com uma taxa LP (`fee_bps`) que
 fica nas reservas do pool — beneficiando exclusivamente os provedores de liquidez.
 
 A plataforma precisa de uma segunda taxa, independente da taxa LP, que:
 
-- Financie a operação do serviço (treasury da `bingo.game`).
+- Financie a operação do serviço (treasury da `bingogamectr`).
 - Seja configurável por pool (pares diferentes podem ter tarifas diferentes).
 - Permita campanhas temporárias de fee-zero ou descontos por tipo de usuário.
 - Seja completamente transparente on-chain — nenhum usuário paga mais do que o contrato declara.
@@ -47,10 +47,10 @@ Provedores de liquidez só vêem o `net_amount_in`, sem distorção da mecânica
 
 ### Treasury
 
-Campo `name treasury` adicionado ao singleton `swap_state`. Default: `bingo.game`.
+Campo `name treasury` adicionado ao singleton `swap_state`. Default: `bingogamectr`.
 Configurável via `settreasury(account)` — `require_auth(get_self())`.
 
-A `bingo.game` já tem `sweepggr` (ADR-005) para gerenciar receitas on-chain; concentrar as
+A `bingogamectr` já tem `sweepggr` (ADR-005) para gerenciar receitas on-chain; concentrar as
 service fees lá mantém a contabilidade unificada.
 
 ### Novas actions
@@ -64,7 +64,7 @@ service fees lá mantém a contabilidade unificada.
 
 - `setpoolfee(pool_id, 0)` — fee-zero para campanha de onboarding.
 - Pools de pares "premium" (ex.: token parceiro) podem ter `service_fee_bps` diferente.
-- Em produção, o contrato `bingo.game` pode chamar `setpoolfee` via inline action para
+- Em produção, o contrato `bingogamectr` pode chamar `setpoolfee` via inline action para
   campanhas programáticas (ex.: fee-zero durante eventos).
 
 ---
@@ -120,7 +120,7 @@ struct complexo. Aguarda sprint de NFT integrations.
 - `pool_record` ganhou campo `service_fee_bps` — **não é `binary_extension`** pois o
   ambiente é dev-only e não há dados on-chain para preservar.
 - `swap_state` ganhou campo `treasury` — idem.
-- `init_dev_env.sh` chama `settreasury bingo.game` e `setpoolfee 1 100` no bootstrap.
+- `init_dev_env.sh` chama `settreasury bingogamectr` e `setpoolfee 1 100` no bootstrap.
 - Harness Passo 10 valida: `settreasury`, `setpoolfee`, dedução correta, campanha fee-zero.
 - `shared-types`: `BlockchainSwapPool.service_fee_bps` e `BlockchainSwapState.treasury`.
 - ABI atualizado manualmente com 2 novos structs e 2 novas actions (CDT omite tabelas — padrão do projeto).

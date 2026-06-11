@@ -62,7 +62,7 @@ interface GameRoomProps {
   onLanguageChange?: (locale: string) => void;
 }
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 // ==========================================
 // COMPONENTE PRINCIPAL

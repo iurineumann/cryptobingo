@@ -1,4 +1,4 @@
-# ADR-021 — Checkout Multi-Moeda via bingo.swap
+# ADR-021 — Checkout Multi-Moeda via bingogameswp
 
 **Status:** Accepted
 **Data:** 2026-06-10
@@ -9,10 +9,10 @@
 ## Contexto
 
 O `BuyTicketModal` aceita apenas a moeda padrão da sala (ex.: WAX). Jogadores que possuem
-saldo em outros tokens aprovados no `bingo.swap` (ex.: BINGO) precisam converter manualmente
+saldo em outros tokens aprovados no `bingogameswp` (ex.: BINGO) precisam converter manualmente
 antes de comprar cartelas — fricção que reduz conversão.
 
-O `bingo.swap` (ADR-018) com taxa de serviço configurável (ADR-019) já provê a infraestrutura
+O `bingogameswp` (ADR-018) com taxa de serviço configurável (ADR-019) já provê a infraestrutura
 on-chain necessária para conversão. Falta expor esse caminho no checkout.
 
 ### Restrições herdadas
@@ -32,7 +32,7 @@ on-chain necessária para conversão. Falta expor esse caminho no checkout.
 
 #### `GET /api/v1/swap/pools`
 
-Retorna pools ativas lidas diretamente do nodeos (tabela `pools` do `bingo.swap`).
+Retorna pools ativas lidas diretamente do nodeos (tabela `pools` do `bingogameswp`).
 Usado pelo frontend para filtrar quais moedas alternativas o usuário pode usar.
 Cache de 10 s em Redis (pools mudam raramente; evita N chamadas por usuário em lobby).
 
@@ -69,17 +69,17 @@ Quando o usuário confirma com moeda alternativa, o frontend constrói **uma ún
 com 3 actions atômicas:
 
 ```
-Action 1: <token_contract>::transfer(user → bingo.swap, amount_in, "swap,<pool_id>,<min_out>,<user>")
-Action 2: <room_token_contract>::transfer(user → bingo.game, amount_out, "deposit")
-Action 3: bingo.game::buytickets(buyer, game_id, matrices, signatures, requested_price)
+Action 1: <token_contract>::transfer(user → bingogameswp, amount_in, "swap,<pool_id>,<min_out>,<user>")
+Action 2: <room_token_contract>::transfer(user → bingogamectr, amount_out, "deposit")
+Action 3: bingogamectr::buytickets(buyer, game_id, matrices, signatures, requested_price)
 ```
 
-**Por que 3 actions e não uma notificação direta para `bingo.game`?**
+**Por que 3 actions e não uma notificação direta para `bingogamectr`?**
 - Action 1 executa o swap e credita `amount_out` ao usuário no token da sala.
-- Action 2 deposita esse montante no `bingo.game` (creditado em `balances` via `on_transfer`).
+- Action 2 deposita esse montante no `bingogamectr` (creditado em `balances` via `on_transfer`).
 - Action 3 debita de `balances` e compra as cartelas.
 - EOSIO garante atomicidade: se qualquer action falha, toda a transação reverte.
-- Nenhuma mudança no contrato `bingo.game` necessária.
+- Nenhuma mudança no contrato `bingogamectr` necessária.
 
 **Slippage:** `min_out` fornecido pelo quote protege contra variações de reserva entre a
 cotação e a execução. Se o pool variar mais de ~0,5%, a transação reverte com erro do contrato.
@@ -115,7 +115,7 @@ Se a cotação expirar antes da confirmação, o frontend recarrega automaticame
 | Alternativa | Motivo de rejeição |
 |---|---|
 | API executa swap (custodia chaves) | Viola modelo de segurança WAX — usuário deve assinar |
-| Cotação assinada ECDSA verificada on-chain | Requer mudança no contrato `bingo.game`; complexidade desnecessária para MVP |
+| Cotação assinada ECDSA verificada on-chain | Requer mudança no contrato `bingogamectr`; complexidade desnecessária para MVP |
 | Roteamento automático multi-hop | Fora de escopo; aumenta superfície de ataque e complexidade de UI |
 | Moeda do prêmio configurável | Viola invariante ADR-005/ADR-010 (prêmio = moeda da sala) |
 
@@ -129,4 +129,4 @@ Se a cotação expirar antes da confirmação, o frontend recarrega automaticame
 - `shared-types`: `SwapQuote`, tipo estendido de `BlockchainSwapPool`.
 - OpenAPI: 2 novos endpoints documentados.
 - Cypress Tier 1: testes com `cy.intercept` mockando `/swap/pools` e `/swap/quote`.
-- Sem mudança no contrato `bingo.game` ou `bingo.swap`.
+- Sem mudança no contrato `bingogamectr` ou `bingogameswp`.

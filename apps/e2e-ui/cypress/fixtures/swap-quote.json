@@ -1,7 +1,7 @@
 {
   "quote_id": "a1b2c3d4-0000-0000-0000-000000000001",
   "pool_id": "1",
-  "from_contract": "bingo.token",
+  "from_contract": "bingogametkn",
   "from_symbol": "4,BINGO",
   "to_contract": "eosio.token",
   "to_symbol": "8,WAX",

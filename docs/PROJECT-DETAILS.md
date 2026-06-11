@@ -15,8 +15,8 @@ O **CryptoBingo** é uma plataforma descentralizada de Bingo construída na rede
 ## 3. Decisões Arquiteturais e de Segurança (ADRs Críticos)
 
 ### ADR 1: Ledger Interno (Balanço Custodiado)
-Para evitar a assinatura de múltiplas ações (transferência + compra) a cada rodada e poupar CPU/NET, o contrato `bingo.game` possui uma tabela interna `balances`. 
-* **Fluxo:** O utilizador deposita o token `BINGO` (via contrato `bingo.token`). O contrato de jogo escuta o depósito via `on_notify` e credita o saldo. As compras de cartelas (`buytickets`) debitam apenas deste ledger interno.
+Para evitar a assinatura de múltiplas ações (transferência + compra) a cada rodada e poupar CPU/NET, o contrato `bingogamectr` possui uma tabela interna `balances`. 
+* **Fluxo:** O utilizador deposita o token `BINGO` (via contrato `bingogametkn`). O contrato de jogo escuta o depósito via `on_notify` e credita o saldo. As compras de cartelas (`buytickets`) debitam apenas deste ledger interno.
 
 ### ADR 2: Transações Atómicas com Assinatura de Servidor (Server-Signed Tickets)
 Para impedir que jogadores mal-intencionados gerem cartelas fraudulentas no cliente, o Frontend pede a cartela ao Backend (`/api/v1/tickets/generate`). 
@@ -32,8 +32,8 @@ O contrato integra-se com o padrão AtomicAssets. Benefícios (como descontos) n
 * Na hora da compra (`buytickets`), o jogador passa o `nft_id`. O contrato verifica no AtomicAssets se o utilizador possui o NFT e cruza com a `nftconfigs` para aplicar o desconto de forma otimizada (baixo custo de CPU).
 
 ## 4. Estrutura dos Smart Contracts
-* **Contrato `bingo.token`**: Standard `eosio.token` (isolado para simular o ambiente Mainnet da WAX).
-* **Contrato `bingo.game`**:
+* **Contrato `bingogametkn`**: Standard `eosio.token` (isolado para simular o ambiente Mainnet da WAX).
+* **Contrato `bingogamectr`**:
   * `setconfig`: Configura a chave pública do backend.
   * `creategame`: Inicia uma sala de bingo (`funding`).
   * `setnftconf` / `delnftconf`: Gere benefícios de NFTs.

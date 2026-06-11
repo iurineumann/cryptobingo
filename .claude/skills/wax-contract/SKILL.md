@@ -27,7 +27,7 @@ não reinicie a chain por conta própria; o reset zera estado).
 ## Passo a passo
 
 ### 1. Editar `.hpp` + `.cpp`
-- Actions de admin: `require_auth(get_self());`. Actions de jogo: `require_auth("microservice"_n);`.
+- Actions de admin: `require_auth(get_self());`. Actions de jogo: `require_auth("bingogamesvc"_n);`.
 - O contrato confia no worker para avaliação, mas **valida pesos on-chain** (anti-inflação).
 - Pesos em hundredths (100 = 1.00×, máx 25500). Espelhe o padrão de actions vizinhas
   (`claimwin`/`claimstage`/`setstages`) para consistência.
@@ -66,9 +66,9 @@ Use `bingo_generated.abi` apenas como referência dos tipos dos campos.
 WAX=/tmp/wax-blockchain/build/bin/cleos
 docker exec bingo_waxdev bash -c \
   "$WAX --url http://127.0.0.1:8888 --wallet-url http://127.0.0.1:8900 \
-   set contract bingo.game /app/contracts/bingo -p bingo.game@active 2>&1 | grep -iE 'executed|error'"
+   set contract bingogamectr /app/contracts/bingo -p bingogamectr@active 2>&1 | grep -iE 'executed|error'"
 ```
-Se a wallet estiver travada: crie wallet temporária e importe a chave de `bingo.game`
+Se a wallet estiver travada: crie wallet temporária e importe a chave de `bingogamectr`
 (= `CONTRACT_PRIVATE_KEY` no `apps/worker-game-loop/.env`):
 ```bash
 $WAX wallet create -n tmp --to-console; $WAX wallet import -n tmp --private-key <CONTRACT_PRIVATE_KEY>
@@ -77,11 +77,11 @@ $WAX wallet create -n tmp --to-console; $WAX wallet import -n tmp --private-key 
 ### 6. Validar
 ```bash
 # action existe no ABI on-chain?
-curl -s -X POST http://127.0.0.1:8888/v1/chain/get_abi -d '{"account_name":"bingo.game"}' \
+curl -s -X POST http://127.0.0.1:8888/v1/chain/get_abi -d '{"account_name":"bingogamectr"}' \
   | python3 -c "import sys,json;print([a['name'] for a in json.load(sys.stdin)['abi']['actions']])"
 # leitura de tabela com campo novo não quebra? (migração ok)
 curl -s -X POST http://127.0.0.1:8888/v1/chain/get_table_rows \
-  -d '{"code":"bingo.game","scope":"bingo.game","table":"gametypes","json":true,"limit":3}'
+  -d '{"code":"bingogamectr","scope":"bingogamectr","table":"gametypes","json":true,"limit":3}'
 ```
 Depois rode o harness (ver skill/seção Harness do CLAUDE.md) com o oracle daemon vivo.
 
@@ -90,7 +90,7 @@ Depois rode o harness (ver skill/seção Harness do CLAUDE.md) com o oracle daem
 - `unpack_exception ... unable to unpack field` → esqueceu binary_extension/`$` na migração (passo 2).
 - `Invalid name at get_table_rows` → bound i64 passado como string; use `UInt64.from(id)`.
 - Action nova "não existe" → esqueceu de corrigir o `bingo.abi` à mão (passo 4) ou não fez deploy.
-- Deploy "unsatisfied authorization" → wallet sem a chave de `bingo.game@active`.
+- Deploy "unsatisfied authorization" → wallet sem a chave de `bingogamectr@active`.
 
 ## Git
 
