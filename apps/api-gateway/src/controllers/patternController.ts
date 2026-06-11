@@ -15,20 +15,20 @@ import type { BlockchainPattern, BlockchainGametype, StageRule } from '@cryptobi
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
-const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
-const CHAIN_ID              = process.env.CHAIN_ID!;
-const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
-const PATTERN_CACHE_TTL     = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
+const CONTRACT_ACCOUNT  = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
+const MICROSERVICE_KEY  = process.env.MICROSERVICE_PRIVATE_KEY!;
+const CHAIN_ID          = process.env.CHAIN_ID!;
+const RPC_URL           = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+const PATTERN_CACHE_TTL = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
 
-
-// Sessão do microserviço para enviar transações admin ao contrato
+// ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
+// bingogamectr@admin aceita bingogamesvc@active como signatário — CONTRACT_PRIVATE_KEY não é necessária
 function getAdminSession(): Session {
     return new Session({
         actor:        CONTRACT_ACCOUNT,
-        permission:   'active',
+        permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
-        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
+        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
     });
 }
 
