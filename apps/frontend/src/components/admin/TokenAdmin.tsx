@@ -1,6 +1,6 @@
 // apps/frontend/src/components/admin/TokenAdmin.tsx
-// Painel administrativo do token BINGO (bingo.token — padrão eosio.token).
-// Abas: Supply (stat global) | Saldos (top holders no contrato bingo.game) | Operações (issue/retire/transfer)
+// Painel administrativo do token BINGO (bingogametkn — padrão eosio.token).
+// Abas: Supply (stat global) | Saldos (top holders no contrato bingogamectr) | Operações (issue/retire/transfer)
 //
 // Leitura: chain.get_table_rows direto via session.client.
 // Escrita: session.transact() — somente conta autorizada (issuer).
@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { Name } from '@wharfkit/session';
 import type { Session } from '@wharfkit/session';
 
-const TOKEN_CONTRACT  = import.meta.env.VITE_BINGO_TOKEN_CONTRACT ?? 'bingo.token';
-const GAME_CONTRACT   = import.meta.env.VITE_CONTRACT_ACCOUNT     ?? 'bingo.game';
+const TOKEN_CONTRACT  = import.meta.env.VITE_BINGO_TOKEN_CONTRACT ?? 'bingogametkn';
+const GAME_CONTRACT   = import.meta.env.VITE_CONTRACT_ACCOUNT     ?? 'bingogamectr';
 const EXPLORER_URL    = import.meta.env.VITE_EXPLORER_URL         ?? 'https://wax.bloks.io';
 const TOKEN_SYMBOL    = 'BINGO';
 const TOKEN_PRECISION = 4;
@@ -102,9 +102,9 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
 
     // ── SALDOS ────────────────────────────────────────────────────────────────
 
-    // Saldo da conta do contrato bingo.game no token externo
+    // Saldo da conta do contrato bingogamectr no token externo
     const [contractWalletBal, setContractWalletBal] = useState<number | null>(null);
-    // Saldo interno agregado (tabela balances do bingo.game com scope=bingo.game)
+    // Saldo interno agregado (tabela balances do bingogamectr com scope=bingogamectr)
     const [contractGameBal, setContractGameBal]     = useState<number | null>(null);
     // Saldo da carteira do admin
     const [adminWalletBal, setAdminWalletBal]       = useState<number | null>(null);
@@ -117,17 +117,17 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
             const gameScope  = Name.from(GAME_CONTRACT).value.toString();
 
             const [adminRes, contractTokenRes, contractGameRes] = await Promise.all([
-                // Saldo do admin no bingo.token
+                // Saldo do admin no bingogametkn
                 session.client.v1.chain.get_table_rows({
                     code: TOKEN_CONTRACT, scope: actorScope,
                     table: 'accounts', limit: 10, json: true,
                 }),
-                // Saldo de bingo.game no bingo.token (tokens livres na conta)
+                // Saldo de bingogamectr no bingogametkn (tokens livres na conta)
                 session.client.v1.chain.get_table_rows({
                     code: TOKEN_CONTRACT, scope: gameScope,
                     table: 'accounts', limit: 10, json: true,
                 }),
-                // Soma dos saldos internos dos jogadores (scope = bingo.game, multi-row)
+                // Soma dos saldos internos dos jogadores (scope = bingogamectr, multi-row)
                 session.client.v1.chain.get_table_rows({
                     code: GAME_CONTRACT, scope: GAME_CONTRACT,
                     table: 'balances', limit: 200, json: true,
@@ -230,7 +230,6 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
             {/* Header */}
             <div className="flex items-baseline justify-between mb-1 gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('admin.token_title')}</h2>
                     <p className="text-sm text-[--cb-text-tertiary]">
                         {t('admin.token_desc')} ·{' '}
                         <span className="font-mono text-[--cb-brand]">{TOKEN_CONTRACT}</span>
@@ -343,7 +342,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
                             </p>
                         </div>
 
-                        {/* bingo.game — conta no token externo */}
+                        {/* bingogamectr — conta no token externo */}
                         <div className="cb-card p-4 flex items-center justify-between gap-4">
                             <div>
                                 <p className="text-xs text-[--cb-text-tertiary]">{t('admin.token_contract_wallet')}</p>

@@ -15,7 +15,7 @@ import { rpcClient }   from '@cryptobingo/blockchain-core';
 import { UInt64 }      from '@wharfkit/antelope';
 import type { BlockchainGametype, BlockchainPattern } from '@cryptobingo/shared-types';
 
-const CONTRACT_ACCOUNT    = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT    = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const PATTERN_CACHE_TTL   = 3_600; // 1 hora
 
 export interface PatternEntry {

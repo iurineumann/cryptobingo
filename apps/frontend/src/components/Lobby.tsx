@@ -21,7 +21,7 @@ interface LobbyProps {
     onReplayGame?: (gameId: string) => void;
 }
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
@@ -210,7 +210,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
         });
     }
 
-    const orphanGames = games.filter(g => !g.room_id || String(g.room_id) === '0');
+    // Apenas jogos em funding sem sala são exibidos como cards avulsos
+    const orphanGames = games.filter(g =>
+        (!g.room_id || String(g.room_id) === '0') && g.status === 'funding'
+    );
     const isEmpty = activeRooms.length === 0 && orphanGames.length === 0;
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -368,7 +371,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 <div className="lobby-card-head">
                                     <div>
                                         <span className="lobby-card-id">Sala #{room.room_id}</span>
-                                        <p className="lobby-card-name">{roomName}</p>
+                                        {room.metadata?.name && <p className="lobby-card-name">{roomName}</p>}
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
                                         {isDrawing ? (
@@ -472,7 +475,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                                 📊 {t('lobby.view_results')}
                                             </button>
                                         )}
-                                        {!canBuy && !canWatch && !navGameId && (
+                                        {!canBuy && !canWatch && !navGameId && !isIdle && (
                                             <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
                                                 ⏳ {t('lobby.no_game_yet')}
                                             </span>

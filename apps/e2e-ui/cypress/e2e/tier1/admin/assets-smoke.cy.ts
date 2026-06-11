@@ -76,7 +76,7 @@ describe('Admin · Assets (SMOKE — NftAdmin + TokenAdmin)', () => {
     describe('TokenAdmin', () => {
         beforeEach(() => {
             // TokenAdmin lê get_table_rows via session.client (proxy /v1/chain/...)
-            // e get_table_rows para stat (bingo.token) e accounts.
+            // e get_table_rows para stat (bingogametkn) e accounts.
             // O cenário admin-rooms já stubba o RPC genérico (rows: []).
             cy.devLogin('admin', 'admin-rooms');
             cy.location('pathname', { timeout: 15_000 }).should('include', '/admin');

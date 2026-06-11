@@ -1,0 +1,17 @@
+{
+  "quote_id": "a1b2c3d4-0000-0000-0000-000000000001",
+  "pool_id": "1",
+  "from_contract": "bingogametkn",
+  "from_symbol": "4,BINGO",
+  "to_contract": "eosio.token",
+  "to_symbol": "8,WAX",
+  "amount_in": "210500000",
+  "amount_in_display": "21050.0000 BINGO",
+  "amount_out": "100000000",
+  "amount_out_display": "1.00000000 WAX",
+  "min_out": "99500000",
+  "fee_bps": 30,
+  "service_fee_bps": 100,
+  "price_impact_pct": 0.02,
+  "expires_at": 9999999999
+}

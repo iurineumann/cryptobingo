@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Name } from '@wharfkit/session';
 import type { Session } from '@wharfkit/session';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 interface PlayerDashboardProps { session: Session }
 
@@ -60,7 +60,6 @@ export default function PlayerDashboard({ session }: PlayerDashboardProps) {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.player_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">{String(session.actor)}</p>
 
             {loading ? (

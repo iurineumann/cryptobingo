@@ -398,10 +398,10 @@ export function isCombinationSatisfied(
 ): boolean {
   return combination.clauses.every(clause => {
     if (clause.type === 'all_of') {
-      return (clause.pattern_ids ?? []).every(id => completedNames.has(id));
+      return (clause.pattern_ids ?? []).every(id => completedNames.has(String(id)));
     }
     if (clause.type === 'any_of') {
-      return (clause.pattern_ids ?? []).some(id => completedNames.has(id));
+      return (clause.pattern_ids ?? []).some(id => completedNames.has(String(id)));
     }
     if (clause.type === 'n_of_type') {
       const needed = clause.count ?? 1;
@@ -483,7 +483,7 @@ export function computeCombinationProximity(
     for (const clause of combo.clauses) {
       let clausePct = 0;
       if (clause.type === 'all_of') {
-        const ids    = clause.pattern_ids ?? [];
+        const ids    = (clause.pattern_ids ?? []).map(id => String(id));
         if (!ids.length) { clausePct = 1; }
         else clausePct = ids.filter(id => doneWithIds.has(id)).length / ids.length;
       } else if (clause.type === 'n_of_type') {
@@ -492,7 +492,7 @@ export function computeCombinationProximity(
         const got    = [...done].filter(n => patternTypeByName.get(n) === type).length;
         clausePct    = Math.min(1, got / needed);
       } else if (clause.type === 'any_of') {
-        clausePct = (clause.pattern_ids ?? []).some(id => doneWithIds.has(id)) ? 1 : 0;
+        clausePct = (clause.pattern_ids ?? []).some(id => doneWithIds.has(String(id))) ? 1 : 0;
       }
       if (clausePct < minClause) minClause = clausePct;
     }
@@ -523,7 +523,7 @@ export function detectComboWinsForTicket(
     for (const clause of combo.clauses) {
       if (clause.type === 'all_of') {
         for (const id of clause.pattern_ids ?? []) {
-          const name = patternNameById.get(id) ?? id;
+          const name = patternNameById.get(String(id)) ?? String(id);
           if (wonSet.has(name)) subsumed.push(name);
         }
       } else if (clause.type === 'n_of_type') {
@@ -535,7 +535,7 @@ export function detectComboWinsForTicket(
         }
       } else if (clause.type === 'any_of') {
         for (const id of clause.pattern_ids ?? []) {
-          const name = patternNameById.get(id) ?? id;
+          const name = patternNameById.get(String(id)) ?? String(id);
           if (wonSet.has(name)) { subsumed.push(name); break; }
         }
       }
@@ -561,7 +561,7 @@ export function detectComboWinsForTicket(
 }
 
 export async function fetchGamePatterns(session: Session, gametypeId: string): Promise<Pattern[]> {
-  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
   try {
     const gtRes = await session.client.v1.chain.get_table_rows({
       code: c, scope: c, table: 'gametypes',

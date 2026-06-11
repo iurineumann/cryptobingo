@@ -4,7 +4,7 @@ import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
 import { fetchBatchWinnings, fetchBatchGameStats, getAuthToken } from '../services/api';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 /** Quantas linhas de partidas do jogador queremos por "página". */
 const PAGE_SIZE = 20;

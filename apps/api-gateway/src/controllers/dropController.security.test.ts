@@ -2,7 +2,7 @@
 // Cobre: BOLA (Broken Object Level Authorization) em deallocateDrop, validações de input.
 
 process.env.JWT_SECRET          = 'test-secret-32chars-xxxxxxxxxx!!';
-process.env.CONTRACT_ACCOUNT    = 'bingo.game';
+process.env.CONTRACT_ACCOUNT    = 'bingogamectr';
 process.env.CHAIN_ID            = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 process.env.RPC_URL             = 'http://localhost:8888';
 process.env.MICROSERVICE_PRIVATE_KEY = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3';
@@ -12,7 +12,7 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
 }));
 jest.mock('@wharfkit/session', () => ({
     Session: jest.fn().mockImplementation(() => ({
-        permissionLevel: { actor: 'bingo.game', permission: 'active' },
+        permissionLevel: { actor: 'bingogamectr', permission: 'active' },
         transact: jest.fn().mockResolvedValue({ response: { transaction_id: 'mock-tx-id' } }),
     })),
 }));

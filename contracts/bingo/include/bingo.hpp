@@ -18,7 +18,7 @@ namespace bingo {
 
     struct [[eosio::table("config")]] config_state {
         public_key signer_key;
-        name       treasury_account = "bingo.game"_n; // destino do sweep de GGR (ADR-005)
+        name       treasury_account = "bingogamectr"_n; // destino do sweep de GGR (ADR-005)
     };
     typedef singleton<"config"_n, config_state> config_singleton;
 
@@ -145,7 +145,7 @@ namespace bingo {
 
     // ADR-016: combinação de padrões como tier de prêmio superior.
     // A SATISFAÇÃO das cláusulas (all_of/any_of/n_of_type + tipos de padrão) é
-    // computada OFF-CHAIN pelo worker (microservice) — assim como o match de
+    // computada OFF-CHAIN pelo worker (bingogamesvc) — assim como o match de
     // padrão em claimwin. On-chain guardamos apenas combo_id → weight: o
     // contrato VALIDA o weight do combo reclamado, impedindo que um worker
     // comprometido infle o prêmio. combo_id = índice canônico na lista off-chain.

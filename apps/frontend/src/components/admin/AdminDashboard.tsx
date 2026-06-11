@@ -5,7 +5,7 @@ import type { Session } from '@wharfkit/session';
 import type { BlockchainGameState, ExtendedAsset } from '@cryptobingo/shared-types';
 import { fetchRtpReport, fetchGamesHistory, type RtpReport, type GameHistoryEntry } from '../../services/api';
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
 interface AdminDashboardProps {
     session?: Session;
@@ -66,7 +66,6 @@ export default function AdminDashboard({ session }: AdminDashboardProps = {}) {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-[--cb-text-primary] mb-1">{t('admin.dash_title')}</h2>
             <p className="text-sm text-[--cb-text-tertiary] mb-6">{t('admin.dash_subtitle')}</p>
 
             {loading ? (

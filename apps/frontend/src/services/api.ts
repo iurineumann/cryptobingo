@@ -222,6 +222,24 @@ export async function createAdminGametype(data: {
     return handleResponse(res);
 }
 
+export async function updateAdminGametype(
+    gametypeId: string,
+    data: {
+        name: string; base_multiplier: number;
+        rules: Array<{ pattern_id: string; weight: number }>;
+        draw_mode?: DrawMode;
+        max_balls?: number;
+        golden_ball_after?: number;
+        master_weight_ovrd?: number;
+    },
+): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/gametypes/${gametypeId}`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
 export async function deleteAdminGametype(gametypeId: string): Promise<void> {
     await fetch(`${API_BASE}/admin/gametypes/${gametypeId}`, {
         method: 'DELETE', headers: authHeaders(),
@@ -262,10 +280,14 @@ export async function upsertGametypeMetadata(gametypeId: string, data: {
     rules:        ExtendedRule[];
     combinations: CombinationRuleInput[];
 }): Promise<void> {
-    await fetch(`${API_BASE}/admin/gametypes/${gametypeId}/metadata`, {
+    const res = await fetch(`${API_BASE}/admin/gametypes/${gametypeId}/metadata`, {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify(data),
     });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Erro HTTP ${res.status} ao salvar metadados.`);
+    }
 }
 
 // ==========================================
@@ -379,6 +401,42 @@ export async function calibrateWeightsApi(data: {
         body: JSON.stringify(data),
     });
     return handleResponse<CalibrateResult>(res);
+}
+
+// ── Suggest Combos (unificado) ────────────────────────────────────────────────
+// ADR-020: geração hierárquica de combos + calibração em uma única chamada.
+
+export interface SuggestComboItem {
+    name:    string;
+    weight:  number;
+    clauses: McCombinationClauseInput[];
+}
+
+export interface SuggestCombosResult {
+    gametype_name:   string;
+    pattern_weights: Record<string, number>;
+    combos:          SuggestComboItem[];
+    combo_weights:   Record<string, number>;
+    validation:      McResult;
+    is_viable:       boolean;
+    alerts:          string[];
+    duration_ms:     number;
+    computed_at:     string;
+}
+
+export async function suggestCombosApi(data: {
+    gametype_name:    string;
+    base_multiplier:  number;
+    patterns:         McPatternInput[];
+    draw_mode?:       string;
+    tickets_per_game?: number;
+    max_balls?:       number;
+}): Promise<SuggestCombosResult> {
+    const res = await fetch(`${API_BASE}/admin/suggest-combos`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(data),
+    });
+    return handleResponse<SuggestCombosResult>(res);
 }
 
 // ==========================================

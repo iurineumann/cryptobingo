@@ -35,15 +35,15 @@ WALLET_NAME="devwallet"
 
 ACCOUNT_NAMES=(
     orng.wax
-    bingo.game
+    bingogamectr
     alien.worlds
-    microservice
+    bingogamesvc
     jogador1
     jogador2
     gameadmin11
     contractad1
     sponsor1111
-    bingo.swap
+    bingogameswp
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -422,54 +422,54 @@ docker exec "$CONTAINER_NAME" \
     "$WAX_BIN/cleos" --url http://127.0.0.1:8888 --wallet-url http://127.0.0.1:8900 \
     wallet import -n "$WALLET_NAME" --private-key "$BT_PRIV" 2>/dev/null || true
 
-cleos system newaccount eosio bingo.token "$BT_PUB" \
+cleos system newaccount eosio bingogametkn "$BT_PUB" \
     --stake-net "1000.0000 WAX" --stake-cpu "1000.0000 WAX" \
     --buy-ram-bytes 8192000 -p eosio@active 2>/dev/null || \
-cleos create account eosio bingo.token "$BT_PUB" -p eosio@active 2>/dev/null || true
+cleos create account eosio bingogametkn "$BT_PUB" -p eosio@active 2>/dev/null || true
 
-echo "BINGO_TOKEN_KEY=$BT_PRIV" >> .waxdev.env
-echo "BINGO_TOKEN_PUB=$BT_PUB"  >> .waxdev.env
+echo "BINGOGAMETKN_KEY=$BT_PRIV" >> .waxdev.env
+echo "BINGOGAMETKN_PUB=$BT_PUB"  >> .waxdev.env
 
-cleos set contract bingo.token "${SYSTEM_CONTRACTS}/eosio.token" -p bingo.token@active
+cleos set contract bingogametkn "${SYSTEM_CONTRACTS}/eosio.token" -p bingogametkn@active
 
-cleos push action bingo.token create \
-    '["bingo.game", "1000000000.0000 BINGO"]' -p bingo.token@active 2>/dev/null || true
-cleos push action bingo.token issue \
-    '["bingo.game", "500000000.0000 BINGO", "Emissao Inicial CryptoBingo"]' \
-    -p bingo.game@active 2>/dev/null || true
+cleos push action bingogametkn create \
+    '["bingogamectr", "1000000000.0000 BINGO"]' -p bingogametkn@active 2>/dev/null || true
+cleos push action bingogametkn issue \
+    '["bingogamectr", "500000000.0000 BINGO", "Emissao Inicial CryptoBingo"]' \
+    -p bingogamectr@active 2>/dev/null || true
 
 echo "[*] Distribuindo BINGO..."
-for dest in microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingo.swap; do
-    cleos push action bingo.token open \
-        "[\"$dest\", \"4,BINGO\", \"bingo.game\"]" \
-        -p bingo.game@active > /dev/null 2>&1 || true
-    cleos push action bingo.token transfer \
-        "[\"bingo.game\", \"$dest\", \"10000.0000 BINGO\", \"Dev tokens\"]" \
-        -p bingo.game@active 2>/dev/null || true
+for dest in bingogamesvc jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
+    cleos push action bingogametkn open \
+        "[\"$dest\", \"4,BINGO\", \"bingogamectr\"]" \
+        -p bingogamectr@active > /dev/null 2>&1 || true
+    cleos push action bingogametkn transfer \
+        "[\"bingogamectr\", \"$dest\", \"10000.0000 BINGO\", \"Dev tokens\"]" \
+        -p bingogamectr@active 2>/dev/null || true
 done
 
 echo "[*] Distribuindo WAX para contas de desenvolvimento..."
-for dest in bingo.game bingo.token microservice jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingo.swap; do
+for dest in bingogamectr bingogametkn bingogamesvc jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
     cleos push action eosio.token transfer \
         "[\"eosio\", \"$dest\", \"100000.0000 WAX\", \"Dev WAX\"]" \
         -p eosio@active 2>/dev/null || true
 done
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8. DEPLOY DO CONTRATO bingo.game
+# 8. DEPLOY DO CONTRATO bingogamectr
 # ──────────────────────────────────────────────────────────────────────────────
-echo "[*] Deploy do contrato bingo.game..."
+echo "[*] Deploy do contrato bingogamectr..."
 if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.abi" ]; then
-    if cleos set contract bingo.game "$CONTRACT_SRC_CONTAINER" -p bingo.game@active; then
-        cleos set account permission bingo.game active --add-code -p bingo.game@active 2>/dev/null || true
-        echo "[✓] bingo.game deployado."
+    if cleos set contract bingogamectr "$CONTRACT_SRC_CONTAINER" -p bingogamectr@active; then
+        cleos set account permission bingogamectr active --add-code -p bingogamectr@active 2>/dev/null || true
+        echo "[✓] bingogamectr deployado."
     else
-        echo "[!] Aviso: deploy do bingo.game falhou (WASM pode ter nomes inválidos)."
+        echo "[!] Aviso: deploy do bingogamectr falhou (WASM pode ter nomes inválidos)."
     fi
 else
     echo "[!] bingo.wasm/bingo.abi não encontrados em ${CONTRACT_SRC_HOST}"
     echo "    Compile o contrato e execute novamente ou:"
-    echo "    cleos set contract bingo.game $CONTRACT_SRC_CONTAINER -p bingo.game@active"
+    echo "    cleos set contract bingogamectr $CONTRACT_SRC_CONTAINER -p bingogamectr@active"
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ fi
 # Segue a mesma arquitetura do contrato orng.wax de produção (WAX mainnet):
 #   - RSA-PKCS1v15-SHA256 para geração de aleatoriedade verificável
 #   - Interface: requestrand / setrand / regkey / setver
-#   - Legacy callback: bingo.game::receiverand(assoc_id, checksum256)
+#   - Legacy callback: bingogamectr::receiverand(assoc_id, checksum256)
 #
 # Ref: https://github.com/worldwide-asset-exchange/wax-orng (branch develop)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -562,54 +562,54 @@ echo "ORNG_RSA_EXPONENT=${ORNG_RSA_EXPONENT}"                 >> .waxdev.env
 # 8c. CONFIGURA signer_key DO CONTRATO
 # ──────────────────────────────────────────────────────────────────────────────
 source .waxdev.env
-echo "[*] Configurando signer_key do contrato bingo.game..."
-cleos push action bingo.game setconfig \
-    "{\"signer_key\": \"${BINGO_GAME_PUB}\"}" \
-    -p bingo.game@active || \
+echo "[*] Configurando signer_key do contrato bingogamectr..."
+cleos push action bingogamectr setconfig \
+    "{\"signer_key\": \"${BINGOGAMECTR_PUB}\"}" \
+    -p bingogamectr@active || \
     echo "[!] Aviso: setconfig falhou (pode executar manualmente depois)."
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8e. DEPLOY DO CONTRATO bingo.swap + ALLOWLIST INICIAL
+# 8e. DEPLOY DO CONTRATO bingogameswp + ALLOWLIST INICIAL
 # ──────────────────────────────────────────────────────────────────────────────
 SWAP_SRC_HOST="$(pwd)/contracts/swap"
 SWAP_SRC_CONTAINER="/app/contracts/swap"
 
-echo "[*] Deploy do contrato bingo.swap..."
+echo "[*] Deploy do contrato bingogameswp..."
 if [ -f "${SWAP_SRC_HOST}/bingo.swap.wasm" ] && [ -f "${SWAP_SRC_HOST}/bingo.swap.abi" ]; then
-    if cleos set contract bingo.swap "$SWAP_SRC_CONTAINER" \
-            bingo.swap.wasm bingo.swap.abi -p bingo.swap@active; then
+    if cleos set contract bingogameswp "$SWAP_SRC_CONTAINER" \
+            bingo.swap.wasm bingo.swap.abi -p bingogameswp@active; then
         # eosio.code necessário para emitir inline transfers (addliq/remliq/swap devolvem tokens)
-        cleos set account permission bingo.swap active --add-code \
-            -p bingo.swap@active 2>/dev/null || true
-        echo "[✓] bingo.swap deployado."
+        cleos set account permission bingogameswp active --add-code \
+            -p bingogameswp@active 2>/dev/null || true
+        echo "[✓] bingogameswp deployado."
 
-        echo "[*] Registrando tokens na allowlist do bingo.swap..."
-        cleos push action bingo.swap addtoken \
+        echo "[*] Registrando tokens na allowlist do bingogameswp..."
+        cleos push action bingogameswp addtoken \
             '{"sym":{"sym":"4,WAX","contract":"eosio.token"}}' \
-            -p bingo.swap@active 2>/dev/null && echo "[✓] WAX adicionado." || \
+            -p bingogameswp@active 2>/dev/null && echo "[✓] WAX adicionado." || \
             echo "[!] Aviso: addtoken WAX falhou."
-        cleos push action bingo.swap addtoken \
-            '{"sym":{"sym":"4,BINGO","contract":"bingo.token"}}' \
-            -p bingo.swap@active 2>/dev/null && echo "[✓] BINGO adicionado." || \
+        cleos push action bingogameswp addtoken \
+            '{"sym":{"sym":"4,BINGO","contract":"bingogametkn"}}' \
+            -p bingogameswp@active 2>/dev/null && echo "[✓] BINGO adicionado." || \
             echo "[!] Aviso: addtoken BINGO falhou."
 
         # Configura treasury das service fees (ADR-019)
-        cleos push action bingo.swap settreasury \
-            '{"account":"bingo.game"}' \
-            -p bingo.swap@active 2>/dev/null && echo "[✓] Treasury configurado (bingo.game)." || \
+        cleos push action bingogameswp settreasury \
+            '{"account":"bingogamectr"}' \
+            -p bingogameswp@active 2>/dev/null && echo "[✓] Treasury configurado (bingogamectr)." || \
             echo "[!] Aviso: settreasury falhou."
 
         # Cria pool padrão WAX/BINGO (fee LP 0.30%) e configura service fee 1%
-        cleos push action bingo.swap createpool \
-            '{"creator":"bingo.swap","sym_a":{"sym":"4,WAX","contract":"eosio.token"},"sym_b":{"sym":"4,BINGO","contract":"bingo.token"},"fee_bps":30}' \
-            -p bingo.swap@active 2>/dev/null && echo "[✓] Pool WAX/BINGO criado (pool_id=1)." || \
+        cleos push action bingogameswp createpool \
+            '{"creator":"bingogameswp","sym_a":{"sym":"4,WAX","contract":"eosio.token"},"sym_b":{"sym":"4,BINGO","contract":"bingogametkn"},"fee_bps":30}' \
+            -p bingogameswp@active 2>/dev/null && echo "[✓] Pool WAX/BINGO criado (pool_id=1)." || \
             echo "[!] Aviso: createpool falhou (pool pode já existir)."
-        cleos push action bingo.swap setpoolfee \
+        cleos push action bingogameswp setpoolfee \
             '{"pool_id":1,"service_fee_bps":100}' \
-            -p bingo.swap@active 2>/dev/null && echo "[✓] Service fee 1% configurada no pool 1." || \
+            -p bingogameswp@active 2>/dev/null && echo "[✓] Service fee 1% configurada no pool 1." || \
             echo "[!] Aviso: setpoolfee falhou."
     else
-        echo "[!] Aviso: deploy do bingo.swap falhou."
+        echo "[!] Aviso: deploy do bingogameswp falhou."
     fi
 else
     echo "[!] bingo.swap.wasm/bingo.swap.abi não encontrados em ${SWAP_SRC_HOST}"
@@ -704,7 +704,9 @@ F="apps/frontend/.env"
 _upsert_env "$F" "VITE_CHAIN_ID"                "$CHAIN_ID"
 _upsert_env "$F" "VITE_RPC_URL"                 "http://127.0.0.1:8888"
 _upsert_env "$F" "VITE_API_GATEWAY_URL"          "http://localhost:8083"
-_upsert_env "$F" "VITE_CONTRACT_ACCOUNT"         "bingo.game"
+_upsert_env "$F" "VITE_CONTRACT_ACCOUNT"         "bingogamectr"
+_upsert_env "$F" "VITE_BINGO_TOKEN_CONTRACT"     "bingogametkn"
+_upsert_env "$F" "VITE_SWAP_CONTRACT"            "bingogameswp"
 _upsert_env "$F" "VITE_EXPLORER_URL"             "https://wax.bloks.io"
 _upsert_env "$F" "VITE_WS_URL"                   ""
 _upsert_env "$F" "VITE_WS_URL_INTERNAL"          "http://127.0.0.1:8085"
@@ -732,19 +734,20 @@ _upsert_env "$F" "RPC_URL"                  "http://127.0.0.1:8888"
 _upsert_env "$F" "POSTGRES_URL"             "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
 _upsert_env "$F" "MONGO_URL"                "mongodb://mongo_admin:mongo_secure_pass_2026@localhost:27017/cryptobingo_edge?authSource=admin"
 _upsert_env "$F" "REDIS_URL"                "redis://localhost:6379"
-_upsert_env "$F" "CONTRACT_ACCOUNT"         "bingo.game"
-_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGO_GAME_KEY:-}"
-_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGO_GAME_KEY:-}"
+_upsert_env "$F" "CONTRACT_ACCOUNT"         "bingogamectr"
+_upsert_env "$F" "SWAP_CONTRACT"            "bingogameswp"
+_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGOGAMESVC_KEY:-}"
+_upsert_env "$F" "CONTRACT_PRIVATE_KEY"     "${BINGOGAMECTR_KEY:-}"
 _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
-_upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3000"
+_upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3001"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
 
 F="apps/worker-game-loop/.env"
 _upsert_env "$F" "CHAIN_ID"                    "$CHAIN_ID"
 _upsert_env "$F" "RPC_URL"                     "http://127.0.0.1:8888"
-_upsert_env "$F" "CONTRACT_ACCOUNT"            "bingo.game"
-_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY"    "${MICROSERVICE_KEY:-}"
-_upsert_env "$F" "CONTRACT_PRIVATE_KEY"        "${BINGO_GAME_KEY:-}"
+_upsert_env "$F" "CONTRACT_ACCOUNT"            "bingogamectr"
+_upsert_env "$F" "MICROSERVICE_PRIVATE_KEY"    "${BINGOGAMESVC_KEY:-}"
+_upsert_env "$F" "CONTRACT_PRIVATE_KEY"        "${BINGOGAMECTR_KEY:-}"
 _upsert_env "$F" "POSTGRES_URL"                "postgres://bingo_admin:bingo_secure_pass_2026@localhost:5432/cryptobingo_ledger"
 _upsert_env "$F" "REDIS_URL"                   "redis://localhost:6379"
 _upsert_env "$F" "RABBITMQ_URL"                "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"
@@ -771,7 +774,7 @@ _upsert_env ".env" "VITE_CHAIN_ID"          "$CHAIN_ID"
 _upsert_env ".env" "VITE_RPC_URL"           "http://127.0.0.1:8888"
 _upsert_env ".env" "VITE_API_GATEWAY_URL"   "http://localhost:8083"
 _upsert_env ".env" "VITE_WS_URL"            "http://localhost:8085"
-_upsert_env ".env" "VITE_CONTRACT_ACCOUNT"  "bingo.game"
+_upsert_env ".env" "VITE_CONTRACT_ACCOUNT"  "bingogamectr"
 
 sed -i "s|^RPC_URL=.*|RPC_URL=http://${CONTAINER_NAME}:8888|" .env.infra 2>/dev/null || \
     echo "RPC_URL=http://${CONTAINER_NAME}:8888" >> .env.infra

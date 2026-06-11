@@ -27,11 +27,12 @@ import { getProfile, updatePreferences, listUsers }   from './controllers/profil
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
-    listGametypes, upsertGametype, deleteGametype,
+    listGametypes, upsertGametype, updateGametype, deleteGametype,
+    saveStages,
     getGametypeMetadata, upsertGametypeMetadata, getGametypeMetadataPublic,
     getGametypePatternsPublic,
 } from './controllers/patternController';
-import { simulateWeights, calibrateWeights }         from './controllers/monteCarloController';
+import { simulateWeights, calibrateWeights, suggestCombos } from './controllers/monteCarloController';
 import { getRtpStatistics, getGamesHistory, syncGameToLedger, getGameStatsBatchHandler } from './controllers/statisticsController';
 import { ensureLedgerTables }                         from './database/ledger';
 import {
@@ -51,6 +52,7 @@ import {
     listAllocations,
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
+import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 
 dotenv.config();
 
@@ -214,6 +216,14 @@ function registerRoutes(): void {
         '/api/v1/admin/gametypes/:gametypeId/metadata',
         adminLimiter, requireAuth, requireRole('admin'), upsertGametypeMetadata
     );
+    app.put(
+        '/api/v1/admin/gametypes/:gametypeId',
+        adminLimiter, requireAuth, requireRole('admin'), updateGametype
+    );
+    app.put(
+        '/api/v1/admin/gametypes/:gametypeId/stages',
+        adminLimiter, requireAuth, requireRole('admin'), saveStages
+    );
 
     // ── Rooms (ADR-010) ──────────────────────────────────────────────
     app.get('/api/v1/rooms',                               playerLimiter, listRooms);
@@ -234,6 +244,10 @@ function registerRoutes(): void {
     app.post(
         '/api/v1/admin/calibrate-weights',
         monteCarloLimiter, requireAuth, requireRole('admin'), calibrateWeights
+    );
+    app.post(
+        '/api/v1/admin/suggest-combos',
+        monteCarloLimiter, requireAuth, requireRole('admin'), suggestCombos
     );
 
     // ── Statistics / Compliance (públicas) — Lei 14.790/2023 ─────────────────
@@ -259,6 +273,10 @@ function registerRoutes(): void {
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
     app.post('/api/v1/player/winnings/batch', playerLimiter, requireAuth, getPlayerWinningsBatch);
+
+    // ── Swap Quote (ADR-021) — público, somente leitura ──────────────────
+    app.get('/api/v1/swap/pools',  playerLimiter, listSwapPools);
+    app.get('/api/v1/swap/quote',  playerLimiter, getSwapQuote);
 
     // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
     app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);

@@ -11,7 +11,7 @@ import { microserviceSession } from './blockchain';
 import { io } from './broadcaster';
 import { redisClient } from './redis';
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const DROP_PROCESS_TTL_SEC = parseInt(process.env.DROP_PROCESS_TTL_SEC || '300', 10);
 const LOCK_PREFIX = 'drop:lock:';
 

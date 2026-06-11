@@ -668,6 +668,67 @@ paths:
       responses:
         '200':
           description: Game type removido
+    put:
+      summary: Atualiza game type on-chain (addgametype)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gametypeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateGametypeRequest' }
+      responses:
+        '200':
+          description: Game type atualizado on-chain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  gametype_id: { type: string }
+                  transaction_id: { type: string }
+        '400':
+          description: Campos obrigatórios ausentes ou inválidos
+
+  /admin/gametypes/{gametypeId}/stages:
+    put:
+      summary: Define estágios progressivos MULTI_MATCH (ADR-013)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: gametypeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stages]
+              properties:
+                stages:
+                  type: array
+                  items: { $ref: '#/components/schemas/StageRule' }
+      responses:
+        '200':
+          description: Estágios atualizados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  transaction_id: { type: string }
+        '400':
+          description: stages inválido
 
   /admin/gametypes/{gametypeId}/metadata:
     get:
@@ -747,15 +808,34 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                gametypeId: { type: string }
-                targetRtp: { type: number, example: 0.85 }
-                simulations: { type: integer, default: 10000 }
+            schema: { $ref: '#/components/schemas/CalibrateWeightsRequest' }
       responses:
         '200':
           description: Pesos calibrados com RTP atingido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalibrateWeightsResult' }
+
+  /admin/suggest-combos:
+    post:
+      summary: Geração e precificação inteligente de combinações (ADR-016)
+      tags: [Admin]
+      security: [{ BearerAuth: [] }]
+      description: |
+        4 fases: descoberta de hit_rates → geração hierárquica de combos →
+        precificação por dificuldade → validação Monte Carlo. Os pesos dos
+        patterns NÃO são modificados.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SuggestCombosRequest' }
+      responses:
+        '200':
+          description: Combos gerados e validados
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuggestCombosResult' }
 
   /admin/ledger/sync:
     post:
@@ -779,6 +859,90 @@ paths:
           description: Jogo sincronizado
         '404':
           description: Jogo não encontrado on-chain
+
+  # ══════════════════════════════════════════
+  # SWAP QUOTE — ADR-021 (Checkout Multi-Moeda)
+  # ══════════════════════════════════════════
+  /swap/pools:
+    get:
+      summary: Lista pools ativas do bingogameswp
+      description: >
+        Retorna pools AMM ativas com reservas e taxas. Cache de 10s no servidor.
+        Usado pelo BuyTicketModal para filtrar tokens alternativos disponíveis.
+      tags: [Swap]
+      parameters: []
+      responses:
+        '200':
+          description: Lista de pools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SwapPoolSummary'
+        '502':
+          description: Falha ao ler pools do nodeos
+
+  /swap/quote:
+    get:
+      summary: Cotação para swap de moeda alternativa na compra de cartelas
+      description: >
+        Dado o custo total em moeda da sala (`amount_out`) e um par de tokens,
+        calcula quantos tokens alternativos o usuário precisa enviar (`amount_in`)
+        usando a fórmula reverse AMM: considera `fee_bps` (LP) e `service_fee_bps`.
+        TTL limitado por `min(30s, game_end_time - now - 5s)`.
+        A transação é construída e assinada pelo cliente via Wharfkit — este endpoint
+        é somente-leitura e não custodia fundos.
+      tags: [Swap]
+      parameters:
+        - in: query
+          name: from_contract
+          required: true
+          schema: { type: string }
+          description: Contrato do token de origem (ex. "bingogametkn")
+        - in: query
+          name: from_symbol
+          required: true
+          schema: { type: string }
+          description: Símbolo com precisão (ex. "4,BINGO")
+        - in: query
+          name: to_contract
+          required: true
+          schema: { type: string }
+          description: Contrato do token de destino
+        - in: query
+          name: to_symbol
+          required: true
+          schema: { type: string }
+          description: Símbolo com precisão do token de destino
+        - in: query
+          name: amount_out
+          required: true
+          schema: { type: string }
+          description: Unidades mínimas do token de destino desejado (custo total das cartelas)
+        - in: query
+          name: game_end_time
+          required: false
+          schema: { type: integer }
+          description: Unix timestamp (segundos) do fim do funding — limita TTL da cotação
+      responses:
+        '200':
+          description: Cotação calculada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwapQuote'
+        '400':
+          description: Parâmetros obrigatórios ausentes ou amount_out inválido
+        '404':
+          description: Par de tokens sem pool disponível
+        '422':
+          description: Liquidez insuficiente para o volume solicitado
+        '502':
+          description: Falha ao ler estado do nodeos
 
   # ══════════════════════════════════════════
   # DROP VAULT (ADR-011)
@@ -1129,22 +1293,236 @@ components:
       properties:
         gametype_name: { type: string }
         simulations: { type: integer }
+        tickets_per_game: { type: integer }
+        ticket_price: { type: number }
+        base_multiplier: { type: integer }
         rtp: { type: number, example: 0.8532 }
         rtp_pct: { type: string, example: "85.3200%" }
         ggr: { type: number, example: 0.1468 }
         ggr_pct: { type: string, example: "14.6800%" }
         total_wagered: { type: number }
         total_paid_out: { type: number }
+        avg_payout_per_game: { type: number }
+        avg_winners_per_game: { type: number }
         is_viable: { type: boolean }
         alerts: { type: array, items: { type: string } }
         pattern_stats:
           type: array
           items:
-            type: object
-            properties:
-              name: { type: string }
-              hit_count: { type: integer }
-              hit_rate: { type: number }
-              avg_balls_needed: { type: number }
+            $ref: '#/components/schemas/PatternStats'
         duration_ms: { type: integer }
         computed_at: { type: string, format: date-time }
+
+    PatternStats:
+      type: object
+      properties:
+        name: { type: string }
+        mask: { type: integer }
+        weight: { type: integer }
+        hit_count: { type: integer }
+        hit_rate: { type: number }
+        avg_balls_needed: { type: number }
+
+    UpdateGametypeRequest:
+      type: object
+      required: [name, base_multiplier, rules]
+      properties:
+        name: { type: string, example: "Bingo Clássico" }
+        base_multiplier: { type: integer, minimum: 1, maximum: 255, example: 5 }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [pattern_id, weight]
+            properties:
+              pattern_id: { type: string }
+              weight: { type: integer, minimum: 100, maximum: 25500, description: "Hundredths (100 = 1.00×, 25500 = 255.00×)" }
+        draw_mode:
+          type: string
+          enum: [standard, fixed, firstfull, goldenball, multimatch]
+          default: standard
+        max_balls: { type: integer, default: 0, description: "0 = padrão (35)" }
+        golden_ball_after: { type: integer, default: 0 }
+        master_weight_ovrd: { type: integer, default: 0, description: "Hundredths — FIRST_FULL override" }
+
+    StageRule:
+      type: object
+      required: [stage, patterns_required, weight]
+      properties:
+        stage: { type: integer, description: "Nº do estágio (1, 2, 3…)" }
+        patterns_required: { type: integer, description: "Qtd de padrões p/ vencer este estágio" }
+        weight: { type: integer, description: "Hundredths (100 = 1.00×, max 25500)" }
+
+    CalibrateWeightsRequest:
+      type: object
+      required: [gametype_name, base_multiplier, patterns]
+      properties:
+        gametype_name: { type: string }
+        base_multiplier: { type: integer, minimum: 1 }
+        patterns:
+          type: array
+          items: { $ref: '#/components/schemas/PatternRuleInput' }
+        combinations:
+          type: array
+          items: { $ref: '#/components/schemas/CombinationRuleInput' }
+        tickets_per_game: { type: integer, default: 100 }
+        ticket_price: { type: number, default: 10 }
+        max_balls: { type: integer, description: "Limite de bolas (1-75)" }
+        target_rtp: { type: number, default: 0.85 }
+        discovery_sims: { type: integer, default: 20000 }
+        alpha: { type: number, default: 0.1 }
+        tolerance: { type: number, default: 0.005 }
+        max_iter: { type: integer, default: 300 }
+        validation_sims: { type: integer, default: 10000 }
+
+    CalibrateWeightsResult:
+      type: object
+      properties:
+        gametype_name: { type: string }
+        target_rtp: { type: number }
+        algebraic_rtp: { type: number }
+        algebraic_rtp_pct: { type: string }
+        iterations: { type: integer }
+        converged: { type: boolean }
+        validation_sims: { type: integer }
+        validation_rtp: { type: number }
+        validation_rtp_pct: { type: string }
+        pattern_weights: { type: object, description: "name → hundredths" }
+        item_calibrations:
+          type: array
+          items: { $ref: '#/components/schemas/ItemCalibration' }
+        alerts: { type: array, items: { type: string } }
+        is_viable: { type: boolean }
+        duration_ms: { type: integer }
+        computed_at: { type: string, format: date-time }
+
+    ItemCalibration:
+      type: object
+      properties:
+        name: { type: string }
+        probability: { type: number }
+        weight: { type: integer, description: "Peso calibrado em hundredths" }
+
+    SuggestCombosRequest:
+      type: object
+      required: [gametype_name, base_multiplier, patterns]
+      properties:
+        gametype_name: { type: string }
+        base_multiplier: { type: integer, minimum: 1 }
+        patterns:
+          type: array
+          items: { $ref: '#/components/schemas/PatternRuleInput' }
+        draw_mode:
+          type: string
+          enum: [standard, fixed, firstfull, goldenball, multimatch]
+          default: standard
+        tickets_per_game: { type: integer, default: 100 }
+        ticket_price: { type: number, default: 10 }
+        max_balls: { type: integer }
+
+    SuggestCombosResult:
+      type: object
+      properties:
+        gametype_name: { type: string }
+        pattern_weights: { type: object, description: "name → hundredths (inalterados)" }
+        combos:
+          type: array
+          items: { $ref: '#/components/schemas/ComboCandidate' }
+        combo_weights: { type: object, description: "combo name → hundredths" }
+        validation: { $ref: '#/components/schemas/SimulationResult' }
+        is_viable: { type: boolean }
+        alerts: { type: array, items: { type: string } }
+        duration_ms: { type: integer }
+        computed_at: { type: string, format: date-time }
+
+    PatternRuleInput:
+      type: object
+      required: [name, mask, weight]
+      properties:
+        pattern_id: { type: [integer, string] }
+        name: { type: string }
+        mask: { type: integer, description: "uint32 bitmask (25 bits)" }
+        weight: { type: integer, description: "Hundredths (100 = 1.00×, 25500 = 255.00×)" }
+        pattern_type:
+          type: string
+          enum: [simple, special, master]
+          default: simple
+
+    CombinationRuleInput:
+      type: object
+      required: [name, weight, clauses]
+      properties:
+        name: { type: string }
+        weight: { type: integer }
+        clauses:
+          type: array
+          items: { $ref: '#/components/schemas/CombinationClauseInput' }
+
+    CombinationClauseInput:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [all_of, any_of, n_of_type]
+        pattern_ids:
+          type: array
+          items: { type: string }
+          description: "IDs dos patterns (usado em all_of / any_of)"
+        pattern_type:
+          type: string
+          description: "Tipo de pattern (usado em n_of_type)"
+        count:
+          type: integer
+          description: "Qtd necessária (usado em n_of_type)"
+
+    ComboCandidate:
+      type: object
+      properties:
+        name: { type: string }
+        weight: { type: integer, description: "Peso sugerido em hundredths" }
+        clauses:
+          type: array
+          items: { $ref: '#/components/schemas/CombinationClauseInput' }
+
+    SwapPoolSummary:
+      type: object
+      description: Pool AMM resumida do bingogameswp (ADR-021)
+      properties:
+        pool_id:         { type: string, description: "uint64 como string" }
+        token_a:
+          type: object
+          properties:
+            contract:  { type: string }
+            symbol:    { type: string }
+            precision: { type: integer }
+        token_b:
+          type: object
+          properties:
+            contract:  { type: string }
+            symbol:    { type: string }
+            precision: { type: integer }
+        reserve_a:       { type: string, description: "int64 como string" }
+        reserve_b:       { type: string, description: "int64 como string" }
+        fee_bps:         { type: integer, description: "Taxa LP em bps (30 = 0.30%)" }
+        service_fee_bps: { type: integer, description: "Taxa de serviço em bps — ADR-019" }
+
+    SwapQuote:
+      type: object
+      description: Cotação para swap de moeda alternativa (ADR-021)
+      properties:
+        quote_id:           { type: string, description: "UUID — rastreabilidade" }
+        pool_id:            { type: string }
+        from_contract:      { type: string }
+        from_symbol:        { type: string }
+        to_contract:        { type: string }
+        to_symbol:          { type: string }
+        amount_in:          { type: string, description: "Unidades mínimas a enviar" }
+        amount_in_display:  { type: string, description: "Ex: '123.4567 BINGO'" }
+        amount_out:         { type: string, description: "Unidades mínimas a receber" }
+        amount_out_display: { type: string, description: "Ex: '10.00000000 WAX'" }
+        min_out:            { type: string, description: "amount_out com slippage 0.5%" }
+        fee_bps:            { type: integer }
+        service_fee_bps:    { type: integer }
+        price_impact_pct:   { type: number, description: "Impacto no pool em %" }
+        expires_at:         { type: integer, description: "Unix timestamp (seconds)" }

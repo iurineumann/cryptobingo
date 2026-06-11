@@ -11,11 +11,11 @@ import { Session }           from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import { UInt64 }            from '@wharfkit/antelope';
-import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
+import type { BlockchainPattern, BlockchainGametype, StageRule } from '@cryptobingo/shared-types';
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingo.game';
+const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID              = process.env.CHAIN_ID!;
 const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
@@ -277,6 +277,133 @@ export async function deleteGametype(req: Request, res: Response): Promise<void>
     }
 }
 
+/**
+ * PUT /api/v1/admin/gametypes/:gametypeId
+ * Atualiza um gametype on-chain (addgametype upsert) + metadados.
+ * Mesma validação do upsertGametype, mas gametype_id vem da URL.
+ *
+ * Body: { name, base_multiplier, rules, draw_mode, max_balls, golden_ball_after, master_weight_ovrd }
+ */
+export async function updateGametype(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+    const {
+        name, base_multiplier, rules,
+        draw_mode, max_balls, golden_ball_after, master_weight_ovrd,
+    } = req.body;
+
+    if (!name || !base_multiplier || !rules) {
+        res.status(400).json({ error: 'Campos obrigatórios: name, base_multiplier, rules.' });
+        return;
+    }
+    if (!Array.isArray(rules) || rules.length === 0) {
+        res.status(400).json({ error: 'rules deve ter pelo menos 1 elemento.' });
+        return;
+    }
+    if (typeof base_multiplier !== 'number' || base_multiplier < 1 || base_multiplier > 255) {
+        res.status(400).json({ error: 'base_multiplier deve ser um inteiro entre 1 e 255.' });
+        return;
+    }
+    for (const rule of rules) {
+        if (!rule.pattern_id || !rule.weight || rule.weight < 100 || rule.weight > 25500) {
+            res.status(400).json({ error: 'Cada rule deve ter pattern_id e weight (1.00-255.00).' });
+            return;
+        }
+    }
+
+    try {
+        const session = getAdminSession();
+        const result = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'addgametype',
+                authorization: [session.permissionLevel],
+                data: {
+                    gametype_id: gametypeId, name, base_multiplier, rules,
+                    draw_mode:            draw_mode ?? 'standard',
+                    max_balls:            max_balls ?? 0,
+                    golden_ball_after:    golden_ball_after ?? 0,
+                    master_weight_ovrd:   master_weight_ovrd ?? 0,
+                },
+            }],
+        }, { broadcast: true });
+
+        // Invalida cache Redis do worker
+        if (redisClient.isOpen) {
+            await redisClient.del(`pattern:gametype:${gametypeId}`);
+        }
+
+        console.log(`✅ [PatternCtrl] Gametype ${gametypeId} (${name}) atualizado. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        `Gametype "${name}" atualizado com sucesso.`,
+            gametype_id:    gametypeId,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao atualizar gametype:', err);
+        res.status(500).json({ error: `Erro ao atualizar gametype: ${msg}` });
+    }
+}
+
+/**
+ * PUT /api/v1/admin/gametypes/:gametypeId/stages
+ * Define os estágios progressivos de um gametype MULTI_MATCH (ADR-013).
+ *
+ * Body: { stages: StageRule[] }
+ */
+export async function saveStages(req: Request, res: Response): Promise<void> {
+    const { gametypeId } = req.params;
+    const { stages } = req.body;
+
+    if (!Array.isArray(stages)) {
+        res.status(400).json({ error: 'stages deve ser um array.' });
+        return;
+    }
+    for (const s of stages) {
+        if (!s.stage || !s.patterns_required || !s.weight) {
+            res.status(400).json({ error: 'Cada stage deve ter stage, patterns_required e weight.' });
+            return;
+        }
+        if (s.weight < 100 || s.weight > 25500) {
+            res.status(400).json({ error: 'weight de cada stage deve ser 1.00-255.00 (100-25500 hundredths).' });
+            return;
+        }
+    }
+
+    try {
+        const session = getAdminSession();
+        const result = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'setstages',
+                authorization: [session.permissionLevel],
+                data: {
+                    gametype_id: gametypeId,
+                    stages:      stages.map(s => ({
+                        stage:             s.stage,
+                        patterns_required: s.patterns_required,
+                        weight:            Math.round(Number(s.weight)),
+                    })),
+                },
+            }],
+        }, { broadcast: true });
+
+        if (redisClient.isOpen) {
+            await redisClient.del(`pattern:gametype:${gametypeId}`);
+        }
+
+        console.log(`✅ [PatternCtrl] Stages do gametype ${gametypeId} atualizados. TX: ${result.response?.transaction_id}`);
+        res.status(200).json({
+            message:        'Estágios atualizados com sucesso.',
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[PatternCtrl] Erro ao salvar stages:', err);
+        res.status(500).json({ error: `Erro ao salvar estágios: ${msg}` });
+    }
+}
+
 // ==========================================
 // GAMETYPE METADATA (off-chain, MongoDB)
 // ==========================================
@@ -438,14 +565,13 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
     }
 
     try {
-        const $set: Record<string, unknown> = {
-            description:     description ?? '',
-            cover_image_url: cover_image_url ?? '',
-            rules_summary:   rules_summary ?? '',
-            sort_order:      sort_order ?? 0,
-        };
-        if (rules)         $set.rules        = rules;
-        if (combosWithId)  $set.combinations = combosWithId;
+        const $set: Record<string, unknown> = {};
+        if (description !== undefined)      $set.description     = description;
+        if (cover_image_url !== undefined)  $set.cover_image_url = cover_image_url;
+        if (rules_summary !== undefined)    $set.rules_summary   = rules_summary;
+        if (sort_order !== undefined)       $set.sort_order      = sort_order;
+        if (rules)                          $set.rules           = rules;
+        if (combosWithId)                   $set.combinations    = combosWithId;
 
         const metadata = await GametypeMetadataModel.findOneAndUpdate(
             { gametype_id: gametypeId },

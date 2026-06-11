@@ -45,10 +45,10 @@ interface EditForm {
 
 const defaultForm: CreateForm = {
     room_id: 0, sponsor: '', gametype_id: 0,
-    currency_quantity: '0.0000 BINGO', currency_contract: 'bingo.token',
-    ticket_price_min_quantity: '0.0000 BINGO', ticket_price_min_contract: 'bingo.token',
-    ticket_price_max_quantity: '0.0000 BINGO', ticket_price_max_contract: 'bingo.token',
-    ticket_price_default_quantity: '0.0000 BINGO', ticket_price_default_contract: 'bingo.token',
+    currency_quantity: '0.0000 BINGO', currency_contract: 'bingogametkn',
+    ticket_price_min_quantity: '0.0000 BINGO', ticket_price_min_contract: 'bingogametkn',
+    ticket_price_max_quantity: '0.0000 BINGO', ticket_price_max_contract: 'bingogametkn',
+    ticket_price_default_quantity: '0.0000 BINGO', ticket_price_default_contract: 'bingogametkn',
     max_tickets_per_player: 0,
     name: '', description: '',
     drops: [], auto_start_delay_sec: 30, chat_enabled: true,
@@ -217,7 +217,6 @@ export default function RoomsAdmin() {
     return (
         <section>
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-[--cb-text-primary]">{t('admin.rooms_title')}</h2>
                 <button className="cb-btn cb-btn-primary cb-btn-sm" data-testid="rooms-new" onClick={() => setShowCreate(s => !s)}>
                     {showCreate ? t('admin.rooms_cancel') : t('admin.rooms_new')}
                 </button>

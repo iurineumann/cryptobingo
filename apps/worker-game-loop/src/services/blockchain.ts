@@ -11,7 +11,7 @@ dotenv.config();
 const microserviceKey = process.env.MICROSERVICE_PRIVATE_KEY!;
 const contractKey     = process.env.CONTRACT_PRIVATE_KEY || microserviceKey;
 const chainId         = process.env.CHAIN_ID!;
-const contractAccount = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const contractAccount = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const rpcUrl          = process.env.RPC_URL           || 'http://127.0.0.1:8888';
 
 const chain = { id: chainId, url: rpcUrl };
@@ -20,9 +20,9 @@ if (!microserviceKey || !chainId) {
     throw new Error('❌ Faltam variáveis de ambiente críticas (MICROSERVICE_PRIVATE_KEY ou CHAIN_ID).');
 }
 
-// Sessão com a permission microservice para ações que exigem require_auth("microservice"_n)
+// Sessão com a permission microservice para ações que exigem require_auth("bingogamesvc"_n)
 export const microserviceSession = new Session({
-    actor:        'microservice',
+    actor:        'bingogamesvc',
     permission:   'active',
     chain,
     walletPlugin: new WalletPluginPrivateKey(microserviceKey),

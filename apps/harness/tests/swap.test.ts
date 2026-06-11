@@ -1,5 +1,5 @@
 // apps/harness/tests/swap.test.ts
-// Suite 9 — E2E do contrato bingo.swap (DEX AMM x*y=k, ADR-018)
+// Suite 9 — E2E do contrato bingogameswp (DEX AMM x*y=k, ADR-018)
 //
 // Cobertura:
 //   Passo 1  — addtoken: WAX e BINGO adicionados à allowlist
@@ -43,7 +43,7 @@ function makeSession(actor: string, key: PrivateKey): Session {
     });
 }
 
-const swapSession   = makeSession('bingo.swap', swapAdminKey);
+const swapSession   = makeSession('bingogameswp', swapAdminKey);
 const playerSession = makeSession('jogador1',   playerKey);
 const player2Session = makeSession('jogador2',  player2Key);
 
@@ -73,7 +73,7 @@ async function getRows<T>(
     limit = 50,
 ): Promise<T[]> {
     const body: Record<string, unknown> = {
-        code:  'bingo.swap',
+        code:  'bingogameswp',
         scope,
         table,
         json:  true,
@@ -91,7 +91,7 @@ async function getRows<T>(
 }
 
 async function getPool(id: number): Promise<BlockchainSwapPool | null> {
-    const rows = await getRows<BlockchainSwapPool>('pools', 'bingo.swap', String(id), String(id), 1);
+    const rows = await getRows<BlockchainSwapPool>('pools', 'bingogameswp', String(id), String(id), 1);
     return rows[0] ?? null;
 }
 
@@ -105,7 +105,7 @@ async function getPending(account: string, pid: number): Promise<BlockchainPendi
     return rows[0] ?? null;
 }
 
-// Lê saldo de token via eosio.token/bingo.token accounts table (scope = account)
+// Lê saldo de token via eosio.token/bingogametkn accounts table (scope = account)
 async function getTokenBalance(tokenContract: string, account: string, symbol: string): Promise<number> {
     const res = await fetch(`${url}/v1/chain/get_table_rows`, {
         method:  'POST',
@@ -124,31 +124,31 @@ async function getTokenBalance(tokenContract: string, account: string, symbol: s
 }
 
 // ==========================================
-// SUITE 9 — bingo.swap AMM
+// SUITE 9 — bingogameswp AMM
 // ==========================================
 
-describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
+describe('Suite 9 — bingogameswp: DEX AMM x*y=k (ADR-018)', () => {
 
     // ── Passo 1: addtoken ─────────────────────────────────────────────────────
     describe('Passo 1 — addtoken: gerencia allowlist', () => {
 
-        it('bingo.swap pode adicionar WAX à allowlist', async () => {
+        it('bingogameswp pode adicionar WAX à allowlist', async () => {
             // O init_dev_env.sh já chamou addtoken; se falhar com "já existe" é ok.
             // Aqui re-verificamos que a entrada está presente na tabela.
-            const rows = await getRows<BlockchainAllowedToken>('allowedtoks', 'bingo.swap');
+            const rows = await getRows<BlockchainAllowedToken>('allowedtoks', 'bingogameswp');
             const wax = rows.find(r => r.sym.sym === '4,WAX' && r.sym.contract === 'eosio.token');
             expect(wax).toBeDefined();
         });
 
-        it('bingo.swap pode adicionar BINGO à allowlist', async () => {
-            const rows = await getRows<BlockchainAllowedToken>('allowedtoks', 'bingo.swap');
-            const bingo = rows.find(r => r.sym.sym === '4,BINGO' && r.sym.contract === 'bingo.token');
+        it('bingogameswp pode adicionar BINGO à allowlist', async () => {
+            const rows = await getRows<BlockchainAllowedToken>('allowedtoks', 'bingogameswp');
+            const bingo = rows.find(r => r.sym.sym === '4,BINGO' && r.sym.contract === 'bingogametkn');
             expect(bingo).toBeDefined();
         });
 
         it('addtoken por conta não-admin é rejeitado', async () => {
             await expect(
-                transact(playerSession, 'bingo.swap', 'addtoken', {
+                transact(playerSession, 'bingogameswp', 'addtoken', {
                     sym: { sym: '4,TLM', contract: 'alien.worlds' },
                 }),
             ).rejects.toThrow();
@@ -160,17 +160,17 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('qualquer conta pode criar pool com par permitido', async () => {
             // Tenta criar; pode já existir de run anterior → pega pool_id pela tabela
-            await transact(playerSession, 'bingo.swap', 'createpool', {
+            await transact(playerSession, 'bingogameswp', 'createpool', {
                 creator: 'jogador1',
                 sym_a:   { sym: '4,WAX',   contract: 'eosio.token' },
-                sym_b:   { sym: '4,BINGO', contract: 'bingo.token' },
+                sym_b:   { sym: '4,BINGO', contract: 'bingogametkn' },
                 fee_bps: 30,
             }).catch(() => {}); // idempotente: pool já pode existir
 
-            const pools = await getRows<BlockchainSwapPool>('pools', 'bingo.swap');
+            const pools = await getRows<BlockchainSwapPool>('pools', 'bingogameswp');
             const waxBingo = pools.find(p =>
                 p.sym_a.sym === '4,WAX'   && p.sym_a.contract === 'eosio.token' &&
-                p.sym_b.sym === '4,BINGO' && p.sym_b.contract === 'bingo.token',
+                p.sym_b.sym === '4,BINGO' && p.sym_b.contract === 'bingogametkn',
             );
             expect(waxBingo).toBeDefined();
             poolId = Number(waxBingo!.pool_id);
@@ -180,7 +180,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         it('createpool com token fora da allowlist é rejeitado', async () => {
             // FAKE é um token inventado, nunca adicionado à allowlist
             await expect(
-                transact(playerSession, 'bingo.swap', 'createpool', {
+                transact(playerSession, 'bingogameswp', 'createpool', {
                     creator: 'jogador1',
                     sym_a:   { sym: '4,WAX',  contract: 'eosio.token' },
                     sym_b:   { sym: '4,FAKE', contract: 'fake.token'  },
@@ -199,7 +199,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         it('jogador1 envia WAX com memo deposit,<pool_id>', async () => {
             await transact(playerSession, 'eosio.token', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: DEP_WAX,
                 memo:     `deposit,${poolId}`,
             });
@@ -210,9 +210,9 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         });
 
         it('jogador1 envia BINGO com memo deposit,<pool_id>', async () => {
-            await transact(playerSession, 'bingo.token', 'transfer', {
+            await transact(playerSession, 'bingogametkn', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: DEP_BINGO,
                 memo:     `deposit,${poolId}`,
             });
@@ -226,7 +226,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             const poolBefore = await getPool(poolId);
             const reservaAAntes = Number(poolBefore?.reserve_a ?? 0);
 
-            await transact(playerSession, 'bingo.swap', 'addliq', {
+            await transact(playerSession, 'bingogameswp', 'addliq', {
                 provider: 'jogador1',
                 pool_id:  poolId,
                 min_lp:   0,
@@ -259,11 +259,11 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             const rB0 = Number(poolBefore!.reserve_b);
             const k0  = rA0 * rB0;
 
-            const waxBefore = await getTokenBalance('bingo.token', 'jogador1', 'BINGO');
+            const waxBefore = await getTokenBalance('bingogametkn', 'jogador1', 'BINGO');
 
             await transact(playerSession, 'eosio.token', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: '100.0000 WAX',
                 memo:     `swap,${poolId},0,jogador1`,
             });
@@ -282,7 +282,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             expect(rB1).toBeLessThan(rB0);
 
             // Jogador recebeu BINGO
-            const waxAfter = await getTokenBalance('bingo.token', 'jogador1', 'BINGO');
+            const waxAfter = await getTokenBalance('bingogametkn', 'jogador1', 'BINGO');
             expect(waxAfter).toBeGreaterThan(waxBefore);
         });
     });
@@ -298,9 +298,9 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
             const waxBefore = await getTokenBalance('eosio.token', 'jogador1', 'WAX');
 
-            await transact(playerSession, 'bingo.token', 'transfer', {
+            await transact(playerSession, 'bingogametkn', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: '100.0000 BINGO',
                 memo:     `swap,${poolId},0,jogador1`,
             });
@@ -334,7 +334,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             const rA0 = Number(poolBefore!.reserve_a);
             const rB0 = Number(poolBefore!.reserve_b);
 
-            await transact(playerSession, 'bingo.swap', 'remliq', {
+            await transact(playerSession, 'bingogameswp', 'remliq', {
                 provider:  'jogador1',
                 pool_id:   poolId,
                 lp_amount: remAmount,
@@ -361,7 +361,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             // Deposita apenas WAX (sem BINGO)
             await transact(playerSession, 'eosio.token', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: '50.0000 WAX',
                 memo:     `deposit,${poolId}`,
             });
@@ -371,7 +371,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
             const waxBefore = await getTokenBalance('eosio.token', 'jogador1', 'WAX');
 
-            await transact(playerSession, 'bingo.swap', 'canceldep', {
+            await transact(playerSession, 'bingogameswp', 'canceldep', {
                 provider: 'jogador1',
                 pool_id:  poolId,
             });
@@ -391,7 +391,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('addtoken por jogador2 (não-admin) é rejeitado', async () => {
             await expect(
-                transact(player2Session, 'bingo.swap', 'addtoken', {
+                transact(player2Session, 'bingogameswp', 'addtoken', {
                     sym: { sym: '4,TLM', contract: 'alien.worlds' },
                 }),
             ).rejects.toThrow();
@@ -399,7 +399,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('deltoken por jogador2 (não-admin) é rejeitado', async () => {
             await expect(
-                transact(player2Session, 'bingo.swap', 'deltoken', {
+                transact(player2Session, 'bingogameswp', 'deltoken', {
                     sym: { sym: '4,WAX', contract: 'eosio.token' },
                 }),
             ).rejects.toThrow();
@@ -407,7 +407,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('createpool com sym_b não-aprovado é rejeitado', async () => {
             await expect(
-                transact(playerSession, 'bingo.swap', 'createpool', {
+                transact(playerSession, 'bingogameswp', 'createpool', {
                     creator: 'jogador1',
                     sym_a:   { sym: '4,WAX',  contract: 'eosio.token' },
                     sym_b:   { sym: '4,EVIL', contract: 'evil.contract' },
@@ -418,7 +418,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('createpool com sym_a não-aprovado é rejeitado', async () => {
             await expect(
-                transact(playerSession, 'bingo.swap', 'createpool', {
+                transact(playerSession, 'bingogameswp', 'createpool', {
                     creator: 'jogador1',
                     sym_a:   { sym: '4,FAKE', contract: 'fake.token'   },
                     sym_b:   { sym: '4,WAX',  contract: 'eosio.token'  },
@@ -430,7 +430,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         it('addliq sem depósitos pendentes é rejeitado', async () => {
             // jogador2 nunca depositou nada
             await expect(
-                transact(player2Session, 'bingo.swap', 'addliq', {
+                transact(player2Session, 'bingogameswp', 'addliq', {
                     provider: 'jogador2',
                     pool_id:  poolId,
                     min_lp:   0,
@@ -443,7 +443,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             await expect(
                 transact(playerSession, 'eosio.token', 'transfer', {
                     from:     'jogador1',
-                    to:       'bingo.swap',
+                    to:       'bingogameswp',
                     quantity: '1.0000 WAX',
                     memo:     `swap,${poolId},999999999999,jogador1`,
                 }),
@@ -453,7 +453,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         it('canceldep sem depósito pendente é rejeitado', async () => {
             // jogador2 não tem nenhum depósito pendente
             await expect(
-                transact(player2Session, 'bingo.swap', 'canceldep', {
+                transact(player2Session, 'bingogameswp', 'canceldep', {
                     provider: 'jogador2',
                     pool_id:  poolId,
                 }),
@@ -462,7 +462,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('remliq com LP maior que o saldo é rejeitado', async () => {
             await expect(
-                transact(player2Session, 'bingo.swap', 'remliq', {
+                transact(player2Session, 'bingogameswp', 'remliq', {
                     provider:  'jogador2',
                     pool_id:   poolId,
                     lp_amount: 999999999,
@@ -474,7 +474,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('setpoolfee por não-admin é rejeitado', async () => {
             await expect(
-                transact(playerSession, 'bingo.swap', 'setpoolfee', {
+                transact(playerSession, 'bingogameswp', 'setpoolfee', {
                     pool_id:         poolId,
                     service_fee_bps: 100,
                 }),
@@ -483,7 +483,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('settreasury por não-admin é rejeitado', async () => {
             await expect(
-                transact(playerSession, 'bingo.swap', 'settreasury', {
+                transact(playerSession, 'bingogameswp', 'settreasury', {
                     account: 'jogador1',
                 }),
             ).rejects.toThrow();
@@ -491,7 +491,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
 
         it('setpoolfee acima de 500 bps é rejeitado', async () => {
             await expect(
-                transact(swapSession, 'bingo.swap', 'setpoolfee', {
+                transact(swapSession, 'bingogameswp', 'setpoolfee', {
                     pool_id:         poolId,
                     service_fee_bps: 501,
                 }),
@@ -502,19 +502,19 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
     // ── Passo 10 — service fee ────────────────────────────────────────────────
     describe('Passo 10 — service_fee: settreasury + setpoolfee + dedução no swap', () => {
 
-        it('settreasury define bingo.game como treasury', async () => {
-            await transact(swapSession, 'bingo.swap', 'settreasury', {
-                account: 'bingo.game',
+        it('settreasury define bingogamectr como treasury', async () => {
+            await transact(swapSession, 'bingogameswp', 'settreasury', {
+                account: 'bingogamectr',
             });
             // Lê swapstate para confirmar
             const rows = await getRows<{ next_pool_id: string; treasury: string }>(
-                'swapstate', 'bingo.swap',
+                'swapstate', 'bingogameswp',
             );
-            expect(rows[0]?.treasury).toBe('bingo.game');
+            expect(rows[0]?.treasury).toBe('bingogamectr');
         });
 
         it('setpoolfee 100 bps (1%) configura service fee do pool', async () => {
-            await transact(swapSession, 'bingo.swap', 'setpoolfee', {
+            await transact(swapSession, 'bingogameswp', 'setpoolfee', {
                 pool_id:         poolId,
                 service_fee_bps: 100,
             });
@@ -527,19 +527,19 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             const SWAP_QTY = '100.0000 WAX';
             const expectedFee = Math.floor(SWAP_WAX * 100 / 10000); // 1% = 10000 units = 1 WAX
 
-            // Saldo WAX da treasury (bingo.game) antes do swap
-            const treasuryBefore = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            // Saldo WAX da treasury (bingogamectr) antes do swap
+            const treasuryBefore = await getTokenBalance('eosio.token', 'bingogamectr', 'WAX');
             const poolBefore = await getPool(poolId);
             const k0 = Number(poolBefore!.reserve_a) * Number(poolBefore!.reserve_b);
 
             await transact(playerSession, 'eosio.token', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: SWAP_QTY,
                 memo:     `swap,${poolId},0,jogador1`,
             });
 
-            const treasuryAfter = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            const treasuryAfter = await getTokenBalance('eosio.token', 'bingogamectr', 'WAX');
             // Treasury deve ter recebido exatamente a service fee
             expect(treasuryAfter - treasuryBefore).toBeCloseTo(expectedFee, -2);
 
@@ -555,7 +555,7 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
         });
 
         it('setpoolfee 0 desativa service fee (campanha fee-zero)', async () => {
-            await transact(swapSession, 'bingo.swap', 'setpoolfee', {
+            await transact(swapSession, 'bingogameswp', 'setpoolfee', {
                 pool_id:         poolId,
                 service_fee_bps: 0,
             });
@@ -563,14 +563,14 @@ describe('Suite 9 — bingo.swap: DEX AMM x*y=k (ADR-018)', () => {
             expect(pool!.service_fee_bps).toBe(0);
 
             // Swap sem service fee: treasury não recebe nada a mais
-            const treasuryBefore = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            const treasuryBefore = await getTokenBalance('eosio.token', 'bingogamectr', 'WAX');
             await transact(playerSession, 'eosio.token', 'transfer', {
                 from:     'jogador1',
-                to:       'bingo.swap',
+                to:       'bingogameswp',
                 quantity: '10.0000 WAX',
                 memo:     `swap,${poolId},0,jogador1`,
             });
-            const treasuryAfter = await getTokenBalance('eosio.token', 'bingo.game', 'WAX');
+            const treasuryAfter = await getTokenBalance('eosio.token', 'bingogamectr', 'WAX');
             expect(treasuryAfter).toBe(treasuryBefore); // nenhuma fee transferida
         });
     });

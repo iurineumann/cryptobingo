@@ -39,7 +39,7 @@ import { executeCloseGame }                                          from './blo
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
 
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingo.game';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
 // Pausa visual entre o reveal da golden ball e o anúncio de vencedores
 const GOLDEN_BALL_PAUSE_MS = parseInt(process.env.GOLDEN_BALL_PAUSE_MS ?? '3000', 10);

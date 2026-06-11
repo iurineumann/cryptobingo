@@ -37,7 +37,7 @@ primeira chamada (`status = archived`), bloqueando o pagamento de múltiplos ven
 **Solução:**
 - `claimwin` aceita `drawn | paying`. Na **primeira** chamada (`drawn`), transiciona para `paying`.
 - Novo estado `paying` na FSM: `drawn → paying → archived`.
-- Nova action `closegame(game_id)` (auth: `microservice`): `paying | drawn → archived`.
+- Nova action `closegame(game_id)` (auth: `bingogamesvc`): `paying | drawn → archived`.
   O worker chama `closegame` após todos os `claimwin` do lote.
 - `abortgame` passa a aceitar também `paying` (fail-safe após payout parcial).
 
@@ -110,7 +110,7 @@ Campos adicionados ao **parâmetro** de `claimwin`:
 - O multiplicador só se aplica a tickets cujo **padrão vencedor inclua** o bit da bola dourada.
   Tickets sem a bola dourada no padrão vencedor recebem o payout normal (multiplicador = 1).
 - **On-chain:** `claimwin` recebe `golden_multiplier`; se `> 1`, multiplica o payout antes
-  de creditar. Nenhuma lógica de tabela/derivação no contrato (confia no microservice).
+  de creditar. Nenhuma lógica de tabela/derivação no contrato (confia no bingogamesvc).
 
 **Fase de avaliação:**
 
@@ -150,7 +150,7 @@ MULTI_MATCH requer:
   deixa o jogo em `paying` indefinidamente. Mitigação: worker verifica e corrige via polling.
 - Modo FIRST_FULL com varredura incremental O(n_tickets × n_balls) é lento para salas com
   muitos tickets; mitigar com inverted index (já implementado no Redis).
-- `golden_multiplier` não é verificado on-chain (confia no microservice) — risco de bug
+- `golden_multiplier` não é verificado on-chain (confia no bingogamesvc) — risco de bug
   off-chain super/sub pagar. Mitigação: testes de integração com mock de entropia.
 
 ---

@@ -5,18 +5,40 @@
 //   2. Usuário visualiza, remove ou adiciona mais cartelas (preview)
 //   3. Submete buytickets() para cada grupo de preço na confirmação
 //
-// Se um grupo de tickets exceder BATCH_SIZE (50), o hook divide
-// automaticamente em múltiplas chamadas de geração + on-chain.
+// Quando swapAction fornecida (ADR-021), a transação inclui 3 ações atômicas:
+//   transfer user→bingogameswp (swap)  →  transfer user→bingogamectr (deposit)  →  buytickets
 //
-// Ref: ADR-001, SPEC.md §2.1
+// Ref: ADR-001, ADR-021, SPEC.md §2.1
 
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { generateSignedTickets, type SignedTicket } from '../services/api';
 
-const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingo.game';
+const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
+const SWAP_ACCOUNT     = import.meta.env.VITE_SWAP_CONTRACT    ?? 'bingogameswp';
 const BATCH_SIZE       = 50;
+
+/**
+ * Quando o usuário paga com moeda alternativa (ADR-021), este bloco descreve
+ * as duas actions extras que precedem `buytickets`:
+ *   1. transfer user → bingogameswp  (executa o swap)
+ *   2. transfer user → bingogamectr  (deposita o token da sala para compra)
+ */
+export interface SwapAction {
+    /** Contrato do token de origem (ex: "bingogametkn") */
+    fromContract:  string;
+    /** Quantidade total a enviar ao swap com fees (ex: "123.4567 BINGO") */
+    amountIn:      string;
+    /** min_out com margem de slippage 0.5% (unidades mínimas como string) */
+    minOut:        string;
+    /** pool_id do bingogameswp */
+    poolId:        string;
+    /** Contrato do token de destino (ex: "eosio.token") */
+    toContract:    string;
+    /** Quantidade exata a depositar no bingogamectr (ex: "10.00000000 WAX") */
+    amountOut:     string;
+}
 
 export interface PurchaseGroup {
     tickets: SignedTicket[];
@@ -35,41 +57,75 @@ export interface UseTicketPurchaseReturn {
     lastPurchase: PurchaseResult | null;
     /** Gera N cartelas assinadas (para preview). Lida com batching interno. */
     generateForPreview: (gameId: string, count: number) => Promise<SignedTicket[]>;
-    /** Submete um ou mais grupos ao contrato. Cada grupo vira uma tx separada. */
-    purchaseTickets: (session: Session, gameId: string, groups: PurchaseGroup[]) => Promise<PurchaseResult | null>;
+    /**
+     * Submete um ou mais grupos ao contrato. Cada grupo vira uma tx separada.
+     * swapAction: quando fornecida, prefixa a tx com swap+deposit antes do buytickets.
+     */
+    purchaseTickets: (
+        session:    Session,
+        gameId:     string,
+        groups:     PurchaseGroup[],
+        swapAction?: SwapAction,
+    ) => Promise<PurchaseResult | null>;
     clearError: () => void;
 }
 
 async function submitBatch(
-    session: Session,
-    gameId: string,
-    tickets: SignedTicket[],
+    session:        Session,
+    gameId:         string,
+    tickets:        SignedTicket[],
     requestedPrice: { quantity: string; contract: string },
+    swapAction?:    SwapAction,
 ): Promise<string> {
     const matrices   = tickets.map(t => t.matrix);
     const signatures = tickets.map(t => t.signature);
 
-    console.log(`📡 [Purchase] Submetendo buytickets() para ${tickets.length} cartela(s)...`);
+    const buyAction = {
+        account:       CONTRACT_ACCOUNT,
+        name:          'buytickets',
+        authorization: [session.permissionLevel],
+        data: {
+            buyer:           String(session.actor),
+            game_id:         gameId,
+            matrices,
+            signatures,
+            nft_id:          0,
+            requested_price: requestedPrice,
+        },
+    };
 
-    const result = await session.transact(
-        {
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'buytickets',
+    // Fluxo swap: 3 ações atômicas — swap + deposit + buytickets
+    const actions = swapAction
+        ? [
+            {
+                account:       swapAction.fromContract,
+                name:          'transfer',
                 authorization: [session.permissionLevel],
                 data: {
-                    buyer:           String(session.actor),
-                    game_id:         gameId,
-                    matrices,
-                    signatures,
-                    nft_id:          0,
-                    requested_price: requestedPrice,
+                    from:     String(session.actor),
+                    to:       SWAP_ACCOUNT,
+                    quantity: swapAction.amountIn,
+                    memo:     `swap,${swapAction.poolId},${swapAction.minOut},${String(session.actor)}`,
                 },
-            }],
-        },
-        { broadcast: true },
-    );
+            },
+            {
+                account:       swapAction.toContract,
+                name:          'transfer',
+                authorization: [session.permissionLevel],
+                data: {
+                    from:     String(session.actor),
+                    to:       CONTRACT_ACCOUNT,
+                    quantity: swapAction.amountOut,
+                    memo:     'deposit',
+                },
+            },
+            buyAction,
+        ]
+        : [buyAction];
 
+    console.log(`📡 [Purchase] Submetendo ${swapAction ? 'swap+deposit+' : ''}buytickets() para ${tickets.length} cartela(s)...`);
+
+    const result = await session.transact({ actions }, { broadcast: true });
     return result.response?.transaction_id ?? 'pending';
 }
 
@@ -97,9 +153,10 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
     }, []);
 
     const purchaseTickets = useCallback(async (
-        session: Session,
-        gameId: string,
-        groups: PurchaseGroup[],
+        session:     Session,
+        gameId:      string,
+        groups:      PurchaseGroup[],
+        swapAction?: SwapAction,
     ): Promise<PurchaseResult | null> => {
 
         setIsPurchasing(true);
@@ -119,11 +176,13 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
                 while (remaining > 0) {
                     const chunkSize = Math.min(remaining, BATCH_SIZE);
                     const chunk = group.tickets.slice(offset, offset + chunkSize);
-                    const txId = await submitBatch(session, gameId, chunk, price);
+                    // swapAction só é embutido no primeiro batch; demais são pagamentos normais
+                    const swap = offset === 0 ? swapAction : undefined;
+                    const txId = await submitBatch(session, gameId, chunk, price, swap);
                     lastTxId = txId;
 
                     allTickets.push(...chunk);
-                    offset   += chunkSize;
+                    offset    += chunkSize;
                     remaining -= chunkSize;
                 }
             }
@@ -143,10 +202,12 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
             const raw = err instanceof Error ? err.message : String(err);
             const message = raw.includes('overdrawn balance')
                 ? t('buy_ticket.error_overdrawn')
-                : raw.includes('funding')
+                : raw.includes('Game is not in FUNDING')
                 ? t('buy_ticket.error_funding_ended')
-                : raw.includes('assertion failure')
+                : raw.includes('assert_recover_key')
                 ? t('buy_ticket.error_invalid_signature')
+                : raw.includes('min_out')
+                ? t('buy_ticket.error_slippage')
                 : t('buy_ticket.error_generic', { raw });
 
             console.error('[Purchase] Falha:', err);

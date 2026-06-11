@@ -1,266 +1,116 @@
-# AGENTS.md — Agentes Especializados do CryptoBingo
+# AGENTS.md — Agents Revisores do CryptoBingo
 
-> Definição dos subagentes (subagent_type) para o ecossistema.
-> Cada agente possui trigger, contexto, ferramentas e regras específicas.
-> Baseado no MASTER-PROMPT.md (Célula de Engenharia de Elite multi-papel).
-
----
-
-## Agente: `smart-contract-engineer`
-
-**Papel:** Engenheiro de Smart Contracts C++ (EOSIO CDT)
-
-**Trigger:** Arquivos em `contracts/` alterados ou necessidade de ação on-chain
-
-**Contexto:**
-- `contracts/bingo/include/bingo.hpp` — tabelas e interfaces
-- `contracts/bingo/src/bingo.cpp` — implementação do core
-- `contracts/bingo/src/orng_mock.cpp` — mock do oráculo
-- `contracts/bingo/bingo.abi`, `bingo.wasm` — artifacts compilados
-- `docs/SPEC.md §1-2` — especificação de dados on-chain e ABI
-- `docs/adr/ADR-001` — assinatura contextual
-- `docs/adr/ADR-004` — bitmask dinâmico (patterns/gametypes)
-- `docs/adr/ADR-005` — fixed-odds treasury
-
-**Ferramentas:** Glob `contracts/`, grep C++, bash (CDT, cmake, dune-node)
-
-**Regras:**
-1. Toda ação on-chain deve ter Ricardian Contract correspondente
-2. Assinaturas ECDSA devem seguir ADR-001 (SHA256(matrix + game_id + account_name))
-3. FSM deve ser estritamente linear: `funding → locked → drawing → drawn → archived`, com `aborted` como fail-safe
-4. `claimwin` deve usar Max Weight Payout (ADR-005): apenas o padrão de maior weight é pago
-5. Custo de CPU deve ser < 5ms por ação; usar `extended_asset` para proteção multimoeda
-6. Sempre compilar com CDT e validar ABI antes de entregar
-7. `Tables` devem usar escopo adequado (games: _self, tickets: game_id, balances: account_name)
+> Agents de revisão pré-PR (`subagent_type` no Agent tool).
+> São especializados por camada: leem arquivos reais, identificam bugs, inconsistências de domínio
+> e violações de invariantes. Não editam código — relatam o que está errado.
+>
+> Ao tocar uma camada, use a **skill** correspondente para desenvolver e delegue a revisão
+> ao **agent** correspondente antes do PR. Ver tabela completa em `CLAUDE.md`.
 
 ---
 
-## Agente: `worker-engineer`
+## Agent: `cryptobingo-reviewer`
 
-**Papel:** Engenheiro do Game Loop Worker (Node.js/TypeScript)
+**Papel:** Revisor cross-cutting do domínio — contrato C++, economia on-chain, invariantes de negócio
 
-**Trigger:** Arquivos em `apps/worker-game-loop/` alterados
+**Quando usar:** Sempre que o contrato C++ for alterado. Também útil como segunda opinião em mudanças
+de worker ou API que tocam lógica on-chain (pesos, payouts, FSM, combinações).
 
-**Contexto:**
-- `apps/worker-game-loop/src/services/rabbitmq.ts` — consumidor de fila
-- `apps/worker-game-loop/src/services/blockchain.ts` — transações WharfKit
-- `apps/worker-game-loop/src/services/evaluator.ts` — motor de bitmasking
-- `apps/worker-game-loop/src/index.ts` — entry point
-- `packages/shared-types/src/index.ts` — tipos compartilhados
-- `packages/blockchain-core/src/client.ts` — cliente RPC Antelope
-- `docs/SPEC.md §3-4` — motor de resolução e eventos
-- `docs/asyncapi.yaml` — contratos de eventos
+**Escopo de revisão:**
+- `contracts/bingo/include/bingo.hpp` + `src/bingo.cpp` + `bingo.abi`
+- `contracts/swap/` (bingogameswp)
+- Invariantes de domínio: `max_weight` (ADR-005), `binary_extension` em migrações (ADR-016), pesos em hundredths, FREE SPACE bit 12, FSM estritamente linear
+- Autenticação on-chain: `require_auth(get_self())` (admin) vs `require_auth("bingogamesvc"_n)` (jogo)
+- Validação de pesos on-chain (anti-inflação de prêmio)
+- ABI manual vs ABI gerado (nunca usar bingo_generated.abi para deploy)
 
-**Ferramentas:** Glob `apps/worker-game-loop/`, grep TS/JSON, bash (pnpm, ts-node-dev)
-
-**Regras:**
-1. `prefetch(1)` no RabbitMQ para at-least-once delivery sem perda
-2. NACK sem requeue para mensagens malformadas; NACK com requeue para erros transitórios
-3. `claimwin` deve varrer TODOS os tickets do jogo (`findAllWinners` paginado)
-4. Evaluator deve usar exclusivamente Bitwise AND O(1) (SPEC.md §3.3)
-5. Bit 12 da máscara inicia setado como FREE SPACE (`0x00001000`)
-6. Logs estruturados com emoji de contexto para rastreabilidade
-7. Reconexão automática ao RabbitMQ em caso de queda do broker
+**Skill complementar:** `wax-contract`
 
 ---
 
-## Agente: `backend-engineer`
+## Agent: `worker-reviewer`
 
-**Papel:** Engenheiro de API Gateway (Express/Node.js/TypeScript)
+**Papel:** Revisor do worker de resolução de jogos e payouts
 
-**Trigger:** Arquivos em `apps/api-gateway/` alterados ou novas rotas
+**Quando usar:** Mudanças em `apps/worker-game-loop/` — evaluator, orchestrator, draw modes, payouts, RabbitMQ, Redis cache.
 
-**Contexto:**
-- `apps/api-gateway/src/index.ts` — entry point e rotas
-- `apps/api-gateway/src/controllers/` — handlers
-- `apps/api-gateway/src/models/` — Mongoose schemas
-- `apps/api-gateway/src/database/` — conexões PG e Mongo
-- `packages/shared-types/src/index.ts` — tipos
-- `docs/openapi.yaml` — especificação REST
-- `docs/adr/ADR-002` — arquitetura off-chain e persistência poliglota
+**Escopo de revisão:**
+- `apps/worker-game-loop/src/services/evaluator.ts` — bitmasking O(1), `findAllWinners` paginado, draw modes
+- `apps/worker-game-loop/src/services/gameOrchestrator.ts` — FSM, auto-advance
+- `apps/worker-game-loop/src/services/rabbitmq.ts` — at-least-once delivery, DLQ, prefetch(1)
+- `apps/worker-game-loop/src/services/dropWorker.ts` — 3 fases, Fisher-Yates
+- `apps/worker-game-loop/src/services/patternCache.ts` — Redis TTL, fail-open
+- Conformidade com `pricePaid` (ADR-010) e `max_weight` (ADR-005)
+- Cobertura de testes Jest
 
-**Ferramentas:** Glob `apps/api-gateway/`, grep TS, bash (pnpm, curl para testes)
-
-**Regras:**
-1. **Spec-Driven:** toda rota deve existir no `openapi.yaml` antes de ser implementada
-2. **Zero Shadow APIs:** proibido criar rotas não documentadas
-3. Tipos devem espelhar exatamente o `shared-types` e o `bingo.abi`
-4. JWT com assinatura de carteira (desafio criptográfico) para autenticação
-5. Rate limiting obrigatório em rotas de produção
-6. Geração de cartelas deve usar ECDSA com `MICROSERVICE_PRIVATE_KEY`
-7. Tratamento de erros com status codes padronizados (RFC 7807 Problem Details)
+**Skill complementar:** `worker-game-resolution`
 
 ---
 
-## Agente: `frontend-engineer`
+## Agent: `api-reviewer`
 
-**Papel:** Engenheiro Frontend (React/Vite/TypeScript)
+**Papel:** Revisor do API Gateway (Express, JWT/RBAC, on-chain, MongoDB, PostgreSQL, cache)
 
-**Trigger:** Arquivos em `apps/frontend/` alterados
+**Quando usar:** Mudanças em `apps/api-gateway/` — controllers, rotas, auth, middleware, specs.
 
-**Contexto:**
-- `apps/frontend/src/App.tsx` — componente raiz
-- `apps/frontend/src/components/Lobby.tsx` — lobby do jogo
-- `apps/frontend/src/services/wharfkit.ts` — integração WharfKit
-- `apps/frontend/src/services/api.ts` — chamadas REST
-- `apps/frontend/src/i18n.ts` — internacionalização
-- `apps/frontend/src/locales/` — arquivos de tradução
-- `packages/shared-types` — tipos compartilhados
-- `docs/asyncapi.yaml` — eventos WebSocket
+**Escopo de revisão:**
+- Spec-Driven: toda rota existe em `docs/openapi.yaml` antes da implementação
+- JWT challenge-response (ADR-006), RBAC por role
+- Rate limiting, Helmet, CORS restrito
+- Controllers: auth, tickets (ECDSA ADR-001), rooms, swap, vault, statistics, monteCarlo
+- Tipos espelham `@cryptobingo/shared-types` e o ABI on-chain
+- Cobertura de testes Jest (unit + security)
 
-**Ferramentas:** Glob `apps/frontend/`, grep TSX/CSS, bash (pnpm, vite)
-
-**Regras:**
-1. Chaves privadas DEV-ONLY com import dinâmico + guard `import.meta.env.DEV` (tree-shaken em produção)
-2. NUNCA hardcodear chaves, actors ou chain IDs
-3. i18next para todo texto visível (suporte a pt-BR, en-US, zh-CN)
-4. Lobby lê dados direto da blockchain (não depende do backend para tabelas on-chain)
-5. Tratamento de loading, erro e vazio em todos os componentes
-6. WharfKit SessionKit para login (Anchor, Cloud Wallet)
-7. Polling de 10s para atualização do lobby (futuramente substituído por WebSocket)
+**Skill complementar:** `api-endpoint`
 
 ---
 
-## Agente: `devops-engineer`
+## Agent: `frontend-reviewer`
 
-**Papel:** Engenheiro de DevOps e Infraestrutura
+**Papel:** Revisor do frontend React (i18n, design system, Wharfkit, serviços)
 
-**Trigger:** Arquivos em `infra/`, `docker-compose.yml`, ou CI/CD
+**Quando usar:** Mudanças em `apps/frontend/` ou `apps/swap-ui/` — componentes, hooks, serviços, locales, Cypress fixtures.
 
-**Contexto:**
-- `docker-compose.yml` — infraestrutura local completa
-- `infra/prometheus/prometheus.yml` — configuração de métricas
-- `turbo.json` — build system
-- `pnpm-workspace.yaml` — workspaces
-- `docs/architecture.md` — topologia de rede
-- `docs/adr/ADR-002` — decisões de infraestrutura
+**Escopo de revisão:**
+- i18n: 3 locales (pt-BR, en-US, zh-CN); nenhum texto hardcoded
+- Seletores Cypress: somente `data-testid` (nunca texto i18n)
+- WharfKit SessionKit: sem custódia de chaves, `WalletPluginPrivateKey` apenas em `DEV`
+- `swapService.ts`: executeSwap/addLiquidity/removeLiquidity via `session.transact()`
+- Design system Tailwind v4: variáveis CSS em `globals.design.css`
+- Cobertura Vitest
 
-**Ferramentas:** Glob `infra/`, `*.yml`, `*.yaml`, `Dockerfile`, bash (docker)
-
-**Regras:**
-1. Healthchecks obrigatórios em todos os serviços
-2. Volumes persistentes para PostgreSQL, MongoDB, RabbitMQ, Prometheus, Grafana
-3. Rede compartilhada `bingo_net` entre todos os containers
-4. .env.infra para credenciais locais (nunca committed)
-5. Prometheus + Grafana para observabilidade desde o dia 1
-6. Container names com prefixo `bingo_` para organização
+**Skill complementar:** `frontend-feature`
 
 ---
 
-## Agente: `docs-architect`
+## Agent: `e2e-reviewer`
 
-**Papel:** Arquiteto de Documentação e ADRs
+**Papel:** Revisor dos testes E2E de UI (Cypress, Tier 1 / Tier 2)
 
-**Trigger:** Decisão arquitetural, nova rota, novo evento, alteração de schema
+**Quando usar:** Mudanças em `apps/e2e-ui/` ou alterações de `data-testid` no frontend.
 
-**Contexto:**
-- `docs/MASTER-PROMPT.md` — arquitetura cognitiva
-- `docs/PROJECT-DETAILS.md` — contexto do projeto
-- `docs/SPEC.md` — especificação mestre
-- `docs/adr/` — todos os ADRs existentes
-- `docs/openapi.yaml` — REST API contract
-- `docs/asyncapi.yaml` — eventos contract
-- `docs/architecture.md` — diagramas Mermaid
-- `docs/COMPLIANCE.md` — conformidade legal
-- `docs/governance/` — todos os arquivos de governança
+**Escopo de revisão:**
+- Tier 1 (PR-gate, determinístico): `cy.intercept` + fixtures; sem WAX real; `cy.devLogin(role)`
+- Tier 2 (nightly/manual): stack completo real
+- Estratégia em camadas (ADR-017): seletores só por `data-testid`
+- CI gating: Tier 1 obrigatório no pipeline; Tier 2 apenas nightly
+- Fixtures alinhadas com contratos OpenAPI/AsyncAPI
 
-**Ferramentas:** Glob `docs/`, grep MD/YAML, read
-
-**Regras:**
-1. **Spec-Driven:** código nunca antecede o contrato. OpenAPI/AsyncAPI/SPEC.md são a fonte da verdade
-2. Toda decisão arquitetural de alto impacto deve gerar um ADR em `docs/adr/ADR-NNN-titulo.md`
-3. ADRs devem ter: Contexto, Decisão, Consequências, Status, Referências
-4. Diagramas Mermaid obrigatórios para fluxos de estado e sequência
-5. `TRACE.md` deve ser atualizado com RCA de bugs e sessões de depuração
-6. `TASKS.md` deve refletir o backlog fiel aos épicos
-7. Ao alterar ABI ou schema, `shared-types` deve ser atualizado na mesma iteração
-8. Contratos Ricardianos devem ser mantidos para cada ação do smart contract
+**Skill complementar:** `e2e-ui-cypress`
 
 ---
 
-## Agente: `test-engineer`
+## Agent: `platform-reviewer`
 
-**Papel:** Engenheiro de Qualidade e Testes
+**Papel:** Revisor de harness E2E on-chain, DevOps/infra e economia (Monte Carlo RTP/GGR)
 
-**Trigger:** Arquivos em `apps/harness/` ou criação/edição de testes
+**Quando usar:** Mudanças em `apps/harness/`, `scripts/`, `init_dev_env.sh`, `infra/k8s/`, `docker-compose.yml`, ou simulação Monte Carlo.
 
-**Contexto:**
-- `apps/harness/scripts/bootstrap.ts` — setup do ambiente
-- `apps/harness/tests/fsm.test.ts` — testes de FSM
-- `turbo.json` — tarefa `test`
-- `docs/SPEC.md` — regras de negócio
-- `docs/adr/ADR-004/005` — regras de bitmask e economia
+**Escopo de revisão:**
+- Harness: testes reais contra nodeos + oracle daemon; oracle precisa estar vivo durante jest
+- `init_dev_env.sh`: criação de contas (bingogamectr/bingogametkn/bingogameswp/bingogamesvc), deploy, env vars, token distribution
+- K8s: namespace, RBAC, NetworkPolicies, securityContext, HPA, PDB, Ingress TLS, ServiceMonitor
+- Monte Carlo: `monteCarloController.ts`; RTP alvo 85% / GGR 15%; pesos em hundredths
+- `orng.abi` mantido à mão (bug CDT: tabela `reqs` ausente no ABI gerado)
 
-**Ferramentas:** Glob `apps/harness/`, `*.test.ts`, `*.spec.ts`, `jest.config.*`, bash (pnpm test)
-
-**Regras:**
-1. Testes de FSM devem cobrir TODOS os estados e transições (funding → locked → drawing → drawn → archived → aborted)
-2. Testes unitários do evaluator (`checkWinPattern`, `applyDrawnBalls`) com 100% de cobertura dos 12 padrões
-3. Bootstrap deve ser executado antes dos testes (deploy de contratos + tokens)
-4. Testes de claimwin devem validar RTP 85% e sponsor multidrop
-5. Simulação Monte Carlo no harness para validar sustentabilidade dos pesos (ADR-005)
-6. Testes de segurança: replay attack, saldo insuficiente, estado inválido
-
----
-
-## Sessão Atual — Rounds 3–5 (Jun 2026)
-
-### Problemas Resolvidos
-
-1. **Assinatura inválida (`buytickets`)** — raiz: ABI do contrato faltava o campo `requested_price: extended_asset` no struct `buytickets` e a `config` table não estava exposta. Wharfkit serializava 5 campos, o datastream do CDT tentava ler 6 e falhava com `read`, que o frontend mapeava como "Assinatura inválida". **Fix:** adicionado `extended_asset` struct, campo `requested_price`, e `config` table ao ABI; redeploy via `cleos set contract`. ABI agora espelha exatamente o C++ (`bingo.cpp` linha 402 com 6 params).
-
-2. **Overflow/ordenação bolas** — `GameRoom.tsx`: `drawnBalls.map` → `[...drawnBalls].reverse().map` (bola mais recente à esquerda, mais antiga à direita). Removido `useEffect` de auto-scroll. `globals.design.css`: `.gr-sequence` de `overflow-x: auto` → `flex-wrap: wrap`.
-
-3. **Timers de estado** — Lobby e GameRoom agora exibem contagem regressiva para cada transição: funding (`🔒 Xs`), locked/drawing (`🎲 Sorteando`). GameRoom navbar mostra badge de status (🟢 funding) + timer ao lado do nome da sala. Traduções adicionadas nos três idiomas.
-
-4. **AUTO_LOCK_SEC 30 → 60** — alterado em Lobby.tsx, GameRoom.tsx, e worker-game-loop (`rabbitmq.ts`).
-
-5. **Clipping mini-balls** — `.gr-stage` com `overflow: hidden` restaurado (impedia overlap com cartelas). `.gr-stage-body` com `overflow-y: auto; min-height: 0` para scroll interno sem vazar.
-
-6. **Layout estágio/cartelas** — grid alterado de `minmax(0, 0.85fr) / 1.25fr` para `auto / 1fr`. `.gr-stage` com `max-height: 55vh` (compact: 45vh). Cartelas ocupam resto com scroll.
-
-7. **Ordenação de cartelas** — `sortedTickets` (useMemo) ordena por células marcadas descendente, recalculado a cada bola (`drawnSet` como dependência).
-
-8. **Próxima partida** — `loadGame` busca `current_game_id` da sala via API. Banner de game-ended mostra "Nova partida disponível! Vendas encerram em Xs" com botão "Ir para nova partida".
-
-9. **Slow-reveal no Lobby** — `drawn` e `archived` (dentro da janela de `AUTO_LOCK_SEC × 1000 + 75 × 3000ms`) são exibidos como `drawing` — badge 🎲 "Sorteio ao vivo", timer, e botão Watch corretos. A janela impede que o jogo suma do card enquanto o slow-reveal ainda está rodando.
-
-### Pendências / Next Steps
-
-- Testar compra de tickets via frontend com conta jogador1 para confirmar que "Assinatura inválida" não ocorre mais
-- Verificar se o worker auto-advance respeita o novo `AUTO_LOCK_DELAY_SEC = 60`
-
-### Chaves e Config
-
-- `signer_key` on-chain: `EOS8Ke4HGnKjQV26sooEdYh5KnUsPMn88FY8kvod6xLXTGJN5TkXf` (corresponde a `BINGO_GAME_PUB` / `MICROSERVICE_PRIVATE_KEY`)
-- Container `bingo_waxdev` faz bind mount de `contracts/` em `/app/contracts:ro`
-- ABI redeploy: `cleos set contract bingo.game /app/contracts/bingo -p bingo.game@active`
-
-### Arquivos Relevantes
-
-- `contracts/bingo/bingo.abi` — ABI corrigido (6 campos em `buytickets`, `config` table adicionada)
-- `contracts/bingo/src/bingo.cpp:402` — assinatura `buytickets` com 6 params
-- `apps/frontend/src/components/Lobby.tsx` — slow-reveal status mapping, room cards, timers
-- `apps/frontend/src/components/GameRoom.tsx` — ball display reverso, sortedTickets, next-game banner, header badge+timer, pattern fetching, winnerMap, sidebar pattern list, game ID display
-- `apps/frontend/src/styles/globals.design.css` — grid layout, stage/tickets overflow, pattern sidebar scroll
-- `apps/frontend/src/locales/en.json`, `pt.json`, `zh.json` — i18n keys `pattern_completed`
-- `apps/worker-game-loop/src/services/rabbitmq.ts:428` — `AUTO_LOCK_DELAY_SEC` default `'60'`
-
----
-
-## Sessão Atual — Rounds 6 (Jul 2026)
-
-### Problemas Resolvidos
-
-10. **Padrões de vitória (patterns) não apareciam no GameRoom** — raiz: `EnrichedRoom` não inclui `patterns`, então `(room as any)?.patterns` retornava sempre `[]`. Com patterns vazio, o `TicketCard` não detectava células vencedoras, o sidebar mostrava "Nenhum padrão vencedor ainda", e os badges de padrão no footer nunca renderizavam. **Fix:** `fetchGamePatterns()` busca patterns diretamente da blockchain via RPC (`gametypes` → `patterns` tables), converte `uint32 mask` em `cells[25]` via `maskToCells()`, e armazena em estado `gamePatterns`. Disparado durante `loadGame` quando `gametype_id` está disponível. `winPattern` e `prize` agora são derivados do WebSocket `winners` via `winnerMap` + `patternByName`.
-
-11. **Ordenação de cartelas por proximidade a padrões** — `sortedTickets` agora considera: vencedores primeiro (ordenados por prêmio decrescente), depois por `computeProximityScore` (markedRatio × prizeValue somado sobre todos os patterns), e finalmente por células marcadas.
-
-12. **Patterns sidebar sem scroll vertical** — `ResizeObserver` no `stageRef` sincroniza `maxHeight` do `.gr-patterns` com a altura do `.gr-stage`. `.gr-patterns-list` (com `flex: 1; overflow-y: auto`) scrolla quando o conteúdo excede. `.gr-patterns` com `overflow: hidden`. Lista ordenada por número de cartelas que completaram cada padrão (decrescente). Padrões completados exibem `"Completado (X)"` com contagem de cartelas.
-
-13. **Exibição do gameId na navbar** — chip `#gameId` exibido no breadcrumb ao lado do nome da sala quando `game` está carregado.
-
-### Pendências / Next Steps
-
-- Verificar se patterns carregam corretamente quando o gametype tem combinations (all_of / any_of / n_of_type)
-- Avaliar cache de patterns para evitar refetch a cada 15s poll
+**Skills complementares:** `harness-e2e`, `weights-calibration`

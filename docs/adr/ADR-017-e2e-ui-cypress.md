@@ -65,7 +65,7 @@ são fallback secundário; texto traduzido é proibido como seletor.
 
 - **REST do gateway** (rooms, gametypes, vault, sponsor) passa por `services/api.ts` → fácil de
   `cy.intercept`. Cobre admin/sponsor CRÍTICOS de forma determinística.
-- **`session.transact()` direto** (NftAdmin→`atomicassets`, TokenAdmin→`bingo.token`) não é stubável
+- **`session.transact()` direto** (NftAdmin→`atomicassets`, TokenAdmin→`bingogametkn`) não é stubável
   de forma confiável → tratado como **SMOKE** no Tier 1 (só listagem) e exercido de verdade no
   **Tier 2** (`admin-onchain`).
 

@@ -128,10 +128,10 @@ on-chain** da origem de cada ativo. Isso é necessário porque:
 Todos os ativos destinados a drops residem em uma **conta custodiante dedicada**.
 Duas opções:
 
-- **Opção A (simples):** A própria conta do contrato (`bingo.game`) atua como custodiante.
+- **Opção A (simples):** A própria conta do contrato (`bingogamectr`) atua como custodiante.
   Os depósitos caem no `on_notify` de `eosio.token` e `atomicassets`.
 - **Opção B (segregação):** Uma conta separada `bingo.vault` (ou `bingo.drop`)
-  é criada exclusivamente para custodiar ativos de drops. O contrato `bingo.game`
+  é criada exclusivamente para custodiar ativos de drops. O contrato `bingogamectr`
   tem permissão para transferi-los dali para jogadores.
 
 **Decisão:** Opção A (simples) para v1. A segregação pode ser implementada futuramente
@@ -180,12 +180,12 @@ Registra a alocação de ativos a salas específicas.
 
 #### 6.5. Fluxo de Depósito
 
-1. Sponsor envia tokens para `bingo.game` com memo `"drop:{room_id}:{chance_pct}:{max_per_game}"`
+1. Sponsor envia tokens para `bingogamectr` com memo `"drop:{room_id}:{chance_pct}:{max_per_game}"`
    (ex: `"drop:1:10:5"` = sala 1, 10% de chance, max 5 drops por partida)
 2. O `on_notify` reconhece o prefixo `"drop:"` e:
    a. Cria registro em `drop_deposits`
    b. Se `room_id` presente, cria registro em `drop_allocations`
-3. Para NFTs: o sponsor faz `transfer` do NFT para `bingo.game` com o mesmo formato de memo
+3. Para NFTs: o sponsor faz `transfer` do NFT para `bingogamectr` com o mesmo formato de memo
 
 #### 6.6. Fluxo de Reivindicação (Refund)
 
@@ -203,8 +203,8 @@ Registra a alocação de ativos a salas específicas.
    b. Para cada alocação, sorteia se haverá drop (baseado em `drop_chance_pct`)
    c. Se sorteado, seleciona aleatoriamente um jogador que comprou cartelas na partida
    d. Executa a distribuição via `execdrop(alloc_id, winner, quantity, nft_asset_id)`:
-      - **Token:** `bingo.game` faz `transfer` para o jogador
-      - **NFT:** `bingo.game` faz `transfer` do AtomicAssets para o jogador
+      - **Token:** `bingogamectr` faz `transfer` para o jogador
+      - **NFT:** `bingogamectr` faz `transfer` do AtomicAssets para o jogador
    e. Atualiza `drops_executed++` e `quantity_distributed`; se esgotou, marca `status = exhausted`
    f. Emite evento WebSocket `chat:sponsor_drop` para o chat da sala
 

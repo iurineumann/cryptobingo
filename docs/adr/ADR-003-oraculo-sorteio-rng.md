@@ -10,7 +10,7 @@ Se o sorteio for computado num servidor centralizado (Backend/Node.js) e depois 
 
 ## Decisão
 1. **Descentralização do Sorteio (On-Chain RNG):** A geração dos números sorteados será delegada exclusivamente a um serviço de Oráculo de Aleatoriedade nativo da rede Antelope/WAX.
-2. **Integração com `orng.wax`:** O contrato oficial do jogo (`bingo.game`) interage com o contrato de sistema `orng.wax` para solicitar entropia criptográfica.
+2. **Integração com `orng.wax`:** O contrato oficial do jogo (`bingogamectr`) interage com o contrato de sistema `orng.wax` para solicitar entropia criptográfica.
 3. **Fluxo Assíncrono de Sorteio (State Machine):**
    - O Worker (via RabbitMQ) aciona a ação `startdraw(game_id)`.
    - O contrato do jogo invoca uma ação *inline* `requestrand` apontando para o oráculo, utilizando o `game_id` como `assoc_id` (identificador de associação).
