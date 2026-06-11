@@ -462,7 +462,21 @@ echo "[*] Deploy do contrato bingogamectr..."
 if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.abi" ]; then
     if cleos set contract bingogamectr "$CONTRACT_SRC_CONTAINER" -p bingogamectr@active; then
         cleos set account permission bingogamectr active --add-code -p bingogamectr@active 2>/dev/null || true
-        echo "[✓] bingogamectr deployado."
+
+        # ADR-026: permissão admin — bingogamectr@active OU bingogamesvc@active podem chamar actions operacionais
+        cleos set account permission bingogamectr admin \
+          '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"bingogamectr","permission":"active"},"weight":1},{"permission":{"actor":"bingogamesvc","permission":"active"},"weight":1}],"waits":[]}' \
+          active -p bingogamectr@active 2>/dev/null || true
+
+        # linkauth: restringe quais actions a permissão admin pode chamar (defesa em profundidade)
+        for ACTION in creategame setnftconf delnftconf addpattern delpattern \
+                      addgametype delgametype setstages setcombos \
+                      createroom activateroom pauseroom closeroom setroommeta \
+                      linkcampaign closecmpgn allocatedrop deallocdrop; do
+            cleos set action permission bingogamectr bingogamectr "$ACTION" admin \
+              -p bingogamectr@active 2>/dev/null || true
+        done
+        echo "[✓] bingogamectr deployado + permissão admin configurada (ADR-026)."
     else
         echo "[!] Aviso: deploy do bingogamectr falhou (WASM pode ter nomes inválidos)."
     fi

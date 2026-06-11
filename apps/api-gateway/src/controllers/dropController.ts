@@ -4,17 +4,18 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
 
-const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
-const MICROSERVICE_PRIV_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
-const CHAIN_ID              = process.env.CHAIN_ID!;
-const RPC_URL               = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
+const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
+const CHAIN_ID         = process.env.CHAIN_ID!;
+const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 
+// ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 function getSession(): Session {
     return new Session({
         actor:        CONTRACT_ACCOUNT,
-        permission:   'active',
+        permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
-        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_PRIV_KEY),
+        walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
     });
 }
 

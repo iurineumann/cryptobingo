@@ -74,9 +74,19 @@ read-only em `/app/contracts`. **Sempre** seguir este ciclo ao mexer no contrato
 `eosio::binary_extension<T>` no `.hpp` e tipo `T[]$` (sufixo `$`) no ABI. Sem isso, linhas antigas
 quebram com `unpack_exception` (não há action para limpar a tabela). Ex.: ADR-016 `combinations`.
 
-**Modelo de auth:** actions admin → `require_auth(get_self())` (= `bingogamectr`); actions de jogo →
-`require_auth("bingogamesvc"_n)`. O contrato **confia no worker** para avaliação (match de padrão /
-satisfação de combo) mas **valida pesos on-chain** contra `gametypes` (anti-inflação de prêmio).
+**Modelo de auth (ADR-026):**
+- `bingogamectr@active` (cold key) → somente `setconfig`, `settreasury`, `sweepggr`
+- `bingogamectr@admin` (threshold 1: `bingogamectr@active` OU `bingogamesvc@active`) →
+  actions operacionais chamadas pelos serviços: `creategame`, `addpattern/delpattern`,
+  `addgametype/delgametype`, `setstages`, `setcombos`, `setnftconf/delnftconf`,
+  `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta`,
+  `linkcampaign`, `closecmpgn`, `allocatedrop`, `deallocdrop`
+- `bingogamesvc@active` → actions FSM: `fundgame`, `lockgame`, `startdraw`, `claimwin`,
+  `claimcombo`, `claimstage`, `closegame`, `execdrop`, `abortgame`
+- **Serviços online usam apenas `MICROSERVICE_PRIVATE_KEY`** — `CONTRACT_PRIVATE_KEY` não
+  é carregada em runtime (api-gateway e worker assinam como `bingogamectr@admin` ou
+  `bingogamesvc@active` com a mesma chave do microserviço). O contrato **confia no worker**
+  para avaliação mas **valida pesos on-chain** contra `gametypes` (anti-inflação de prêmio).
 
 **Pesos** são sempre **hundredths** (100 = 1.00×; máx 25500 = 255×).
 
