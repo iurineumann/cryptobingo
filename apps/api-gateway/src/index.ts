@@ -53,6 +53,8 @@ import {
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
+import { getLeaderboardGlobal, getLeaderboardByRoom } from './controllers/leaderboardController';
+import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
 dotenv.config();
 
@@ -285,6 +287,16 @@ function registerRoutes(): void {
     app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin'), allocateDrop);
     app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin'), deallocateDrop);
     app.post('/api/v1/vault/reclaim',    playerLimiter, requireAuth, reclaimAsset);
+
+    // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────
+    app.get('/api/v1/leaderboard',                  playerLimiter, getLeaderboardGlobal);
+    app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
+
+    // ── News / Promoções (ADR-024) ────────────────────────────────────────────
+    app.get   ('/api/v1/news',        playerLimiter, listNews);
+    app.post  ('/api/v1/news',        adminLimiter,  requireAuth, requireRole('admin'), createNews);
+    app.patch ('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), updateNews);
+    app.delete('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), deleteNews);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {

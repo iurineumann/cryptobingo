@@ -12,7 +12,7 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
 }));
 jest.mock('@wharfkit/session', () => ({
     Session: jest.fn().mockImplementation(() => ({
-        permissionLevel: { actor: 'bingogamectr', permission: 'active' },
+        permissionLevel: { actor: 'bingogamectr', permission: 'admin' },
         transact: jest.fn().mockResolvedValue({ response: { transaction_id: 'mock-tx-id' } }),
     })),
 }));

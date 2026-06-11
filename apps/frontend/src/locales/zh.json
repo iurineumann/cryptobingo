@@ -744,6 +744,46 @@
     "footer_copyright": "© {{year}} CryptoBingo。保留所有权利。",
     "footer_tagline": "可证明公平 · 链上宾果"
   },
+  "leaderboard": {
+    "title_global": "全球排行榜",
+    "title_room": "房间排行榜",
+    "updated_at": "更新于 {{time}}",
+    "empty": "暂无获奖记录。",
+    "col_player": "玩家",
+    "col_total_won": "总赢得",
+    "col_games_won": "场次"
+  },
+  "faq": {
+    "title": "常见问题",
+    "subtitle": "关于CryptoBingo您需要了解的一切。",
+    "items": [
+      {
+        "question": "什么是CryptoBingo？",
+        "answer": "CryptoBingo是基于WAX区块链的链上宾果平台。每场游戏都可公开验证，奖励自动发送到您的钱包。"
+      },
+      {
+        "question": "如何游玩？",
+        "answer": "连接您的WAX钱包，选择房间，购买彩票并等待开奖。如果获胜，奖励将自动发送。"
+      },
+      {
+        "question": "抽奖公平吗？",
+        "answer": "是的。CryptoBingo使用WAX随机性预言机（orng.wax），基于RSA-SHA256，任何人都可以在链上验证其结果。"
+      },
+      {
+        "question": "可以使用哪些代币？",
+        "answer": "WAX是默认代币。房间可以接受BINGO、TLM或其他支持的代币。您也可以使用兑换功能以其他代币支付。"
+      },
+      {
+        "question": "奖励如何支付？",
+        "answer": "开奖后，智能合约自动评估所有彩票并直接将奖励转账到获奖者钱包。"
+      }
+    ]
+  },
+  "news": {
+    "title": "新闻与促销",
+    "empty": "暂无发布内容。",
+    "pinned": "置顶"
+  },
   "welcome": "欢迎来到CryptoBingo",
   "landing_lobby": "游戏大厅",
   "loading": "加载个人资料...",

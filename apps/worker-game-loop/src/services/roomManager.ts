@@ -1,7 +1,7 @@
 import { rpcClient, fetchGame } from '@cryptobingo/blockchain-core';
 import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
-import { contractSession, microserviceSession } from './blockchain';
+import { adminSession, microserviceSession } from './blockchain';
 import { connectRedis } from './redis';
 import { processRoomDrops } from './dropWorker';
 
@@ -95,11 +95,11 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
 
         // Cria o jogo (requer bingogamectr@active)
         console.log(`[RoomManager] Sala ${room.room_id}: criando game ${newGameId}...`);
-        const createResult = await contractSession.transact({
+        const createResult = await adminSession.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
                 name:          'creategame',
-                authorization: [contractSession.permissionLevel],
+                authorization: [adminSession.permissionLevel],
                 data: {
                     game_id:      newGameId,
                     ticket_price: {
