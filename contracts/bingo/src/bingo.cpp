@@ -573,7 +573,7 @@ namespace bingo {
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
-                check(nft_itr->collection_name == "cryptobingo"_n, "NFT nao pertence a colecao oficial.");
+                check(nft_itr->collection_name == "cryptobingo1"_n, "NFT nao pertence a colecao oficial.");
                 nftconfigs_table _configs(get_self(), get_self().value);
                 auto conf_itr = _configs.find(nft_itr->template_id);
                 if (conf_itr != _configs.end()) {
