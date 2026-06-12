@@ -1,0 +1,4 @@
+# Artefatos de compilação — gerados pelo init_dev_env.sh
+# Nunca commitar: binário opaco e ABI externa (pinknetworkx)
+atomicassets.wasm
+atomicassets.abi
