@@ -35,6 +35,7 @@ WALLET_NAME="devwallet"
 
 ACCOUNT_NAMES=(
     orng.wax
+    atomicassets
     bingogamectr
     alien.worlds
     bingogamesvc
@@ -631,6 +632,163 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 8f. ATOMICASSETS — Compilação, deploy e seed de dados de desenvolvimento
+#
+# Replica o contrato atomicassets da WAX mainnet (pinknetworkx) na chain local.
+# Necessário para:
+#   - onnfttransfer (on_notify bingogamectr)
+#   - buytickets com desconto NFT (leitura da tabela assets)
+#   - execdrop / reclaimasset (inline transfer para winner/sponsor)
+#
+# ABI: usa o .abi commitado no repo pinknetworkx — contrato externo, não mantemos.
+# Ref: ADR-027
+# ──────────────────────────────────────────────────────────────────────────────
+
+ATOMIC_HOST="$(pwd)/contracts/atomicassets"
+ATOMIC_CONTAINER="/app/contracts/atomicassets"
+mkdir -p "$ATOMIC_HOST"
+
+# ── 8f-1. Compila (se não houver cache) ────────────────────────────────────
+# Mesmo padrão do orng: clona em /tmp no container (volume ro), compila,
+# copia wasm+abi para o host, deploya a partir do volume montado.
+ATOMIC_FAILED=false
+if [ ! -f "$ATOMIC_HOST/atomicassets.wasm" ]; then
+    echo "[*] Clonando e compilando atomicassets (primeira execução — ~2 min)..."
+    if docker exec "$CONTAINER_NAME" bash -c "
+        cd /tmp && \
+        rm -rf atomicassets-contract && \
+        git clone --depth 1 \
+            https://github.com/pinknetworkx/atomicassets-contract.git \
+            atomicassets-contract 2>&1 && \
+        cd atomicassets-contract && \
+        cdt-cpp -abigen \
+            -I include/ \
+            src/atomicassets.cpp \
+            -o atomicassets.wasm \
+            --contract atomicassets \
+            -O2 2>&1
+    "; then
+        docker cp \
+            "$CONTAINER_NAME:/tmp/atomicassets-contract/atomicassets.wasm" \
+            "$ATOMIC_HOST/atomicassets.wasm"
+        # ABI da pinknetworkx (commitado no repo deles, não gerado por nós)
+        docker cp \
+            "$CONTAINER_NAME:/tmp/atomicassets-contract/atomicassets.abi" \
+            "$ATOMIC_HOST/atomicassets.abi" 2>/dev/null || \
+        docker cp \
+            "$CONTAINER_NAME:/tmp/atomicassets-contract/include/atomicassets.abi" \
+            "$ATOMIC_HOST/atomicassets.abi" 2>/dev/null || true
+        echo "[✓] atomicassets.wasm + .abi copiados para $ATOMIC_HOST/"
+    else
+        echo "[!] ERRO: falha na compilação do atomicassets."
+        echo "    NFT vault/drops não funcionarão neste ambiente."
+        ATOMIC_FAILED=true
+    fi
+else
+    echo "[✓] atomicassets.wasm já em cache — pulando compilação."
+fi
+
+# ── 8f-2. Deploy ────────────────────────────────────────────────────────────
+if [ "$ATOMIC_FAILED" = "false" ] && \
+   [ -f "$ATOMIC_HOST/atomicassets.wasm" ] && \
+   [ -f "$ATOMIC_HOST/atomicassets.abi" ]; then
+    echo "[*] Deploy do contrato atomicassets..."
+    if cleos set contract atomicassets "$ATOMIC_CONTAINER" \
+            atomicassets.wasm atomicassets.abi \
+            -p atomicassets@active; then
+
+        # eosio.code: necessário para inline actions (notify_accounts callbacks)
+        cleos set account permission atomicassets active \
+            --add-code -p atomicassets@active 2>/dev/null || true
+
+        # ── 8f-3. Init do contrato ──────────────────────────────────────────
+        echo "[*] Inicializando atomicassets..."
+        cleos push action atomicassets init '[]' \
+            -p atomicassets@active 2>/dev/null || true
+
+        # ── 8f-4. Seed: collection "cryptobingo1" (12 chars — restrição AtomicAssets)
+        echo "[*] Criando collection 'cryptobingo1'..."
+        cleos push action atomicassets createcol \
+            '{"author":"bingogamectr","collection_name":"cryptobingo1","allow_notify":true,"authorized_accounts":["bingogamectr"],"notify_accounts":["bingogamectr"],"market_fee":0.05,"data":[]}' \
+            -p bingogamectr@active 2>/dev/null || true
+
+        # ── 8f-4b. Pin imagens de NFT no IPFS local (se disponível) ────────
+        UTIL_IMG_CID="local-icon"
+        PRIZE_IMG_CID="local-fox"
+        if docker ps --format '{{.Names}}' | grep -q 'bingo_ipfs'; then
+            UTIL_IMG_CID=$(docker exec bingo_ipfs ipfs add -Q \
+                /export/icon.webp 2>/dev/null || echo "local-icon")
+            PRIZE_IMG_CID=$(docker exec bingo_ipfs ipfs add -Q \
+                /export/fox-mascot.png 2>/dev/null || echo "local-fox")
+            echo "[✓] Imagens pinadas: utility=$UTIL_IMG_CID prize=$PRIZE_IMG_CID"
+            echo "IPFS_NFT_UTIL_CID=$UTIL_IMG_CID"   >> .waxdev.env
+            echo "IPFS_NFT_PRIZE_CID=$PRIZE_IMG_CID" >> .waxdev.env
+        else
+            echo "[!] IPFS offline — imagens com placeholder. Execute 'docker compose up -d' e rerun --envs."
+        fi
+
+        # ── 8f-5. Seed: schema "utility" (NFT de desconto em tickets) ───────
+        echo "[*] Criando schema 'utility'..."
+        cleos push action atomicassets createschema \
+            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo1","schema_name":"utility","schema_format":[{"name":"img","type":"image"},{"name":"discount_pct","type":"uint8"},{"name":"is_vip","type":"bool"},{"name":"name","type":"string"}]}' \
+            -p bingogamectr@active 2>/dev/null || true
+
+        # ── 8f-5b. Seed: schema "prize" (prêmio de ranking de temporada) ───
+        # "name"/"string" é obrigatório em todo schema do AtomicAssets
+        echo "[*] Criando schema 'prize'..."
+        cleos push action atomicassets createschema \
+            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo1","schema_name":"prize","schema_format":[{"name":"name","type":"string"},{"name":"img","type":"image"},{"name":"prize_type","type":"string"},{"name":"season","type":"uint32"},{"name":"rarity","type":"string"}]}' \
+            -p bingogamectr@active 2>/dev/null || true
+
+        # ── 8f-6. Seed: template 1 (utility — 10% off) ─────────────────────
+        # immutable_data usa first/second (EOSIO pair); image→string, bool→uint8
+        echo "[*] Criando template 1 (utility)..."
+        cleos push action atomicassets createtempl \
+            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"utility\",\"transferable\":true,\"burnable\":false,\"max_supply\":0,\"immutable_data\":[{\"first\":\"img\",\"second\":[\"string\",\"${UTIL_IMG_CID}\"]},{\"first\":\"discount_pct\",\"second\":[\"uint8\",10]},{\"first\":\"is_vip\",\"second\":[\"uint8\",0]},{\"first\":\"name\",\"second\":[\"string\",\"CryptoBingo Utility NFT\"]}]}" \
+            -p bingogamectr@active 2>/dev/null || true
+
+        # ── 8f-6b. Seed: template 2 (prize — burnable para resgatar backed tokens)
+        echo "[*] Criando template 2 (prize / temporada)..."
+        cleos push action atomicassets createtempl \
+            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"prize\",\"transferable\":true,\"burnable\":true,\"max_supply\":0,\"immutable_data\":[{\"first\":\"name\",\"second\":[\"string\",\"CryptoBingo Season Prize\"]},{\"first\":\"img\",\"second\":[\"string\",\"${PRIZE_IMG_CID}\"]},{\"first\":\"prize_type\",\"second\":[\"string\",\"season_rank\"]},{\"first\":\"season\",\"second\":[\"uint32\",1]},{\"first\":\"rarity\",\"second\":[\"string\",\"rare\"]}]}" \
+            -p bingogamectr@active 2>/dev/null || true
+
+        # ── 8f-7. Seed: nftconfig no bingogamectr (template 1 = 10% off) ───
+        # valid_until=0 significa sem expiração (uint32 — não usar 9999999999, transborda)
+        # Usa -p bingogamectr@admin (setnftconf está linkada à permissão admin)
+        echo "[*] Registrando nftconfig no bingogamectr..."
+        cleos push action bingogamectr setnftconf \
+            '{"template_id":1,"discount_pct":10,"is_vip":false,"valid_until":0}' \
+            -p bingogamectr@admin 2>/dev/null || true
+
+        # ── 8f-8. Seed: minta utility NFTs para contas dev ─────────────────
+        echo "[*] Mintando utility NFTs (template 1)..."
+        for dest in jogador1 jogador2 sponsor1111; do
+            cleos push action atomicassets mintasset \
+                "{\"authorized_minter\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"utility\",\"template_id\":1,\"new_asset_owner\":\"${dest}\",\"immutable_data\":[],\"mutable_data\":[],\"tokens_to_back\":[]}" \
+                -p bingogamectr@active 2>/dev/null && \
+                echo "[✓] Utility NFT mintado para ${dest}." || \
+                echo "[!] Aviso: mint utility para ${dest} falhou."
+        done
+
+        # ── 8f-8b. Seed: minta prize NFT para vault de bingogamectr ────────
+        # tokens_to_back vazio — backing é feito manualmente (ver ADR-027)
+        echo "[*] Mintando prize NFT (template 2) para vault..."
+        cleos push action atomicassets mintasset \
+            '{"authorized_minter":"bingogamectr","collection_name":"cryptobingo1","schema_name":"prize","template_id":2,"new_asset_owner":"bingogamectr","immutable_data":[],"mutable_data":[],"tokens_to_back":[]}' \
+            -p bingogamectr@active 2>/dev/null && \
+            echo "[✓] Prize NFT mintado para vault." || \
+            echo "[!] Aviso: mint prize falhou."
+
+        echo "[✓] atomicassets deployado e seed concluído (ADR-027)."
+    else
+        echo "[!] Aviso: deploy do atomicassets falhou — NFT vault/drops indisponíveis."
+    fi
+else
+    echo "[!] atomicassets.wasm/abi ausentes — deploy pulado."
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 9. CAPTURA CHAIN_ID
 # ──────────────────────────────────────────────────────────────────────────────
 echo "[*] Capturando Chain ID..."
@@ -735,6 +893,10 @@ _upsert_env "$F" "VITE_DEV_ACTOR_CONTRACT_ADMIN" "contractad1"
 _upsert_env "$F" "VITE_DEV_KEY_CONTRACT_ADMIN"   "${CONTRACTAD1_KEY:-}"
 _upsert_env "$F" "VITE_DEV_ACTOR_SPONSOR"        "sponsor1111"
 _upsert_env "$F" "VITE_DEV_KEY_SPONSOR"          "${SPONSOR1111_KEY:-}"
+_upsert_env "$F" "VITE_ATOMIC_API"              "https://test.api.atomicassets.io"
+_upsert_env "$F" "VITE_ATOMIC_CONTRACT"         "atomicassets"
+_upsert_env "$F" "VITE_ATOMIC_COLLECTION"       "cryptobingo1"
+_upsert_env "$F" "VITE_IPFS_GATEWAY"            "http://localhost:8080/ipfs/"
 
 F="apps/api-gateway/.env"
 if grep -q "^JWT_SECRET=" "$F" 2>/dev/null; then
@@ -755,6 +917,7 @@ _upsert_env "$F" "MICROSERVICE_PRIVATE_KEY" "${BINGOGAMESVC_KEY:-}"
 _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
 _upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3001"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
+_upsert_env "$F" "ATOMIC_CONTRACT"          "atomicassets"
 
 F="apps/worker-game-loop/.env"
 _upsert_env "$F" "CHAIN_ID"                    "$CHAIN_ID"

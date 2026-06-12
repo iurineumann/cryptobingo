@@ -8,7 +8,7 @@ import { UserProfile }       from '../models/UserProfile';
 import type { MongoNftCache } from '@cryptobingo/shared-types';
 
 const ATOMIC_CONTRACT  = 'atomicassets';
-const BINGO_COLLECTION = 'cryptobingo';
+const BINGO_COLLECTION = 'cryptobingo1';
 
 // ==========================================
 // GET /api/v1/nfts/my-assets
