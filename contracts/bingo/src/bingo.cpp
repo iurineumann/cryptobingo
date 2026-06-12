@@ -56,7 +56,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::creategame(uint64_t game_id, extended_asset ticket_price, uint64_t gametype_id, uint64_t room_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         games_table games(get_self(), get_self().value);
         check(games.find(game_id) == games.end(), "Game ID already exists.");
 
@@ -101,7 +101,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         check(discount_pct <= 100, "Desconto maximo e 100%");
         nftconfigs_table _configs(get_self(), get_self().value);
         auto itr = _configs.find(template_id);
@@ -118,7 +118,7 @@ namespace bingo {
     }
 
     void bingo_contract::delnftconf(int32_t template_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         nftconfigs_table _configs(get_self(), get_self().value);
         _configs.erase(_configs.require_find(template_id, "Template ID nao encontrado."));
     }
@@ -128,7 +128,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::addpattern(uint64_t pattern_id, std::string name, uint32_t mask) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         check(mask > 0, "mask deve ser maior que zero.");
         check(mask < (1u << 25), "mask nao pode exceder 25 bits.");
         check(name.size() <= 64, "name muito longo (max 64 chars).");
@@ -146,13 +146,13 @@ namespace bingo {
     }
 
     void bingo_contract::delpattern(uint64_t pattern_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         patterns_table patterns(get_self(), get_self().value);
         patterns.erase(patterns.require_find(pattern_id, "pattern_id nao encontrado."));
     }
 
     void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         check(base_multiplier > 0, "base_multiplier deve ser maior que zero.");
         check(rules.size() > 0, "rules deve ter pelo menos 1 elemento.");
         check(name.size() <= 64, "name muito longo (max 64 chars).");
@@ -208,7 +208,7 @@ namespace bingo {
     }
 
     void bingo_contract::delgametype(uint64_t gametype_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         gametypes_table gametypes(get_self(), get_self().value);
         gametypes.erase(gametypes.require_find(gametype_id, "gametype_id nao encontrado."));
     }
@@ -218,7 +218,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::setstages(uint64_t gametype_id, std::vector<stage_rule> stages) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         gametypes_table gametypes(get_self(), get_self().value);
         auto itr = gametypes.require_find(gametype_id, "gametype_id nao encontrado.");
 
@@ -251,7 +251,7 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::setcombos(uint64_t gametype_id, std::vector<combo_rule> combinations) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         gametypes_table gametypes(get_self(), get_self().value);
         auto itr = gametypes.require_find(gametype_id, "gametype_id nao encontrado.");
 
@@ -573,7 +573,7 @@ namespace bingo {
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
-                check(nft_itr->collection_name == "cryptobingo"_n, "NFT nao pertence a colecao oficial.");
+                check(nft_itr->collection_name == "cryptobingo1"_n, "NFT nao pertence a colecao oficial.");
                 nftconfigs_table _configs(get_self(), get_self().value);
                 auto conf_itr = _configs.find(nft_itr->template_id);
                 if (conf_itr != _configs.end()) {
@@ -826,9 +826,8 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::abortgame(uint64_t game_id, std::string reason) {
-        bool by_ms    = has_auth("bingogamesvc"_n);
-        bool by_admin = has_auth(get_self());
-        check(by_ms || by_admin, "Auth: bingogamesvc ou admin necessaria.");
+        bool by_ms = has_auth("bingogamesvc"_n);
+        if (!by_ms) require_auth(permission_level{get_self(), "admin"_n});
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -932,7 +931,7 @@ namespace bingo {
         auto camp_itr = campaigns.require_find(campaign_id, "campaign_id nao encontrado.");
         bool by_admin   = has_auth(get_self());
         bool by_sponsor = has_auth(camp_itr->sponsor);
-        check(by_admin || by_sponsor, "Auth: admin ou sponsor necessaria.");
+        if (!by_admin && !by_sponsor) require_auth(permission_level{get_self(), "admin"_n});
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
@@ -967,7 +966,7 @@ namespace bingo {
         auto camp_itr = campaigns.require_find(campaign_id, "campaign_id nao encontrado.");
         bool by_admin   = has_auth(get_self());
         bool by_sponsor = has_auth(camp_itr->sponsor);
-        check(by_admin || by_sponsor, "Auth: admin ou sponsor necessaria.");
+        if (!by_admin && !by_sponsor) require_auth(permission_level{get_self(), "admin"_n});
 
         if (camp_itr->balance_remaining.quantity.amount > 0 && camp_itr->leftover_policy == "refund"_n) {
             action(
@@ -997,7 +996,7 @@ namespace bingo {
         uint32_t       max_tickets_per_player,
         bool           sponsor_room
     ) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
 
         rooms_table rooms(get_self(), get_self().value);
         check(rooms.find(room_id) == rooms.end(), "room_id ja existe.");
@@ -1035,7 +1034,7 @@ namespace bingo {
     }
 
     void bingo_contract::activateroom(uint64_t room_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(
@@ -1046,7 +1045,7 @@ namespace bingo {
     }
 
     void bingo_contract::pauseroom(uint64_t room_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status == "active"_n, "pauseroom: sala deve estar ativa.");
@@ -1054,7 +1053,7 @@ namespace bingo {
     }
 
     void bingo_contract::closeroom(uint64_t room_id) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "closeroom: sala ja esta fechada.");
@@ -1065,7 +1064,7 @@ namespace bingo {
     }
 
     void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
-        require_auth(get_self());
+        require_auth(permission_level{get_self(), "admin"_n});
         check(room_drop_chance_bps <= 10000, "room_drop_chance_bps deve ser 0–10000.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
@@ -1102,7 +1101,7 @@ namespace bingo {
 
         bool by_owner = has_auth(dep_itr->owner);
         bool by_admin = has_auth(get_self());
-        check(by_owner || by_admin, "Auth: owner do deposito ou admin necessaria.");
+        if (!by_owner && !by_admin) require_auth(permission_level{get_self(), "admin"_n});
         check(dep_itr->status == "available"_n, "Deposito nao esta disponivel.");
         check(drop_chance_bps > 0 && drop_chance_bps <= 10000, "drop_chance_bps deve ser 1–10000.");
 
@@ -1168,7 +1167,7 @@ namespace bingo {
 
         bool by_owner = has_auth(alloc_itr->owner);
         bool by_admin = has_auth(get_self());
-        check(by_owner || by_admin, "Auth: owner ou admin necessaria.");
+        if (!by_owner && !by_admin) require_auth(permission_level{get_self(), "admin"_n});
         check(alloc_itr->status == "active"_n, "Alocacao nao esta ativa.");
 
         // Atualiza alocação

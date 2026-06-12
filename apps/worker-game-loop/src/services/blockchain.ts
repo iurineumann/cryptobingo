@@ -9,7 +9,6 @@ import dotenv                     from 'dotenv';
 dotenv.config();
 
 const microserviceKey = process.env.MICROSERVICE_PRIVATE_KEY!;
-const contractKey     = process.env.CONTRACT_PRIVATE_KEY || microserviceKey;
 const chainId         = process.env.CHAIN_ID!;
 const contractAccount = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const rpcUrl          = process.env.RPC_URL           || 'http://127.0.0.1:8888';
@@ -20,7 +19,7 @@ if (!microserviceKey || !chainId) {
     throw new Error('❌ Faltam variáveis de ambiente críticas (MICROSERVICE_PRIVATE_KEY ou CHAIN_ID).');
 }
 
-// Sessão com a permission microservice para ações que exigem require_auth("bingogamesvc"_n)
+// Sessão FSM — actions require_auth("bingogamesvc"_n): fundgame, lock, startdraw, claim*, close, exec
 export const microserviceSession = new Session({
     actor:        'bingogamesvc',
     permission:   'active',
@@ -28,17 +27,18 @@ export const microserviceSession = new Session({
     walletPlugin: new WalletPluginPrivateKey(microserviceKey),
 });
 
-// Sessão com a permission active do contrato para ações que exigem require_auth(get_self())
-export const contractSession = new Session({
+// Sessão admin operacional — actions require_auth(bingogamectr@admin): creategame e similares (ADR-026)
+// bingogamectr@admin aceita bingogamesvc@active como signatário — não precisa de CONTRACT_PRIVATE_KEY
+export const adminSession = new Session({
     actor:        contractAccount,
-    permission:   'active',
+    permission:   'admin',
     chain,
-    walletPlugin: new WalletPluginPrivateKey(contractKey),
+    walletPlugin: new WalletPluginPrivateKey(microserviceKey),
 });
 
-// Helper que escolhe a sessão conforme a action
-async function transact(actionName: string, data: object, useMicroservice: boolean = false): Promise<string | undefined> {
-    const session = useMicroservice ? microserviceSession : contractSession;
+// Helper interno — todas as actions FSM usam microserviceSession (bingogamesvc@active)
+async function transact(actionName: string, data: object): Promise<string | undefined> {
+    const session = microserviceSession;
     const result = await session.transact({
         actions: [{
             account:       contractAccount,
@@ -55,7 +55,7 @@ async function transact(actionName: string, data: object, useMicroservice: boole
 /** CREATED → FUNDING: abre as vendas. */
 export async function executeFundGame(gameId: string): Promise<string | undefined> {
     console.log(`🟢 [Blockchain] fundgame → jogo ${gameId}`);
-    const txId = await transact('fundgame', { game_id: gameId }, true);
+    const txId = await transact('fundgame', { game_id: gameId });
     console.log(`✅ Jogo ${gameId} aberto para vendas. TX: ${txId}`);
     return txId;
 }
@@ -63,7 +63,7 @@ export async function executeFundGame(gameId: string): Promise<string | undefine
 /** FUNDING → LOCKED: fecha as vendas. */
 export async function executeLockGame(gameId: string): Promise<string | undefined> {
     console.log(`🔒 [Blockchain] lockgame → jogo ${gameId}`);
-    const txId = await transact('lockgame', { game_id: gameId }, true);
+    const txId = await transact('lockgame', { game_id: gameId });
     console.log(`✅ Jogo ${gameId} travado. TX: ${txId}`);
     return txId;
 }
@@ -71,7 +71,7 @@ export async function executeLockGame(gameId: string): Promise<string | undefine
 /** LOCKED → DRAWING: aciona o oráculo. */
 export async function executeStartDraw(gameId: string): Promise<string | undefined> {
     console.log(`🎲 [Blockchain] startdraw → jogo ${gameId}`);
-    const txId = await transact('startdraw', { game_id: gameId }, true);
+    const txId = await transact('startdraw', { game_id: gameId });
     console.log(`✅ Sorteio iniciado (aguardando oráculo). TX: ${txId}`);
     return txId;
 }
@@ -101,7 +101,7 @@ export async function executeClaimWin(
         ball_count:        ballCount,
         win_pattern_mask:  winPatternMask.toString(),
         golden_multiplier: goldenMultiplier,
-    }, true);
+    });
     console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
@@ -132,7 +132,7 @@ export async function executeClaimCombo(
         ball_count:        ballCount,
         combo_id:          comboId,
         golden_multiplier: goldenMultiplier,
-    }, true);
+    });
     console.log(`✅ Combinação #${comboId} liquidada para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
@@ -159,7 +159,7 @@ export async function executeClaimStage(
         stage,
         ball_count:       ballCount,
         win_pattern_mask: winPatternMask.toString(),
-    }, true);
+    });
     console.log(`✅ Estágio ${stage} liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
@@ -170,7 +170,7 @@ export async function executeClaimStage(
  */
 export async function executeCloseGame(gameId: string): Promise<string | undefined> {
     console.log(`📦 [Blockchain] closegame → jogo ${gameId}`);
-    const txId = await transact('closegame', { game_id: gameId }, true);
+    const txId = await transact('closegame', { game_id: gameId });
     console.log(`✅ Jogo ${gameId} arquivado. TX: ${txId}`);
     return txId;
 }
@@ -182,7 +182,7 @@ export async function executeCloseGame(gameId: string): Promise<string | undefin
  */
 export async function executeAbortGame(gameId: string, reason: string): Promise<string | undefined> {
     console.log(`❌ [Blockchain] abortgame → jogo ${gameId} (motivo: ${reason})`);
-    const txId = await transact('abortgame', { game_id: gameId, reason }, true);
+    const txId = await transact('abortgame', { game_id: gameId, reason });
     console.log(`✅ Jogo ${gameId} abortado. TX: ${txId}`);
     return txId;
 }
@@ -198,7 +198,7 @@ export async function executeRefundTicket(
     ticketId: string,
 ): Promise<string | undefined> {
     console.log(`💸 [Blockchain] refundticket → jogo ${gameId}, cartela #${ticketId}`);
-    const txId = await transact('refundticket', { game_id: gameId, ticket_id: ticketId }, true);
+    const txId = await transact('refundticket', { game_id: gameId, ticket_id: ticketId });
     console.log(`✅ Cartela #${ticketId} estornada. TX: ${txId}`);
     return txId;
 }
@@ -214,7 +214,7 @@ export async function executeClearGame(
     maxRows:  number = 50,
 ): Promise<string | undefined> {
     console.log(`🧹 [Blockchain] cleargame → jogo ${gameId} (max_rows: ${maxRows})`);
-    const txId = await transact('cleargame', { game_id: gameId, max_rows: maxRows }, true);
+    const txId = await transact('cleargame', { game_id: gameId, max_rows: maxRows });
     console.log(`✅ Lote de RAM liberado para jogo ${gameId}. TX: ${txId}`);
     return txId;
 }
