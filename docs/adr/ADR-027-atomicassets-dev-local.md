@@ -55,12 +55,12 @@ aos nossos contratos — para contratos externos usamos a ABI canônica deles.
 
 | Item | Detalhe |
 |---|---|
-| Collection | `cryptobingo` (author: `bingogamectr`, allow_notify: true) |
+| Collection | `cryptobingo1` (author: `bingogamectr`, allow_notify: true) |
 | Schema `utility` | `img` (image), `discount_pct` (uint8), `is_vip` (bool), `name` (string) |
-| Schema `prize` | `img` (image), `prize_type` (string), `season` (uint32), `rarity` (string) |
-| Template 1 | utility — `icon.webp`, `discount_pct=10`, `is_vip=false`, `burnable=false` |
+| Schema `prize` | `name` (string, obrigatório), `img` (image), `prize_type` (string), `season` (uint32), `rarity` (string) |
+| Template 1 | utility — `icon.webp`, `discount_pct=10`, `is_vip=0`, `burnable=false` |
 | Template 2 | prize — `fox-mascot.png`, `season=1`, `rarity=rare`, `burnable=true` |
-| nftconfig | `template_id=1` → `bingogamectr` (10% desconto, `valid_until=inf`) |
+| nftconfig | `template_id=1` → `bingogamectr` (10% desconto, `valid_until=0` = sem expiração) |
 | NFTs utility | 1 por conta: `jogador1`, `jogador2`, `sponsor1111` |
 | NFT prize | 1 para vault de `bingogamectr` (sem `backed_tokens` iniciais — ver abaixo) |
 

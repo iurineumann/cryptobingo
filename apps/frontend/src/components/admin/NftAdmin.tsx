@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { Session } from '@wharfkit/session';
 
 const ATOMIC_API   = import.meta.env.VITE_ATOMIC_API        ?? 'https://test.api.atomicassets.io';
-const COLLECTION   = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo';
+const COLLECTION   = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo1';
 const EXPLORER_URL = import.meta.env.VITE_EXPLORER_URL      ?? 'https://wax.bloks.io';
 
 // ── Tipos AtomicAssets ────────────────────────────────────────────────────────

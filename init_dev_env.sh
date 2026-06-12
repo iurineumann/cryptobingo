@@ -706,10 +706,10 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
         cleos push action atomicassets init '[]' \
             -p atomicassets@active 2>/dev/null || true
 
-        # ── 8f-4. Seed: collection "cryptobingo" ───────────────────────────
-        echo "[*] Criando collection 'cryptobingo'..."
+        # ── 8f-4. Seed: collection "cryptobingo1" (12 chars — restrição AtomicAssets)
+        echo "[*] Criando collection 'cryptobingo1'..."
         cleos push action atomicassets createcol \
-            '{"author":"bingogamectr","collection_name":"cryptobingo","allow_notify":true,"authorized_accounts":["bingogamectr"],"notify_accounts":["bingogamectr"],"market_fee":0.05,"data":[]}' \
+            '{"author":"bingogamectr","collection_name":"cryptobingo1","allow_notify":true,"authorized_accounts":["bingogamectr"],"notify_accounts":["bingogamectr"],"market_fee":0.05,"data":[]}' \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-4b. Pin imagens de NFT no IPFS local (se disponível) ────────
@@ -730,39 +730,42 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
         # ── 8f-5. Seed: schema "utility" (NFT de desconto em tickets) ───────
         echo "[*] Criando schema 'utility'..."
         cleos push action atomicassets createschema \
-            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo","schema_name":"utility","schema_format":[{"name":"img","type":"image"},{"name":"discount_pct","type":"uint8"},{"name":"is_vip","type":"bool"},{"name":"name","type":"string"}]}' \
+            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo1","schema_name":"utility","schema_format":[{"name":"img","type":"image"},{"name":"discount_pct","type":"uint8"},{"name":"is_vip","type":"bool"},{"name":"name","type":"string"}]}' \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-5b. Seed: schema "prize" (prêmio de ranking de temporada) ───
+        # "name"/"string" é obrigatório em todo schema do AtomicAssets
         echo "[*] Criando schema 'prize'..."
         cleos push action atomicassets createschema \
-            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo","schema_name":"prize","schema_format":[{"name":"img","type":"image"},{"name":"prize_type","type":"string"},{"name":"season","type":"uint32"},{"name":"rarity","type":"string"}]}' \
+            '{"authorized_creator":"bingogamectr","collection_name":"cryptobingo1","schema_name":"prize","schema_format":[{"name":"name","type":"string"},{"name":"img","type":"image"},{"name":"prize_type","type":"string"},{"name":"season","type":"uint32"},{"name":"rarity","type":"string"}]}' \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-6. Seed: template 1 (utility — 10% off) ─────────────────────
+        # immutable_data usa first/second (EOSIO pair); image→string, bool→uint8
         echo "[*] Criando template 1 (utility)..."
         cleos push action atomicassets createtempl \
-            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo\",\"schema_name\":\"utility\",\"transferable\":true,\"burnable\":false,\"max_supply\":0,\"immutable_data\":[{\"key\":\"img\",\"value\":[\"image\",\"${UTIL_IMG_CID}\"]},{\"key\":\"discount_pct\",\"value\":[\"uint8\",10]},{\"key\":\"is_vip\",\"value\":[\"bool\",false]},{\"key\":\"name\",\"value\":[\"string\",\"CryptoBingo Utility NFT\"]}]}" \
+            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"utility\",\"transferable\":true,\"burnable\":false,\"max_supply\":0,\"immutable_data\":[{\"first\":\"img\",\"second\":[\"string\",\"${UTIL_IMG_CID}\"]},{\"first\":\"discount_pct\",\"second\":[\"uint8\",10]},{\"first\":\"is_vip\",\"second\":[\"uint8\",0]},{\"first\":\"name\",\"second\":[\"string\",\"CryptoBingo Utility NFT\"]}]}" \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-6b. Seed: template 2 (prize — burnable para resgatar backed tokens)
         echo "[*] Criando template 2 (prize / temporada)..."
         cleos push action atomicassets createtempl \
-            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo\",\"schema_name\":\"prize\",\"transferable\":true,\"burnable\":true,\"max_supply\":0,\"immutable_data\":[{\"key\":\"img\",\"value\":[\"image\",\"${PRIZE_IMG_CID}\"]},{\"key\":\"prize_type\",\"value\":[\"string\",\"season_rank\"]},{\"key\":\"season\",\"value\":[\"uint32\",1]},{\"key\":\"rarity\",\"value\":[\"string\",\"rare\"]}]}" \
+            "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"prize\",\"transferable\":true,\"burnable\":true,\"max_supply\":0,\"immutable_data\":[{\"first\":\"name\",\"second\":[\"string\",\"CryptoBingo Season Prize\"]},{\"first\":\"img\",\"second\":[\"string\",\"${PRIZE_IMG_CID}\"]},{\"first\":\"prize_type\",\"second\":[\"string\",\"season_rank\"]},{\"first\":\"season\",\"second\":[\"uint32\",1]},{\"first\":\"rarity\",\"second\":[\"string\",\"rare\"]}]}" \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-7. Seed: nftconfig no bingogamectr (template 1 = 10% off) ───
-        # bingogamectr@active satisfaz o threshold da permissão admin (ADR-026)
+        # valid_until=0 significa sem expiração (uint32 — não usar 9999999999, transborda)
+        # Usa -p bingogamectr@admin (setnftconf está linkada à permissão admin)
         echo "[*] Registrando nftconfig no bingogamectr..."
         cleos push action bingogamectr setnftconf \
-            '{"template_id":1,"discount_pct":10,"is_vip":false,"valid_until":9999999999}' \
-            -p bingogamectr@active 2>/dev/null || true
+            '{"template_id":1,"discount_pct":10,"is_vip":false,"valid_until":0}' \
+            -p bingogamectr@admin 2>/dev/null || true
 
         # ── 8f-8. Seed: minta utility NFTs para contas dev ─────────────────
         echo "[*] Mintando utility NFTs (template 1)..."
         for dest in jogador1 jogador2 sponsor1111; do
             cleos push action atomicassets mintasset \
-                "{\"authorized_minter\":\"bingogamectr\",\"collection_name\":\"cryptobingo\",\"schema_name\":\"utility\",\"template_id\":1,\"new_asset_owner\":\"${dest}\",\"immutable_data\":[],\"mutable_data\":[],\"tokens_to_back\":[]}" \
+                "{\"authorized_minter\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"utility\",\"template_id\":1,\"new_asset_owner\":\"${dest}\",\"immutable_data\":[],\"mutable_data\":[],\"tokens_to_back\":[]}" \
                 -p bingogamectr@active 2>/dev/null && \
                 echo "[✓] Utility NFT mintado para ${dest}." || \
                 echo "[!] Aviso: mint utility para ${dest} falhou."
@@ -772,7 +775,7 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
         # tokens_to_back vazio — backing é feito manualmente (ver ADR-027)
         echo "[*] Mintando prize NFT (template 2) para vault..."
         cleos push action atomicassets mintasset \
-            '{"authorized_minter":"bingogamectr","collection_name":"cryptobingo","schema_name":"prize","template_id":2,"new_asset_owner":"bingogamectr","immutable_data":[],"mutable_data":[],"tokens_to_back":[]}' \
+            '{"authorized_minter":"bingogamectr","collection_name":"cryptobingo1","schema_name":"prize","template_id":2,"new_asset_owner":"bingogamectr","immutable_data":[],"mutable_data":[],"tokens_to_back":[]}' \
             -p bingogamectr@active 2>/dev/null && \
             echo "[✓] Prize NFT mintado para vault." || \
             echo "[!] Aviso: mint prize falhou."
@@ -892,6 +895,7 @@ _upsert_env "$F" "VITE_DEV_ACTOR_SPONSOR"        "sponsor1111"
 _upsert_env "$F" "VITE_DEV_KEY_SPONSOR"          "${SPONSOR1111_KEY:-}"
 _upsert_env "$F" "VITE_ATOMIC_API"              "https://test.api.atomicassets.io"
 _upsert_env "$F" "VITE_ATOMIC_CONTRACT"         "atomicassets"
+_upsert_env "$F" "VITE_ATOMIC_COLLECTION"       "cryptobingo1"
 _upsert_env "$F" "VITE_IPFS_GATEWAY"            "http://localhost:8080/ipfs/"
 
 F="apps/api-gateway/.env"
