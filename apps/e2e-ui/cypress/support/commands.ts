@@ -71,6 +71,15 @@ declare global {
             devLogin(role: DevRole, scenario?: StubScenario): Chainable<void>;
 
             /**
+             * Tier 3 — login real sem nenhum intercept: clica o botão de dev-login
+             * no footer e aguarda a auth completa contra o api-gateway real. Exige
+             * stack completa rodando (api-gateway + frontend dev). O JWT é emitido
+             * pelo api-gateway com o JWT_SECRET real; chamadas subsequentes usam
+             * esse token sem mock.
+             */
+            realDevLogin(role: DevRole): Chainable<void>;
+
+            /**
              * Carrega o conjunto de fixtures e registra os intercepts REST/RPC do
              * cenário. Deve ser chamado ANTES do cy.visit que dispara as chamadas.
              */
@@ -212,6 +221,23 @@ Cypress.Commands.add('stubBackend', (scenario: StubScenario) => {
     const register = SCENARIO_INTERCEPTS[scenario];
     if (!register) throw new Error(`[stubBackend] cenário desconhecido: ${scenario}`);
     register();
+});
+
+// ==========================================
+// cy.realDevLogin(role) — Tier 3
+// ==========================================
+// Sem nenhum cy.intercept: visita a raiz, abre o dropdown de dev-login do footer
+// (só existe com import.meta.env.DEV=true) e clica no botão do papel. O frontend
+// executa o fluxo real: challenge → assinatura local com WalletPluginPrivateKey
+// (VITE_DEV_KEY_*) → verify → JWT real emitido pelo api-gateway.
+// Aguarda a navegação pós-auth como sinal de conclusão.
+
+Cypress.Commands.add('realDevLogin', (role: DevRole) => {
+    cy.visit('/');
+    cy.get('[data-testid="dev-login-toggle"]', { timeout: 10_000 }).click();
+    cy.get(`[data-testid="dev-login-${role}"]`, { timeout: 10_000 }).click();
+    // Sinal de auth concluída: o app sai de '/' após gravar o JWT e carregar o profile.
+    cy.location('pathname', { timeout: 30_000 }).should('not.eq', '/');
 });
 
 // ==========================================

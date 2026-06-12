@@ -4,6 +4,7 @@
 // Estratégia em camadas via `--env tier`:
 //   tier=1 → specs determinísticos (cy.intercept + fixtures, sem WAX) — PR-gate.
 //   tier=2 → specs contra o stack real (docker compose + init_dev_env) — nightly.
+//   tier=3 → fluxos reais completos: auth real (cy.realDevLogin), JWT real, sem mocks.
 //
 // O `specPattern` é resolvido a partir de `config.env.tier` (default 1), de modo
 // que `cypress run --env tier=2` troque o conjunto de specs sem duplicar config.
@@ -29,7 +30,9 @@ export default defineConfig({
             const tier = Number(config.env.tier ?? 1);
 
             config.specPattern =
-                tier === 2
+                tier === 3
+                    ? 'cypress/e2e/tier3/**/*.cy.ts'
+                    : tier === 2
                     ? 'cypress/e2e/tier2/**/*.cy.ts'
                     : 'cypress/e2e/tier1/**/*.cy.ts';
 
