@@ -264,6 +264,22 @@ services:
     networks:
       - bingo_net
 
+  # ==========================================
+  # 9. IPFS LOCAL — Gateway para imagens de NFT (ADR-027)
+  # ==========================================
+  bingo_ipfs:
+    image: ipfs/kubo:latest
+    container_name: bingo_ipfs
+    restart: unless-stopped
+    ports:
+      - "5001:5001"   # API (ipfs add, pin, etc.)
+      - "8080:8080"   # Gateway HTTP: http://localhost:8080/ipfs/{CID}
+    volumes:
+      - ipfs_data:/data/ipfs
+      - ./apps/frontend/public/brand:/export:ro   # brand assets para pinning no init
+    networks:
+      - bingo_net
+
 # ==========================================
 # VOLUMES E REDES
 # ==========================================
@@ -274,6 +290,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  ipfs_data:
 
 networks:
   bingo_net:
