@@ -53,7 +53,7 @@ describe('Player · Jornada completa de jogo (Tier 2 real)', () => {
         cy.get('[data-testid="gr-room-header"]', { timeout: DEFAULT_TIMEOUT }).should('be.visible');
 
         // Abre o modal de compra de cartela.
-        cy.get('[data-testid="buy-ticket-btn"]', { timeout: DEFAULT_TIMEOUT })
+        cy.get('[data-testid="gr-buy-more"]', { timeout: DEFAULT_TIMEOUT })
             .should('not.be.disabled')
             .click();
 

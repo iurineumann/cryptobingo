@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import {
     fetchVaultDeposits, fetchVaultAllocations,
     allocateDropToRoom, deallocateFromRoom, reclaimVaultDeposit,
-    fetchSponsorRooms,
+    fetchRooms,
     type DropDeposit, type DropAllocation, type EnrichedRoom,
 } from '../../services/api';
 
@@ -34,7 +34,7 @@ export default function SponsorVault() {
             const [depResp, allocResp, roomsResp] = await Promise.all([
                 fetchVaultDeposits(),
                 fetchVaultAllocations(),
-                fetchSponsorRooms(),
+                fetchRooms(),
             ]);
             setDeposits(depResp.deposits);
             setAllocations(allocResp.allocations);
@@ -106,6 +106,15 @@ export default function SponsorVault() {
         return <span className={`cb-badge text-xs ${cls}`}>{status}</span>;
     };
 
+    // Deriva um quantity_per_drop válido a partir do saldo restante do depósito.
+    // "50.0000 BINGO" → "1.0000 BINGO"  (1 unidade da mesma precision + símbolo)
+    const defaultQtyPerDrop = (quantityStr: string): string => {
+        const parts = quantityStr.split(' ');
+        if (parts.length !== 2) return '';
+        const decimals = (parts[0].split('.')[1] ?? '').length;
+        return `${(1).toFixed(decimals)} ${parts[1]}`;
+    };
+
     // Dropdown de salas do sponsor para o form de alocação
     const roomName = (id: string) => {
         const r = rooms.find(r => String(r.room_id) === id);
@@ -124,7 +133,7 @@ export default function SponsorVault() {
                 </div>
             )}
             {success && (
-                <div className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
+                <div data-testid="sponsor-vault-toast-success" className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
                     <span>✓ {success}</span>
                     <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
                 </div>
@@ -168,10 +177,16 @@ export default function SponsorVault() {
                                 className="cb-input cb-select"
                                 data-testid="sponsor-vault-field-deposit_id"
                                 value={allocForm.deposit_id}
-                                onChange={e => setAllocForm(f => ({ ...f, deposit_id: e.target.value }))}
+                                onChange={e => {
+                                    const dep = deposits.find(d => String(d.deposit_id) === e.target.value);
+                                    const autoQty = dep?.quantity_remaining?.quantity
+                                        ? defaultQtyPerDrop(dep.quantity_remaining.quantity)
+                                        : '';
+                                    setAllocForm(f => ({ ...f, deposit_id: e.target.value, quantity_per_drop: autoQty }));
+                                }}
                             >
                                 <option value="">{t('sponsor.select_deposit')}</option>
-                                {deposits.filter(d => d.status === 'deposited' || d.status === 'active').map(d => (
+                                {deposits.filter(d => d.status === 'available' || d.status === 'deposited' || d.status === 'active').map(d => (
                                     <option key={d.deposit_id} value={d.deposit_id}>
                                         #{d.deposit_id} — {d.asset_type === 'nft' ? `NFT #${d.nft_asset_id}` : d.quantity_remaining.quantity}
                                     </option>
@@ -247,7 +262,7 @@ export default function SponsorVault() {
             ) : tab === 'deposits' ? (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(28rem, 1fr))' }}>
                     {deposits.map(d => (
-                        <div key={d.deposit_id} className="cb-card p-4 flex flex-col gap-2">
+                        <div key={d.deposit_id} data-testid={`sponsor-deposit-${d.deposit_id}`} className="cb-card p-4 flex flex-col gap-2">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-[--cb-text-primary]">#{d.deposit_id}</span>
@@ -288,7 +303,7 @@ export default function SponsorVault() {
             ) : (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(28rem, 1fr))' }}>
                     {allocations.map(a => (
-                        <div key={a.alloc_id} className="cb-card p-4 flex flex-col gap-2">
+                        <div key={a.alloc_id} data-testid={`sponsor-alloc-${a.alloc_id}`} className="cb-card p-4 flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-[--cb-text-primary]">Alloc #{a.alloc_id}</span>

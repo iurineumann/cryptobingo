@@ -245,7 +245,7 @@ export default function RoomsAdmin() {
                             <select className="cb-input w-full mt-1" data-testid="rooms-field-gametype_id" value={form.gametype_id}
                                 onChange={e => setForm(f => ({ ...f, gametype_id: parseInt(e.target.value) || 0 }))}
                             >
-                                <option value={0}>— {t('admin.rooms_form_gametype_select')} —</option>
+                                <option value="">— {t('admin.rooms_form_gametype_select')} —</option>
                                 {gametypes.map(gt => (
                                     <option key={gt.gametype_id} value={gt.gametype_id}>
                                         #{gt.gametype_id} — {gt.name}
