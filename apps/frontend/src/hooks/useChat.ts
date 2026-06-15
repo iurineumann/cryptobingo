@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getAuthToken } from '../services/api';
 
 export interface ChatMessage {
     id:              string;
@@ -17,52 +18,145 @@ interface UseChatOptions {
 interface UseChatReturn {
     messages:    ChatMessage[];
     loading:     boolean;
+    hasMore:     boolean;
     sendMessage: (text: string) => void;
+    loadMore:    () => void;
+    unread:      number;
+    resetUnread: () => void;
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_GATEWAY_URL ?? '';
+const WS_URL  = import.meta.env.VITE_WS_URL ?? '';
+
+// ── Cache persistente entre montagens/desmontagens ──────────────
+const messageCache = new Map<string, ChatMessage[]>();
+const wsSockets   = new Map<string, Socket>();
+
+// Testing only
+export function __resetChatCache() { messageCache.clear(); wsSockets.clear(); }
 
 export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatReturn {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [loading,  setLoading]  = useState(true);
-    const [socket,   setSocket]   = useState<Socket | null>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>(() => messageCache.get(roomId) ?? []);
+    const [loading,  setLoading]  = useState(() => !messageCache.has(roomId));
+    const [hasMore,  setHasMore]  = useState(true);
+    const [unread,   setUnread]   = useState(0);
+    const loadingRef = useRef(false);
+    const roomRef    = useRef(roomId);
+    roomRef.current = roomId;
 
+    // ── REST: fetch histórico ────────────────────────────────────
+    const fetchPage = useCallback(async (before?: string) => {
+        if (loadingRef.current) return;
+        const token = getAuthToken();
+        if (!token) return;
+        loadingRef.current = true;
+        if (!before) setLoading(true);
+
+        try {
+            const params = new URLSearchParams({ limit: '30' });
+            if (before) params.set('before', before);
+
+            const res = await fetch(`${API_URL}/api/v1/rooms/${roomId}/chat?${params}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const data: { messages: ChatMessage[]; hasMore: boolean } = await res.json();
+
+            setMessages(prev => {
+                if (!before) return data.messages;
+                const existing = new Set(prev.map(m => m.id));
+                const newMsgs  = data.messages.filter(m => !existing.has(m.id));
+                return [...newMsgs, ...prev];
+            });
+            setHasMore(data.hasMore);
+        } catch {
+            // REST offline — WS continua funcionando
+        } finally {
+            setLoading(false);
+            loadingRef.current = false;
+        }
+    }, [roomId]);
+
+    // Cache hit → pula fetchPage
     useEffect(() => {
+        if (!messageCache.has(roomId)) {
+            fetchPage();
+        } else {
+            setLoading(false);
+        }
+    }, [roomId, fetchPage]);
+
+    // ── WS: tempo real ───────────────────────────────────────────
+    useEffect(() => {
+        const existing = wsSockets.get(roomId);
+        if (existing && existing.connected) {
+            return;
+        }
+
         const s = io(`${WS_URL}/chat`, {
             auth:       { wallet: walletAddress },
             transports: ['websocket'],
         });
 
-        s.on('connect', () => {
-            s.emit('chat:join', { roomId });
-            setLoading(false);
-        });
-
-        s.on('chat:messages', (msgs: ChatMessage[]) => {
-            setMessages(msgs);
-        });
+        s.on('connect', () => s.emit('chat:join', { roomId }));
 
         s.on('chat:message', (msg: ChatMessage) => {
-            setMessages(prev => [...prev, msg]);
+            setMessages(prev => {
+                if (prev.some(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
+            });
         });
 
         s.on('chat:sponsor_drop', (msg: ChatMessage) => {
-            setMessages(prev => [...prev, msg]);
+            setMessages(prev => {
+                if (prev.some(m => m.id === msg.id)) return prev;
+                return [...prev, msg];
+            });
         });
 
-        setSocket(s);
+        wsSockets.set(roomId, s);
 
         return () => {
             s.emit('chat:leave', { roomId });
-            s.disconnect();
         };
     }, [roomId, walletAddress]);
 
+    // ── Salva no cache ao desmontar ──────────────────────────────
+    const cacheRef = useRef(messages);
+    cacheRef.current = messages;
+    useEffect(() => {
+        return () => {
+            messageCache.set(roomId, cacheRef.current);
+        };
+    }, [roomId]);
+
     const sendMessage = useCallback((text: string) => {
         const trimmed = text.trim();
-        if (!trimmed || !socket) return;
-        socket.emit('chat:send', { roomId, message: trimmed });
-    }, [socket, roomId]);
+        if (!trimmed) return;
+        const s = wsSockets.get(roomId);
+        if (s?.connected) s.emit('chat:send', { roomId, message: trimmed });
+    }, [roomId]);
 
-    return { messages, loading, sendMessage };
+    const loadMore = useCallback(() => {
+        if (loadingRef.current || messages.length === 0) return;
+        const oldest = [...messages].sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        )[0];
+        const before = new Date(new Date(oldest.timestamp).getTime() - 1).toISOString();
+        fetchPage(before);
+    }, [messages, fetchPage]);
+
+    const resetUnread = useCallback(() => setUnread(0), []);
+
+    // ── Incrementa unread a cada mensagem nova ───────────────────
+    const prevLenRef = useRef(messages.length);
+    useEffect(() => {
+        if (messages.length > prevLenRef.current) {
+            setUnread(n => n + (messages.length - prevLenRef.current));
+        }
+        prevLenRef.current = messages.length;
+    }, [messages.length]);
+
+    return { messages, loading, hasMore, sendMessage, loadMore, unread, resetUnread };
 }
