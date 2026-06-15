@@ -53,6 +53,7 @@ import {
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
+import { getChatHistory } from './controllers/chatController';
 import { getLeaderboardGlobal, getLeaderboardByRoom } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
@@ -291,6 +292,9 @@ function registerRoutes(): void {
     // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────
     app.get('/api/v1/leaderboard',                  playerLimiter, getLeaderboardGlobal);
     app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
+
+    // ── Chat ────────────────────────────────────────────────────────────────────
+    app.get('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);

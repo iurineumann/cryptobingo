@@ -3,6 +3,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import mongoose from 'mongoose';
 import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
@@ -28,10 +29,14 @@ async function bootstrap(): Promise<void> {
     // Iniciado primeiro para estar disponível desde o início do processo.
     startMetricsServer();
 
-    // ── 2. Redis (Inverted Index) ─────────────────────────────────────────────
+    // ── 2. MongoDB (Chat persistence) ─────────────────────────────────────────
+    await mongoose.connect(process.env.MONGO_URL as string);
+    console.log('✅ [MongoDB] Conectado (chat).');
+
+    // ── 3. Redis (Inverted Index) ─────────────────────────────────────────────
     await connectRedis();
 
-    // ── 3. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
+    // ── 4. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
     startBroadcaster();
 
     // ── 4. Auto-advance do ciclo de vida (independente do RabbitMQ) ───────────
