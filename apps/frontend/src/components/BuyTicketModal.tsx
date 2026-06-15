@@ -408,6 +408,7 @@ export default function BuyTicketModal({
                     </h2>
                     <button
                         className="cb-modal-close"
+                        data-testid="buy-modal-close"
                         onClick={onClose}
                         disabled={isPurchasing || generating}
                         aria-label={t('common.close')}
