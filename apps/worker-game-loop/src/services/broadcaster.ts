@@ -5,6 +5,7 @@
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import {
     wsConnectionsActive,
     slowRevealBallsTotal,
@@ -14,6 +15,17 @@ import {
 const WS_PORT            = parseInt(process.env.WS_PORT         ?? '8085', 10);
 const JWT_SECRET         = process.env.JWT_SECRET               ?? '';
 const REVEAL_INTERVAL_MS = parseInt(process.env.REVEAL_INTERVAL ?? '3000', 10);
+
+// ── Chat Message Schema (Mongo inline) ──────────────────────────
+const chatMessageSchema = new mongoose.Schema({
+    room_id:         { type: String, required: true, index: true },
+    wallet_address:  { type: String, required: true },
+    message:         { type: String, required: true },
+    is_sponsor_drop: { type: Boolean, default: false },
+}, { timestamps: true });
+chatMessageSchema.index({ room_id: 1, createdAt: -1 });
+const ChatMessage = mongoose.models.ChatMessage
+    || mongoose.model('ChatMessage', chatMessageSchema);
 
 // ==========================================
 // PER-IP CONNECTION RATE LIMITER (DDoS)
@@ -201,6 +213,61 @@ io.on('connection', (socket: Socket) => {
         wsConnectionsActive.dec();
         decrementIp(socket.handshake.address);
         console.log(`🔌 [WS] Desconectado: ${socket.id} (${wallet}) — ${reason}`);
+    });
+});
+
+// ==========================================
+// CHAT NAMESPACE (Mongo + Socket.io)
+// ==========================================
+
+const chatNamespace = io.of('/chat');
+
+chatNamespace.on('connection', (socket: Socket) => {
+    const wallet = socket.handshake.auth?.wallet as string | undefined;
+    if (!wallet) {
+        socket.disconnect();
+        return;
+    }
+
+    let currentRoom: string | null = null;
+
+    socket.on('chat:join', ({ roomId }: { roomId: string }) => {
+        currentRoom = roomId;
+        socket.join(roomId);
+    });
+
+    socket.on('chat:send', async ({ roomId, message }: { roomId: string; message: string }) => {
+        if (!roomId || !message?.trim()) return;
+
+        try {
+            const doc = await ChatMessage.create({
+                room_id: roomId,
+                wallet_address: wallet,
+                message: message.trim(),
+                is_sponsor_drop: false,
+            });
+
+            const msg = {
+                id:              String(doc._id),
+                wallet_address:  wallet,
+                message:         message.trim(),
+                is_sponsor_drop: false,
+                timestamp:       (doc as any).createdAt.toISOString(),
+            };
+
+            chatNamespace.to(roomId).emit('chat:message', msg);
+        } catch (err) {
+            console.error('[Chat] Erro ao salvar mensagem:', err);
+        }
+    });
+
+    socket.on('chat:leave', ({ roomId }: { roomId: string }) => {
+        if (roomId) socket.leave(roomId);
+        currentRoom = null;
+    });
+
+    socket.on('disconnect', () => {
+        if (currentRoom) socket.leave(currentRoom);
     });
 });
 
