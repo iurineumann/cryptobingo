@@ -574,11 +574,16 @@ echo "ORNG_RSA_EXPONENT=${ORNG_RSA_EXPONENT}"                 >> .waxdev.env
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 8c. CONFIGURA signer_key DO CONTRATO
+#
+# signer_key = chave pública de bingogamesvc (MICROSERVICE_PRIVATE_KEY).
+# O api-gateway assina matrizes de cartela com BINGOGAMESVC_KEY; o contrato
+# valida via assert_recover_key em buytickets. Usar BINGOGAMECTR_PUB aqui
+# causaria mismatch e rejeição de todas as compras de cartela.
 # ──────────────────────────────────────────────────────────────────────────────
 source .waxdev.env
 echo "[*] Configurando signer_key do contrato bingogamectr..."
 cleos push action bingogamectr setconfig \
-    "{\"signer_key\": \"${BINGOGAMECTR_PUB}\"}" \
+    "{\"signer_key\": \"${BINGOGAMESVC_PUB}\", \"treasury_account\": \"bingogamectr\"}" \
     -p bingogamectr@active || \
     echo "[!] Aviso: setconfig falhou (pode executar manualmente depois)."
 

@@ -284,8 +284,8 @@ function registerRoutes(): void {
     app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);
     app.get('/api/v1/vault/deposits/:depositId', playerLimiter, requireAuth, getDeposit);
     app.get('/api/v1/vault/allocations',      playerLimiter, requireAuth, listAllocations);
-    app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin'), allocateDrop);
-    app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin'), deallocateDrop);
+    app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin', 'sponsor'), allocateDrop);
+    app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin', 'sponsor'), deallocateDrop);
     app.post('/api/v1/vault/reclaim',    playerLimiter, requireAuth, reclaimAsset);
 
     // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────

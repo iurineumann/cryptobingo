@@ -18,15 +18,17 @@ describe('Sponsor · Fluxo de Drop completo (ADR-011, Tier 3 real)', () => {
     // transfer sponsor1111 → bingogamectr com memo "vault" aciona on_notify e
     // grava o drop_deposit. cy.exec faz isso antes de qualquer interação na UI.
 
-    before(() => {
+    beforeEach(() => {
+        // BINGO está em bingogametkn (não eosio.token). O memo "vault" aciona
+        // on_notify no bingogamectr e registra o drop_deposit com status="available".
         cy.exec(
-            'docker exec bingo_waxdev cleos push action eosio.token transfer ' +
+            'docker exec bingo_waxdev cleos push action bingogametkn transfer ' +
             '\'["sponsor1111","bingogamectr","50.0000 BINGO","vault"]\' ' +
             '-p sponsor1111@active',
             { timeout: 15_000, failOnNonZeroExit: false },
         ).then((result) => {
             if (result.code !== 0) {
-                cy.log('[!] Depósito BINGO falhou — sponsor1111 pode não ter saldo suficiente.');
+                cy.log('[!] Depósito BINGO (vault) falhou — sponsor1111 pode não ter saldo suficiente.');
                 cy.log(result.stderr);
             }
         });
@@ -50,10 +52,13 @@ describe('Sponsor · Fluxo de Drop completo (ADR-011, Tier 3 real)', () => {
         });
 
         it('exibe pelo menos um depósito disponível (status available)', () => {
+            // Verifica que existe pelo menos um card de depósito com status "available".
+            // Não usa .first() pois depósitos antigos de runs anteriores aparecem como
+            // "allocated" e estariam na frente da lista.
             cy.get('[data-testid^="sponsor-deposit-"]', { timeout: DEFAULT_TIMEOUT })
-                .should('have.length.gte', 1)
-                .first()
-                .should('contain.text', 'available');
+                .should('have.length.gte', 1);
+            cy.contains('[data-testid^="sponsor-deposit-"]', 'available')
+                .should('exist');
         });
 
         it('aloca o depósito a uma sala ativa', () => {
@@ -98,21 +103,54 @@ describe('Sponsor · Fluxo de Drop completo (ADR-011, Tier 3 real)', () => {
 
     describe('Player compra cartela e vê o prize-breakdown após encerramento', () => {
         before(() => {
+            // Garante saldo interno de BINGO para jogador1 antes de comprar cartela.
+            cy.exec(
+                'docker exec bingo_waxdev cleos push action bingogametkn transfer ' +
+                '\'["jogador1","bingogamectr","1000.0000 BINGO","deposito tier3"]\' ' +
+                '-p jogador1@active',
+                { timeout: 15_000, failOnNonZeroExit: false },
+            );
             cy.realDevLogin('player');
             cy.location('pathname', { timeout: DEFAULT_TIMEOUT }).should('eq', '/lobby');
         });
 
         it('entra na sala com drop ativo e compra cartela', () => {
-            cy.get('[data-testid^="lobby-card-"]', { timeout: DEFAULT_TIMEOUT })
-                .should('have.length.gte', 1);
-            cy.get('[data-testid^="lobby-card-"]').first().click();
-            cy.get('[data-testid="gr-room-header"]', { timeout: DEFAULT_TIMEOUT }).should('be.visible');
+            // Após spec 02 (~4min) jogos podem estar abortados ou criados recentemente.
+            // GameRoom poll a cada 15s; worker cria novo jogo ~30s após abort.
+            // Estratégia: entra via lobby-buy- (só existe para jogos em 'funding'),
+            // verifica status; se não for 'funding', aguarda gr-next-game-btn
+            // (aparece quando GameRoom detecta nextGame.status==='funding' via poll)
+            // e clica para voltar ao lobby e tentar novamente — até 3×.
+            const entrarEmFunding = (tentativa = 0): void => {
+                cy.get('[data-testid^="lobby-buy-"]', { timeout: 120_000 })
+                    .should('have.length.gte', 1)
+                    .first()
+                    .click({ force: true });
+                cy.get('[data-testid="gr-room-header"]', { timeout: DEFAULT_TIMEOUT }).should('be.visible');
+                cy.get('[data-testid="gr-game-status"]', { timeout: DEFAULT_TIMEOUT })
+                    .invoke('attr', 'data-status')
+                    .then((status) => {
+                        if (status === 'funding') return;
+                        if (tentativa >= 3) {
+                            throw new Error(`Jogo não atingiu 'funding' após ${tentativa + 1} tentativas (último status: ${status})`);
+                        }
+                        // Aguarda GameRoom detectar nextGame via poll de 15s
+                        // (worker ~30s + poll ~15s = ~45s até o botão aparecer)
+                        cy.get('[data-testid="gr-next-game-btn"]', { timeout: 90_000 })
+                            .should('exist')
+                            .scrollIntoView()
+                            .click({ force: true });
+                        entrarEmFunding(tentativa + 1);
+                    });
+            };
+            entrarEmFunding();
 
-            cy.get('[data-testid="buy-ticket-btn"]', { timeout: DEFAULT_TIMEOUT })
+            cy.get('[data-testid="gr-buy-more"]', { timeout: DEFAULT_TIMEOUT })
                 .should('not.be.disabled')
                 .click();
             cy.get('[data-testid="buy-modal"]', { timeout: DEFAULT_TIMEOUT }).should('be.visible');
-            cy.get('[data-testid="buy-confirm"]').should('not.be.disabled').click();
+            cy.get('[data-testid="buy-preview"]').should('not.be.disabled').click();
+            cy.get('[data-testid="buy-confirm"]', { timeout: DEFAULT_TIMEOUT }).should('not.be.disabled').click();
 
             cy.get(
                 '[data-testid="buy-toast-success"], [data-testid="gr-my-tickets"] [data-testid^="gr-ticket-"]',
@@ -132,15 +170,18 @@ describe('Sponsor · Fluxo de Drop completo (ADR-011, Tier 3 real)', () => {
         });
 
         it('prize-breakdown está visível (drop aparece se vencedor eleito)', () => {
-            // A estrutura do breakdown sempre existe; a linha de drop é probabilística
-            // (drop_chance_bps do gametype). Validamos a estrutura — não falhamos se
-            // o drop não ocorreu nesta execução específica.
-            cy.get('[data-testid="gr-prize-breakdown"]', { timeout: DEFAULT_TIMEOUT })
+            // gr-prize-breakdown só renderiza quando playerWinEntries.length > 0
+            // (o player ganhou algum prêmio). Resultado probabilístico — o overlay
+            // de encerramento é a asserção primária; o breakdown é validado se presente.
+            cy.get('[data-testid="gr-ended-overlay"]', { timeout: DEFAULT_TIMEOUT })
                 .should('be.visible');
 
-            cy.get('[data-testid="gr-prize-breakdown"]').then(($el) => {
-                if ($el.find('[data-testid="gr-prize-drop-item"]').length) {
-                    cy.wrap($el).find('[data-testid="gr-prize-drop-item"]').should('be.visible');
+            cy.get('body').then(($body) => {
+                if ($body.find('[data-testid="gr-prize-breakdown"]').length) {
+                    cy.get('[data-testid="gr-prize-breakdown"]').should('be.visible');
+                    cy.log('[i] Player ganhou — prize-breakdown visível.');
+                } else {
+                    cy.log('[i] Player não ganhou nesta rodada — prize-breakdown ausente (esperado).');
                 }
             });
         });

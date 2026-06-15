@@ -4,10 +4,10 @@
   "private": true,
   "description": "Testes E2E de UI (Cypress) do CryptoBingo — jornada visual player/admin/sponsor. Ref: ADR-017.",
   "scripts": {
-    "e2e": "cypress run --env tier=1",
-    "e2e:open": "cypress open",
-    "e2e:tier2": "cypress run --env tier=2",
-    "e2e:tier3": "cypress run --env tier=3",
+    "e2e": "env -u ELECTRON_RUN_AS_NODE cypress run --env tier=1",
+    "e2e:open": "env -u ELECTRON_RUN_AS_NODE cypress open",
+    "e2e:tier2": "env -u ELECTRON_RUN_AS_NODE cypress run --env tier=2",
+    "e2e:tier3": "env -u ELECTRON_RUN_AS_NODE cypress run --env tier=3",
     "e2e:docker": "bash run-docker.sh tier=1",
     "e2e:docker:tier2": "bash run-docker.sh tier=2",
     "clean": "rm -rf cypress/screenshots cypress/videos"
