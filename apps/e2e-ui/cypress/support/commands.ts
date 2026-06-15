@@ -233,11 +233,22 @@ Cypress.Commands.add('stubBackend', (scenario: StubScenario) => {
 // Aguarda a navegação pós-auth como sinal de conclusão.
 
 Cypress.Commands.add('realDevLogin', (role: DevRole) => {
+    // Remove JWT do role anterior para forçar nova autenticação.
+    // Com testIsolation:false, o cb_jwt anterior ainda está no sessionStorage e na
+    // variável _token do módulo api.ts. authenticateSession tem early-return quando
+    // getAuthToken() != null — sem esse clear, o login do novo role é ignorado e o
+    // session.actor diverge do wallet no JWT, causando "expected key different" no
+    // buytickets (hash usa req.user.wallet do JWT, buyer usa session.actor).
+    cy.clearAllSessionStorage();
     cy.visit('/');
     cy.get('[data-testid="dev-login-toggle"]', { timeout: 10_000 }).click();
-    cy.get(`[data-testid="dev-login-${role}"]`, { timeout: 10_000 }).click();
-    // Sinal de auth concluída: o app sai de '/' após gravar o JWT e carregar o profile.
-    cy.location('pathname', { timeout: 30_000 }).should('not.eq', '/');
+    // Cypress Studio gravou `> strong` como seletor exato (elemento mais específico
+    // no ponto de clique). Manter para corresponder ao comportamento real observado.
+    cy.get(`[data-testid="dev-login-${role}"] > strong`, { timeout: 10_000 }).click();
+    // Sinal de auth concluída: lobby renderizado após navigate('/lobby').
+    // O elemento `h2.lobby-header-title` só existe após auth + carregamento do profile.
+    // Confirmado pelo fluxo gravado no Cypress Studio (tier3/teste-login.cy.ts).
+    cy.get('h2.lobby-header-title', { timeout: 30_000 }).should('be.visible');
 });
 
 // ==========================================

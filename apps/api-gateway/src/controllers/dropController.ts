@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { Session } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import { Name, UInt64 } from '@wharfkit/antelope';
+import { UInt64 } from '@wharfkit/antelope';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -109,6 +109,36 @@ export async function allocateDrop(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    // Busca o depósito para obter token_contract (necessário para extended_asset)
+    // e verificar ownership do sponsor.
+    const callerRole = (req as any).userRole as string;
+    let depRow: any;
+    try {
+        const depResp = await rpcClient.v1.chain.get_table_rows({
+            code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT,
+            table: 'dropdeposits', lower_bound: UInt64.from(deposit_id),
+            upper_bound: UInt64.from(deposit_id), limit: 1, json: true,
+        });
+        depRow = depResp.rows[0];
+    } catch {
+        res.status(500).json({ error: 'Erro ao verificar depósito on-chain.' });
+        return;
+    }
+    if (!depRow) {
+        res.status(404).json({ error: `Depósito ${deposit_id} não encontrado.` });
+        return;
+    }
+    if (callerRole === 'sponsor' && depRow.owner !== req.user?.wallet) {
+        res.status(403).json({ error: 'Acesso negado: depósito não pertence ao sponsor.' });
+        return;
+    }
+
+    // quantity_per_drop: extended_asset { quantity, contract }
+    // Passa objetos planos — Wharfkit usa o ABI da chain para serializar; instâncias
+    // de Name/Asset causam "Found undefined" no encoder quando embutidas no data object.
+    const tokenContract: string = depRow.quantity_remaining?.contract ?? 'bingogametkn';
+    const rawQty = quantity_per_drop || '1.0000 BINGO';
+
     try {
         const session = getAdminSession();
         const result = await session.transact({
@@ -117,11 +147,12 @@ export async function allocateDrop(req: Request, res: Response): Promise<void> {
                 name:          'allocatedrop',
                 authorization: [session.permissionLevel],
                 data: {
-                    deposit_id:       UInt64.from(deposit_id),
-                    room_id:          UInt64.from(room_id),
-                    quantity_per_drop: quantity_per_drop || '0 TOKEN',
-                    nft_asset_id:     nft_asset_id || '0',
-                    drop_chance_bps,
+                    caller:            CONTRACT_ACCOUNT,
+                    deposit_id:        UInt64.from(deposit_id),
+                    room_id:           UInt64.from(room_id),
+                    quantity_per_drop: { quantity: rawQty, contract: tokenContract },
+                    nft_asset_id:      UInt64.from(nft_asset_id || '0'),
+                    drop_chance_bps:   Number(drop_chance_bps),
                 },
             }],
         }, { broadcast: true });
@@ -156,7 +187,10 @@ export async function deallocateDrop(req: Request, res: Response): Promise<void>
                 account:       CONTRACT_ACCOUNT,
                 name:          'deallocdrop',
                 authorization: [session.permissionLevel],
-                data:          { alloc_id: UInt64.from(alloc_id) },
+                data: {
+                    caller:   CONTRACT_ACCOUNT,
+                    alloc_id: UInt64.from(alloc_id),
+                },
             }],
         }, { broadcast: true });
 
