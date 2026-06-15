@@ -13,7 +13,7 @@ import type { MongoUserProfile, BlockchainGameState, BlockchainBalance, Extended
 import type { EnrichedRoom } from '../services/api';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
-import ChatPanel from './chat/ChatPanel';
+import ChatFloating from './chat/ChatFloating';
 import Logo from './Logo';
 import { TicketCard } from './TicketCard';
 import {
@@ -82,7 +82,7 @@ export default function GameRoom({
   const [room,         setRoom]         = useState<EnrichedRoom | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
-  const [showChat,     setShowChat]     = useState(false);
+
   const [loadingGame,  setLoadingGame]  = useState(true);
   const [now,          setNow]          = useState(Date.now());
   const [maxBalls,          setMaxBalls]          = useState(75);
@@ -691,17 +691,6 @@ export default function GameRoom({
             </span>
           )}
 
-          {/* Chat */}
-          {room?.metadata?.chat_enabled !== false && (
-            <button
-              className={`cb-btn cb-btn-sm ${showChat ? 'cb-btn-primary' : 'cb-btn-ghost'}`}
-              onClick={() => setShowChat(s => !s)}
-              aria-label="Chat da sala"
-            >
-              💬
-            </button>
-          )}
-
           {/* Seletor de idioma */}
           <select
             value={i18n.language}
@@ -1214,14 +1203,12 @@ export default function GameRoom({
         </div>
       )}
 
-      {/* ── Chat Panel ─────────────────────────────────────────────────────── */}
-      {showChat && room && (
-        <ChatPanel
+      {/* ── Chat Floating ──────────────────────────────────────────────────── */}
+      {room && (
+        <ChatFloating
           roomId={room.room_id}
           roomName={room.metadata?.name ?? `Sala #${room.room_id}`}
-          session={session}
           walletAddress={profile.wallet_address}
-          onClose={() => setShowChat(false)}
         />
       )}
 

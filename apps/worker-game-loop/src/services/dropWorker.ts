@@ -8,8 +8,10 @@ import { UInt64 } from '@wharfkit/antelope';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { microserviceSession } from './blockchain';
-import { io } from './broadcaster';
+import { io as wsIo } from './broadcaster';
 import { redisClient } from './redis';
+
+const chatNs = () => wsIo.of('/chat');
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const DROP_PROCESS_TTL_SEC = parseInt(process.env.DROP_PROCESS_TTL_SEC || '300', 10);
@@ -203,7 +205,7 @@ async function executeDrop(
             eventPayload.asset_name = `NFT #${alloc.nft_asset_id}`;
         }
 
-        io.to(`game:${gameId}`).emit('chat:sponsor_drop', eventPayload);
+        chatNs().to(roomId).emit('chat:sponsor_drop', eventPayload);
 
     } catch (err) {
         console.error(`[DropWorker] Erro ao executar drop alloc #${alloc.alloc_id}:`, err);
