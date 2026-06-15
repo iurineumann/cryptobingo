@@ -182,6 +182,26 @@ export async function deallocateDrop(req: Request, res: Response): Promise<void>
 
     try {
         const session = getAdminSession();
+
+        // Sponsors só podem desalocar próprias alocações (evita IDOR).
+        const callerRole = (req as any).user?.role as string | undefined;
+        if (callerRole === 'sponsor') {
+            const allocRes = await session.client.v1.chain.get_table_rows({
+                code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'dropallocs',
+                lower_bound: UInt64.from(alloc_id), upper_bound: UInt64.from(alloc_id),
+                limit: 1, json: true,
+            });
+            const allocRow = allocRes.rows[0];
+            if (!allocRow) {
+                res.status(404).json({ error: `Alocação ${alloc_id} não encontrada.` });
+                return;
+            }
+            if (allocRow.owner !== (req as any).user?.wallet) {
+                res.status(403).json({ error: 'Acesso negado: alocação não pertence ao sponsor.' });
+                return;
+            }
+        }
+
         const result = await session.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
