@@ -382,6 +382,40 @@
         {
           "name": "created_at",
           "type": "time_point_sec"
+        },
+        {
+          "name": "nft_template_allowlist",
+          "type": "uint64[]$"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64$"
+        },
+        {
+          "name": "house_fee_bps",
+          "type": "uint16$"
+        },
+        {
+          "name": "estimated_monthly_tickets",
+          "type": "uint32$"
+        }
+      ]
+    },
+    {
+      "name": "room_treasury",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "balance",
+          "type": "extended_asset"
+        },
+        {
+          "name": "locked",
+          "type": "extended_asset"
         }
       ]
     },
@@ -982,6 +1016,46 @@
       ]
     },
     {
+      "name": "setroomnft",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "nft_template_allowlist",
+          "type": "uint64[]"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "house_fee_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "estimated_monthly_tickets",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "withdrawroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "amount",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
       "name": "startdraw",
       "base": "",
       "fields": [
@@ -1265,6 +1339,16 @@
       "ricardian_contract": ""
     },
     {
+      "name": "setroomnft",
+      "type": "setroomnft",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "withdrawroom",
+      "type": "withdrawroom",
+      "ricardian_contract": ""
+    },
+    {
       "name": "startdraw",
       "type": "startdraw",
       "ricardian_contract": ""
@@ -1391,6 +1475,17 @@
     {
       "name": "rooms",
       "type": "room_record",
+      "index_type": "i64",
+      "key_names": [
+        "room_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "roomtresry",
+      "type": "room_treasury",
       "index_type": "i64",
       "key_names": [
         "room_id"

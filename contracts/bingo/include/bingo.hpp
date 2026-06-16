@@ -239,6 +239,12 @@ namespace bingo {
         uint16_t       room_drop_chance_bps   = 10000;
         bool           sponsor_room           = false;
         time_point_sec created_at;
+        // ADR-028 §4: binary_extension → linhas de salas pré-existentes (sem estes
+        // campos) continuam desserializando. Ausente = comportamento legado.
+        eosio::binary_extension<std::vector<uint64_t>> nft_template_allowlist; // templates aceitos (vazio = todos)
+        eosio::binary_extension<uint64_t>              campaign_id;            // vínculo de campanha (0 = nenhum)
+        eosio::binary_extension<uint16_t>              house_fee_bps;          // taxa da casa sobre lucro do treasury
+        eosio::binary_extension<uint32_t>              estimated_monthly_tickets; // projeção p/ colateral
 
         uint64_t primary_key()  const { return room_id; }
         uint64_t by_sponsor()   const { return sponsor.value; }
@@ -250,6 +256,22 @@ namespace bingo {
         indexed_by<"bysponsor"_n, const_mem_fun<room_record, uint64_t, &room_record::by_sponsor>>,
         indexed_by<"bystatus"_n,  const_mem_fun<room_record, uint64_t, &room_record::by_status>>
     > rooms_table;
+
+    // ==========================================
+    // ROOM TREASURIES — Sala patrocinada (ADR-028 §5)
+    //
+    // Sponsor custeia a sala: ticket sales creditam balance, payouts debitam
+    // balance (nunca o house balance). `locked` é o colateral travado enquanto
+    // a sala está ativa — sponsor não pode sacar. Um row por sala.
+    // ==========================================
+
+    struct [[eosio::table("roomtresry")]] room_treasury {
+        uint64_t       room_id;
+        extended_asset balance;   // saldo disponível (ticket sales + depósitos - payouts)
+        extended_asset locked;    // colateral travado enquanto a sala está ativa
+        uint64_t primary_key() const { return room_id; }
+    };
+    typedef multi_index<"roomtresry"_n, room_treasury> room_treasuries_table;
 
     // ==========================================
     // DROP VAULT — Singleton (ADR-011)
@@ -410,6 +432,10 @@ namespace bingo {
         [[eosio::action]] void pauseroom(uint64_t room_id);
         [[eosio::action]] void closeroom(uint64_t room_id);
         [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player);
+        // ADR-028 §4: configura economia de sala patrocinada (allowlist, campanha, taxa, projeção)
+        [[eosio::action]] void setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets);
+        // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala
+        [[eosio::action]] void withdrawroom(uint64_t room_id, extended_asset amount);
 
         // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
         [[eosio::action]] void allocatedrop(name caller, uint64_t deposit_id, uint64_t room_id, extended_asset quantity_per_drop, uint64_t nft_asset_id, uint16_t drop_chance_bps);
