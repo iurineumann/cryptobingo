@@ -297,5 +297,14 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
     Até lá, `VALUE_SCHEMA_FIELD` é configurável (validado em `confignft`) mas não
     consumido on-chain; apenas `VALUE_FIXED` é aplicado.
   - Consumo dos **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
-- `claimwin.boost_nft_ids` e os campos novos de `rooms` usam `binary_extension`
-  (trailing/`$`) → callers e linhas antigas continuam válidos; E2E permanece verde.
+  - Param `boost_nft_ids` + aplicação do **prize boost** no `claimwin` (§7). Tentou-se
+    adicioná-lo como `binary_extension` trailing, mas o wharfkit (antelope 1.2.0) **não
+    omite binary_extension de array** na codificação → quebraria os callers atuais do
+    worker. Adiado p/ Fase 2 (lockstep com o worker). O débito do payout no
+    `room_treasury` e a `house_fee_bps` no `closegame` permanecem (não dependem do param).
+- Os campos novos de `rooms` usam `binary_extension` (trailing/`$`) → linhas de salas
+  pré-existentes continuam desserializando; E2E permanece verde.
+- **Gotcha de assinatura no harness (ADR-026):** actions admin do `bingogamectr`
+  exigem a permissão `admin` (linkauth); `bingogamesvc@active` não a satisfaz. Tickets
+  são assinados com a chave de `signer_key` = `bingogamesvc` (microservice). O harness
+  foi corrigido para refletir isso (branch separada, escopo de plataforma).
