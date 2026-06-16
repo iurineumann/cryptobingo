@@ -637,6 +637,24 @@ namespace bingo {
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
+
+                // ADR-028 §4: quando um NFT é usado em sala com allowlist, o template
+                // precisa estar autorizado nela.
+                if (game_itr->room_id != 0) {
+                    rooms_table rooms(get_self(), get_self().value);
+                    auto room_itr = rooms.find(game_itr->room_id);
+                    if (room_itr != rooms.end() && room_itr->nft_template_allowlist.has_value()) {
+                        const auto& allow = room_itr->nft_template_allowlist.value();
+                        if (!allow.empty()) {
+                            bool ok = false;
+                            for (auto t : allow) {
+                                if (t == (uint64_t)nft_itr->template_id) { ok = true; break; }
+                            }
+                            check(ok, "NFT nao esta na allowlist de templates desta sala.");
+                        }
+                    }
+                }
+
                 nftconfigs_table _configs(get_self(), get_self().value);
                 auto conf_itr = _configs.find((uint64_t)nft_itr->template_id);
                 if (conf_itr != _configs.end()) {
@@ -664,6 +682,22 @@ namespace bingo {
             check(bal_itr->balance >= total_cost, "Saldo insuficiente.");
             balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance -= total_cost; });
             games.modify(game_itr, get_self(), [&](auto& g) { g.total_wagered += total_cost; });
+
+            // ADR-028 §6: em sala patrocinada, ticket sales creditam o room_treasury
+            // (o desconto TICKET_DISCOUNT é absorvido pelo sponsor: já está no total_cost).
+            if (game_itr->room_id != 0) {
+                rooms_table rooms(get_self(), get_self().value);
+                auto room_itr = rooms.find(game_itr->room_id);
+                if (room_itr != rooms.end() && room_itr->sponsor_room) {
+                    room_treasuries_table treasuries(get_self(), get_self().value);
+                    auto t_itr = treasuries.require_find(game_itr->room_id,
+                        "Treasury da sala patrocinada nao inicializado.");
+                    check(t_itr->balance.quantity.symbol == total_cost.quantity.symbol &&
+                          t_itr->balance.contract == total_cost.contract,
+                        "Token do ticket difere do treasury da sala.");
+                    treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance += total_cost; });
+                }
+            }
         }
 
         for (size_t i = 0; i < matrices.size(); ++i) {
