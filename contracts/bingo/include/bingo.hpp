@@ -131,6 +131,53 @@ namespace bingo {
     typedef multi_index<"nftconfigs"_n, nft_config> nftconfigs_table;
 
     // ==========================================
+    // NFT BURNS / GRANTS — Burn detection híbrido (ADR-028 §8)
+    //
+    // Burn é detectado off-chain (AtomicAssets API) e registrado pelo worker
+    // (bingogamesvc) via recordburn. Para regras BURN_TO_CLAIM, gera um grant
+    // temporário. Trust model: igual ao claimwin (worker é trusted).
+    // ==========================================
+
+    struct [[eosio::table("nftseq")]] nft_seq {
+        uint64_t next_burn_id  = 1;
+        uint64_t next_grant_id = 1;
+    };
+    typedef singleton<"nftseq"_n, nft_seq> nft_seq_singleton;
+
+    struct [[eosio::table("nftburns")]] nft_burn {
+        uint64_t     burn_id;
+        name         owner;
+        uint64_t     asset_id;
+        uint64_t     template_id;
+        name         collection;
+        time_point   burned_at;
+        uint64_t primary_key() const { return burn_id; }
+        uint64_t by_owner()    const { return owner.value; }
+        uint64_t by_asset()    const { return asset_id; }
+    };
+    typedef multi_index<
+        "nftburns"_n,
+        nft_burn,
+        indexed_by<"byowner"_n, const_mem_fun<nft_burn, uint64_t, &nft_burn::by_owner>>,
+        indexed_by<"byasset"_n, const_mem_fun<nft_burn, uint64_t, &nft_burn::by_asset>>
+    > nft_burns_table;
+
+    struct [[eosio::table("nftgrants")]] nft_grant {
+        uint64_t     grant_id;
+        name         owner;
+        uint64_t     template_id;
+        uint8_t      rule_type;
+        time_point   grant_until;
+        uint64_t primary_key() const { return grant_id; }
+        uint64_t by_owner()    const { return owner.value; }
+    };
+    typedef multi_index<
+        "nftgrants"_n,
+        nft_grant,
+        indexed_by<"byowner"_n, const_mem_fun<nft_grant, uint64_t, &nft_grant::by_owner>>
+    > nft_grants_table;
+
+    // ==========================================
     // CAMPAIGNS — Motor de Patrocínio B2B
     // ==========================================
 
@@ -412,6 +459,9 @@ namespace bingo {
         // ── NFT Config (ADR-028) ──────────────────────────────────────────────
         [[eosio::action]] void confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules);
         [[eosio::action]] void delnftconf(uint64_t template_id);
+        // ADR-028 §8: registra burn detectado off-chain (auth bingogamesvc).
+        // Para regras BURN_TO_CLAIM do template, gera grant temporário.
+        [[eosio::action]] void recordburn(name owner, uint64_t asset_id, uint64_t template_id, name collection);
 
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);

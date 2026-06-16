@@ -161,6 +161,53 @@ namespace bingo {
         _configs.erase(_configs.require_find(template_id, "Template ID nao encontrado."));
     }
 
+    // ADR-028 §8: registra um burn provado off-chain (AtomicAssets API) pelo worker.
+    // Trust model: worker é trusted (igual claimwin). Idempotente por asset_id.
+    // Para cada regra BURN_TO_CLAIM do template, cria um grant temporário.
+    void bingo_contract::recordburn(name owner, uint64_t asset_id, uint64_t template_id, name collection) {
+        require_auth("bingogamesvc"_n);
+
+        nft_burns_table burns(get_self(), get_self().value);
+        auto by_asset = burns.get_index<"byasset"_n>();
+        check(by_asset.find(asset_id) == by_asset.end(), "Burn ja registrado para este asset_id.");
+
+        nft_seq_singleton seq_t(get_self(), get_self().value);
+        nft_seq seq = seq_t.get_or_default(nft_seq{});
+
+        // RAM pago pelo contrato: em recordburn quem assina é o worker
+        // (bingogamesvc), não o player — não dá para cobrar RAM do owner sem a
+        // autorização dele. (Diverge do ADR §Consequências, que assumia buyer.)
+        uint64_t burn_id = seq.next_burn_id++;
+        burns.emplace(get_self(), [&](auto& b) {
+            b.burn_id     = burn_id;
+            b.owner       = owner;
+            b.asset_id    = asset_id;
+            b.template_id = template_id;
+            b.collection  = collection;
+            b.burned_at   = current_time_point();
+        });
+
+        nftconfigs_table _configs(get_self(), get_self().value);
+        auto conf_itr = _configs.find(template_id);
+        if (conf_itr != _configs.end()) {
+            nft_grants_table grants(get_self(), get_self().value);
+            for (const auto& r : conf_itr->rules) {
+                if (r.type != RULE_BURN_TO_CLAIM) continue;
+                uint64_t grant_id = seq.next_grant_id++;
+                time_point until = current_time_point() + eosio::seconds(r.grant_duration_sec);
+                grants.emplace(get_self(), [&](auto& g) {
+                    g.grant_id    = grant_id;
+                    g.owner       = owner;
+                    g.template_id = template_id;
+                    g.rule_type   = r.type;
+                    g.grant_until = until;
+                });
+            }
+        }
+
+        seq_t.set(seq, get_self());
+    }
+
     // ==========================================
     // ADR-004 FASE 2 — PADRÕES DINÂMICOS
     // ==========================================
