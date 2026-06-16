@@ -52,6 +52,27 @@ async function transact(actionName: string, data: object): Promise<string | unde
 
 // ── FSM Transitions ────────────────────────────────────────────────────────────
 
+/**
+ * ADR-028 §8: registra um burn provado off-chain (recordburn, auth bingogamesvc).
+ * Idempotente no contrato (rejeita asset_id já registrado). Gera grants BURN_TO_CLAIM.
+ */
+export async function executeRecordBurn(
+    owner:      string,
+    assetId:    string,
+    templateId: number | string,
+    collection: string,
+): Promise<string | undefined> {
+    console.log(`🔥 [Blockchain] recordburn → ${owner} queimou asset ${assetId} (tpl ${templateId})`);
+    const txId = await transact('recordburn', {
+        owner,
+        asset_id:    assetId,
+        template_id: templateId,
+        collection,
+    });
+    console.log(`✅ Burn registrado. TX: ${txId}`);
+    return txId;
+}
+
 /** CREATED → FUNDING: abre as vendas. */
 export async function executeFundGame(gameId: string): Promise<string | undefined> {
     console.log(`🟢 [Blockchain] fundgame → jogo ${gameId}`);
