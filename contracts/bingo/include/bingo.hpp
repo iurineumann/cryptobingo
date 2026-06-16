@@ -85,15 +85,48 @@ namespace bingo {
     > tickets_table;
 
     // ==========================================
-    // NFT CONFIGS
+    // NFT CONFIGS — Motor de Mecânicas NFT (ADR-028)
+    //
+    // Multi-regra por template. Substitui o modelo legado
+    // (discount_pct/is_vip) por um vetor de regras tipadas.
     // ==========================================
 
+    // Tipo da regra NFT (ADR-028 §1)
+    enum nft_rule_type : uint8_t {
+        RULE_TICKET_DISCOUNT = 1,  // desconto na compra de cartela
+        RULE_PRIZE_BOOST     = 2,  // % extra no payout
+        RULE_ROOM_ACCESS     = 3,  // acesso a salas restritas
+        RULE_BURN_TO_CLAIM   = 4,  // queima → grant temporário
+    };
+
+    // Origem do valor da regra (ADR-028 §2)
+    enum nft_value_origin : uint8_t {
+        VALUE_FIXED        = 0,  // fixed_value (hundredths)
+        VALUE_SCHEMA_FIELD = 1,  // lê do schema field da NFT (validação dupla)
+    };
+
+    // Condição de elegibilidade da regra
+    enum nft_condition : uint8_t {
+        COND_OWNS   = 0,  // jogador possui a NFT
+        COND_BURNED = 1,  // jogador queimou a NFT (BURN_TO_CLAIM)
+    };
+
+    struct nft_rule {
+        uint8_t               type;                   // nft_rule_type
+        uint8_t               value_origin        = 0; // nft_value_origin
+        uint16_t              fixed_value         = 0; // hundredths se VALUE_FIXED
+        std::string           schema_field;            // nome do campo se VALUE_SCHEMA_FIELD
+        uint8_t               max_uses            = 0; // 0 = ilimitado (consumível se > 0)
+        uint32_t              grant_duration_sec  = 0; // p/ BURN_TO_CLAIM
+        uint8_t               condition           = 0; // nft_condition
+        std::vector<uint64_t> room_ids;                // p/ ROOM_ACCESS (vazio = todas)
+    };
+
     struct [[eosio::table("nftconfigs")]] nft_config {
-        int32_t  template_id;
-        uint8_t  discount_pct;
-        bool     is_vip;
-        uint32_t valid_until;
-        uint64_t primary_key() const { return (uint64_t)template_id; }
+        uint64_t              template_id;
+        name                  collection_name;
+        std::vector<nft_rule> rules;
+        uint64_t primary_key() const { return template_id; }
     };
     typedef multi_index<"nftconfigs"_n, nft_config> nftconfigs_table;
 
@@ -352,9 +385,9 @@ namespace bingo {
         [[eosio::action]] void refundticket(uint64_t game_id, uint64_t ticket_id);
         [[eosio::action]] void cleargame(uint64_t game_id, uint32_t max_rows);
 
-        // ── NFT Config ───────────────────────────────────────────────────────
-        [[eosio::action]] void setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until);
-        [[eosio::action]] void delnftconf(int32_t template_id);
+        // ── NFT Config (ADR-028) ──────────────────────────────────────────────
+        [[eosio::action]] void confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules);
+        [[eosio::action]] void delnftconf(uint64_t template_id);
 
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);

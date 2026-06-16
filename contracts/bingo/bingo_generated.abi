@@ -280,6 +280,24 @@
             ]
         },
         {
+            "name": "confignft",
+            "base": "",
+            "fields": [
+                {
+                    "name": "template_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "collection_name",
+                    "type": "name"
+                },
+                {
+                    "name": "rules",
+                    "type": "nft_rule[]"
+                }
+            ]
+        },
+        {
             "name": "creategame",
             "base": "",
             "fields": [
@@ -369,7 +387,7 @@
             "fields": [
                 {
                     "name": "template_id",
-                    "type": "int32"
+                    "type": "uint64"
                 }
             ]
         },
@@ -432,6 +450,44 @@
                 {
                     "name": "game_id",
                     "type": "uint64"
+                }
+            ]
+        },
+        {
+            "name": "nft_rule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "value_origin",
+                    "type": "uint8"
+                },
+                {
+                    "name": "fixed_value",
+                    "type": "uint16"
+                },
+                {
+                    "name": "schema_field",
+                    "type": "string"
+                },
+                {
+                    "name": "max_uses",
+                    "type": "uint8"
+                },
+                {
+                    "name": "grant_duration_sec",
+                    "type": "uint32"
+                },
+                {
+                    "name": "condition",
+                    "type": "uint8"
+                },
+                {
+                    "name": "room_ids",
+                    "type": "uint64[]"
                 }
             ]
         },
@@ -522,28 +578,6 @@
                 {
                     "name": "signer_key",
                     "type": "public_key"
-                }
-            ]
-        },
-        {
-            "name": "setnftconf",
-            "base": "",
-            "fields": [
-                {
-                    "name": "template_id",
-                    "type": "int32"
-                },
-                {
-                    "name": "discount_pct",
-                    "type": "uint8"
-                },
-                {
-                    "name": "is_vip",
-                    "type": "bool"
-                },
-                {
-                    "name": "valid_until",
-                    "type": "uint32"
                 }
             ]
         },
@@ -713,6 +747,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "confignft",
+            "type": "confignft",
+            "ricardian_contract": ""
+        },
+        {
             "name": "creategame",
             "type": "creategame",
             "ricardian_contract": ""
@@ -790,11 +829,6 @@
         {
             "name": "setconfig",
             "type": "setconfig",
-            "ricardian_contract": ""
-        },
-        {
-            "name": "setnftconf",
-            "type": "setnftconf",
             "ricardian_contract": ""
         },
         {

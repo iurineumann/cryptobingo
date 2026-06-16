@@ -470,7 +470,7 @@ if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.
           active -p bingogamectr@active 2>/dev/null || true
 
         # linkauth: restringe quais actions a permissão admin pode chamar (defesa em profundidade)
-        for ACTION in creategame setnftconf delnftconf addpattern delpattern \
+        for ACTION in creategame confignft delnftconf addpattern delpattern \
                       addgametype delgametype setstages setcombos \
                       createroom activateroom pauseroom closeroom setroommeta \
                       linkcampaign closecmpgn allocatedrop deallocdrop abortgame; do
@@ -758,12 +758,12 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
             "{\"authorized_creator\":\"bingogamectr\",\"collection_name\":\"cryptobingo1\",\"schema_name\":\"prize\",\"transferable\":true,\"burnable\":true,\"max_supply\":0,\"immutable_data\":[{\"first\":\"name\",\"second\":[\"string\",\"CryptoBingo Season Prize\"]},{\"first\":\"img\",\"second\":[\"string\",\"${PRIZE_IMG_CID}\"]},{\"first\":\"prize_type\",\"second\":[\"string\",\"season_rank\"]},{\"first\":\"season\",\"second\":[\"uint32\",1]},{\"first\":\"rarity\",\"second\":[\"string\",\"rare\"]}]}" \
             -p bingogamectr@active 2>/dev/null || true
 
-        # ── 8f-7. Seed: nftconfig no bingogamectr (template 1 = 10% off) ───
-        # valid_until=0 significa sem expiração (uint32 — não usar 9999999999, transborda)
-        # Usa -p bingogamectr@admin (setnftconf está linkada à permissão admin)
-        echo "[*] Registrando nftconfig no bingogamectr..."
-        cleos push action bingogamectr setnftconf \
-            '{"template_id":1,"discount_pct":10,"is_vip":false,"valid_until":0}' \
+        # ── 8f-7. Seed: nftconfig no bingogamectr (ADR-028 motor multi-regra) ───
+        # template 1 = TICKET_DISCOUNT 10% (fixed_value em hundredths de %: 1000 = 10%)
+        # Usa -p bingogamectr@admin (confignft está linkada à permissão admin)
+        echo "[*] Registrando nftconfig no bingogamectr (ADR-028)..."
+        cleos push action bingogamectr confignft \
+            '{"template_id":1,"collection_name":"cryptobingo1","rules":[{"type":1,"value_origin":0,"fixed_value":1000,"schema_field":"","max_uses":0,"grant_duration_sec":0,"condition":0,"room_ids":[]}]}' \
             -p bingogamectr@admin 2>/dev/null || true
 
         # ── 8f-8. Seed: minta utility NFTs para contas dev ─────────────────

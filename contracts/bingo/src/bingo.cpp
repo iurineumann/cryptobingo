@@ -100,24 +100,62 @@ namespace bingo {
     // GESTÃO DE NFTs
     // ==========================================
 
-    void bingo_contract::setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until) {
+    // ADR-028 §1: configura motor multi-regra por template.
+    // Substitui setnftconf. Valida cada regra (tipo, origem do valor, limites).
+    void bingo_contract::confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules) {
         require_auth(permission_level{get_self(), "admin"_n});
-        check(discount_pct <= 100, "Desconto maximo e 100%");
+        check(collection_name.value != 0, "collection_name obrigatorio.");
+        check(rules.size() > 0,  "rules deve ter pelo menos 1 elemento.");
+        check(rules.size() <= 16, "rules: maximo 16 por template.");
+
+        for (const auto& r : rules) {
+            check(r.type >= RULE_TICKET_DISCOUNT && r.type <= RULE_BURN_TO_CLAIM,
+                "rule.type invalido (1=discount,2=boost,3=access,4=burn).");
+            check(r.value_origin == VALUE_FIXED || r.value_origin == VALUE_SCHEMA_FIELD,
+                "rule.value_origin invalido (0=fixed,1=schema_field).");
+            check(r.condition == COND_OWNS || r.condition == COND_BURNED,
+                "rule.condition invalido (0=owns,1=burned).");
+
+            // BURN_TO_CLAIM implica condition=burned; demais implicam owns
+            if (r.type == RULE_BURN_TO_CLAIM) {
+                check(r.condition == COND_BURNED, "BURN_TO_CLAIM exige condition=burned.");
+                check(r.grant_duration_sec > 0, "BURN_TO_CLAIM exige grant_duration_sec > 0.");
+            } else {
+                check(r.condition == COND_OWNS, "regra nao-burn exige condition=owns.");
+            }
+
+            if (r.value_origin == VALUE_FIXED) {
+                // hundredths: discount cap 100% (10000); boost cap 255x (25500)
+                if (r.type == RULE_TICKET_DISCOUNT) {
+                    check(r.fixed_value > 0 && r.fixed_value <= 10000,
+                        "TICKET_DISCOUNT fixed_value: 1..10000 (hundredths de %).");
+                } else if (r.type == RULE_PRIZE_BOOST) {
+                    check(r.fixed_value > 0 && r.fixed_value <= 25500,
+                        "PRIZE_BOOST fixed_value: 1..25500 (hundredths).");
+                }
+            } else { // VALUE_SCHEMA_FIELD
+                check(!r.schema_field.empty(), "VALUE_SCHEMA_FIELD exige schema_field.");
+                check(r.schema_field.size() <= 64, "schema_field muito longo (max 64).");
+            }
+        }
+
         nftconfigs_table _configs(get_self(), get_self().value);
         auto itr = _configs.find(template_id);
         if (itr == _configs.end()) {
             _configs.emplace(get_self(), [&](auto& row) {
-                row.template_id = template_id; row.discount_pct = discount_pct;
-                row.is_vip = is_vip; row.valid_until = valid_until;
+                row.template_id     = template_id;
+                row.collection_name = collection_name;
+                row.rules           = rules;
             });
         } else {
             _configs.modify(itr, get_self(), [&](auto& row) {
-                row.discount_pct = discount_pct; row.is_vip = is_vip; row.valid_until = valid_until;
+                row.collection_name = collection_name;
+                row.rules           = rules;
             });
         }
     }
 
-    void bingo_contract::delnftconf(int32_t template_id) {
+    void bingo_contract::delnftconf(uint64_t template_id) {
         require_auth(permission_level{get_self(), "admin"_n});
         nftconfigs_table _configs(get_self(), get_self().value);
         _configs.erase(_configs.require_find(template_id, "Template ID nao encontrado."));
@@ -573,16 +611,22 @@ namespace bingo {
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
-                check(nft_itr->collection_name == "cryptobingo1"_n, "NFT nao pertence a colecao oficial.");
                 nftconfigs_table _configs(get_self(), get_self().value);
-                auto conf_itr = _configs.find(nft_itr->template_id);
+                auto conf_itr = _configs.find((uint64_t)nft_itr->template_id);
                 if (conf_itr != _configs.end()) {
-                    if (conf_itr->valid_until > 0) {
-                        check(current_time_point().sec_since_epoch() <= conf_itr->valid_until,
-                            "Utilidade do NFT expirou.");
+                    check(conf_itr->collection_name == nft_itr->collection_name,
+                        "NFT nao pertence a colecao configurada para o template.");
+                    // ADR-028 §6: aplica o maior TICKET_DISCOUNT FIXED elegível (owns).
+                    // SCHEMA_FIELD e consumíveis: sub-fases 1c/1f.
+                    uint16_t best_discount = 0; // hundredths de %
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_TICKET_DISCOUNT) continue;
+                        if (r.condition != COND_OWNS) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_discount) best_discount = r.fixed_value;
                     }
-                    if (conf_itr->discount_pct > 0) {
-                        int64_t discount = (total_cost.quantity.amount * conf_itr->discount_pct) / 100;
+                    if (best_discount > 0) {
+                        int64_t discount = (total_cost.quantity.amount * (int64_t)best_discount) / 10000;
                         total_cost.quantity.amount -= discount;
                     }
                 }
