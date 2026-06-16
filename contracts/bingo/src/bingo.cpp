@@ -228,12 +228,17 @@ namespace bingo {
             check(r.condition == COND_OWNS || r.condition == COND_BURNED,
                 "rule.condition invalido (0=owns,1=burned).");
 
-            // BURN_TO_CLAIM implica condition=burned; demais implicam owns
+            // BURN_TO_CLAIM exige condition=burned + duração do grant. Demais tipos
+            // (discount/boost/access) aceitam owns OU burned: condition=burned = o
+            // benefício é concedido via grant após a queima (ADR-028 §8).
             if (r.type == RULE_BURN_TO_CLAIM) {
                 check(r.condition == COND_BURNED, "BURN_TO_CLAIM exige condition=burned.");
                 check(r.grant_duration_sec > 0, "BURN_TO_CLAIM exige grant_duration_sec > 0.");
-            } else {
-                check(r.condition == COND_OWNS, "regra nao-burn exige condition=owns.");
+            }
+            // benefícios burned devem ser FIXED (asset queimado não tem schema p/ ler)
+            if (r.condition == COND_BURNED && r.type != RULE_BURN_TO_CLAIM) {
+                check(r.value_origin == VALUE_FIXED,
+                    "regra burned (nao-burn) exige value_origin=fixed.");
             }
 
             if (r.value_origin == VALUE_FIXED) {
@@ -793,12 +798,16 @@ namespace bingo {
         total_cost.quantity.amount *= (int64_t)matrices.size();
 
         if (total_cost.quantity.amount > 0) {
+            // ADR-028 §6/§8: melhor TICKET_DISCOUNT elegível, em hundredths-de-%
+            // (10000 = 100%). Considera regras owns (NFT possuído via nft_id) e
+            // burned (grant BURN_TO_CLAIM ativo). Aplica UM desconto (o maior).
+            uint32_t best_hbp = 0;
+
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
 
-                // ADR-028 §4: quando um NFT é usado em sala com allowlist, o template
-                // precisa estar autorizado nela.
+                // ADR-028 §4: NFT usado em sala com allowlist → template autorizado.
                 if (game_itr->room_id != 0) {
                     rooms_table rooms(get_self(), get_self().value);
                     auto room_itr = rooms.find(game_itr->room_id);
@@ -819,13 +828,8 @@ namespace bingo {
                 if (conf_itr != _configs.end()) {
                     check(conf_itr->collection_name == nft_itr->collection_name,
                         "NFT nao pertence a colecao configurada para o template.");
-                    // ADR-028 §6: aplica o maior TICKET_DISCOUNT elegível (owns).
-                    // Unidade comparável = hundredths-de-% (10000 = 100%):
-                    //   VALUE_FIXED        → fixed_value já em hundredths-de-%
-                    //   VALUE_SCHEMA_FIELD → valor do schema field é PERCENT inteiro
-                    //                        (ex.: utility.discount_pct=10) → ×100
-                    // Consumíveis (max_uses): sub-fase posterior.
-                    uint32_t best_hbp = 0; // hundredths-de-%
+                    // owns: VALUE_FIXED (hundredths-de-%) ou VALUE_SCHEMA_FIELD
+                    // (campo do schema é PERCENT inteiro, ex. discount_pct=10 → ×100).
                     for (const auto& r : conf_itr->rules) {
                         if (r.type != RULE_TICKET_DISCOUNT) continue;
                         if (r.condition != COND_OWNS) continue;
@@ -836,17 +840,39 @@ namespace bingo {
                             if (_read_schema_numeric(nft_itr->collection_name, nft_itr->schema_name,
                                     nft_itr->template_id, nft_itr->immutable_serialized_data,
                                     r.schema_field, v)) {
-                                uint32_t hbp = (v > 100 ? 100 : (uint32_t)v) * 100; // percent → hundredths-de-%
+                                uint32_t hbp = (v > 100 ? 100 : (uint32_t)v) * 100;
                                 if (hbp > best_hbp) best_hbp = hbp;
                             }
                         }
                     }
-                    if (best_hbp > 10000) best_hbp = 10000; // cap 100%
-                    if (best_hbp > 0) {
-                        int64_t discount = (total_cost.quantity.amount * (int64_t)best_hbp) / 10000;
-                        total_cost.quantity.amount -= discount;
+                }
+            }
+
+            // ADR-028 §8: desconto via grant BURN_TO_CLAIM ativo (jogador queimou o
+            // NFT → não o possui; benefício só FIXED, pois não há asset p/ ler schema).
+            {
+                nft_grants_table grants(get_self(), get_self().value);
+                auto gidx = grants.get_index<"byowner"_n>();
+                uint32_t now_sec = current_time_point().sec_since_epoch();
+                nftconfigs_table _gconfigs(get_self(), get_self().value);
+                for (auto it = gidx.lower_bound(buyer.value);
+                     it != gidx.end() && it->owner == buyer; ++it) {
+                    if (it->grant_until.sec_since_epoch() <= now_sec) continue; // expirado
+                    auto conf_itr = _gconfigs.find(it->template_id);
+                    if (conf_itr == _gconfigs.end()) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_TICKET_DISCOUNT) continue;
+                        if (r.condition != COND_BURNED) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
                     }
                 }
+            }
+
+            if (best_hbp > 10000) best_hbp = 10000; // cap 100%
+            if (best_hbp > 0) {
+                int64_t discount = (total_cost.quantity.amount * (int64_t)best_hbp) / 10000;
+                total_cost.quantity.amount -= discount;
             }
 
             balances_table balances(get_self(), buyer.value);
