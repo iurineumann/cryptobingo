@@ -25,6 +25,118 @@ namespace bingo {
     }
 
     // ==========================================
+    // ADR-028 §2 — Deserialização de schema field (ALPHA AtomicAssets) on-chain
+    // ==========================================
+
+    // Lê um varint sem sinal (LEB128) — encoding usado pelo atomicdata.
+    static uint64_t _aa_read_varuint(const std::vector<uint8_t>& d, size_t& i) {
+        uint64_t result = 0; int shift = 0;
+        while (i < d.size()) {
+            uint8_t b = d[i++];
+            result |= (uint64_t)(b & 0x7f) << shift;
+            if (!(b & 0x80)) break;
+            shift += 7;
+            if (shift >= 64) break;
+        }
+        return result;
+    }
+
+    // Avança o cursor `i` por UM valor do `type`, capturando o valor numérico quando
+    // aplicável. Retorna false se o tipo for desconhecido ou os dados truncarem.
+    static bool _aa_decode_value(const std::string& type, const std::vector<uint8_t>& d,
+                                 size_t& i, bool& is_num, uint64_t& num) {
+        is_num = false; num = 0;
+
+        // arrays "X[]" → varint(count) + count × elemento
+        if (type.size() >= 2 && type.compare(type.size() - 2, 2, "[]") == 0) {
+            std::string el = type.substr(0, type.size() - 2);
+            uint64_t count = _aa_read_varuint(d, i);
+            for (uint64_t k = 0; k < count; k++) {
+                bool b; uint64_t n;
+                if (!_aa_decode_value(el, d, i, b, n)) return false;
+            }
+            return true;
+        }
+        // length-prefixed (varint len + bytes)
+        if (type == "string" || type == "image" || type == "ipfs") {
+            uint64_t len = _aa_read_varuint(d, i);
+            i += (size_t)len;
+            return i <= d.size();
+        }
+        // 1 byte cru
+        if (type == "bool" || type == "byte") {
+            if (i >= d.size()) return false;
+            num = d[i++]; is_num = true; return true;
+        }
+        // inteiros sem sinal → varint
+        if (type == "uint8" || type == "uint16" || type == "uint32" || type == "uint64") {
+            num = _aa_read_varuint(d, i); is_num = true; return true;
+        }
+        // inteiros com sinal → varint zigzag
+        if (type == "int8" || type == "int16" || type == "int32" || type == "int64") {
+            uint64_t v = _aa_read_varuint(d, i);
+            int64_t sv = (int64_t)(v >> 1) ^ -(int64_t)(v & 1);
+            num = (uint64_t)sv; is_num = true; return true;
+        }
+        // fixedN (N = bits) → N/8 bytes little-endian
+        if (type.rfind("fixed", 0) == 0) {
+            int bits = atoi(type.c_str() + 5);
+            int bytes = bits / 8;
+            if (bytes <= 0 || bytes > 8 || i + (size_t)bytes > d.size()) return false;
+            uint64_t v = 0;
+            for (int k = 0; k < bytes; k++) v |= (uint64_t)d[i + k] << (8 * k);
+            i += (size_t)bytes; num = v; is_num = true; return true;
+        }
+        if (type == "float")  { i += 4; return i <= d.size(); }
+        if (type == "double") { i += 8; return i <= d.size(); }
+        return false; // tipo desconhecido → não dá para avançar com segurança
+    }
+
+    // Percorre `data` segundo `format` procurando `field` numérico. ALPHA: sequência
+    // de [identifier varint][valor]. No AtomicAssets os identificadores de atributo
+    // começam em 4 (valores 0-3 reservados): índice 0-based no format = identifier - 4.
+    // (Confirmado empiricamente nos schemas utility/prize do dev env.)
+    static constexpr uint64_t AA_ID_BASE = 4;
+    static bool _aa_walk(const std::vector<uint8_t>& data, const std::vector<aa_format>& format,
+                         const std::string& field, uint64_t& out) {
+        size_t i = 0;
+        while (i < data.size()) {
+            uint64_t identifier = _aa_read_varuint(data, i);
+            if (identifier < AA_ID_BASE) return false;
+            uint64_t idx = identifier - AA_ID_BASE;
+            if (idx >= format.size()) return false;
+            const aa_format& line = format[idx];
+            bool is_num; uint64_t num;
+            if (!_aa_decode_value(line.type, data, i, is_num, num)) return false;
+            if (line.name == field) {
+                if (!is_num) return false; // campo alvo não-numérico
+                out = num; return true;
+            }
+        }
+        return false; // campo não presente nestes dados
+    }
+
+    bool bingo_contract::_read_schema_numeric(name collection, name schema, int32_t template_id,
+                                              const std::vector<uint8_t>& asset_imm,
+                                              const std::string& field, uint64_t& out) {
+        atomic_schemas_table schemas("atomicassets"_n, collection.value);
+        auto sch_itr = schemas.find(schema.value);
+        if (sch_itr == schemas.end()) return false;
+        const auto& format = sch_itr->format;
+
+        // 1) tenta o immutable do próprio asset (dados únicos por asset)
+        if (!asset_imm.empty() && _aa_walk(asset_imm, format, field, out)) return true;
+
+        // 2) fallback: immutable compartilhado do template
+        atomic_templates_table templates("atomicassets"_n, collection.value);
+        auto tpl_itr = templates.find((uint64_t)(int64_t)template_id);
+        if (tpl_itr != templates.end() &&
+            _aa_walk(tpl_itr->immutable_serialized_data, format, field, out)) return true;
+
+        return false;
+    }
+
+    // ==========================================
     // CONFIGURAÇÃO
     // ==========================================
 
@@ -707,17 +819,31 @@ namespace bingo {
                 if (conf_itr != _configs.end()) {
                     check(conf_itr->collection_name == nft_itr->collection_name,
                         "NFT nao pertence a colecao configurada para o template.");
-                    // ADR-028 §6: aplica o maior TICKET_DISCOUNT FIXED elegível (owns).
-                    // SCHEMA_FIELD e consumíveis: sub-fases 1c/1f.
-                    uint16_t best_discount = 0; // hundredths de %
+                    // ADR-028 §6: aplica o maior TICKET_DISCOUNT elegível (owns).
+                    // Unidade comparável = hundredths-de-% (10000 = 100%):
+                    //   VALUE_FIXED        → fixed_value já em hundredths-de-%
+                    //   VALUE_SCHEMA_FIELD → valor do schema field é PERCENT inteiro
+                    //                        (ex.: utility.discount_pct=10) → ×100
+                    // Consumíveis (max_uses): sub-fase posterior.
+                    uint32_t best_hbp = 0; // hundredths-de-%
                     for (const auto& r : conf_itr->rules) {
                         if (r.type != RULE_TICKET_DISCOUNT) continue;
                         if (r.condition != COND_OWNS) continue;
-                        if (r.value_origin != VALUE_FIXED) continue;
-                        if (r.fixed_value > best_discount) best_discount = r.fixed_value;
+                        if (r.value_origin == VALUE_FIXED) {
+                            if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
+                        } else { // VALUE_SCHEMA_FIELD
+                            uint64_t v = 0;
+                            if (_read_schema_numeric(nft_itr->collection_name, nft_itr->schema_name,
+                                    nft_itr->template_id, nft_itr->immutable_serialized_data,
+                                    r.schema_field, v)) {
+                                uint32_t hbp = (v > 100 ? 100 : (uint32_t)v) * 100; // percent → hundredths-de-%
+                                if (hbp > best_hbp) best_hbp = hbp;
+                            }
+                        }
                     }
-                    if (best_discount > 0) {
-                        int64_t discount = (total_cost.quantity.amount * (int64_t)best_discount) / 10000;
+                    if (best_hbp > 10000) best_hbp = 10000; // cap 100%
+                    if (best_hbp > 0) {
+                        int64_t discount = (total_cost.quantity.amount * (int64_t)best_hbp) / 10000;
                         total_cost.quantity.amount -= discount;
                     }
                 }

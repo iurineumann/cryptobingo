@@ -426,6 +426,32 @@ namespace bingo {
     };
     typedef multi_index<"assets"_n, asset_s> atomic_assets_table;
 
+    // ADR-028 §2: leitura de schema/template do AtomicAssets para deserializar
+    // schema fields on-chain (validação dupla). Espelha os structs do pinknetworkx.
+    struct aa_format {
+        std::string name;
+        std::string type;
+    };
+
+    struct schema_s {
+        name                   schema_name;
+        std::vector<aa_format> format;
+        uint64_t primary_key() const { return schema_name.value; }
+    };
+    typedef multi_index<"schemas"_n, schema_s> atomic_schemas_table; // scope = collection
+
+    struct template_s {
+        int32_t               template_id;
+        name                  schema_name;
+        bool                  transferable;
+        bool                  burnable;
+        uint32_t              max_supply;
+        uint32_t              issued_supply;
+        std::vector<uint8_t>  immutable_serialized_data;
+        uint64_t primary_key() const { return (uint64_t)(int64_t)template_id; }
+    };
+    typedef multi_index<"templates"_n, template_s> atomic_templates_table; // scope = collection
+
     // ==========================================
     // CONTRACT
     // ==========================================
@@ -512,6 +538,13 @@ namespace bingo {
     private:
         drop_state _get_drop_state();
         void       _save_drop_state(drop_state& ds);
+
+        // ADR-028 §2: lê um schema field NUMÉRICO de um asset (deserialização ALPHA
+        // AtomicAssets on-chain). Tenta o immutable do asset; se ausente, o do
+        // template. Retorna true + valor se encontrado e numérico.
+        bool _read_schema_numeric(name collection, name schema, int32_t template_id,
+                                  const std::vector<uint8_t>& asset_imm,
+                                  const std::string& field, uint64_t& out);
     };
 
 }
