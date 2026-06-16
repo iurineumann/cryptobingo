@@ -85,17 +85,97 @@ namespace bingo {
     > tickets_table;
 
     // ==========================================
-    // NFT CONFIGS
+    // NFT CONFIGS — Motor de Mecânicas NFT (ADR-028)
+    //
+    // Multi-regra por template. Substitui o modelo legado
+    // (discount_pct/is_vip) por um vetor de regras tipadas.
     // ==========================================
 
+    // Tipo da regra NFT (ADR-028 §1)
+    enum nft_rule_type : uint8_t {
+        RULE_TICKET_DISCOUNT = 1,  // desconto na compra de cartela
+        RULE_PRIZE_BOOST     = 2,  // % extra no payout
+        RULE_ROOM_ACCESS     = 3,  // acesso a salas restritas
+        RULE_BURN_TO_CLAIM   = 4,  // queima → grant temporário
+    };
+
+    // Origem do valor da regra (ADR-028 §2)
+    enum nft_value_origin : uint8_t {
+        VALUE_FIXED        = 0,  // fixed_value (hundredths)
+        VALUE_SCHEMA_FIELD = 1,  // lê do schema field da NFT (validação dupla)
+    };
+
+    // Condição de elegibilidade da regra
+    enum nft_condition : uint8_t {
+        COND_OWNS   = 0,  // jogador possui a NFT
+        COND_BURNED = 1,  // jogador queimou a NFT (BURN_TO_CLAIM)
+    };
+
+    struct nft_rule {
+        uint8_t               type;                   // nft_rule_type
+        uint8_t               value_origin        = 0; // nft_value_origin
+        uint16_t              fixed_value         = 0; // hundredths se VALUE_FIXED
+        std::string           schema_field;            // nome do campo se VALUE_SCHEMA_FIELD
+        uint8_t               max_uses            = 0; // 0 = ilimitado (consumível se > 0)
+        uint32_t              grant_duration_sec  = 0; // p/ BURN_TO_CLAIM
+        uint8_t               condition           = 0; // nft_condition
+        std::vector<uint64_t> room_ids;                // p/ ROOM_ACCESS (vazio = todas)
+    };
+
     struct [[eosio::table("nftconfigs")]] nft_config {
-        int32_t  template_id;
-        uint8_t  discount_pct;
-        bool     is_vip;
-        uint32_t valid_until;
-        uint64_t primary_key() const { return (uint64_t)template_id; }
+        uint64_t              template_id;
+        name                  collection_name;
+        std::vector<nft_rule> rules;
+        uint64_t primary_key() const { return template_id; }
     };
     typedef multi_index<"nftconfigs"_n, nft_config> nftconfigs_table;
+
+    // ==========================================
+    // NFT BURNS / GRANTS — Burn detection híbrido (ADR-028 §8)
+    //
+    // Burn é detectado off-chain (AtomicAssets API) e registrado pelo worker
+    // (bingogamesvc) via recordburn. Para regras BURN_TO_CLAIM, gera um grant
+    // temporário. Trust model: igual ao claimwin (worker é trusted).
+    // ==========================================
+
+    struct [[eosio::table("nftseq")]] nft_seq {
+        uint64_t next_burn_id  = 1;
+        uint64_t next_grant_id = 1;
+    };
+    typedef singleton<"nftseq"_n, nft_seq> nft_seq_singleton;
+
+    struct [[eosio::table("nftburns")]] nft_burn {
+        uint64_t     burn_id;
+        name         owner;
+        uint64_t     asset_id;
+        uint64_t     template_id;
+        name         collection;
+        time_point   burned_at;
+        uint64_t primary_key() const { return burn_id; }
+        uint64_t by_owner()    const { return owner.value; }
+        uint64_t by_asset()    const { return asset_id; }
+    };
+    typedef multi_index<
+        "nftburns"_n,
+        nft_burn,
+        indexed_by<"byowner"_n, const_mem_fun<nft_burn, uint64_t, &nft_burn::by_owner>>,
+        indexed_by<"byasset"_n, const_mem_fun<nft_burn, uint64_t, &nft_burn::by_asset>>
+    > nft_burns_table;
+
+    struct [[eosio::table("nftgrants")]] nft_grant {
+        uint64_t     grant_id;
+        name         owner;
+        uint64_t     template_id;
+        uint8_t      rule_type;
+        time_point   grant_until;
+        uint64_t primary_key() const { return grant_id; }
+        uint64_t by_owner()    const { return owner.value; }
+    };
+    typedef multi_index<
+        "nftgrants"_n,
+        nft_grant,
+        indexed_by<"byowner"_n, const_mem_fun<nft_grant, uint64_t, &nft_grant::by_owner>>
+    > nft_grants_table;
 
     // ==========================================
     // CAMPAIGNS — Motor de Patrocínio B2B
@@ -206,6 +286,12 @@ namespace bingo {
         uint16_t       room_drop_chance_bps   = 10000;
         bool           sponsor_room           = false;
         time_point_sec created_at;
+        // ADR-028 §4: binary_extension → linhas de salas pré-existentes (sem estes
+        // campos) continuam desserializando. Ausente = comportamento legado.
+        eosio::binary_extension<std::vector<uint64_t>> nft_template_allowlist; // templates aceitos (vazio = todos)
+        eosio::binary_extension<uint64_t>              campaign_id;            // vínculo de campanha (0 = nenhum)
+        eosio::binary_extension<uint16_t>              house_fee_bps;          // taxa da casa sobre lucro do treasury
+        eosio::binary_extension<uint32_t>              estimated_monthly_tickets; // projeção p/ colateral
 
         uint64_t primary_key()  const { return room_id; }
         uint64_t by_sponsor()   const { return sponsor.value; }
@@ -217,6 +303,22 @@ namespace bingo {
         indexed_by<"bysponsor"_n, const_mem_fun<room_record, uint64_t, &room_record::by_sponsor>>,
         indexed_by<"bystatus"_n,  const_mem_fun<room_record, uint64_t, &room_record::by_status>>
     > rooms_table;
+
+    // ==========================================
+    // ROOM TREASURIES — Sala patrocinada (ADR-028 §5)
+    //
+    // Sponsor custeia a sala: ticket sales creditam balance, payouts debitam
+    // balance (nunca o house balance). `locked` é o colateral travado enquanto
+    // a sala está ativa — sponsor não pode sacar. Um row por sala.
+    // ==========================================
+
+    struct [[eosio::table("roomtresry")]] room_treasury {
+        uint64_t       room_id;
+        extended_asset balance;   // saldo disponível (ticket sales + depósitos - payouts)
+        extended_asset locked;    // colateral travado enquanto a sala está ativa
+        uint64_t primary_key() const { return room_id; }
+    };
+    typedef multi_index<"roomtresry"_n, room_treasury> room_treasuries_table;
 
     // ==========================================
     // DROP VAULT — Singleton (ADR-011)
@@ -344,6 +446,10 @@ namespace bingo {
         // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
         // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
+        // ADR-028 §7: o param boost_nft_ids (prize boost) foi adiado p/ a Fase 2 —
+        // wharfkit não omite binary_extension de array, então adicioná-lo quebraria
+        // os callers atuais do worker. Entra em lockstep com o worker. Aqui claimwin
+        // mantém só o débito do treasury em sala patrocinada.
         [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
@@ -352,9 +458,12 @@ namespace bingo {
         [[eosio::action]] void refundticket(uint64_t game_id, uint64_t ticket_id);
         [[eosio::action]] void cleargame(uint64_t game_id, uint32_t max_rows);
 
-        // ── NFT Config ───────────────────────────────────────────────────────
-        [[eosio::action]] void setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until);
-        [[eosio::action]] void delnftconf(int32_t template_id);
+        // ── NFT Config (ADR-028) ──────────────────────────────────────────────
+        [[eosio::action]] void confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules);
+        [[eosio::action]] void delnftconf(uint64_t template_id);
+        // ADR-028 §8: registra burn detectado off-chain (auth bingogamesvc).
+        // Para regras BURN_TO_CLAIM do template, gera grant temporário.
+        [[eosio::action]] void recordburn(name owner, uint64_t asset_id, uint64_t template_id, name collection);
 
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);
@@ -377,6 +486,10 @@ namespace bingo {
         [[eosio::action]] void pauseroom(uint64_t room_id);
         [[eosio::action]] void closeroom(uint64_t room_id);
         [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player);
+        // ADR-028 §4: configura economia de sala patrocinada (allowlist, campanha, taxa, projeção)
+        [[eosio::action]] void setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets);
+        // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala
+        [[eosio::action]] void withdrawroom(uint64_t room_id, extended_asset amount);
 
         // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
         [[eosio::action]] void allocatedrop(name caller, uint64_t deposit_id, uint64_t room_id, extended_asset quantity_per_drop, uint64_t nft_asset_id, uint16_t drop_chance_bps);

@@ -280,6 +280,24 @@
             ]
         },
         {
+            "name": "confignft",
+            "base": "",
+            "fields": [
+                {
+                    "name": "template_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "collection_name",
+                    "type": "name"
+                },
+                {
+                    "name": "rules",
+                    "type": "nft_rule[]"
+                }
+            ]
+        },
+        {
             "name": "creategame",
             "base": "",
             "fields": [
@@ -369,7 +387,7 @@
             "fields": [
                 {
                     "name": "template_id",
-                    "type": "int32"
+                    "type": "uint64"
                 }
             ]
         },
@@ -436,6 +454,44 @@
             ]
         },
         {
+            "name": "nft_rule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "type",
+                    "type": "uint8"
+                },
+                {
+                    "name": "value_origin",
+                    "type": "uint8"
+                },
+                {
+                    "name": "fixed_value",
+                    "type": "uint16"
+                },
+                {
+                    "name": "schema_field",
+                    "type": "string"
+                },
+                {
+                    "name": "max_uses",
+                    "type": "uint8"
+                },
+                {
+                    "name": "grant_duration_sec",
+                    "type": "uint32"
+                },
+                {
+                    "name": "condition",
+                    "type": "uint8"
+                },
+                {
+                    "name": "room_ids",
+                    "type": "uint64[]"
+                }
+            ]
+        },
+        {
             "name": "pattern_rule",
             "base": "",
             "fields": [
@@ -488,6 +544,28 @@
             ]
         },
         {
+            "name": "recordburn",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "template_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "collection",
+                    "type": "name"
+                }
+            ]
+        },
+        {
             "name": "refundticket",
             "base": "",
             "fields": [
@@ -526,28 +604,6 @@
             ]
         },
         {
-            "name": "setnftconf",
-            "base": "",
-            "fields": [
-                {
-                    "name": "template_id",
-                    "type": "int32"
-                },
-                {
-                    "name": "discount_pct",
-                    "type": "uint8"
-                },
-                {
-                    "name": "is_vip",
-                    "type": "bool"
-                },
-                {
-                    "name": "valid_until",
-                    "type": "uint32"
-                }
-            ]
-        },
-        {
             "name": "setroommeta",
             "base": "",
             "fields": [
@@ -561,6 +617,32 @@
                 },
                 {
                     "name": "max_tickets_per_player",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setroomnft",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "nft_template_allowlist",
+                    "type": "uint64[]"
+                },
+                {
+                    "name": "campaign_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "house_fee_bps",
+                    "type": "uint16"
+                },
+                {
+                    "name": "estimated_monthly_tickets",
                     "type": "uint32"
                 }
             ]
@@ -644,6 +726,20 @@
                     "type": "extended_asset"
                 }
             ]
+        },
+        {
+            "name": "withdrawroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "amount",
+                    "type": "extended_asset"
+                }
+            ]
         }
     ],
     "actions": [
@@ -713,6 +809,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "confignft",
+            "type": "confignft",
+            "ricardian_contract": ""
+        },
+        {
             "name": "creategame",
             "type": "creategame",
             "ricardian_contract": ""
@@ -778,6 +879,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "recordburn",
+            "type": "recordburn",
+            "ricardian_contract": ""
+        },
+        {
             "name": "refundticket",
             "type": "refundticket",
             "ricardian_contract": ""
@@ -793,13 +899,13 @@
             "ricardian_contract": ""
         },
         {
-            "name": "setnftconf",
-            "type": "setnftconf",
+            "name": "setroommeta",
+            "type": "setroommeta",
             "ricardian_contract": ""
         },
         {
-            "name": "setroommeta",
-            "type": "setroommeta",
+            "name": "setroomnft",
+            "type": "setroomnft",
             "ricardian_contract": ""
         },
         {
@@ -825,6 +931,11 @@
         {
             "name": "withdraw",
             "type": "withdraw",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdrawroom",
+            "type": "withdrawroom",
             "ricardian_contract": ""
         }
     ],
