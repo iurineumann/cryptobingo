@@ -272,7 +272,30 @@ contrato valida ownership + schema + regra + aplica. Mais seguro.
 - `claimwin` payload muda (`boost_nft_ids[]`) — worker precisa pré-computar e ordenar
 - `sponsor_pool` em `game_state` permanece para jogos legados (não-sponsor), mas não é
    mais populado para salas sponsor
-- RAM tracking (nftburns, nftgrants) paga pelo player via `emplace` com payer = buyer
+- RAM tracking (nftburns, nftgrants) paga pelo **contrato** (`emplace(get_self())`):
+  em `recordburn` quem assina é o worker (`bingogamesvc`), não o player — não há como
+  cobrar RAM do `owner` sem a autorização dele. (Correção da decisão original que
+  assumia `payer = buyer`; `buyer` só vale em `buytickets`, onde o player assina.)
 - MongoDB `player_progression` schema inalterado, apenas populado pelo worker
 - Init_dev_env precisa seedar schema `utility` com campos adicionais
   (`boost_pct`, `rarity`, `tier`) e templates de exemplo com multi-regra
+
+### Faseamento da implementação (branches/PRs)
+
+Implementação faseada — cada fase em sua branch, merge entre fases:
+
+- **Fase 1 (contrato, branch `feature/adr-028-fase1-contrato`):** sub-commits 1a–1e —
+  `nftconfigs` multi-regra (`confignft`), economia de sala patrocinada
+  (`room_treasuries`, colateral, `house_fee_bps`), `buytickets`/`claimwin`/`closegame`
+  com fluxo de treasury, motor de burn (`recordburn`/`nftburns`/`nftgrants`).
+- **Diferido para a Fase 2 (worker), em lockstep com quem assina/computa:**
+  - `nft_id` no **hash da signature** de `buytickets` (§6) — quebra toda assinatura
+    existente; muda junto do worker/frontend que assinam.
+  - Decremento de **consumível** via mutable data (`setassetdata`) (§3).
+  - **Deserialização de schema field on-chain** (§2, "1f") — par de segurança do
+    schema-precompute do worker; validação dupla só é testável end-to-end com o worker.
+    Até lá, `VALUE_SCHEMA_FIELD` é configurável (validado em `confignft`) mas não
+    consumido on-chain; apenas `VALUE_FIXED` é aplicado.
+  - Consumo dos **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
+- `claimwin.boost_nft_ids` e os campos novos de `rooms` usam `binary_extension`
+  (trailing/`$`) → callers e linhas antigas continuam válidos; E2E permanece verde.
