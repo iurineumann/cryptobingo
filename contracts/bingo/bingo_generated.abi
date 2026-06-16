@@ -548,6 +548,28 @@
             ]
         },
         {
+            "name": "recordburn",
+            "base": "",
+            "fields": [
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "template_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "collection",
+                    "type": "name"
+                }
+            ]
+        },
+        {
             "name": "refundticket",
             "base": "",
             "fields": [
@@ -858,6 +880,11 @@
         {
             "name": "reclaimasset",
             "type": "reclaimasset",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "recordburn",
+            "type": "recordburn",
             "ricardian_contract": ""
         },
         {
