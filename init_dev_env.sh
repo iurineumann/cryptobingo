@@ -472,7 +472,7 @@ if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.
         # linkauth: restringe quais actions a permissão admin pode chamar (defesa em profundidade)
         for ACTION in creategame confignft delnftconf addpattern delpattern \
                       addgametype delgametype setstages setcombos \
-                      createroom activateroom pauseroom closeroom setroommeta \
+                      createroom activateroom pauseroom closeroom setroommeta setroomnft \
                       linkcampaign closecmpgn allocatedrop deallocdrop abortgame; do
             cleos set action permission bingogamectr bingogamectr "$ACTION" admin \
               -p bingogamectr@active 2>/dev/null || true

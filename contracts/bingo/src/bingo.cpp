@@ -497,6 +497,32 @@ namespace bingo {
             return;
         }
 
+        // Memo: "room:{id}" → custeio do treasury de sala patrocinada (ADR-028 §5)
+        const std::string ROOM_PREFIX = "room:";
+        if (memo.rfind(ROOM_PREFIX, 0) == 0) {
+            uint64_t room_id = std::stoull(memo.substr(ROOM_PREFIX.size()));
+            rooms_table rooms(get_self(), get_self().value);
+            auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+            check(room_itr->sponsor_room, "Sala nao e patrocinada (sponsor_room=false).");
+            check(room_itr->sponsor == from, "Apenas o sponsor da sala pode custear o treasury.");
+
+            room_treasuries_table treasuries(get_self(), get_self().value);
+            auto t_itr = treasuries.find(room_id);
+            if (t_itr == treasuries.end()) {
+                treasuries.emplace(get_self(), [&](auto& t) {
+                    t.room_id = room_id;
+                    t.balance = deposit_asset;
+                    t.locked  = extended_asset(asset(0, quantity.symbol), token_contract);
+                });
+            } else {
+                check(t_itr->balance.quantity.symbol == quantity.symbol &&
+                      t_itr->balance.contract == token_contract,
+                    "Token do deposito difere do treasury da sala.");
+                treasuries.modify(t_itr, get_self(), [&](auto& t) { t.balance += deposit_asset; });
+            }
+            return;
+        }
+
         // Depósito de jogador (wallet interna)
         balances_table balances(get_self(), from.value);
         auto bal_itr = balances.find(deposit_asset.quantity.symbol.code().raw());
@@ -1074,6 +1100,11 @@ namespace bingo {
             r.room_drop_chance_bps    = 10000;
             r.sponsor_room            = sponsor_room;
             r.created_at              = time_point_sec(current_time_point().sec_since_epoch());
+            // ADR-028 §4: defaults dos campos de economia de sala patrocinada
+            r.nft_template_allowlist.emplace(std::vector<uint64_t>{});
+            r.campaign_id.emplace(0);
+            r.house_fee_bps.emplace(0);
+            r.estimated_monthly_tickets.emplace(0);
         });
     }
 
@@ -1085,6 +1116,50 @@ namespace bingo {
             room_itr->status == "inactive"_n || room_itr->status == "paused"_n,
             "activateroom: sala deve estar em inactive ou paused."
         );
+
+        // ADR-028 §5: sala patrocinada exige colateral no treasury cobrindo o
+        // pior caso de payout (RTP worst-case) antes de ativar.
+        if (room_itr->sponsor_room) {
+            uint32_t est_tickets = room_itr->estimated_monthly_tickets.has_value()
+                ? room_itr->estimated_monthly_tickets.value() : 0;
+
+            // max multiplier do gametype = base_multiplier × maior weight (hundredths)
+            gametypes_table gametypes(get_self(), get_self().value);
+            auto gt_itr = gametypes.require_find(room_itr->gametype_id, "gametype_id da sala invalido.");
+            uint32_t max_weight = 0;
+            for (const auto& r : gt_itr->rules)  if (r.weight > max_weight) max_weight = r.weight;
+            for (const auto& s : gt_itr->stages) if (s.weight > max_weight) max_weight = s.weight;
+            if (gt_itr->combinations.has_value())
+                for (const auto& c : gt_itr->combinations.value())
+                    if (c.weight > max_weight) max_weight = c.weight;
+
+            // required = est_tickets × ticket_price_max × base_multiplier × max_weight / 100
+            __int128 required = (__int128)est_tickets
+                * (__int128)room_itr->ticket_price_max.quantity.amount
+                * (__int128)gt_itr->base_multiplier
+                * (__int128)max_weight / 100;
+
+            if (required > 0) {
+                check(max_weight > 0, "gametype sem weight valido para colateral.");
+                room_treasuries_table treasuries(get_self(), get_self().value);
+                auto t_itr = treasuries.require_find(room_id,
+                    "Treasury vazio: deposite colateral (memo room:<id>) antes de ativar.");
+                check(t_itr->balance.quantity.symbol == room_itr->ticket_price_max.quantity.symbol,
+                    "Token do treasury difere do preco da sala.");
+
+                __int128 total = (__int128)t_itr->balance.quantity.amount
+                               + (__int128)t_itr->locked.quantity.amount;
+                check(total >= required, "Colateral insuficiente no treasury para ativar a sala.");
+
+                // trava exatamente `required`; excedente volta a ficar disponível
+                int64_t req64 = (int64_t)required;
+                treasuries.modify(t_itr, same_payer, [&](auto& t) {
+                    t.locked.quantity.amount  = req64;
+                    t.balance.quantity.amount = (int64_t)(total - required);
+                });
+            }
+        }
+
         rooms.modify(room_itr, same_payer, [&](auto& r) { r.status = "active"_n; });
     }
 
@@ -1119,6 +1194,48 @@ namespace bingo {
             r.room_drop_chance_bps   = room_drop_chance_bps;
             r.max_tickets_per_player = max_tickets_per_player;
         });
+    }
+
+    // ADR-028 §4: configura economia da sala patrocinada (allowlist de templates
+    // NFT, vínculo de campanha, taxa da casa e projeção de tickets p/ colateral).
+    void bingo_contract::setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets) {
+        require_auth(permission_level{get_self(), "admin"_n});
+        check(house_fee_bps <= 10000, "house_fee_bps deve ser 0–10000.");
+        check(nft_template_allowlist.size() <= 100, "allowlist: maximo 100 templates.");
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
+        rooms.modify(room_itr, same_payer, [&](auto& r) {
+            r.nft_template_allowlist.emplace(nft_template_allowlist);
+            r.campaign_id.emplace(campaign_id);
+            r.house_fee_bps.emplace(house_fee_bps);
+            r.estimated_monthly_tickets.emplace(estimated_monthly_tickets);
+        });
+    }
+
+    // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala.
+    // `locked` (colateral) não é sacável enquanto travado.
+    void bingo_contract::withdrawroom(uint64_t room_id, extended_asset amount) {
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        require_auth(room_itr->sponsor);
+        check(amount.quantity.amount > 0, "amount deve ser maior que zero.");
+
+        room_treasuries_table treasuries(get_self(), get_self().value);
+        auto t_itr = treasuries.require_find(room_id, "Treasury da sala nao encontrado.");
+        check(t_itr->balance.quantity.symbol == amount.quantity.symbol &&
+              t_itr->balance.contract == amount.contract,
+            "Token do saque difere do treasury.");
+        check(t_itr->balance >= amount, "Saldo disponivel insuficiente (locked nao e sacavel).");
+
+        treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= amount; });
+
+        action(
+            permission_level{get_self(), "active"_n},
+            amount.contract, "transfer"_n,
+            std::make_tuple(get_self(), room_itr->sponsor, amount.quantity,
+                std::string("Saque treasury sala #" + std::to_string(room_id)))
+        ).send();
     }
 
     // ==========================================

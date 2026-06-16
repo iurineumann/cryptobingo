@@ -600,6 +600,32 @@
             ]
         },
         {
+            "name": "setroomnft",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "nft_template_allowlist",
+                    "type": "uint64[]"
+                },
+                {
+                    "name": "campaign_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "house_fee_bps",
+                    "type": "uint16"
+                },
+                {
+                    "name": "estimated_monthly_tickets",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
             "name": "setstages",
             "base": "",
             "fields": [
@@ -672,6 +698,20 @@
                 {
                     "name": "owner",
                     "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "extended_asset"
+                }
+            ]
+        },
+        {
+            "name": "withdrawroom",
+            "base": "",
+            "fields": [
+                {
+                    "name": "room_id",
+                    "type": "uint64"
                 },
                 {
                     "name": "amount",
@@ -837,6 +877,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "setroomnft",
+            "type": "setroomnft",
+            "ricardian_contract": ""
+        },
+        {
             "name": "setstages",
             "type": "setstages",
             "ricardian_contract": ""
@@ -859,6 +904,11 @@
         {
             "name": "withdraw",
             "type": "withdraw",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdrawroom",
+            "type": "withdrawroom",
             "ricardian_contract": ""
         }
     ],
