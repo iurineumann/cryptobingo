@@ -849,7 +849,7 @@ namespace bingo {
     // golden_multiplier: 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode.
     // ==========================================
 
-    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids) {
+    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
         require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
@@ -896,30 +896,8 @@ namespace bingo {
             payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
-        // ADR-028 §7: Prize Boost. O worker passa boost_nft_ids ordenados; o
-        // contrato valida ownership + regra PRIZE_BOOST (FIXED) e aplica o maior
-        // boost elegível a este ticket. SCHEMA_FIELD boost → sub-fase 1f.
-        if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
-            atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
-            nftconfigs_table _configs(get_self(), get_self().value);
-            uint16_t best_boost = 0; // hundredths (100 = 1.00×); só aplica se > 100
-            for (uint64_t boost_id : boost_nft_ids.value()) {
-                auto nft_itr = winner_nfts.find(boost_id);
-                if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
-                auto conf_itr = _configs.find((uint64_t)nft_itr->template_id);
-                if (conf_itr == _configs.end()) continue;
-                if (conf_itr->collection_name != nft_itr->collection_name) continue;
-                for (const auto& r : conf_itr->rules) {
-                    if (r.type != RULE_PRIZE_BOOST) continue;
-                    if (r.condition != COND_OWNS) continue;
-                    if (r.value_origin != VALUE_FIXED) continue;
-                    if (r.fixed_value > best_boost) best_boost = r.fixed_value;
-                }
-            }
-            if (best_boost > 100) {
-                payout.quantity.amount = payout.quantity.amount * (int64_t)best_boost / 100;
-            }
-        }
+        // ADR-028 §7: aplicação do Prize Boost (boost_nft_ids) foi adiada p/ a Fase 2
+        // (lockstep com o worker — wharfkit não omite binary_extension de array).
 
         if (payout.quantity.amount > 0) {
             // ADR-028 §7: em sala patrocinada, o payout é debitado do room_treasury
