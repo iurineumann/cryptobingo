@@ -34,22 +34,26 @@ const url     = process.env.RPC_URL  || 'http://127.0.0.1:8888';
 const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 
 
+// Resolução de chaves resiliente ao naming do .waxdev.env: o reset grava
+// BINGOGAMECTR_KEY/BINGOGAMESVC_KEY; o worker usa CONTRACT/MICROSERVICE_PRIVATE_KEY.
 const eosioKey         = PrivateKey.from(process.env.EOSIO_KEY!);
 const playerKey        = PrivateKey.from(process.env.JOGADOR1_KEY!);
-const bingoKey         = PrivateKey.from(process.env.BINGO_GAME_KEY!);
-const microserviceKey  = PrivateKey.from(process.env.MICROSERVICE_KEY!);
+const bingoKey         = PrivateKey.from((process.env.BINGO_GAME_KEY  || process.env.BINGOGAMECTR_KEY || process.env.CONTRACT_PRIVATE_KEY)!);
+const microserviceKey  = PrivateKey.from((process.env.MICROSERVICE_KEY || process.env.BINGOGAMESVC_KEY || process.env.MICROSERVICE_PRIVATE_KEY)!);
 
-function makeSession(actor: string, key: PrivateKey) {
+function makeSession(actor: string, key: PrivateKey, permission = 'active') {
     return new Session({
         actor,
-        permission:   'active',
+        permission,
         chain:        { id: chainId, url },
         walletPlugin: new WalletPluginPrivateKey(key),
     });
 }
 
 const rootSession   = makeSession('eosio',        eosioKey);
-const bingoSession  = makeSession('bingogamectr',   bingoKey);
+// ADR-026: actions de admin do bingogamectr exigem a permissão `admin`
+// (linkauth). A chave de bingogamectr@active pertence ao threshold admin.
+const bingoSession  = makeSession('bingogamectr', bingoKey, 'admin');
 const playerSession = makeSession('jogador1',     playerKey);
 const microSession  = makeSession('bingogamesvc', microserviceKey);
 
@@ -221,7 +225,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mainGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -331,7 +335,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: abortGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -433,7 +437,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mmGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -516,7 +520,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: payingGameId }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -598,7 +602,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: gbGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -704,7 +708,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: ffGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -726,7 +730,12 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
             code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
             lower_bound: ffGameIdStr, upper_bound: ffGameIdStr, limit: 1, json: true,
         });
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        // drawn_balls é `bytes` no ABI → get_table_rows(json) pode devolver hex string.
+        // Normaliza para number[] (cada byte = 1 bola, 1..75).
+        const rawBalls = gameRes.rows[0].drawn_balls as unknown;
+        const drawnBalls: number[] = typeof rawBalls === 'string'
+            ? (rawBalls.match(/.{2}/g) ?? []).map(h => parseInt(h, 16))
+            : (rawBalls as number[]);
         expect(drawnBalls.length).toBe(75);
 
         // Computa o cutoff: posição em que o ticket TEST_MATRIX fica completo
@@ -796,7 +805,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
         } catch {
             // sala pode já existir de uma execução anterior — ok
         }
-        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
+        await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
         console.log('   ✅ Sala 999 criada/ativa para DROP_VAULT');
     });
 
@@ -860,6 +869,8 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     });
 
     test('DV-3: deallocdrop por conta sem auth (microservice) → falha', async () => {
+        // Teste negativo: microSession (bingogamesvc@active) NÃO satisfaz a permissão
+        // admin exigida por deallocdrop (linkauth ADR-026) → deve ser rejeitado.
         await expect(
             transact(microSession, 'bingogamectr', 'deallocdrop', {
                 caller:   Name.from('bingogamesvc'),
@@ -927,7 +938,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         } catch {
             // sala pode já existir — ok
         }
-        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
+        await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
         console.log('   ✅ Sala 42 criada/ativa (min=10 WAX, max=50 WAX)');
     });
 
@@ -949,7 +960,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         await expect(
             transact(playerSession, 'bingogamectr', 'buytickets', {
@@ -970,7 +981,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -1074,7 +1085,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: comboGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: comboGameId, matrices: [matrixBytes], signatures: [sig],
             nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
