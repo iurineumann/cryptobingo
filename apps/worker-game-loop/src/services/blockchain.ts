@@ -89,18 +89,23 @@ export async function executeClaimWin(
     ballCount:        number,
     winPatternMask:   bigint,
     goldenMultiplier: number = 0,
+    boostNftIds:      string[] = [],
 ): Promise<string | undefined> {
     console.log(
         `🏆 [Blockchain] claimwin → jogo ${gameId}, cartela #${ticketId}, ` +
         `${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}` +
-        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '')
+        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '') +
+        (boostNftIds.length ? ` 🚀boost[${boostNftIds.join(',')}]` : '')
     );
+    // ADR-028 §7: boost_nft_ids é binary_extension (uint64[]$). Sempre enviado
+    // explicitamente (mesmo vazio) — wharfkit não omite binary_extension de array.
     const txId = await transact('claimwin', {
         game_id:           gameId,
         ticket_id:         ticketId,
         ball_count:        ballCount,
         win_pattern_mask:  winPatternMask.toString(),
         golden_multiplier: goldenMultiplier,
+        boost_nft_ids:     boostNftIds,
     });
     console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;
