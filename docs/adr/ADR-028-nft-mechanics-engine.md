@@ -288,15 +288,23 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
   `nftconfigs` multi-regra (`confignft`), economia de sala patrocinada
   (`room_treasuries`, colateral, `house_fee_bps`), `buytickets`/`claimwin`/`closegame`
   com fluxo de treasury, motor de burn (`recordburn`/`nftburns`/`nftgrants`).
-- **Diferido para a Fase 2 (worker), em lockstep com quem assina/computa:**
-  - `nft_id` no **hash da signature** de `buytickets` (§6) — quebra toda assinatura
-    existente; muda junto do worker/frontend que assinam.
+- **Fase 2 (worker, branch `feature/adr-028-fase2-worker`) — implementado:**
+  - **2A — prize boost** (§7): `claimwin.boost_nft_ids` (binary_extension), worker
+    `nftMechanics.getBoostNftIds`, contrato aplica o maior PRIZE_BOOST FIXED. Todos os
+    callers passam o campo explícito (wharfkit não omite binary_extension de array).
+  - **2B — deserialização de schema field on-chain** (§2): parser ALPHA AtomicAssets no
+    contrato (`_aa_walk`/`_read_schema_numeric`). `TICKET_DISCOUNT VALUE_SCHEMA_FIELD`
+    lê o campo do template/asset e aplica. **Gotcha:** identificadores de atributo do
+    AtomicAssets começam em **4** (índice = `identifier - 4`). Validado E2E com
+    `utility.discount_pct`.
+- **Ainda pendente na Fase 2:**
+  - `nft_id` no **hash da signature** de `buytickets` (§6) — é a **Fase 3 (api-gateway)**:
+    a assinatura é gerada no `ticketController`, não no worker.
   - Decremento de **consumível** via mutable data (`setassetdata`) (§3).
-  - **Deserialização de schema field on-chain** (§2, "1f") — par de segurança do
-    schema-precompute do worker; validação dupla só é testável end-to-end com o worker.
-    Até lá, `VALUE_SCHEMA_FIELD` é configurável (validado em `confignft`) mas não
-    consumido on-chain; apenas `VALUE_FIXED` é aplicado.
-  - Consumo dos **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
+  - 2C — burn sync cron (worker → AtomicAssets API → `recordburn`) + consumo dos
+    **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
+  - 2D — XP/achievement engine (§9).
+  - `PRIZE_BOOST VALUE_SCHEMA_FIELD` (reusa o deserializador do 2B).
   - Param `boost_nft_ids` + aplicação do **prize boost** no `claimwin` (§7). Tentou-se
     adicioná-lo como `binary_extension` trailing, mas o wharfkit (antelope 1.2.0) **não
     omite binary_extension de array** na codificação → quebraria os callers atuais do
