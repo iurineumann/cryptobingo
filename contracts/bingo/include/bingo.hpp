@@ -399,7 +399,9 @@ namespace bingo {
         // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
         // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
-        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
+        // ADR-028 §7: boost_nft_ids é binary_extension (trailing) → callers antigos
+        // (worker pré-Fase 2) que não passam o campo continuam válidos.
+        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived

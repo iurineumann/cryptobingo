@@ -724,6 +724,10 @@
         {
           "name": "golden_multiplier",
           "type": "uint16"
+        },
+        {
+          "name": "boost_nft_ids",
+          "type": "uint64[]$"
         }
       ]
     },

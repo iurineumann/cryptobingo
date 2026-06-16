@@ -802,7 +802,7 @@ namespace bingo {
     // golden_multiplier: 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode.
     // ==========================================
 
-    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
+    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids) {
         require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
@@ -849,7 +849,50 @@ namespace bingo {
             payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
+        // ADR-028 §7: Prize Boost. O worker passa boost_nft_ids ordenados; o
+        // contrato valida ownership + regra PRIZE_BOOST (FIXED) e aplica o maior
+        // boost elegível a este ticket. SCHEMA_FIELD boost → sub-fase 1f.
+        if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
+            atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
+            nftconfigs_table _configs(get_self(), get_self().value);
+            uint16_t best_boost = 0; // hundredths (100 = 1.00×); só aplica se > 100
+            for (uint64_t boost_id : boost_nft_ids.value()) {
+                auto nft_itr = winner_nfts.find(boost_id);
+                if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
+                auto conf_itr = _configs.find((uint64_t)nft_itr->template_id);
+                if (conf_itr == _configs.end()) continue;
+                if (conf_itr->collection_name != nft_itr->collection_name) continue;
+                for (const auto& r : conf_itr->rules) {
+                    if (r.type != RULE_PRIZE_BOOST) continue;
+                    if (r.condition != COND_OWNS) continue;
+                    if (r.value_origin != VALUE_FIXED) continue;
+                    if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                }
+            }
+            if (best_boost > 100) {
+                payout.quantity.amount = payout.quantity.amount * (int64_t)best_boost / 100;
+            }
+        }
+
         if (payout.quantity.amount > 0) {
+            // ADR-028 §7: em sala patrocinada, o payout é debitado do room_treasury
+            // (nunca do house balance). Sala house: comportamento legado.
+            if (game_itr->room_id != 0) {
+                rooms_table rooms(get_self(), get_self().value);
+                auto room_itr = rooms.find(game_itr->room_id);
+                if (room_itr != rooms.end() && room_itr->sponsor_room) {
+                    room_treasuries_table treasuries(get_self(), get_self().value);
+                    auto t_itr = treasuries.require_find(game_itr->room_id,
+                        "Treasury da sala patrocinada nao encontrado.");
+                    check(t_itr->balance.quantity.symbol == payout.quantity.symbol &&
+                          t_itr->balance.contract == payout.contract,
+                        "Token do payout difere do treasury da sala.");
+                    check(t_itr->balance >= payout,
+                        "Treasury da sala sem saldo para cobrir o payout.");
+                    treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= payout; });
+                }
+            }
+
             auto bal_itr = balances.find(payout.quantity.symbol.code().raw());
             if (bal_itr == balances.end()) {
                 balances.emplace(get_self(), [&](auto& b) { b.balance = payout; });
@@ -891,30 +934,60 @@ namespace bingo {
         check(needs_archive || already_done,
             "Game deve estar em PAYING, DRAWN ou ARCHIVED para closegame.");
 
-        // Libera o slot da sala para que uma nova partida possa ser criada
+        // Libera o slot da sala + detecta economia de sala patrocinada (ADR-028)
+        bool     is_sponsor_room = false;
+        uint16_t house_fee_bps   = 0;
         if (game_itr->room_id != 0) {
             rooms_table rooms(get_self(), get_self().value);
             auto room_itr = rooms.find(game_itr->room_id);
-            if (room_itr != rooms.end() && room_itr->current_game_id == game_id) {
-                rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+            if (room_itr != rooms.end()) {
+                is_sponsor_room = room_itr->sponsor_room;
+                if (room_itr->house_fee_bps.has_value()) house_fee_bps = room_itr->house_fee_bps.value();
+                if (room_itr->current_game_id == game_id) {
+                    rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+                }
             }
         }
 
         if (needs_archive) {
-            // ADR-005: calcula GGR = total_wagered - total_paid e acumula no pool
             int64_t ggr_amount = game_itr->total_wagered.quantity.amount - game_itr->total_paid;
             if (ggr_amount > 0) {
                 ggr_pool_table ggr_pool(get_self(), get_self().value);
                 auto ggr_key = game_itr->total_wagered.quantity.symbol.code().raw();
-                auto ggr_itr = ggr_pool.find(ggr_key);
-                if (ggr_itr == ggr_pool.end()) {
-                    extended_asset ggr_entry = game_itr->total_wagered;
-                    ggr_entry.quantity.amount = ggr_amount;
-                    ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
+
+                if (is_sponsor_room) {
+                    // ADR-028 §5: o lucro fica no treasury do sponsor; a casa retém
+                    // apenas house_fee_bps do GGR, debitado do treasury.balance.
+                    int64_t house_fee = (int64_t)(((__int128)ggr_amount * house_fee_bps) / 10000);
+                    if (house_fee > 0) {
+                        room_treasuries_table treasuries(get_self(), get_self().value);
+                        auto t_itr = treasuries.find(game_itr->room_id);
+                        if (t_itr != treasuries.end() && t_itr->balance.quantity.amount >= house_fee) {
+                            extended_asset fee_asset = game_itr->total_wagered;
+                            fee_asset.quantity.amount = house_fee;
+                            treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= fee_asset; });
+                            auto ggr_itr = ggr_pool.find(ggr_key);
+                            if (ggr_itr == ggr_pool.end()) {
+                                ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = fee_asset; });
+                            } else {
+                                ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
+                                    r.ggr.quantity.amount += house_fee;
+                                });
+                            }
+                        }
+                    }
                 } else {
-                    ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
-                        r.ggr.quantity.amount += ggr_amount;
-                    });
+                    // ADR-005: sala house — GGR inteiro acumula no pool da casa
+                    auto ggr_itr = ggr_pool.find(ggr_key);
+                    if (ggr_itr == ggr_pool.end()) {
+                        extended_asset ggr_entry = game_itr->total_wagered;
+                        ggr_entry.quantity.amount = ggr_amount;
+                        ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
+                    } else {
+                        ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
+                            r.ggr.quantity.amount += ggr_amount;
+                        });
+                    }
                 }
             }
 
@@ -1214,6 +1287,19 @@ namespace bingo {
         check(room_itr->current_game_id == 0,
             "closeroom: aguarde a partida corrente terminar antes de fechar a sala.");
         rooms.modify(room_itr, same_payer, [&](auto& r) { r.status = "closed"_n; });
+
+        // ADR-028 §5: ao fechar, libera o colateral travado para que o sponsor
+        // possa sacar o saldo total via withdrawroom.
+        if (room_itr->sponsor_room) {
+            room_treasuries_table treasuries(get_self(), get_self().value);
+            auto t_itr = treasuries.find(room_id);
+            if (t_itr != treasuries.end() && t_itr->locked.quantity.amount > 0) {
+                treasuries.modify(t_itr, same_payer, [&](auto& t) {
+                    t.balance.quantity.amount += t.locked.quantity.amount;
+                    t.locked.quantity.amount = 0;
+                });
+            }
+        }
     }
 
     void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
