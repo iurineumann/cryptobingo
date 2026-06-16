@@ -288,6 +288,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
             ball_count:        35,
             win_pattern_mask:  winPatternMask,
             golden_multiplier: 0,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
 
@@ -541,7 +542,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id: payingGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
             ball_count: 35, win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
-            golden_multiplier: 0,
+            golden_multiplier: 0, boost_nft_ids: [],
         });
         expect(await getGameStatus(payingGameStr)).toBe('paying');
 
@@ -646,6 +647,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
             ball_count:        ballCount,
             win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: goldenMultiplier,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(gbGameIdStr)).toBe('paying');
@@ -759,6 +761,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
             ball_count:        cutoff,
             win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: 0,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(ffGameIdStr)).toBe('paying');

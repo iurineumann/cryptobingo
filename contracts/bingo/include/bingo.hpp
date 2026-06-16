@@ -446,11 +446,11 @@ namespace bingo {
         // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
         // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
-        // ADR-028 §7: o param boost_nft_ids (prize boost) foi adiado p/ a Fase 2 —
-        // wharfkit não omite binary_extension de array, então adicioná-lo quebraria
-        // os callers atuais do worker. Entra em lockstep com o worker. Aqui claimwin
-        // mantém só o débito do treasury em sala patrocinada.
-        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier);
+        // ADR-028 §7 (Fase 2): boost_nft_ids — prize boost. Param trailing
+        // binary_extension. Todos os callers (worker + harness) passam o campo
+        // explicitamente (wharfkit não omite binary_extension de array). O contrato
+        // valida ownership + regra PRIZE_BOOST (FIXED) e aplica o maior boost.
+        [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived

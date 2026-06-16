@@ -15,6 +15,7 @@ import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame
 import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
+import { getBoostNftIds } from './nftMechanics';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -628,6 +629,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                 (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
             );
             // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
+            // ADR-028 §7: para claimwin, pré-computa NFTs de PRIZE_BOOST do vencedor.
             const txHash = isCombo
                 ? await executeClaimCombo(
                     gameId,
@@ -642,6 +644,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     effectiveBalls.length,
                     patternMask,
                     appliedMultiplier,
+                    await getBoostNftIds(ticket.owner).catch(() => []),
                 );
 
             if (txHash) {
