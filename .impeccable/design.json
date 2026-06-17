@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-16T12:00:00.000Z",
+  "title": "Design System: CryptoBingo",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Violet", "canonical": "oklch(62% 0.22 290)", "tonalRamp": ["oklch(22% 0.18 290)", "oklch(32% 0.20 290)", "oklch(42% 0.22 290)", "oklch(52% 0.24 290)", "oklch(62% 0.22 290)", "oklch(72% 0.16 290)", "oklch(82% 0.10 290)", "oklch(92% 0.04 290)"] },
+      "accent-gold": { "role": "accent", "displayName": "Amber Gold", "canonical": "oklch(75% 0.14 80)", "tonalRamp": ["oklch(25% 0.10 80)", "oklch(35% 0.12 80)", "oklch(45% 0.14 80)", "oklch(55% 0.16 80)", "oklch(65% 0.16 80)", "oklch(75% 0.14 80)", "oklch(85% 0.10 80)", "oklch(95% 0.04 80)"] },
+      "neutral-bg": { "role": "background", "displayName": "Near-Black Violet", "canonical": "oklch(12% 0.025 290)", "tonalRamp": ["oklch(4% 0.01 290)", "oklch(8% 0.02 290)", "oklch(12% 0.025 290)", "oklch(16% 0.03 290)", "oklch(22% 0.035 290)", "oklch(30% 0.04 290)", "oklch(40% 0.05 290)", "oklch(55% 0.06 290)"] },
+      "text-primary": { "role": "text", "displayName": "Slate White", "canonical": "oklch(92% 0.01 250)", "tonalRamp": ["oklch(35% 0.01 250)", "oklch(50% 0.01 250)", "oklch(65% 0.01 250)", "oklch(78% 0.01 250)", "oklch(85% 0.01 250)", "oklch(92% 0.01 250)", "oklch(96% 0.005 250)", "oklch(99% 0.002 250)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Space Grotesk", "purpose": "Display headings, room names, big stats." },
+      "body": { "displayName": "Inter", "purpose": "All body text, UI copy, labels." },
+      "mono": { "displayName": "JetBrains Mono", "purpose": "Wallet addresses, ticket IDs, amounts, code." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.3)", "purpose": "Resting card elevation." },
+      { "name": "card-hover", "value": "0 20px 25px -5px rgba(0,0,0,0.4), 0 8px 10px -6px rgba(0,0,0,0.4)", "purpose": "Elevated card on hover." },
+      { "name": "modal", "value": "0 25px 50px -12px rgba(0,0,0,0.7)", "purpose": "Modal and overlay depth." },
+      { "name": "glow-brand", "value": "0 0 20px -4px rgba(124,58,237,0.6)", "purpose": "Primary button hover glow." },
+      { "name": "glow-accent", "value": "0 0 20px -4px rgba(245,158,11,0.7)", "purpose": "Win state and accent glow." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for state transitions." },
+      { "name": "duration-default", "value": "150ms", "purpose": "Hover, focus, active transitions." },
+      { "name": "duration-emphasis", "value": "250ms", "purpose": "Modal open, progress fill, slide." },
+      { "name": "duration-slow", "value": "400ms", "purpose": "Theme switch, page enter." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary violet CTA. Used for main actions: connect wallet, buy tickets, enter rooms.",
+      "html": "<button class=\"ds-btn-primary\">Buy Tickets</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1.25rem; font-family: Inter, system-ui, sans-serif; font-size: clamp(0.825rem, 0.80rem + 0.25vw, 0.875rem); font-weight: 600; line-height: 1.25; border-radius: 0.625rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; background: #8b5cf6; color: #fff; transition: background-color 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms, transform 150ms; } .ds-btn-primary:hover { background: #a78bfa; box-shadow: 0 0 20px -4px rgba(124,58,237,0.6); } .ds-btn-primary:active { transform: scale(0.97); background: #7c3aed; } .ds-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "Gold accent CTA for high-emphasis actions: claim prizes, winning moments.",
+      "html": "<button class=\"ds-btn-accent\">Claim Prize</button>",
+      "css": ".ds-btn-accent { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1.25rem; font-family: Inter, system-ui, sans-serif; font-size: clamp(0.825rem, 0.80rem + 0.25vw, 0.875rem); font-weight: 700; line-height: 1.25; border-radius: 0.625rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; background: #fbbf24; color: #1a1a2e; transition: background-color 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms, transform 150ms; } .ds-btn-accent:hover { background: #fcd34d; box-shadow: 0 0 20px -4px rgba(245,158,11,0.7); } .ds-btn-accent:active { transform: scale(0.97); background: #f59e0b; } .ds-btn-accent:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Base card container used across lobby, admin, and game room panels.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Room Name</div><div class=\"ds-card-body\">Content here</div></div>",
+      "css": ".ds-card { background: #1a1a2e; border: 1px solid rgba(255,255,255,0.10); border-radius: 1rem; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.3); transition: border-color 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms; } .ds-card:hover { border-color: rgba(255,255,255,0.16); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4), 0 8px 10px -6px rgba(0,0,0,0.4); } .ds-card-title { font-family: 'Space Grotesk', Inter, sans-serif; font-size: clamp(1.0625rem, 1.00rem + 0.5vw, 1.125rem); font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; } .ds-card-body { color: #94a3b8; font-size: clamp(0.825rem, 0.80rem + 0.25vw, 0.875rem); }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Text input field used in forms, search, and admin panels.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search rooms...\" />",
+      "css": ".ds-input { display: block; width: 100%; padding: 0.625rem 0.875rem; font-family: Inter, system-ui, sans-serif; font-size: clamp(0.9375rem, 0.90rem + 0.25vw, 1rem); color: #f1f5f9; background: #252541; border: 1px solid rgba(255,255,255,0.10); border-radius: 0.625rem; outline: none; transition: border-color 150ms, box-shadow 150ms; box-sizing: border-box; } .ds-input::placeholder { color: #64748b; } .ds-input:hover { border-color: rgba(255,255,255,0.16); } .ds-input:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,0.15); }"
+    },
+    {
+      "name": "Tier Badge - Bronze",
+      "kind": "chip",
+      "refersTo": "cb-tier-bronze",
+      "description": "Player tier badge showing Bronze rank (2nd tier in 9-tier progression).",
+      "html": "<span class=\"ds-tier-badge ds-tier-bronze\">Bronze</span>",
+      "css": ".ds-tier-badge { padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: clamp(0.70rem, 0.65rem + 0.25vw, 0.75rem); font-weight: 700; display: inline-flex; align-items: center; line-height: 1.4; letter-spacing: 0.01em; } .ds-tier-bronze { background: linear-gradient(135deg, #78350f, #b45309); color: #fef3c7; }"
+    },
+    {
+      "name": "Tier Badge - Diamond",
+      "kind": "chip",
+      "refersTo": "cb-tier-diamond",
+      "description": "Player tier badge showing Diamond rank (9th and highest tier).",
+      "html": "<span class=\"ds-tier-badge ds-tier-diamond\">Diamante</span>",
+      "css": ".ds-tier-diamond { background: linear-gradient(135deg, #4c1d95, #7c3aed, #a78bfa); color: #fff; box-shadow: 0 0 16px rgba(167,139,250,0.5); }"
+    },
+    {
+      "name": "Status Chip - Funding",
+      "kind": "chip",
+      "refersTo": "cb-status-funding",
+      "description": "Game status chip showing 'Open/Funding' with green indicators.",
+      "html": "<span class=\"ds-status-chip ds-status-funding\"><span class=\"ds-dot\"></span>Aberto</span>",
+      "css": ".ds-status-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.6rem; font-size: clamp(0.70rem, 0.65rem + 0.25vw, 0.75rem); font-weight: 600; border-radius: 9999px; line-height: 1.4; } .ds-status-funding { background: rgba(52,211,153,0.12); color: #34d399; border: 1px solid rgba(52,211,153,0.25); } .ds-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; display: inline-block; }"
+    },
+    {
+      "name": "Progress Bar",
+      "kind": "custom",
+      "refersTo": "cb-progress",
+      "description": "Progress bar used for game fill and XP level progression.",
+      "html": "<div class=\"ds-progress\"><div class=\"ds-progress-track\"><div class=\"ds-progress-fill\" style=\"width: 65%\"></div></div></div>",
+      "css": ".ds-progress-track { height: 0.375rem; background: rgba(255,255,255,0.06); border-radius: 9999px; overflow: hidden; } .ds-progress-fill { height: 100%; background: linear-gradient(90deg, #8b5cf6, #fbbf24); border-radius: 9999px; transition: width 400ms cubic-bezier(0.4,0,0.2,1); box-shadow: 0 0 8px #8b5cf6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Neon-Lit Casino Vault",
+    "overview": "Dark, confident, playfully premium — CryptoBingo lives in a violet-gold atmosphere where on-chain transparency meets game-night energy. The surface is near-black with subtle violet undertones; gold is the accent of value. This is not a crypto dashboard or a cartoon bingo hall. It is a tasteful, modern GameFi platform where every state reads clearly and progression feels rewarding.\n\nBold typography (Space Grotesk for headings, Inter for body) drives hierarchy. Motion is restrained to state changes. Cards have rounded corners and subtle shadows. The system is dark-by-default with a light theme courtesy; WCAG AA contrast is a floor, not a stretch goal.",
+    "keyCharacteristics": [
+      "Dark-by-default violet-black canvas, gold accent, subtle glows for state",
+      "Near-black surfaces with layered elevation (sunken → base → elevated → overlay)",
+      "1rem rounded corners on cards, 0.625rem on buttons, pills everywhere for tags",
+      "Space Grotesk for display/interactive moments, Inter for reading, JetBrains Mono for data",
+      "Motion at 150–250ms for state transitions only; no decorative choreography",
+      "Design tokens as CSS custom properties via Tailwind v4 @theme + semantic --cb-* layer"
+    ],
+    "rules": [
+      { "name": "The Glow-Earns-Its-Place Rule", "body": "Glows appear only on hover (buttons), active (selected items), and winning state (golden glow). Never decorative. A resting element never glows.", "section": "colors" },
+      { "name": "The One-Token Palette Rule", "body": "No semantic color appears in two values. --cb-success is the only success token; --cb-danger is the only danger. Variants are light/dark theme mappings, not independent colors.", "section": "colors" },
+      { "name": "The Display-Only Rule", "body": "Space Grotesk is reserved for display, headings, and values. Never for body text, labels, or UI copy.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. Shadows appear only as a response to state (hover, card, modal).", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use violet (#8b5cf6) as the single primary action color across all surfaces.",
+      "Do use gold (#fbbf24) exclusively for winning moments, prize amounts, and accent CTAs.",
+      "Do use tonal layering (sunken → base → surface → elevated) for depth instead of shadows.",
+      "Do keep motion at 150–250ms for state transitions (hover, focus, active).",
+      "Do use data-testid attributes on all interactive elements for E2E.",
+      "Do respect prefers-reduced-motion — every animation has a crossfade or instant fallback.",
+      "Do keep body text at WCAG AA ≥4.5:1 against the dark canvas."
+    ],
+    "donts": [
+      "Don't use glassmorphism (backdrop-blur on card surfaces) — reserved for navbar only.",
+      "Don't use gradient text (background-clip: text with gradient) — solid color only.",
+      "Don't use side-stripe borders (border-left >1px as accent) — use full background tint or nothing.",
+      "Don't use uppercase tracking on every section heading — reserved for sublabels and chip text.",
+      "Don't use bounce or elastic easing — stick to cubic-bezier(0.4, 0, 0.2, 1) or ease-out-quart.",
+      "Don't use display fonts for body text, labels, buttons, or data.",
+      "Don't stack modals — use inline/expandable alternatives first.",
+      "Don't use ghost buttons for primary actions — primary actions get filled violet or gold."
+    ]
+  }
+}

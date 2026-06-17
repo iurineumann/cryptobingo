@@ -9,6 +9,7 @@ import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
+import { startBurnSyncCron }   from './services/burnCron';
 
 console.log('=============================================');
 console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
@@ -53,7 +54,10 @@ async function bootstrap(): Promise<void> {
     setInterval(autoClaimDrawnGames,   15_000);
     setInterval(autoStartLockedGames,  30_000);
 
-    // ── 5. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
+    // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
+    startBurnSyncCron();
+
+    // ── 6. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
     // Não await: a conexão pode demorar ou precisar de retry sem bloquear o worker.
     connectRabbitMQ();
 }

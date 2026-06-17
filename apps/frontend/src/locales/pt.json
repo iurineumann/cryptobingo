@@ -754,10 +754,15 @@
     "title_global": "Ranking Global",
     "title_room": "Ranking da Sala",
     "updated_at": "Atualizado às {{time}}",
-    "empty": "Nenhum vencedor registrado ainda.",
+    "empty": "Nenhum registro ainda.",
     "col_player": "Jogador",
     "col_total_won": "Total Ganho",
-    "col_games_won": "Partidas"
+    "col_games_won": "Partidas",
+    "col_xp": "XP",
+    "col_tier": "Rank",
+    "col_games": "Jogos",
+    "tab_winnings": "Ganhos",
+    "tab_xp": "XP"
   },
   "faq": {
     "title": "Perguntas Frequentes",
@@ -794,5 +799,17 @@
   "loading": "Carregando perfil...",
   "language": "Idioma",
   "landing_lobby": "Salas de Jogo",
-  "wallet_connected": "Carteira Conectada:"
+  "wallet_connected": "Carteira Conectada:",
+  "progression": {
+    "level": "Nv. {{level}}",
+    "sub_level": "Sub-nível {{subLevel}}",
+    "xp_to_next": "{{xp}} XP para o próximo",
+    "xp_progress": "{{pct}}% de progresso",
+    "tier_label": "Nível {{tier}}"
+  },
+  "achievements": {
+    "title": "Conquistas",
+    "progress": "{{unlocked}} / {{total}} desbloqueadas",
+    "recent_unlock": "Nova conquista desbloqueada!"
+  }
 }

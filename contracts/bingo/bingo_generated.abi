@@ -622,6 +622,10 @@
                 {
                     "name": "max_tickets_per_player",
                     "type": "uint32"
+                },
+                {
+                    "name": "difficulty",
+                    "type": "uint8"
                 }
             ]
         },

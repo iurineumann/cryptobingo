@@ -23,7 +23,7 @@ import {
     ensureNonceTable,
     logout,
 } from './controllers/authController';
-import { getProfile, updatePreferences, listUsers }   from './controllers/profileController';
+import { getProfile, updatePreferences, getAchievements, listUsers } from './controllers/profileController';
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
@@ -54,7 +54,7 @@ import {
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 import { getChatHistory } from './controllers/chatController';
-import { getLeaderboardGlobal, getLeaderboardByRoom } from './controllers/leaderboardController';
+import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
 dotenv.config();
@@ -167,6 +167,7 @@ function registerRoutes(): void {
     // ── Perfil (JWT + player rate limit) ─────────────────────────────────────
     app.get('/api/v1/profile', playerLimiter, requireAuth, getProfile);
     app.put('/api/v1/profile', playerLimiter, requireAuth, updatePreferences);
+    app.get('/api/v1/profile/achievements', playerLimiter, requireAuth, getAchievements);
 
     // ── Cartelas (JWT + ticket rate limit) ───────────────────────────────────
     app.post(
@@ -291,6 +292,7 @@ function registerRoutes(): void {
 
     // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────
     app.get('/api/v1/leaderboard',                  playerLimiter, getLeaderboardGlobal);
+    app.get('/api/v1/leaderboard/xp',               playerLimiter, getLeaderboardXp);
     app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
 
     // ── Chat ────────────────────────────────────────────────────────────────────

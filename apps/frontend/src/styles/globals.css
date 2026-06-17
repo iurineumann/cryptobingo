@@ -517,12 +517,23 @@ body {
         border: 1px solid var(--cb-border-default);
     }
 
-    /* ── Tier Badges ── */
+    /* ── Tier Badges (9 tiers, PT-BR: Cobre → Diamante) ── */
 
-    .cb-tier-bronze  { background: linear-gradient(135deg,#78350f,#b45309); color:#fef3c7; padding:0.2rem 0.6rem; border-radius:9999px; font-size:var(--font-size-xs); font-weight:700; display:inline-flex; align-items:center; }
-    .cb-tier-silver  { background: linear-gradient(135deg,#475569,#94a3b8); color:#f8fafc; padding:0.2rem 0.6rem; border-radius:9999px; font-size:var(--font-size-xs); font-weight:700; display:inline-flex; align-items:center; }
-    .cb-tier-gold    { background: linear-gradient(135deg,#92400e,#fcd34d); color:#1a1a2e; padding:0.2rem 0.6rem; border-radius:9999px; font-size:var(--font-size-xs); font-weight:700; display:inline-flex; align-items:center; }
-    .cb-tier-diamond { background: linear-gradient(135deg,#4c1d95,#7c3aed,#a78bfa); color:#fff; padding:0.2rem 0.6rem; border-radius:9999px; font-size:var(--font-size-xs); font-weight:700; display:inline-flex; align-items:center; box-shadow:0 0 16px rgb(167 139 250/0.5); }
+    .cb-tier {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.2rem 0.6rem; border-radius: 9999px;
+        font-size: var(--font-size-xs); font-weight: 700; line-height: 1.4;
+        letter-spacing: 0.01em;
+    }
+    .cb-tier-cobre     { background: linear-gradient(135deg,#7c2d12,#b45309,#d97706); color:#fffbeb; }
+    .cb-tier-bronze    { background: linear-gradient(135deg,#451a03,#78350f,#b45309); color:#fef3c7; }
+    .cb-tier-prata     { background: linear-gradient(135deg,#334155,#475569,#94a3b8); color:#f8fafc; }
+    .cb-tier-ouro      { background: linear-gradient(135deg,#78350f,#92400e,#fcd34d); color:#1a1a2e; font-weight:800; }
+    .cb-tier-platina   { background: linear-gradient(135deg,#475569,#64748b,#cbd5e1); color:#0f172a; font-weight:800; }
+    .cb-tier-esmeralda { background: linear-gradient(135deg,#064e3b,#047857,#34d399); color:#ecfdf5; }
+    .cb-tier-safira    { background: linear-gradient(135deg,#1e3a5f,#1d4ed8,#60a5fa); color:#eff6ff; }
+    .cb-tier-rubi      { background: linear-gradient(135deg,#4c0519,#be123c,#fb7185); color:#fff1f2; }
+    .cb-tier-diamante  { background: linear-gradient(135deg,#2e1065,#4c1d95,#7c3aed,#a78bfa); color:#fff; box-shadow:0 0 16px rgb(167 139 250/0.5); }
 
     /* ── Game Status Chips — CSS puro, sem @apply ── */
 
@@ -754,6 +765,80 @@ body {
         box-shadow: 0 0 8px var(--cb-brand);
     }
 
+    /* XP Progress tier-specific fill colors */
+    .cb-progress-fill-cobre     { background: linear-gradient(90deg, #92400e, #d97706); box-shadow: 0 0 8px #d97706; }
+    .cb-progress-fill-bronze    { background: linear-gradient(90deg, #78350f, #b45309); box-shadow: 0 0 8px #b45309; }
+    .cb-progress-fill-prata     { background: linear-gradient(90deg, #475569, #94a3b8); box-shadow: 0 0 8px #94a3b8; }
+    .cb-progress-fill-ouro      { background: linear-gradient(90deg, #92400e, #fcd34d); box-shadow: 0 0 12px #fbbf24; }
+    .cb-progress-fill-platina   { background: linear-gradient(90deg, #64748b, #e2e8f0); box-shadow: 0 0 8px #cbd5e1; }
+    .cb-progress-fill-esmeralda { background: linear-gradient(90deg, #047857, #34d399); box-shadow: 0 0 8px #34d399; }
+    .cb-progress-fill-safira    { background: linear-gradient(90deg, #1d4ed8, #60a5fa); box-shadow: 0 0 8px #60a5fa; }
+    .cb-progress-fill-rubi      { background: linear-gradient(90deg, #be123c, #fb7185); box-shadow: 0 0 8px #fb7185; }
+    .cb-progress-fill-diamante  { background: linear-gradient(90deg, #6d28d9, #a78bfa); box-shadow: 0 0 12px #a78bfa; }
+
+    /* ── XP Progress Bar ── */
+
+    .cb-xp-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        min-width: 0;
+    }
+
+    .cb-xp-bar-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .cb-xp-bar-level {
+        font-family: var(--font-family-mono);
+        font-size: var(--font-size-xs);
+        font-weight: 600;
+        color: var(--cb-text-secondary);
+    }
+
+    .cb-xp-bar-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: var(--font-size-xs);
+    }
+
+    .cb-xp-bar-sub {
+        font-family: var(--font-family-mono);
+        font-weight: 600;
+        color: var(--cb-text-tertiary);
+    }
+
+    .cb-xp-bar-next {
+        font-weight: 600;
+        color: var(--cb-text-tertiary);
+    }
+
+    /* Navbar compact variant (inline with other nav items) */
+    .cb-xp-bar-nav {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.4rem;
+        max-width: 12rem;
+    }
+
+    .cb-xp-bar-nav .cb-xp-bar-label {
+        gap: 0.3rem;
+        flex-shrink: 0;
+    }
+
+    .cb-xp-bar-nav .cb-xp-bar-meta {
+        display: none;
+    }
+
+    .cb-xp-bar-nav .cb-progress-track {
+        flex: 1;
+        min-width: 3rem;
+    }
+
     /* ── Divider ── */
 
     .cb-divider {
@@ -892,6 +977,60 @@ body {
 @keyframes cb-shimmer {
     to { background-position: -200% 0; }
 }
+
+    /* ── Achievement Grid ── */
+
+    .cb-achievement-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .cb-achievement-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 0.75rem;
+        background: var(--cb-bg-sunken);
+        transition: background-color 150ms;
+    }
+    .cb-achievement-card.cb-achievement-locked {
+        opacity: 0.4;
+        filter: grayscale(0.6);
+    }
+
+    .cb-achievement-icon {
+        font-size: 1.75rem;
+        flex-shrink: 0;
+        width: 2.5rem;
+        text-align: center;
+    }
+
+    .cb-achievement-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+    }
+
+    .cb-achievement-label {
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--cb-text-primary);
+    }
+
+    .cb-achievement-desc {
+        font-size: 0.75rem;
+        color: var(--cb-text-tertiary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cb-modal-body {
+        padding: 0;
+    }
 
 @keyframes cb-ball-drop {
     0%   { opacity: 0; transform: translateY(-3rem) scale(0.5) rotate(-10deg); }

@@ -562,6 +562,29 @@ export async function fetchBatchWinnings(gameIds: string[]): Promise<BatchWinnin
 }
 
 // ==========================================
+// ACHIEVEMENTS (ADR-028 2D)
+// ==========================================
+
+export interface AchievementDef {
+    id:       string;
+    label:    string;
+    desc:     string;
+    icon:     string;
+    unlocked: boolean;
+}
+
+export interface AchievementsResponse {
+    achievements: AchievementDef[];
+}
+
+export async function fetchAchievements(): Promise<AchievementsResponse> {
+    const res = await fetch(`${API_BASE}/profile/achievements`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<AchievementsResponse>(res);
+}
+
+// ==========================================
 // GAME STATS BATCH (público — ADR-015, compliance)
 // ==========================================
 
@@ -822,12 +845,22 @@ export interface RoomLeaderboardResponse {
     cached_at: string;
 }
 
+export interface LeaderboardXpResponse {
+    entries:   import('@cryptobingo/shared-types').LeaderboardXpEntry[];
+    cached_at: string;
+}
+
 export async function fetchLeaderboard(opts?: { currency?: string; limit?: number }): Promise<LeaderboardResponse> {
     const params = new URLSearchParams();
     if (opts?.currency) params.set('currency', opts.currency);
     if (opts?.limit)    params.set('limit',    String(opts.limit));
     const res = await fetch(`${API_BASE}/leaderboard?${params}`, { headers: publicHeaders() });
     return handleResponse(res);
+}
+
+export async function fetchLeaderboardXp(limit = 20): Promise<LeaderboardXpResponse> {
+    const res = await fetch(`${API_BASE}/leaderboard/xp?limit=${limit}`, { headers: publicHeaders() });
+    return handleResponse<LeaderboardXpResponse>(res);
 }
 
 export async function fetchRoomLeaderboard(roomId: string, limit = 10): Promise<RoomLeaderboardResponse> {
