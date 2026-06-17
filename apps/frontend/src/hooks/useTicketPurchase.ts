@@ -55,17 +55,19 @@ export interface UseTicketPurchaseReturn {
     isPurchasing: boolean;
     purchaseError: string | null;
     lastPurchase: PurchaseResult | null;
-    /** Gera N cartelas assinadas (para preview). Lida com batching interno. */
-    generateForPreview: (gameId: string, count: number) => Promise<SignedTicket[]>;
+    /** Gera N cartelas assinadas (para preview). nftId: asset_id da NFT de desconto (ADR-028 §6). */
+    generateForPreview: (gameId: string, count: number, nftId?: string) => Promise<SignedTicket[]>;
     /**
      * Submete um ou mais grupos ao contrato. Cada grupo vira uma tx separada.
      * swapAction: quando fornecida, prefixa a tx com swap+deposit antes do buytickets.
+     * nftId: deve casar com o nftId usado em generateForPreview (mesmo hash).
      */
     purchaseTickets: (
         session:    Session,
         gameId:     string,
         groups:     PurchaseGroup[],
         swapAction?: SwapAction,
+        nftId?:      string,
     ) => Promise<PurchaseResult | null>;
     clearError: () => void;
 }
@@ -76,6 +78,7 @@ async function submitBatch(
     tickets:        SignedTicket[],
     requestedPrice: { quantity: string; contract: string },
     swapAction?:    SwapAction,
+    nftId?:         string,
 ): Promise<string> {
     const matrices   = tickets.map(t => t.matrix);
     const signatures = tickets.map(t => t.signature);
@@ -89,7 +92,7 @@ async function submitBatch(
             game_id:         gameId,
             matrices,
             signatures,
-            nft_id:          0,
+            nft_id:          nftId && nftId !== '0' ? nftId : 0,
             requested_price: requestedPrice,
         },
     };
@@ -140,12 +143,13 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
     const generateForPreview = useCallback(async (
         gameId: string,
         count: number,
+        nftId?: string,
     ): Promise<SignedTicket[]> => {
         const all: SignedTicket[] = [];
         let remaining = count;
         while (remaining > 0) {
             const n = Math.min(remaining, BATCH_SIZE);
-            const { tickets } = await generateSignedTickets(gameId, n);
+            const { tickets } = await generateSignedTickets(gameId, n, nftId);
             all.push(...tickets);
             remaining -= n;
         }
@@ -157,6 +161,7 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
         gameId:      string,
         groups:      PurchaseGroup[],
         swapAction?: SwapAction,
+        nftId?:      string,
     ): Promise<PurchaseResult | null> => {
 
         setIsPurchasing(true);
@@ -178,7 +183,7 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
                     const chunk = group.tickets.slice(offset, offset + chunkSize);
                     // swapAction só é embutido no primeiro batch; demais são pagamentos normais
                     const swap = offset === 0 ? swapAction : undefined;
-                    const txId = await submitBatch(session, gameId, chunk, price, swap);
+                    const txId = await submitBatch(session, gameId, chunk, price, swap, nftId);
                     lastTxId = txId;
 
                     allTickets.push(...chunk);

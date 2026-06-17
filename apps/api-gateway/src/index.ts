@@ -39,7 +39,7 @@ import {
     listCampaigns, getCampaign,
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
-import { getMyNfts }                                 from './controllers/nftController';
+import { getMyNfts, getEligibleDiscountNfts }        from './controllers/nftController';
 import { livenessCheck, readinessCheck }             from './controllers/healthController';
 import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winningsController';
 import {
@@ -272,7 +272,8 @@ function registerRoutes(): void {
     app.post('/api/v1/sponsors/campaigns/:campaignId/close', adminLimiter, requireAuth, requireRole('admin'), closeCampaign);
 
     // ── NFTs (JWT) ───────────────────────────────────────────────────────
-    app.get('/api/v1/nfts/my-assets', playerLimiter, requireAuth, getMyNfts);
+    app.get('/api/v1/nfts/my-assets',          playerLimiter, requireAuth, getMyNfts);
+    app.get('/api/v1/nfts/eligible-discount',  playerLimiter, requireAuth, getEligibleDiscountNfts);
 
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
