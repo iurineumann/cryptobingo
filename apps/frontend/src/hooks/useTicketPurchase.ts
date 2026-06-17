@@ -92,7 +92,7 @@ async function submitBatch(
             game_id:         gameId,
             matrices,
             signatures,
-            nft_id:          nftId && nftId !== '0' ? nftId : 0,
+            nft_id:          nftId && nftId !== '0' ? BigInt(nftId) : 0n,
             requested_price: requestedPrice,
         },
     };

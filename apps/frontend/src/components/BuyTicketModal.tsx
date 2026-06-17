@@ -473,15 +473,16 @@ export default function BuyTicketModal({
                                 <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-2">
                                     {t('buy_ticket.nft_discount_label')}
                                 </legend>
-                                <div className="flex gap-2 flex-wrap">
+                                <div className="flex gap-2 flex-wrap" role="group">
                                     <button
                                         type="button"
                                         className={[
-                                            'cb-btn cb-btn-sm rounded-full',
+                                            'cb-btn cb-btn-sm cb-btn-pill',
                                             !selectedNftId ? 'cb-btn-primary' : 'cb-btn-ghost',
                                         ].join(' ')}
                                         onClick={() => setSelectedNftId(null)}
                                         disabled={batches.length > 0}
+                                        aria-pressed={!selectedNftId}
                                         data-testid="nft-discount-none"
                                     >
                                         {t('buy_ticket.nft_discount_none')}
@@ -491,11 +492,12 @@ export default function BuyTicketModal({
                                             key={nft.asset_id}
                                             type="button"
                                             className={[
-                                                'cb-btn cb-btn-sm rounded-full',
+                                                'cb-btn cb-btn-sm cb-btn-pill',
                                                 selectedNftId === nft.asset_id ? 'cb-btn-primary' : 'cb-btn-ghost',
                                             ].join(' ')}
                                             onClick={() => setSelectedNftId(nft.asset_id)}
                                             disabled={batches.length > 0}
+                                            aria-pressed={selectedNftId === nft.asset_id}
                                             data-testid={`nft-discount-${nft.asset_id}`}
                                             title={`#${nft.asset_id}`}
                                         >
