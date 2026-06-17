@@ -1064,8 +1064,19 @@ namespace bingo {
                 for (const auto& r : conf_itr->rules) {
                     if (r.type != RULE_PRIZE_BOOST) continue;
                     if (r.condition != COND_OWNS) continue;
-                    if (r.value_origin != VALUE_FIXED) continue;
-                    if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                    if (r.value_origin == VALUE_FIXED) {
+                        if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                    } else { // VALUE_SCHEMA_FIELD
+                        uint64_t v = 0;
+                        if (_read_schema_numeric(nft_itr->collection_name,
+                                nft_itr->schema_name,
+                                nft_itr->template_id,
+                                nft_itr->immutable_serialized_data,
+                                r.schema_field, v)) {
+                            if (v > 25500) v = 25500;
+                            if ((uint16_t)v > best_boost) best_boost = (uint16_t)v;
+                        }
+                    }
                 }
             }
             if (best_boost > 100) {

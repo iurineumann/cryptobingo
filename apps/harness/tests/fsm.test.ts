@@ -54,6 +54,8 @@ const rootSession   = makeSession('eosio',        eosioKey);
 // ADR-026: actions de admin do bingogamectr exigem a permissão `admin`
 // (linkauth). A chave de bingogamectr@active pertence ao threshold admin.
 const bingoSession  = makeSession('bingogamectr', bingoKey, 'admin');
+// AtomicAssets (createtempl/mintasset) exige require_auth(bingogamectr) → @active.
+const bingoActiveSession = makeSession('bingogamectr', bingoKey, 'active');
 const playerSession = makeSession('jogador1',     playerKey);
 const microSession  = makeSession('bingogamesvc', microserviceKey);
 
@@ -1140,6 +1142,202 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
     test('CB-4: closegame → PAYING → ARCHIVED', async () => {
         await transact(microSession, 'bingogamectr', 'closegame', { game_id: comboGameId });
         expect(await getGameStatus(comboGameIdStr)).toBe('archived');
+        console.log('   ✅ status: archived');
+    });
+});
+
+// ==========================================
+// SUITE PRIZE_BOOST — VALUE_SCHEMA_FIELD [ADR-028 §7 / sub-fase 2F]
+// ==========================================
+// Valida o caminho on-chain do prize boost cujo valor vem de um campo numérico
+// do schema da NFT (não FIXED). claimwin recebe boost_nft_ids; o contrato lê
+// `discount_pct` (hundredths) do immutable do template via _read_schema_numeric
+// e multiplica o payout. Aqui discount_pct=200 → boost 2.00× sobre o prêmio base.
+describe('FSM — PRIZE_BOOST VALUE_SCHEMA_FIELD [ADR-028 §7/2F]', () => {
+    const COLLECTION  = 'cryptobingo1';
+    const SCHEMA      = 'utility';
+    const BOOST_HUND  = 200; // discount_pct=200 → boost 2.00× (hundredths)
+    const GAMETYPE_ID_BOOST = UInt64.from(5);
+
+    let boostGameId:    UInt64;
+    let boostGameIdStr: string;
+    let templateId:     number;
+    let assetId:        string;
+
+    // Lê o saldo interno (extended_asset) do owner na tabela balances (scope=owner).
+    async function getInternalWax(owner: string): Promise<number> {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: owner, table: 'balances', limit: 10, json: true,
+        });
+        for (const row of res.rows as any[]) {
+            const q: string = row.balance?.quantity ?? '';
+            if (q.endsWith('WAX')) return Math.round(parseFloat(q) * 10000); // → unidades (4 casas)
+        }
+        return 0;
+    }
+
+    beforeAll(async () => {
+        const n = Name.from(randomGameName());
+        boostGameId    = n.value;
+        boostGameIdStr = n.toString();
+        console.log(`\n🎁 Jogo boost-schema: ${boostGameIdStr} (${boostGameId})\n`);
+
+        // Padrão ROW_0 (idempotente) + gametype 5 Standard (base_mult=1, weight=10).
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addpattern', {
+                pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: Number(MASK_ROW0),
+            });
+        } catch { /* já existe */ }
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addgametype', {
+                gametype_id:        GAMETYPE_ID_BOOST,
+                name:               'BoostSchema',
+                base_multiplier:    1,
+                rules:              [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+                draw_mode:          'standard',
+                max_balls:          35,
+                golden_ball_after:  0,
+                master_weight_ovrd: 0,
+            });
+        } catch { /* já existe */ }
+    });
+
+    test('BS-0: createtempl utility com discount_pct=200 (hundredths do boost)', async () => {
+        await transact(bingoActiveSession, 'atomicassets', 'createtempl', {
+            authorized_creator: 'bingogamectr',
+            collection_name:    COLLECTION,
+            schema_name:        SCHEMA,
+            transferable:       true,
+            burnable:           false,
+            max_supply:         0,
+            immutable_data: [
+                { first: 'discount_pct', second: ['uint8', BOOST_HUND] },
+                { first: 'name',         second: ['string', 'Boost x2 NFT'] },
+            ],
+        });
+
+        // template_id é auto-incremental por coleção; pega o maior recém-criado.
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'atomicassets', scope: COLLECTION, table: 'templates',
+            limit: 1000, json: true,
+        });
+        templateId = Math.max(...(res.rows as any[]).map(r => Number(r.template_id)));
+        expect(templateId).toBeGreaterThan(0);
+        console.log(`   ✅ template ${templateId} criado (discount_pct=${BOOST_HUND})`);
+    });
+
+    test('BS-1: confignft PRIZE_BOOST VALUE_SCHEMA_FIELD (discount_pct, owns)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'confignft', {
+            template_id:     UInt64.from(templateId),
+            collection_name: COLLECTION,
+            rules: [{
+                type: 2,             // RULE_PRIZE_BOOST
+                value_origin: 1,     // VALUE_SCHEMA_FIELD
+                fixed_value: 0,
+                schema_field: 'discount_pct',
+                max_uses: 0,
+                grant_duration_sec: 0,
+                condition: 0,        // COND_OWNS
+                room_ids: [],
+            }],
+        });
+        console.log('   ✅ nftconfig SCHEMA_FIELD gravado');
+    });
+
+    test('BS-2: mintasset do template para jogador1 → boost NFT possuído', async () => {
+        await transact(bingoActiveSession, 'atomicassets', 'mintasset', {
+            authorized_minter: 'bingogamectr',
+            collection_name:   COLLECTION,
+            schema_name:       SCHEMA,
+            template_id:       templateId,
+            new_asset_owner:   'jogador1',
+            immutable_data:    [],   // vazio → _read_schema_numeric usa fallback do template
+            mutable_data:      [],
+            tokens_to_back:    [],
+        });
+
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'atomicassets', scope: 'jogador1', table: 'assets', limit: 1000, json: true,
+        });
+        const mine = (res.rows as any[]).filter(r => Number(r.template_id) === templateId);
+        assetId = String(Math.max(...mine.map(r => Number(r.asset_id))));
+        expect(Number(assetId)).toBeGreaterThan(0);
+        console.log(`   ✅ asset ${assetId} mintado para jogador1`);
+    });
+
+    test('BS-3: FSM completa (create→fund→buy→lock→draw)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id:      boostGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_BOOST,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: boostGameId });
+        await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingogamectr',
+            quantity: '500.0000 WAX', memo: 'Deposito boost-schema',
+        });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: boostGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: boostGameId,
+            matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: boostGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: boostGameId });
+        await waitForDrawn(boostGameIdStr);
+        console.log('   ✅ status: drawn');
+    }, 90_000);
+
+    test('BS-4: claimwin com boost_nft_ids → payout 2.00× (schema field)', async () => {
+        const [gameRes, ticketRes] = await Promise.all([
+            rpcClient.v1.chain.get_table_rows({
+                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
+                lower_bound: boostGameIdStr, upper_bound: boostGameIdStr, limit: 1, json: true,
+            }),
+            rpcClient.v1.chain.get_table_rows({
+                code: 'bingogamectr', scope: boostGameIdStr, table: 'tickets', limit: 1, json: true,
+            }),
+        ]);
+        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
+        const ticketId = UInt64.from(ticket.ticket_id);
+
+        // ADR-026: claimwin confia na avaliação do worker (valida só peso on-chain),
+        // logo o payout independe do estado real do bitmask — submetemos ROW_0 e o
+        // foco do teste é o multiplicador SCHEMA_FIELD aplicado ao prêmio.
+        void drawnBalls;
+
+        // Prêmio base: price(10) × base_mult(1) × weight(10)/100 = 1.0000 WAX = 10000.
+        const baseUnits   = 10000;
+        const boostedUnits = baseUnits * BOOST_HUND / 100; // ×2.00 = 20000
+
+        const before = await getInternalWax('jogador1');
+        await transact(microSession, 'bingogamectr', 'claimwin', {
+            game_id:           boostGameId,
+            ticket_id:         ticketId,
+            ball_count:        35,
+            win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+            golden_multiplier: 0,
+            boost_nft_ids:     [UInt64.from(assetId)],
+        });
+        const after = await getInternalWax('jogador1');
+
+        expect(after - before).toBe(boostedUnits);
+        console.log(`   ✅ payout com boost SCHEMA_FIELD: +${(boostedUnits/10000).toFixed(4)} WAX (base ${(baseUnits/10000).toFixed(4)} × ${BOOST_HUND/100})`);
+    });
+
+    test('BS-5: closegame → ARCHIVED', async () => {
+        await transact(microSession, 'bingogamectr', 'closegame', { game_id: boostGameId });
+        expect(await getGameStatus(boostGameIdStr)).toBe('archived');
         console.log('   ✅ status: archived');
     });
 });
