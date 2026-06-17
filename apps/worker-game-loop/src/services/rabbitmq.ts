@@ -21,6 +21,7 @@ import {
 }                          from './blockchain';
 import { findAllWinners }                          from './evaluator';
 import { buildInvertedIndex }                       from './invertedIndex';
+import { awardTicketPurchaseXP }                    from './xpEngine';
 import { onGameResolved }                           from './roomManager';
 import { orchestrateGame }                          from './gameOrchestrator';
 import {
@@ -238,6 +239,10 @@ function consumeMessages(): void {
                     // Executa após o lock — os tickets estão finalizados
                     buildInvertedIndex(gameId).catch(err =>
                         console.error(`[RabbitMQ] Erro ao construir índice para jogo ${gameId}:`, err)
+                    );
+                    // ADR-028 2D: XP por compra de cartelas
+                    awardTicketPurchaseXP(gameId).catch(err =>
+                        console.error(`[RabbitMQ] Erro ao conceder XP de compra para jogo ${gameId}:`, err)
                     );
                     break;
                 }

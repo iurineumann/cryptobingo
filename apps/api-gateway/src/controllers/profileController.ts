@@ -1,6 +1,42 @@
 import { Request, Response } from 'express';
 import UserProfile from '../models/UserProfile';
 
+// Curva φ-tier (espelhada do xpEngine.ts — ADR-028 §9)
+const PHI = 1.618034;
+const BASE_XP = 906;
+const N_PER_TIER = 25;
+const MAX_LEVEL = 225;
+const TIERS = ['Cobre','Bronze','Prata','Ouro','Platina','Esmeralda','Safira','Rubi','Diamante'];
+
+function tierXp(t: number): number {
+    return Math.floor(BASE_XP * Math.pow(PHI, t));
+}
+
+function tierThreshold(t: number): number {
+    return Math.floor(BASE_XP * (Math.pow(PHI, t + 1) - 1) / (PHI - 1));
+}
+
+function totalXp(level: number): number {
+    if (level <= 0) return 0;
+    if (level >= MAX_LEVEL) return tierThreshold(8);
+    const t = Math.min(8, Math.floor((level - 1) / N_PER_TIER));
+    const inTier = level - t * N_PER_TIER;
+    const prev = t > 0 ? tierThreshold(t - 1) : 0;
+    const range = tierXp(t);
+    return prev + Math.floor(range * Math.pow(inTier / N_PER_TIER, 2));
+}
+
+function deriveLevel(xp: number): { level: number; tier: string; sub_level: number } {
+    let lo = 1, hi = MAX_LEVEL;
+    while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (totalXp(mid) <= xp) lo = mid;
+        else hi = mid - 1;
+    }
+    const t = Math.min(8, Math.floor((lo - 1) / N_PER_TIER));
+    return { level: lo, tier: TIERS[t], sub_level: ((lo - 1) % N_PER_TIER) + 1 };
+}
+
 /**
  * GET /api/v1/profile
  *
@@ -24,7 +60,29 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
             console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}`);
         }
 
-        res.status(200).json(profile);
+        // Enriquecimento de progressão (ADR-028 2D)
+        const { xp = 0, tier, level, sub_level, games_played = 0 } = profile.progression || {};
+        const currentXp = xp || 0;
+        const derived = deriveLevel(currentXp);
+        const nextLevel = Math.min(derived.level + 1, MAX_LEVEL);
+        const nextLevelXp = totalXp(nextLevel);
+        const currentLevelXp = totalXp(derived.level);
+        const xpIntoLevel = currentXp - currentLevelXp;
+        const xpNeeded = nextLevelXp - currentLevelXp;
+
+        res.status(200).json({
+            ...profile.toObject(),
+            progression: {
+                xp: currentXp,
+                tier: derived.tier,
+                level: derived.level,
+                sub_level: derived.sub_level,
+                games_played,
+                next_level_xp: nextLevelXp,
+                xp_to_next_level: Math.max(0, xpNeeded - xpIntoLevel),
+                progress_pct: xpNeeded > 0 ? Math.round((xpIntoLevel / xpNeeded) * 100) : 100,
+            },
+        });
     } catch (error) {
         console.error(`[Profile] Erro ao buscar perfil de ${wallet_address}:`, error);
         res.status(500).json({ error: 'Erro interno ao buscar perfil.' });

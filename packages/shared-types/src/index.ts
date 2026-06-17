@@ -226,7 +226,9 @@ export interface MongoUserProfile {
     };
     progression: {
         xp:           number;
-        tier:         'Bronze' | 'Silver' | 'Gold' | 'Diamond';
+        tier:         'Cobre' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Safira' | 'Rubi' | 'Diamante';
+        level:        number;
+        sub_level:    number;
         games_played: number;
     };
 }

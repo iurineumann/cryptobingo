@@ -490,6 +490,10 @@
         {
           "name": "estimated_monthly_tickets",
           "type": "uint32$"
+        },
+        {
+          "name": "difficulty",
+          "type": "uint8$"
         }
       ]
     },
@@ -816,6 +820,10 @@
         {
           "name": "golden_multiplier",
           "type": "uint16"
+        },
+        {
+          "name": "boost_nft_ids",
+          "type": "uint64[]$"
         }
       ]
     },
@@ -1104,6 +1112,10 @@
         {
           "name": "max_tickets_per_player",
           "type": "uint32"
+        },
+        {
+          "name": "difficulty",
+          "type": "uint8"
         }
       ]
     },

@@ -32,9 +32,15 @@ const UserProfileSchema = new Schema({
     },
 
     progression: {
-        xp:           { type: Number, default: 0       },
-        tier:         { type: String, enum: ['Bronze', 'Silver', 'Gold', 'Diamond'], default: 'Bronze' },
-        games_played: { type: Number, default: 0       },
+        xp:           { type: Number, default: 0 },
+        tier:         {
+            type: String,
+            enum: ['Cobre', 'Bronze', 'Prata', 'Ouro', 'Platina', 'Esmeralda', 'Safira', 'Rubi', 'Diamante'],
+            default: 'Cobre',
+        },
+        level:        { type: Number, default: 1 },
+        sub_level:    { type: Number, default: 1 },
+        games_played: { type: Number, default: 0 },
     },
 }, { timestamps: true });
 
