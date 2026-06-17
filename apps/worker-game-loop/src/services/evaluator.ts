@@ -16,6 +16,7 @@ import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    fr
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
+import { awardWinXP, awardComboXP } from './xpEngine';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -663,6 +664,8 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     payout.amount,
                     payout.currency,
                 ).catch(() => {});
+                awardWinXP(ticket.owner, gameId).catch(() => {});
+                if (isCombo) awardComboXP(ticket.owner).catch(() => {});
             }
         }
     }

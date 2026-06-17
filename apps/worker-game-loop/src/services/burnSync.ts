@@ -12,6 +12,7 @@
 
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { executeRecordBurn } from './blockchain';
+import { awardBurnXP } from './xpEngine';
 
 const ATOMIC_ACCOUNT = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
 
@@ -54,6 +55,7 @@ export async function syncBurns(owner: string, candidates: BurnCandidate[]): Pro
         try {
             await executeRecordBurn(owner, c.assetId, c.templateId, c.collection);
             recorded.push(c.assetId);
+            awardBurnXP(owner, c.collection, c.templateId).catch(() => {});
         } catch (e: any) {
             // "Burn ja registrado" → idempotente; demais erros logam e seguem
             const msg = String(e?.message ?? e);
