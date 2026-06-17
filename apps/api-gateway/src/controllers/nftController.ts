@@ -118,31 +118,41 @@ export async function getEligibleDiscountNfts(req: Request, res: Response): Prom
             return;
         }
 
-        // 2. Lê nftconfigs on-chain (todos os templates configurados)
-        const cfgRes = await rpcClient.v1.chain.get_table_rows({
-            code:  CONTRACT_ACCOUNT,
-            scope: CONTRACT_ACCOUNT,
-            table: 'nftconfigs',
-            limit: 200,
-            json:  true,
-        });
-
-        // 3. Monta mapa template_id → melhor desconto TICKET_DISCOUNT OWNS
+        // 2. Lê nftconfigs on-chain com paginação (todos os templates)
         const discountMap = new Map<number, { discount_hundredths: number; value_origin: number }>();
-        for (const cfg of cfgRes.rows as any[]) {
-            const templateId = Number(cfg.template_id);
-            for (const rule of (cfg.rules ?? []) as any[]) {
-                if (rule.type !== RULE_TICKET_DISCOUNT) continue;
-                if (rule.condition !== COND_OWNS) continue;
-                const h = rule.value_origin === VALUE_FIXED ? Number(rule.fixed_value) : 0;
-                const existing = discountMap.get(templateId);
-                if (!existing || h > existing.discount_hundredths) {
-                    discountMap.set(templateId, { discount_hundredths: h, value_origin: Number(rule.value_origin) });
+        let lowerBound: string | undefined;
+        do {
+            const cfgRes = await rpcClient.v1.chain.get_table_rows({
+                code:        CONTRACT_ACCOUNT,
+                scope:       CONTRACT_ACCOUNT,
+                table:       'nftconfigs',
+                limit:       200,
+                json:        true,
+                lower_bound: lowerBound,
+            } as any);
+
+            // 3. Monta mapa template_id → melhor desconto TICKET_DISCOUNT OWNS
+            for (const cfg of cfgRes.rows as any[]) {
+                const templateId = Number(cfg.template_id);
+                for (const rule of (cfg.rules ?? []) as any[]) {
+                    if (rule.type !== RULE_TICKET_DISCOUNT) continue;
+                    if (rule.condition !== COND_OWNS) continue;
+                    // SCHEMA_FIELD: desconto desconhecido em tempo de listagem — usa 0 como hundredths
+                    const h = rule.value_origin === VALUE_FIXED ? Number(rule.fixed_value) : 0;
+                    const existing = discountMap.get(templateId);
+                    // VALUE_FIXED sempre vence VALUE_SCHEMA_FIELD (h=0) quando maior
+                    if (!existing || h > existing.discount_hundredths || !existing.discount_hundredths) {
+                        discountMap.set(templateId, { discount_hundredths: h, value_origin: Number(rule.value_origin) });
+                    }
                 }
             }
-        }
 
-        // 4. Filtra assets elegíveis e ordena por desconto desc
+            lowerBound = (cfgRes as any).rows_more && cfgRes.rows.length > 0
+                ? String(Number((cfgRes.rows as any[]).at(-1).template_id) + 1)
+                : undefined;
+        } while (lowerBound);
+
+        // 4. Filtra assets elegíveis e ordena: FIXED desc, SCHEMA_FIELD no topo (desconto desconhecido = Infinity)
         const eligible: EligibleDiscountNft[] = playerAssets
             .filter(a => discountMap.has(Number(a.template_id)))
             .map(a => {
@@ -156,7 +166,12 @@ export async function getEligibleDiscountNfts(req: Request, res: Response): Prom
                     value_origin:        cfg.value_origin,
                 };
             })
-            .sort((a, b) => b.discount_hundredths - a.discount_hundredths);
+            .sort((a, b) => {
+                // SCHEMA_FIELD (value_origin=1): desconto desconhecido → topo da lista
+                const wa = a.value_origin === 1 ? Infinity : a.discount_hundredths;
+                const wb = b.value_origin === 1 ? Infinity : b.discount_hundredths;
+                return wb - wa;
+            });
 
         res.status(200).json({ nfts: eligible });
 
