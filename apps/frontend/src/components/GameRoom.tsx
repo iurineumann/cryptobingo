@@ -860,7 +860,7 @@ export default function GameRoom({
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '—'}</span>
+                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '⭐'}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
                   )}
@@ -1224,6 +1224,7 @@ export default function GameRoom({
           roomPriceMin={room?.ticket_price_min}
           roomPriceMax={room?.ticket_price_max}
           roomPriceDefault={room?.ticket_price_default}
+          nftTemplateAllowlist={room?.nft_template_allowlist}
         />
       )}
     </div>

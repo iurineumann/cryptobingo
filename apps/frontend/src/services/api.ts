@@ -123,11 +123,12 @@ export interface GenerateTicketsResponse {
 export async function generateSignedTickets(
     gameId: string,
     count: number,
+    nftId?: string,
 ): Promise<GenerateTicketsResponse> {
     const res = await fetch(`${API_BASE}/games/${gameId}/tickets/generate`, {
         method:  'POST',
         headers: authHeaders(),
-        body:    JSON.stringify({ count }),
+        body:    JSON.stringify({ count, ...(nftId && nftId !== '0' ? { nft_id: nftId } : {}) }),
     });
     return handleResponse<GenerateTicketsResponse>(res);
 }
@@ -528,6 +529,20 @@ export interface NftAsset {
 
 export async function fetchMyNfts(): Promise<{ nfts: NftAsset[] }> {
     const res = await fetch(`${API_BASE}/nfts/my-assets`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export interface EligibleDiscountNft {
+    asset_id:            string;
+    template_id:         number;
+    collection_name:     string;
+    discount_hundredths: number;
+    discount_pct:        number; // float para exibição (ex: 5.0 = 5%)
+    value_origin:        number; // 0=FIXED, 1=SCHEMA_FIELD
+}
+
+export async function fetchEligibleDiscountNfts(): Promise<{ nfts: EligibleDiscountNft[] }> {
+    const res = await fetch(`${API_BASE}/nfts/eligible-discount`, { headers: authHeaders() });
     return handleResponse(res);
 }
 
