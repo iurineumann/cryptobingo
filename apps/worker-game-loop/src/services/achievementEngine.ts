@@ -1,4 +1,5 @@
 import { PlayerProgression } from '../models/playerProgression';
+import { achievementsUnlockedTotal } from './metrics';
 
 const ACHIEVEMENTS = [
     { id: 'first_win',    label: 'Primeira Vitória',        desc: 'Ganhe sua primeira partida',               icon: '🏆' },
@@ -62,6 +63,7 @@ async function unlock(wallet: string, achievementId: string): Promise<boolean> {
         );
         if (res.modifiedCount > 0) {
             console.log(`🏅 [Achievement] ${wallet} desbloqueou: ${achievementId}`);
+            achievementsUnlockedTotal.inc({ achievement_id: achievementId });
             return true;
         }
         return false;

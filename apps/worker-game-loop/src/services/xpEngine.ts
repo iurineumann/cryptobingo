@@ -7,6 +7,10 @@ import {
     checkStreakAchievements, checkBurnAchievements,
     checkTierAchievements,
 } from './achievementEngine';
+import {
+    xpAwardedTotal, xpAmountTotal, xpErrorsTotal,
+    xpDurationHistogram,
+} from './metrics';
 
 const PHI = 1.618034;
 const BASE_XP = 906;
@@ -104,24 +108,35 @@ async function recalcLevel(wallet: string): Promise<void> {
 
 export async function awardPlayerXP(wallet: string, amount: number): Promise<void> {
     if (amount <= 0) return;
-    const streakCount = await ensureDailyStreak(wallet);
+    const startTime = Date.now();
+    const streakCount = await ensureDailyStreak(wallet).catch(() => {
+        xpErrorsTotal.inc({ type: 'streak' });
+        return 0;
+    });
     const totalAmount = amount + streakCount * 2;
     await PlayerProgression.updateOne(
         { wallet_address: wallet },
         { $inc: { 'progression.xp': totalAmount, 'progression.games_played': 1 } },
         { upsert: true },
-    ).catch(err => console.error(`[XP] Erro ao incrementar XP de ${wallet}:`, err));
+    ).catch(err => {
+        console.error(`[XP] Erro ao incrementar XP de ${wallet}:`, err);
+        xpErrorsTotal.inc({ type: 'game' });
+    });
     await recalcLevel(wallet);
 
     const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
     if (!doc?.progression) return;
+    xpAwardedTotal.inc({ type: 'game' });
+    xpAmountTotal.inc({ type: 'game' }, totalAmount);
+    xpDurationHistogram.observe({ type: 'game' }, Date.now() - startTime);
     checkGamesPlayedAchievements(wallet, doc.progression.games_played).catch(() => {});
     checkStreakAchievements(wallet, streakCount).catch(() => {});
     checkTierAchievements(wallet, doc.progression.tier).catch(() => {});
 }
 
 export async function awardWinXP(wallet: string, gameId: string, isVip = false, isGolden = false): Promise<void> {
-    const game = await fetchGame(gameId).catch(() => null);
+    const start = Date.now();
+    const game = await fetchGame(gameId).catch(() => { xpErrorsTotal.inc({ type: 'win' }); return null; });
     if (!game) return;
     const roomId = String((game as any).room_id ?? '0');
     if (roomId === '0') return;
@@ -131,36 +146,49 @@ export async function awardWinXP(wallet: string, gameId: string, isVip = false, 
     await PlayerProgression.updateOne(
         { wallet_address: wallet },
         { $inc: { 'progression.wins_count': 1 } },
-    ).catch(() => {});
+    ).catch(() => { xpErrorsTotal.inc({ type: 'win' }); });
     const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
     const wins = doc?.progression?.wins_count ?? 0;
+    xpAwardedTotal.inc({ type: 'win' });
+    xpAmountTotal.inc({ type: 'win' }, xp);
+    xpDurationHistogram.observe({ type: 'win' }, Date.now() - start);
     checkWinAchievements(wallet, wins, isGolden).catch(() => {});
 }
 
 export async function awardComboXP(wallet: string): Promise<void> {
+    const start = Date.now();
     await awardPlayerXP(wallet, 15);
     await PlayerProgression.updateOne(
         { wallet_address: wallet },
         { $inc: { 'progression.combos_count': 1 } },
-    ).catch(() => {});
+    ).catch(() => { xpErrorsTotal.inc({ type: 'combo' }); });
     const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
     const combos = doc?.progression?.combos_count ?? 0;
+    xpAwardedTotal.inc({ type: 'combo' });
+    xpAmountTotal.inc({ type: 'combo' }, 15);
+    xpDurationHistogram.observe({ type: 'combo' }, Date.now() - start);
     checkComboAchievements(wallet, combos).catch(() => {});
 }
 
 export async function awardBurnXP(wallet: string, collection: string, templateId: string | number): Promise<void> {
-    const rarity = await getRarity(collection, templateId);
-    await awardPlayerXP(wallet, 50 + rarity * 10);
+    const start = Date.now();
+    const rarity = await getRarity(collection, templateId).catch(() => { xpErrorsTotal.inc({ type: 'burn' }); return 0; });
+    const amount = 50 + rarity * 10;
+    await awardPlayerXP(wallet, amount);
     await PlayerProgression.updateOne(
         { wallet_address: wallet },
         { $inc: { 'progression.burns_count': 1 } },
-    ).catch(() => {});
+    ).catch(() => { xpErrorsTotal.inc({ type: 'burn' }); });
     const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
     const burns = doc?.progression?.burns_count ?? 0;
+    xpAwardedTotal.inc({ type: 'burn' });
+    xpAmountTotal.inc({ type: 'burn' }, amount);
+    xpDurationHistogram.observe({ type: 'burn' }, Date.now() - start);
     checkBurnAchievements(wallet, burns).catch(() => {});
 }
 
 export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
+    const start = Date.now();
     const tickets: any[] = [];
     let lowerBound: string | undefined;
     let hasMore = true;
@@ -179,16 +207,24 @@ export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
         const owner = String((t as any).owner ?? '');
         if (owner) perOwner.set(owner, (perOwner.get(owner) || 0) + 1);
     }
+    let totalAwarded = 0;
     for (const [wallet, count] of perOwner) {
-        await awardPlayerXP(wallet, count * 1).catch(err =>
-            console.error(`[XP] Erro ao conceder XP de compra para ${wallet}:`, err)
-        );
+        await awardPlayerXP(wallet, count * 1).catch(err => {
+            console.error(`[XP] Erro ao conceder XP de compra para ${wallet}:`, err);
+            xpErrorsTotal.inc({ type: 'purchase' });
+        });
         await PlayerProgression.updateOne(
             { wallet_address: wallet },
             { $inc: { 'progression.tickets_bought': count } },
-        ).catch(() => {});
+        ).catch(() => { xpErrorsTotal.inc({ type: 'purchase' }); });
         const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
         const bought = doc?.progression?.tickets_bought ?? count;
+        totalAwarded += count;
         checkPurchaseAchievements(wallet, bought).catch(() => {});
     }
+    if (totalAwarded > 0) {
+        xpAwardedTotal.inc({ type: 'purchase' });
+        xpAmountTotal.inc({ type: 'purchase' }, totalAwarded);
+    }
+    xpDurationHistogram.observe({ type: 'purchase' }, Date.now() - start);
 }
