@@ -5,7 +5,7 @@ ROOM_ACCESS, BURN_TO_CLAIM), treasury de sala para patrocinador, schema field
 deserialização dupla (worker + contrato), consumíveis via mutable data, XP/achievement
 engine off-chain, e suporte a coleções externas com field mapping.
 
-## Status: Proposto
+## Status: Aceito (Fases 1–2 implementadas; Fase 3 api-gateway pendente — `nft_id` no hash da signature §6)
 
 ## Contexto
 
@@ -366,21 +366,22 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
     25500 (255×) e validação dupla. `FIXED` e `SCHEMA_FIELD` coexistem na mesma config
     (usa o maior). Campo ausente/não-numérico → boost 0 (ignora template). Validado E2E
     (harness `BS-0..5`: `discount_pct=200` → payout 2.00× no `claimwin`) + unit no worker.
-- **Ainda pendente na Fase 2:**
-  - `nft_id` no **hash da signature** de `buytickets` (§6) — é a **Fase 3 (api-gateway)**:
-    a assinatura é gerada no `ticketController`, não no worker.
-  - Decremento de **consumível** via mutable data (`setassetdata`) (§3).
-  - 2C — burn sync cron (worker → AtomicAssets API → `recordburn`) + consumo dos
-    **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
+  - **2C — burn sync cron (§8): implementado.** `burnCron.ts` orquestra
+    AtomicAssets API → `recordburn` (dedup por `asset_id` em `nftburns`) e gera
+    `nftgrants` para regras `BURN_TO_CLAIM`. Os **grants** ativos são consumidos
+    on-chain em `buytickets` (desconto `COND_BURNED`) e `claimwin` (prize boost
+    `COND_BURNED`, sempre `FIXED`), descobertos por owner (índice `byowner`) e
+    filtrados por `grant_until`. Validado E2E (harness `BG-0..4`: queima → grant →
+    payout 3.00× via grant, isolado em `jogador2`).
   - **2D — XP/achievement engine (§9): implementado.** φ-tier curve, 225 níveis,
     9 tiers (Cobre→Diamante). Difficulty on-chain no `room_record`. Worker
     `xpEngine.ts` com hooks em win/combo/burn/compra. Daily streak lazy. Rarity
     via deserializador ALPHA no worker (`atomicSchema.ts`).
-  - Param `boost_nft_ids` + aplicação do **prize boost** no `claimwin` (§7). Tentou-se
-    adicioná-lo como `binary_extension` trailing, mas o wharfkit (antelope 1.2.0) **não
-    omite binary_extension de array** na codificação → quebraria os callers atuais do
-    worker. Adiado p/ Fase 2 (lockstep com o worker). O débito do payout no
-    `room_treasury` e a `house_fee_bps` no `closegame` permanecem (não dependem do param).
+  - **2E — decremento de consumível (§3): implementado.** Mutable data via
+    `setassetdata` decrementa `uses` da NFT consumível no consumo.
+- **Ainda pendente na Fase 2:**
+  - `nft_id` no **hash da signature** de `buytickets` (§6) — é a **Fase 3 (api-gateway)**:
+    a assinatura é gerada no `ticketController`, não no worker.
 - Os campos novos de `rooms` usam `binary_extension` (trailing/`$`) → linhas de salas
   pré-existentes continuam desserializando; E2E permanece verde.
 - **Gotcha de assinatura no harness (ADR-026):** actions admin do `bingogamectr`
