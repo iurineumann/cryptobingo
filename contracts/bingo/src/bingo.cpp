@@ -1048,37 +1048,64 @@ namespace bingo {
             payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
-        // ADR-028 §7: Prize Boost. O worker passa boost_nft_ids (ordenados por payout);
-        // o contrato valida ownership + regra PRIZE_BOOST (FIXED, owns) e aplica o maior
-        // boost elegível a este ticket. SCHEMA_FIELD boost → sub-fase 2B.
-        if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
-            atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
+        // ADR-028 §7/§8: Prize Boost. Aplica o maior boost elegível ao vencedor entre:
+        //  (a) NFTs possuídas passadas em boost_nft_ids (PRIZE_BOOST owns; FIXED ou
+        //      SCHEMA_FIELD — o worker as ordena por payout);
+        //  (b) grants BURN_TO_CLAIM ativos do vencedor (PRIZE_BOOST burned, sempre FIXED —
+        //      o asset foi queimado, não há schema p/ ler). Os grants são descobertos
+        //      on-chain por owner (o worker não precisa passá-los).
+        {
             nftconfigs_table _bconfigs(get_self(), get_self().value);
             uint16_t best_boost = 0; // hundredths (100 = 1.00×); só aplica se > 100
-            for (uint64_t boost_id : boost_nft_ids.value()) {
-                auto nft_itr = winner_nfts.find(boost_id);
-                if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
-                auto conf_itr = _bconfigs.find((uint64_t)nft_itr->template_id);
-                if (conf_itr == _bconfigs.end()) continue;
-                if (conf_itr->collection_name != nft_itr->collection_name) continue;
-                for (const auto& r : conf_itr->rules) {
-                    if (r.type != RULE_PRIZE_BOOST) continue;
-                    if (r.condition != COND_OWNS) continue;
-                    if (r.value_origin == VALUE_FIXED) {
-                        if (r.fixed_value > best_boost) best_boost = r.fixed_value;
-                    } else { // VALUE_SCHEMA_FIELD
-                        uint64_t v = 0;
-                        if (_read_schema_numeric(nft_itr->collection_name,
-                                nft_itr->schema_name,
-                                nft_itr->template_id,
-                                nft_itr->immutable_serialized_data,
-                                r.schema_field, v)) {
-                            if (v > 25500) v = 25500;
-                            if ((uint16_t)v > best_boost) best_boost = (uint16_t)v;
+
+            // (a) NFTs possuídas
+            if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
+                atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
+                for (uint64_t boost_id : boost_nft_ids.value()) {
+                    auto nft_itr = winner_nfts.find(boost_id);
+                    if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
+                    auto conf_itr = _bconfigs.find((uint64_t)nft_itr->template_id);
+                    if (conf_itr == _bconfigs.end()) continue;
+                    if (conf_itr->collection_name != nft_itr->collection_name) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_PRIZE_BOOST) continue;
+                        if (r.condition != COND_OWNS) continue;
+                        if (r.value_origin == VALUE_FIXED) {
+                            if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                        } else { // VALUE_SCHEMA_FIELD
+                            uint64_t v = 0;
+                            if (_read_schema_numeric(nft_itr->collection_name,
+                                    nft_itr->schema_name,
+                                    nft_itr->template_id,
+                                    nft_itr->immutable_serialized_data,
+                                    r.schema_field, v)) {
+                                if (v > 25500) v = 25500;
+                                if ((uint16_t)v > best_boost) best_boost = (uint16_t)v;
+                            }
                         }
                     }
                 }
             }
+
+            // (b) grants BURN_TO_CLAIM ativos (benefício burned é sempre FIXED)
+            {
+                nft_grants_table grants(get_self(), get_self().value);
+                auto gidx = grants.get_index<"byowner"_n>();
+                uint32_t now_sec = current_time_point().sec_since_epoch();
+                for (auto it = gidx.lower_bound(winner.value);
+                     it != gidx.end() && it->owner == winner; ++it) {
+                    if (it->grant_until.sec_since_epoch() <= now_sec) continue; // expirado
+                    auto conf_itr = _bconfigs.find(it->template_id);
+                    if (conf_itr == _bconfigs.end()) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_PRIZE_BOOST) continue;
+                        if (r.condition != COND_BURNED) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                    }
+                }
+            }
+
             if (best_boost > 100) {
                 payout.quantity.amount = payout.quantity.amount * (int64_t)best_boost / 100;
             }
