@@ -292,6 +292,7 @@ namespace bingo {
         eosio::binary_extension<uint64_t>              campaign_id;            // vínculo de campanha (0 = nenhum)
         eosio::binary_extension<uint16_t>              house_fee_bps;          // taxa da casa sobre lucro do treasury
         eosio::binary_extension<uint32_t>              estimated_monthly_tickets; // projeção p/ colateral
+        eosio::binary_extension<uint8_t>               difficulty;                // ADR-028 2D: 0-10 (XP multiplier, 0 = default 1)
 
         uint64_t primary_key()  const { return room_id; }
         uint64_t by_sponsor()   const { return sponsor.value; }
@@ -511,7 +512,7 @@ namespace bingo {
         [[eosio::action]] void activateroom(uint64_t room_id);
         [[eosio::action]] void pauseroom(uint64_t room_id);
         [[eosio::action]] void closeroom(uint64_t room_id);
-        [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player);
+        [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty = 1);
         // ADR-028 §4: configura economia de sala patrocinada (allowlist, campanha, taxa, projeção)
         [[eosio::action]] void setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets);
         // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala

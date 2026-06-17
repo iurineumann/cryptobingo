@@ -1501,17 +1501,19 @@ namespace bingo {
         }
     }
 
-    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
+    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty) {
         require_auth(permission_level{get_self(), "admin"_n});
         check(room_drop_chance_bps <= 10000, "room_drop_chance_bps deve ser 0–10000.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
+        check(difficulty <= 10, "difficulty deve ser 0-10.");
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
         rooms.modify(room_itr, same_payer, [&](auto& r) {
             r.room_drop_chance_bps   = room_drop_chance_bps;
             r.max_tickets_per_player = max_tickets_per_player;
+            r.difficulty.emplace(difficulty > 0 ? difficulty : 1);
         });
     }
 
