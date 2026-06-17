@@ -794,5 +794,17 @@
   "loading": "Loading profile...",
   "language": "Language",
   "landing_lobby": "Game Lobbies",
-  "wallet_connected": "Wallet Connected:"
+  "wallet_connected": "Wallet Connected:",
+  "progression": {
+    "level": "Lv. {{level}}",
+    "sub_level": "Sub-level {{subLevel}}",
+    "xp_to_next": "{{xp}} XP to next",
+    "xp_progress": "{{pct}}% progress",
+    "tier_label": "{{tier}} tier"
+  },
+  "achievements": {
+    "title": "Achievements",
+    "progress": "{{unlocked}} / {{total}} unlocked",
+    "recent_unlock": "New achievement unlocked!"
+  }
 }

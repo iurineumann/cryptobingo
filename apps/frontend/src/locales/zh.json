@@ -794,5 +794,17 @@
   "landing_lobby": "游戏大厅",
   "loading": "加载个人资料...",
   "language": "语言",
-  "wallet_connected": "钱包已连接："
+  "wallet_connected": "钱包已连接：",
+  "progression": {
+    "level": "Lv. {{level}}",
+    "sub_level": "子等级 {{subLevel}}",
+    "xp_to_next": "还需 {{xp}} XP",
+    "xp_progress": "进度 {{pct}}%",
+    "tier_label": "{{tier}} 段位"
+  },
+  "achievements": {
+    "title": "成就",
+    "progress": "已解锁 {{unlocked}} / {{total}}",
+    "recent_unlock": "新成就已解锁!"
+  }
 }

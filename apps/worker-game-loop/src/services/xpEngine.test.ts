@@ -106,7 +106,8 @@ describe('awardPlayerXP — concede XP + daily streak + recalculo de level', () 
     it('faz updateOne para streak + $inc para XP + $set para level', async () => {
         mockFindOne
             .mockResolvedValueOnce({ daily_streak: { last_date: '', count: 0 } })
-            .mockResolvedValueOnce({ progression: { xp: 100, level: 1, tier: 'Cobre', sub_level: 1 } });
+            .mockResolvedValueOnce({ progression: { xp: 100, level: 1, tier: 'Cobre', sub_level: 1 } })
+            .mockResolvedValueOnce({ progression: { xp: 100, level: 1, tier: 'Cobre', sub_level: 1, games_played: 1 } });
         mockUpdateOne.mockResolvedValue({ acknowledged: true });
 
         await awardPlayerXP('jogador1', 50);
@@ -134,7 +135,9 @@ describe('awardWinXP — vitória com difficulty da sala', () => {
         mockGetTableRows.mockResolvedValue({ rows: [{ difficulty: 5 }] });
         mockFindOne
             .mockResolvedValueOnce({ daily_streak: { last_date: new Date().toISOString().slice(0, 10), count: 3 } })
-            .mockResolvedValueOnce({ progression: { xp: 200, level: 1, tier: 'Cobre', sub_level: 1 } });
+            .mockResolvedValueOnce({ progression: { xp: 200, level: 1, tier: 'Cobre', sub_level: 1 } })
+            .mockResolvedValueOnce({ progression: { xp: 200, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, wins_count: 0 } })
+            .mockResolvedValueOnce({ progression: { xp: 200, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, wins_count: 1 } });
         mockUpdateOne.mockResolvedValue({ acknowledged: true });
 
         await awardWinXP('jogador1', 'game1');
@@ -152,7 +155,9 @@ describe('awardWinXP — vitória com difficulty da sala', () => {
         mockGetTableRows.mockResolvedValue({ rows: [{ difficulty: 3 }] });
         mockFindOne
             .mockResolvedValueOnce({ daily_streak: { last_date: new Date().toISOString().slice(0, 10), count: 1 } })
-            .mockResolvedValueOnce({ progression: { xp: 300, level: 1, tier: 'Cobre', sub_level: 1 } });
+            .mockResolvedValueOnce({ progression: { xp: 300, level: 1, tier: 'Cobre', sub_level: 1 } })
+            .mockResolvedValueOnce({ progression: { xp: 300, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, wins_count: 0 } })
+            .mockResolvedValueOnce({ progression: { xp: 300, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, wins_count: 1 } });
         mockUpdateOne.mockResolvedValue({ acknowledged: true });
 
         await awardWinXP('jogador1', 'game1', true);
@@ -176,7 +181,9 @@ describe('awardComboXP', () => {
     it('concede 15 XP + streak', async () => {
         mockFindOne
             .mockResolvedValueOnce({ daily_streak: { last_date: new Date().toISOString().slice(0, 10), count: 2 } })
-            .mockResolvedValueOnce({ progression: { xp: 400, level: 1, tier: 'Cobre', sub_level: 1 } });
+            .mockResolvedValueOnce({ progression: { xp: 400, level: 1, tier: 'Cobre', sub_level: 1 } })
+            .mockResolvedValueOnce({ progression: { xp: 400, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, combos_count: 0 } })
+            .mockResolvedValueOnce({ progression: { xp: 400, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, combos_count: 1 } });
         mockUpdateOne.mockResolvedValue({ acknowledged: true });
 
         await awardComboXP('jogador1');
@@ -194,7 +201,9 @@ describe('awardBurnXP', () => {
         mockGetRarity.mockResolvedValueOnce(5);
         mockFindOne
             .mockResolvedValueOnce({ daily_streak: { last_date: new Date().toISOString().slice(0, 10), count: 0 } })
-            .mockResolvedValueOnce({ progression: { xp: 500, level: 1, tier: 'Cobre', sub_level: 1 } });
+            .mockResolvedValueOnce({ progression: { xp: 500, level: 1, tier: 'Cobre', sub_level: 1 } })
+            .mockResolvedValueOnce({ progression: { xp: 500, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, burns_count: 0 } })
+            .mockResolvedValueOnce({ progression: { xp: 500, level: 2, tier: 'Cobre', sub_level: 2, games_played: 1, burns_count: 1 } });
         mockUpdateOne.mockResolvedValue({ acknowledged: true });
 
         await awardBurnXP('jogador1', 'collection1', '123');

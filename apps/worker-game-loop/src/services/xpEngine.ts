@@ -1,6 +1,12 @@
 import { rpcClient, fetchGame } from '@cryptobingo/blockchain-core';
 import { PlayerProgression } from '../models/playerProgression';
 import { getRarity } from './atomicSchema';
+import {
+    checkWinAchievements, checkComboAchievements,
+    checkPurchaseAchievements, checkGamesPlayedAchievements,
+    checkStreakAchievements, checkBurnAchievements,
+    checkTierAchievements,
+} from './achievementEngine';
 
 const PHI = 1.618034;
 const BASE_XP = 906;
@@ -106,9 +112,15 @@ export async function awardPlayerXP(wallet: string, amount: number): Promise<voi
         { upsert: true },
     ).catch(err => console.error(`[XP] Erro ao incrementar XP de ${wallet}:`, err));
     await recalcLevel(wallet);
+
+    const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
+    if (!doc?.progression) return;
+    checkGamesPlayedAchievements(wallet, doc.progression.games_played).catch(() => {});
+    checkStreakAchievements(wallet, streakCount).catch(() => {});
+    checkTierAchievements(wallet, doc.progression.tier).catch(() => {});
 }
 
-export async function awardWinXP(wallet: string, gameId: string, isVip = false): Promise<void> {
+export async function awardWinXP(wallet: string, gameId: string, isVip = false, isGolden = false): Promise<void> {
     const game = await fetchGame(gameId).catch(() => null);
     if (!game) return;
     const roomId = String((game as any).room_id ?? '0');
@@ -116,15 +128,36 @@ export async function awardWinXP(wallet: string, gameId: string, isVip = false):
     const diff = await getDifficulty(roomId);
     const xp = (isVip ? 25 : 10) * diff;
     await awardPlayerXP(wallet, xp);
+    await PlayerProgression.updateOne(
+        { wallet_address: wallet },
+        { $inc: { 'progression.wins_count': 1 } },
+    ).catch(() => {});
+    const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
+    const wins = doc?.progression?.wins_count ?? 0;
+    checkWinAchievements(wallet, wins, isGolden).catch(() => {});
 }
 
 export async function awardComboXP(wallet: string): Promise<void> {
     await awardPlayerXP(wallet, 15);
+    await PlayerProgression.updateOne(
+        { wallet_address: wallet },
+        { $inc: { 'progression.combos_count': 1 } },
+    ).catch(() => {});
+    const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
+    const combos = doc?.progression?.combos_count ?? 0;
+    checkComboAchievements(wallet, combos).catch(() => {});
 }
 
 export async function awardBurnXP(wallet: string, collection: string, templateId: string | number): Promise<void> {
     const rarity = await getRarity(collection, templateId);
     await awardPlayerXP(wallet, 50 + rarity * 10);
+    await PlayerProgression.updateOne(
+        { wallet_address: wallet },
+        { $inc: { 'progression.burns_count': 1 } },
+    ).catch(() => {});
+    const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
+    const burns = doc?.progression?.burns_count ?? 0;
+    checkBurnAchievements(wallet, burns).catch(() => {});
 }
 
 export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
@@ -150,5 +183,12 @@ export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
         await awardPlayerXP(wallet, count * 1).catch(err =>
             console.error(`[XP] Erro ao conceder XP de compra para ${wallet}:`, err)
         );
+        await PlayerProgression.updateOne(
+            { wallet_address: wallet },
+            { $inc: { 'progression.tickets_bought': count } },
+        ).catch(() => {});
+        const doc = await PlayerProgression.findOne({ wallet_address: wallet }).catch(() => null);
+        const bought = doc?.progression?.tickets_bought ?? count;
+        checkPurchaseAchievements(wallet, bought).catch(() => {});
     }
 }

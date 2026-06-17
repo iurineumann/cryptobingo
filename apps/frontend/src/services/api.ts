@@ -562,6 +562,29 @@ export async function fetchBatchWinnings(gameIds: string[]): Promise<BatchWinnin
 }
 
 // ==========================================
+// ACHIEVEMENTS (ADR-028 2D)
+// ==========================================
+
+export interface AchievementDef {
+    id:       string;
+    label:    string;
+    desc:     string;
+    icon:     string;
+    unlocked: boolean;
+}
+
+export interface AchievementsResponse {
+    achievements: AchievementDef[];
+}
+
+export async function fetchAchievements(): Promise<AchievementsResponse> {
+    const res = await fetch(`${API_BASE}/profile/achievements`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<AchievementsResponse>(res);
+}
+
+// ==========================================
 // GAME STATS BATCH (público — ADR-015, compliance)
 // ==========================================
 
