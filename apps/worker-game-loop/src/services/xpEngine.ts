@@ -139,7 +139,7 @@ export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
         });
         tickets.push(...res.rows);
         hasMore = !!res.more && !!res.next_key;
-        lowerBound = res.next_key as string;
+        lowerBound = res.next_key as unknown as string;
     }
     const perOwner = new Map<string, number>();
     for (const t of tickets) {
