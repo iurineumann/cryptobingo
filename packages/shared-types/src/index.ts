@@ -230,7 +230,15 @@ export interface MongoUserProfile {
         level:        number;
         sub_level:    number;
         games_played: number;
+        wins_count?:   number;
+        combos_count?: number;
+        tickets_bought?: number;
+        burns_count?:  number;
+        next_level_xp?:  number;
+        xp_to_next_level?: number;
+        progress_pct?:   number;
     };
+    achievements?: AchievementEntry[];
 }
 
 export interface MongoChatMessage {
@@ -406,6 +414,28 @@ export interface SwapPoolSummary {
     reserve_b:       string;
     fee_bps:         number;
     service_fee_bps: number;
+}
+
+// ── Achievement Definitions (ADR-028 2D) ─────────────────────────────────────
+
+/**
+ * Definição de uma conquista no sistema de progressão.
+ * Fonte: achievementEngine.ts (worker-game-loop).
+ */
+export interface AchievementDefinition {
+    id:    string;
+    label: string;
+    desc:  string;
+    icon:  string;
+}
+
+/**
+ * Conquista desbloqueada por um jogador.
+ * Armazenada em MongoUserProfile.achievements[] como subdocumento.
+ */
+export interface AchievementEntry {
+    id:          string;
+    unlocked_at: Date;
 }
 
 // ── Rankings & Conteúdo (ADR-024) ────────────────────────────────────────────

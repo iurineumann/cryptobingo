@@ -17,6 +17,7 @@ import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
 import { awardWinXP, awardComboXP } from './xpEngine';
+import { checkStageWinAchievement } from './achievementEngine';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -483,6 +484,7 @@ export async function payMultiMatchStage(
 ): Promise<void> {
     for (const { ticket, patternMask, ballCount } of result.winners) {
         await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
+        checkStageWinAchievement(ticket.owner).catch(() => {});
     }
 }
 
@@ -664,7 +666,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     payout.amount,
                     payout.currency,
                 ).catch(() => {});
-                awardWinXP(ticket.owner, gameId).catch(() => {});
+                awardWinXP(ticket.owner, gameId, false, appliedMultiplier > 0).catch(() => {});
                 if (isCombo) awardComboXP(ticket.owner).catch(() => {});
             }
         }

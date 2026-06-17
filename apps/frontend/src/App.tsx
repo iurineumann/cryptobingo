@@ -57,6 +57,8 @@ import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
 import Logo             from './components/Logo';
+import XpProgressBar    from './components/XpProgressBar';
+import AchievementModal from './components/AchievementModal';
 import LeaderboardPage  from './components/LeaderboardPage';
 import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
@@ -232,6 +234,7 @@ function AppRoot() {
     const [loading,          setLoading]          = useState(false);
     const [error,            setError]            = useState<string | null>(null);
     const [restoringSession, setRestoringSession] = useState(true);
+    const [showAchievements, setShowAchievements] = useState(false);
 
     const isAdmin = !!(
         profile && (
@@ -371,9 +374,26 @@ function AppRoot() {
                     </span>
 
                     {profile && (
-                        <span className={`cb-tier-${profile.progression.tier.toLowerCase() as 'bronze' | 'silver' | 'gold' | 'diamond'}`}>
-                            {profile.progression.tier}
-                        </span>
+                        <>
+                            <XpProgressBar
+                                tier={profile.progression.tier}
+                                level={profile.progression.level}
+                                subLevel={profile.progression.sub_level}
+                                progressPct={profile.progression.progress_pct ?? 0}
+                                nextLevelXp={profile.progression.next_level_xp ?? 0}
+                                xpToNext={profile.progression.xp_to_next_level ?? 0}
+                                size="sm"
+                                className="cb-xp-bar-nav"
+                            />
+                            <button
+                                className="cb-btn cb-btn-ghost cb-btn-sm"
+                                onClick={() => setShowAchievements(true)}
+                                data-testid="nav-achievements"
+                                aria-label={t('achievements.title')}
+                            >
+                                🏅
+                            </button>
+                        </>
                     )}
 
                     {isAdmin && (
@@ -450,6 +470,10 @@ function AppRoot() {
                     <Outlet />
                 </main>
             </div>
+
+            {showAchievements && (
+                <AchievementModal onClose={() => setShowAchievements(false)} />
+            )}
         </div>
     );
 

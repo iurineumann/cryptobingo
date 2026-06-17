@@ -794,5 +794,17 @@
   "loading": "Carregando perfil...",
   "language": "Idioma",
   "landing_lobby": "Salas de Jogo",
-  "wallet_connected": "Carteira Conectada:"
+  "wallet_connected": "Carteira Conectada:",
+  "progression": {
+    "level": "Nv. {{level}}",
+    "sub_level": "Sub-nível {{subLevel}}",
+    "xp_to_next": "{{xp}} XP para o próximo",
+    "xp_progress": "{{pct}}% de progresso",
+    "tier_label": "Nível {{tier}}"
+  },
+  "achievements": {
+    "title": "Conquistas",
+    "progress": "{{unlocked}} / {{total}} desbloqueadas",
+    "recent_unlock": "Nova conquista desbloqueada!"
+  }
 }

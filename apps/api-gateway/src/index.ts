@@ -23,7 +23,7 @@ import {
     ensureNonceTable,
     logout,
 } from './controllers/authController';
-import { getProfile, updatePreferences, listUsers }   from './controllers/profileController';
+import { getProfile, updatePreferences, getAchievements, listUsers } from './controllers/profileController';
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
@@ -167,6 +167,7 @@ function registerRoutes(): void {
     // ── Perfil (JWT + player rate limit) ─────────────────────────────────────
     app.get('/api/v1/profile', playerLimiter, requireAuth, getProfile);
     app.put('/api/v1/profile', playerLimiter, requireAuth, updatePreferences);
+    app.get('/api/v1/profile/achievements', playerLimiter, requireAuth, getAchievements);
 
     // ── Cartelas (JWT + ticket rate limit) ───────────────────────────────────
     app.post(
