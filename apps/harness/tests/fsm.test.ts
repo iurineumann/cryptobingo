@@ -101,6 +101,13 @@ function randomGameName(): string {
     return s;
 }
 
+// room_id único por execução — IDs fixos (999/42) colidem em re-run no mesmo chain
+// (createroom/activateroom falham com "sala já existe / não está inactive"), forçando
+// reset. ID aleatório torna as suites de sala idempotentes entre runs.
+function randomRoomId(): UInt64 {
+    return UInt64.from(Math.floor(Math.random() * 1_000_000_000) + 1_000_000);
+}
+
 async function transact(session: Session, account: string, name: string, data: object) {
     return session.transact({
         actions: [{
@@ -136,6 +143,21 @@ async function waitForDrawn(gameIdStr: string, attempts = 30): Promise<void> {
         if (status !== 'drawing') throw new Error(`Estado inesperado: ${status}`);
     }
     throw new Error(`Timeout: jogo ${gameIdStr} ainda em 'drawing' após ${attempts * 2}s. Oracle daemon rodando?`);
+}
+
+// Lê a linha do jogo na tabela games. Usa bound UInt64 (key i64) — bound como string
+// no wharfkit é intermitente (CLAUDE.md gotcha) e devolve rows vazio esporadicamente.
+// Pequeno retry tolera o lag de leitura do nodeos logo após a transição de estado.
+async function getGameRow(gameId: UInt64, retries = 5): Promise<any> {
+    for (let i = 0; i < retries; i++) {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
+            lower_bound: gameId, upper_bound: gameId, limit: 1, json: true,
+        });
+        if (res.rows[0]) return res.rows[0];
+        await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error(`getGameRow: jogo ${gameId} não encontrado após ${retries} tentativas`);
 }
 
 // ==========================================
@@ -266,17 +288,14 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 6: claimwin → DRAWN → PAYING (ADR-012: multi-winner)', async () => {
-        const [gameRes, ticketRes] = await Promise.all([
-            rpcClient.v1.chain.get_table_rows({
-                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-                lower_bound: mainGameIdStr, upper_bound: mainGameIdStr, limit: 1, json: true,
-            }),
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(mainGameId),
             rpcClient.v1.chain.get_table_rows({
                 code: 'bingogamectr', scope: mainGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const drawnBalls: number[] = gameRow.drawn_balls;
         const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
         const ticketId = UInt64.from(ticket.ticket_id);
 
@@ -390,7 +409,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         });
         const check = await rpcClient.v1.chain.get_table_rows({
             code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-            lower_bound: abortGameIdStr, upper_bound: abortGameIdStr, limit: 1, json: true,
+            lower_bound: abortGameId, upper_bound: abortGameId, limit: 1, json: true,
         });
         expect(check.rows.length).toBe(0);
         console.log('   ✅ Jogo apagado da RAM');
@@ -629,17 +648,14 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     }, 90_000);
 
     test('GB-2: claimwin com golden_multiplier derivado de drawn_balls → PAYING', async () => {
-        const [gameRes, ticketRes] = await Promise.all([
-            rpcClient.v1.chain.get_table_rows({
-                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-                lower_bound: gbGameIdStr, upper_bound: gbGameIdStr, limit: 1, json: true,
-            }),
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(gbGameId),
             rpcClient.v1.chain.get_table_rows({
                 code: 'bingogamectr', scope: gbGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const drawnBalls: number[] = gameRow.drawn_balls;
         const goldenBallAfter = 4;
         // ball_count = goldenBallAfter + 1: inclui as bolas normais + a golden ball
         const ballCount       = goldenBallAfter + 1;
@@ -736,13 +752,10 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
     }, 90_000);
 
     test('FF-2: computa cutoff ball e claimwin com ball_count=cutoff → PAYING', async () => {
-        const gameRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-            lower_bound: ffGameIdStr, upper_bound: ffGameIdStr, limit: 1, json: true,
-        });
+        const ffGameRow = await getGameRow(ffGameId);
         // drawn_balls é `bytes` no ABI → get_table_rows(json) pode devolver hex string.
         // Normaliza para number[] (cada byte = 1 bola, 1..75).
-        const rawBalls = gameRes.rows[0].drawn_balls as unknown;
+        const rawBalls = ffGameRow.drawn_balls as unknown;
         const drawnBalls: number[] = typeof rawBalls === 'string'
             ? (rawBalls.match(/.{2}/g) ?? []).map(h => parseInt(h, 16))
             : (rawBalls as number[]);
@@ -796,10 +809,10 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     let allocId:     number;
 
     beforeAll(async () => {
-        vaultRoomId = UInt64.from(999);
+        vaultRoomId = randomRoomId();
     });
 
-    test('DV-0: createroom id=999 para suportar allocatedrop', async () => {
+    test('DV-0: createroom (id aleatório) para suportar allocatedrop', async () => {
         const price50 = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
             const r = await transact(bingoSession, 'bingogamectr', 'createroom', {
@@ -817,7 +830,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
             // sala pode já existir de uma execução anterior — ok
         }
         await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
-        console.log('   ✅ Sala 999 criada/ativa para DROP_VAULT');
+        console.log(`   ✅ Sala ${vaultRoomId} criada/ativa para DROP_VAULT`);
     });
 
     test('DV-1: transfer memo=vault → deposit criado no Drop Vault', async () => {
@@ -920,7 +933,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
 
 describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price', () => {
 
-    const ROOM_ID = UInt64.from(42);
+    const ROOM_ID = randomRoomId();
     let pricedGameId:    UInt64;
     let pricedGameIdStr: string;
 
@@ -931,7 +944,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         console.log(`\n💰 Jogo ROOM_PRICING: ${pricedGameIdStr} (${pricedGameId})\n`);
     });
 
-    test('RP-0: createroom id=42 com price_min=10 WAX, price_max=50 WAX', async () => {
+    test('RP-0: createroom (id aleatório) com price_min=10 WAX, price_max=50 WAX', async () => {
         const min = ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' });
         const max = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
@@ -950,10 +963,10 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
             // sala pode já existir — ok
         }
         await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
-        console.log('   ✅ Sala 42 criada/ativa (min=10 WAX, max=50 WAX)');
+        console.log(`   ✅ Sala ${ROOM_ID} criada/ativa (min=10 WAX, max=50 WAX)`);
     });
 
-    test('RP-1: creategame vinculado a room_id=42', async () => {
+    test('RP-1: creategame vinculado à sala (id aleatório)', async () => {
         const r = await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      pricedGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
@@ -962,7 +975,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         });
         expect(r.response).toBeDefined();
         await transact(microSession, 'bingogamectr', 'fundgame', { game_id: pricedGameId });
-        console.log('   ✅ Jogo criado e financiado em sala 42');
+        console.log(`   ✅ Jogo criado e financiado em sala ${ROOM_ID}`);
     });
 
     test('RP-2: buytickets com requested_price=5 WAX (< min=10 WAX) → falha', async () => {
@@ -1304,16 +1317,13 @@ describe('FSM — PRIZE_BOOST VALUE_SCHEMA_FIELD [ADR-028 §7/2F]', () => {
     }, 90_000);
 
     test('BS-4: claimwin com boost_nft_ids → payout 2.00× (schema field)', async () => {
-        const [gameRes, ticketRes] = await Promise.all([
-            rpcClient.v1.chain.get_table_rows({
-                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-                lower_bound: boostGameIdStr, upper_bound: boostGameIdStr, limit: 1, json: true,
-            }),
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(boostGameId),
             rpcClient.v1.chain.get_table_rows({
                 code: 'bingogamectr', scope: boostGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const drawnBalls: number[] = gameRow.drawn_balls;
         const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
         const ticketId = UInt64.from(ticket.ticket_id);
 
