@@ -16,6 +16,7 @@ import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    fr
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
+import { decrementUsedNfts } from './consumableService';
 import { awardWinXP, awardComboXP } from './xpEngine';
 import { checkStageWinAchievement } from './achievementEngine';
 import { Pool } from 'pg';
@@ -633,6 +634,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             );
             // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
             // ADR-028 §7: para claimwin, pré-computa NFTs de PRIZE_BOOST do vencedor.
+            let boostNftIds: string[] = [];
             const txHash = isCombo
                 ? await executeClaimCombo(
                     gameId,
@@ -647,7 +649,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     effectiveBalls.length,
                     patternMask,
                     appliedMultiplier,
-                    await getBoostNftIds(ticket.owner).catch(() => []),
+                    (boostNftIds = await getBoostNftIds(ticket.owner).catch(() => [])),
                 );
 
             if (txHash) {
@@ -668,6 +670,8 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                 ).catch(() => {});
                 awardWinXP(ticket.owner, gameId, false, appliedMultiplier > 0).catch(() => {});
                 if (isCombo) awardComboXP(ticket.owner).catch(() => {});
+                // ADR-028 §3: decrementa usos de NFTs consumíveis usadas no boost
+                if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
             }
         }
     }
