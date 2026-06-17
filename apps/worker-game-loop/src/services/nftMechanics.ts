@@ -6,34 +6,57 @@
 // mesmo princípio do max_weight de combos).
 
 import { rpcClient } from '@cryptobingo/blockchain-core';
+import { getTemplateSchema } from './atomicSchema';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const ATOMIC_ACCOUNT   = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
 
 // Tipos das regras NFT (espelha o enum on-chain — ADR-028 §1)
-const RULE_PRIZE_BOOST = 2;
-const VALUE_FIXED      = 0;
-const COND_OWNS        = 0;
+const RULE_PRIZE_BOOST    = 2;
+const VALUE_FIXED         = 0;
+const VALUE_SCHEMA_FIELD  = 1;
+const COND_OWNS           = 0;
 
 interface NftRule {
-    type: number;
+    type:         number;
     value_origin: number;
-    fixed_value: number;
-    condition: number;
+    fixed_value:  number;
+    schema_field: string;
+    condition:    number;
 }
 interface NftConfigRow {
-    template_id: number | string;
+    template_id:     number | string;
     collection_name: string;
-    rules: NftRule[];
+    rules:           NftRule[];
 }
 
-// template_id → { collection, boost(hundredths) } para regras PRIZE_BOOST FIXED owns
+// template_id → { collection, boost(hundredths) } para regras PRIZE_BOOST (FIXED ou SCHEMA_FIELD) owns
 type BoostMap = Map<string, { collection: string; boost: number }>;
 
 let _boostCache: { map: BoostMap; at: number } | null = null;
 const BOOST_TTL_MS = 60_000;
 
-/** Lê nftconfigs on-chain e indexa os templates com PRIZE_BOOST FIXED (owns). Cache 60s. */
+/**
+ * Resolve o boost de uma regra VALUE_SCHEMA_FIELD lendo immutable_serialized_data do
+ * template. O campo deve ser numérico (hundredths). Retorna 0 em caso de erro.
+ */
+async function resolveSchemaFieldBoost(
+    collection: string,
+    templateId: string | number,
+    fieldName:  string,
+): Promise<number> {
+    try {
+        const attrs = await getTemplateSchema(collection, templateId);
+        const raw = attrs[fieldName];
+        if (raw === undefined || raw === null) return 0;
+        const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw);
+        return isNaN(n) || n <= 0 ? 0 : n;
+    } catch {
+        return 0;
+    }
+}
+
+/** Lê nftconfigs on-chain e indexa templates com PRIZE_BOOST (FIXED ou SCHEMA_FIELD) owns. Cache 60s. */
 async function getBoostTemplates(): Promise<BoostMap> {
     if (_boostCache && Date.now() - _boostCache.at < BOOST_TTL_MS) return _boostCache.map;
 
@@ -48,10 +71,19 @@ async function getBoostTemplates(): Promise<BoostMap> {
         for (const row of (res.rows as NftConfigRow[])) {
             let best = 0;
             for (const r of (row.rules || [])) {
-                if (r.type === RULE_PRIZE_BOOST && r.value_origin === VALUE_FIXED &&
-                    r.condition === COND_OWNS && r.fixed_value > best) {
-                    best = r.fixed_value;
+                if (r.type !== RULE_PRIZE_BOOST || r.condition !== COND_OWNS) continue;
+
+                let candidate = 0;
+                if (r.value_origin === VALUE_FIXED) {
+                    candidate = r.fixed_value ?? 0;
+                } else if (r.value_origin === VALUE_SCHEMA_FIELD && r.schema_field) {
+                    candidate = await resolveSchemaFieldBoost(
+                        row.collection_name,
+                        row.template_id,
+                        r.schema_field,
+                    );
                 }
+                if (candidate > best) best = candidate;
             }
             if (best > 100) {
                 map.set(String(row.template_id), { collection: row.collection_name, boost: best });

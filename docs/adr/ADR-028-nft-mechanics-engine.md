@@ -360,6 +360,12 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
     lê o campo do template/asset e aplica. **Gotcha:** identificadores de atributo do
     AtomicAssets começam em **4** (índice = `identifier - 4`). Validado E2E com
     `utility.discount_pct`.
+  - **2F — `PRIZE_BOOST VALUE_SCHEMA_FIELD`** (§7, reusa o deserializador do 2B):
+    contrato (`claimwin`) e worker (`nftMechanics.getBoostTemplates`) resolvem o boost
+    lendo o campo numérico (hundredths) do schema do template, com clamp on-chain em
+    25500 (255×) e validação dupla. `FIXED` e `SCHEMA_FIELD` coexistem na mesma config
+    (usa o maior). Campo ausente/não-numérico → boost 0 (ignora template). Validado E2E
+    (harness `BS-0..5`: `discount_pct=200` → payout 2.00× no `claimwin`) + unit no worker.
 - **Ainda pendente na Fase 2:**
   - `nft_id` no **hash da signature** de `buytickets` (§6) — é a **Fase 3 (api-gateway)**:
     a assinatura é gerada no `ticketController`, não no worker.
@@ -370,7 +376,6 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
     9 tiers (Cobre→Diamante). Difficulty on-chain no `room_record`. Worker
     `xpEngine.ts` com hooks em win/combo/burn/compra. Daily streak lazy. Rarity
     via deserializador ALPHA no worker (`atomicSchema.ts`).
-  - `PRIZE_BOOST VALUE_SCHEMA_FIELD` (reusa o deserializador do 2B).
   - Param `boost_nft_ids` + aplicação do **prize boost** no `claimwin` (§7). Tentou-se
     adicioná-lo como `binary_extension` trailing, mas o wharfkit (antelope 1.2.0) **não
     omite binary_extension de array** na codificação → quebraria os callers atuais do
