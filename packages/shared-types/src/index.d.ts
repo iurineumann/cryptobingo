@@ -168,10 +168,19 @@ export interface MongoUserProfile {
     };
     progression: {
         xp: number;
-        tier: 'Bronze' | 'Silver' | 'Gold' | 'Diamond';
+        tier: 'Cobre' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Safira' | 'Rubi' | 'Diamante';
+        level: number;
+        sub_level: number;
         games_played: number;
+        wins_count?: number;
+        combos_count?: number;
+        tickets_bought?: number;
+        burns_count?: number;
+        next_level_xp?: number;
+        xp_to_next_level?: number;
+        progress_pct?: number;
     };
-}
+    achievements?: AchievementEntry[];
 export interface MongoChatMessage {
     lobby_id: string;
     wallet_address: string;
@@ -189,6 +198,15 @@ export interface RoomMetadata {
     auto_start_delay_sec: number;
     drops: RoomDropConfig[];
 }
+export interface LeaderboardXpEntry {
+    rank: number;
+    wallet: string;
+    nickname: string | null;
+    xp: number;
+    tier: string;
+    level: number;
+    games_played: number;
+}
 export interface RoomDropConfig {
     token_contract: string;
     symbol: string;
@@ -197,6 +215,16 @@ export interface RoomDropConfig {
     collection_name: string;
     drop_chance_pct: number;
     max_drops_per_game: number;
+}
+export interface AchievementDefinition {
+    id: string;
+    label: string;
+    desc: string;
+    icon: string;
+}
+export interface AchievementEntry {
+    id: string;
+    unlocked_at: Date;
 }
 export interface MongoNftCache {
     wallet_address: string;

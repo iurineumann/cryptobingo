@@ -144,6 +144,74 @@ export async function getTemplateSchema(collectionName: string, templateId: stri
     return deserializeAttributes(bytes, format);
 }
 
+// Mapeamento tipo AtomicAssets ALPHA → nome do variant no ATTRIBUTE_MAP.
+// Usado para re-serializar mutable data em setassetdata.
+const ATOMIC_TYPE_TO_VARIANT: Record<number, string> = {
+    1: 'int8',   2: 'uint8',  3: 'uint16',  4: 'uint32',
+    5: 'uint64', 6: 'int8',   7: 'int8',    8: 'int16',
+    9: 'int32', 10: 'int64', 13: 'float32', 14: 'float64',
+    17: 'string',
+};
+
+interface AssetRow {
+    asset_id:                 string;
+    template_id:              string | number;
+    collection_name:          string;
+    schema_name:              string;
+    mutable_serialized_data:  string;
+}
+
+/**
+ * Lê asset on-chain + decodifica mutable_serialized_data.
+ * Retorna decoded attrs + schema format para rebuild posterior.
+ */
+export async function getAssetMutableData(
+    owner:      string,
+    assetId:    string | number,
+    collection: string,
+): Promise<{ decoded: Record<string, any>; format: SchemaField[] }> {
+    const schemasRes: any = await rpcClient.v1.chain.get_table_rows({
+        code: ATOMIC_ACCOUNT, scope: collection, table: 'schemas',
+        limit: 100, json: true,
+    });
+    const assetsRes: any = await rpcClient.v1.chain.get_table_rows({
+        code: ATOMIC_ACCOUNT, scope: owner, table: 'assets',
+        lower_bound: assetId as any, upper_bound: assetId as any,
+        limit: 1, json: true,
+    });
+    const asset = (assetsRes.rows as AssetRow[])?.[0];
+    if (!asset) return { decoded: {}, format: [] };
+
+    const schema = (schemasRes.rows as any[])?.find((s: any) => s.schema_name === asset.schema_name);
+    if (!schema) return { decoded: {}, format: [] };
+
+    const format = (schema.format ?? []) as SchemaField[];
+    const raw = asset.mutable_serialized_data ?? '';
+    if (!raw) return { decoded: {}, format };
+
+    const bytes = hexToBytes(raw);
+    return { decoded: deserializeAttributes(bytes, format), format };
+}
+
+/**
+ * Reconstrói ATTRIBUTE_MAP (formato Wharfkit para setassetdata) a partir de
+ * decoded values + schema format. Campos com tipo desconhecido são ignorados
+ * (logados como warning). uint64 deve ser string; bool como uint8 (0/1).
+ */
+export function buildAttributeMap(
+    decoded: Record<string, any>,
+    format:  SchemaField[],
+): Array<{ first: string; second: [string, any] }> {
+    const result: Array<{ first: string; second: [string, any] }> = [];
+    for (const field of format) {
+        if (!(field.name in decoded)) continue;
+        const variantName = ATOMIC_TYPE_TO_VARIANT[field.type];
+        if (!variantName) continue; // array/complex types ignorados
+        result.push({ first: field.name, second: [variantName, decoded[field.name]] });
+    }
+    return result;
+}
+
 export async function getRarity(collectionName: string, templateId: string | number): Promise<number> {
     try {
         const attrs = await getTemplateSchema(collectionName, templateId);

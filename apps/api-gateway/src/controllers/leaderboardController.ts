@@ -5,7 +5,7 @@ import { Request, Response } from 'express';
 import { pgPool } from '../database';
 import { redisClient } from '../database/redis';
 import { UserProfile } from '../models/UserProfile';
-import type { LeaderboardEntry } from '@cryptobingo/shared-types';
+import type { LeaderboardEntry, LeaderboardXpEntry } from '@cryptobingo/shared-types';
 
 const TTL_SECONDS = 300; // 5 min
 
@@ -78,6 +78,51 @@ export async function getLeaderboardByRoom(req: Request, res: Response): Promise
     } catch (err) {
         console.error('[Leaderboard] Erro ao buscar ranking da sala:', err);
         res.status(500).json({ error: 'Erro ao buscar leaderboard da sala.' });
+    }
+}
+
+// ==========================================
+// GET /api/v1/leaderboard/xp
+// ==========================================
+
+/**
+ * Ranking por XP (progressão). Fonte: MongoDB userprofiles.progression.xp.
+ * Público, cache Redis 300s.
+ */
+export async function getLeaderboardXp(req: Request, res: Response): Promise<void> {
+    const limit = Math.min(Math.max(Number(req.query.limit ?? 20), 1), 50);
+    const cacheKey = `leaderboard:xp:${limit}`;
+
+    try {
+        const cached = await redisClient.get(cacheKey).catch(() => null);
+        if (cached) {
+            res.status(200).json(JSON.parse(cached));
+            return;
+        }
+    } catch { /* fail-open */ }
+
+    try {
+        const profiles = await UserProfile.find(
+            { 'progression.xp': { $exists: true, $gt: 0 } },
+            { wallet_address: 1, nickname: 1, progression: 1 },
+        ).sort({ 'progression.xp': -1 }).limit(limit).lean();
+
+        const entries: LeaderboardXpEntry[] = profiles.map((p, idx) => ({
+            rank:          idx + 1,
+            wallet:        p.wallet_address,
+            nickname:      p.nickname ?? null,
+            xp:            p.progression?.xp ?? 0,
+            tier:          p.progression?.tier ?? 'Cobre',
+            level:         p.progression?.level ?? 1,
+            games_played:  p.progression?.games_played ?? 0,
+        }));
+
+        const payload = { entries, cached_at: new Date().toISOString() };
+        redisClient.setEx(cacheKey, TTL_SECONDS, JSON.stringify(payload)).catch(() => {});
+        res.status(200).json(payload);
+    } catch (err) {
+        console.error('[Leaderboard] Erro ao buscar ranking XP:', err);
+        res.status(500).json({ error: 'Erro ao buscar ranking XP.' });
     }
 }
 

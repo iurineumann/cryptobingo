@@ -16,7 +16,9 @@ import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    fr
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
+import { decrementUsedNfts } from './consumableService';
 import { awardWinXP, awardComboXP } from './xpEngine';
+import { checkStageWinAchievement } from './achievementEngine';
 import { Pool } from 'pg';
 
 let pgPool: Pool | null = null;
@@ -483,6 +485,7 @@ export async function payMultiMatchStage(
 ): Promise<void> {
     for (const { ticket, patternMask, ballCount } of result.winners) {
         await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
+        checkStageWinAchievement(ticket.owner).catch(() => {});
     }
 }
 
@@ -631,6 +634,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             );
             // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
             // ADR-028 §7: para claimwin, pré-computa NFTs de PRIZE_BOOST do vencedor.
+            let boostNftIds: string[] = [];
             const txHash = isCombo
                 ? await executeClaimCombo(
                     gameId,
@@ -645,7 +649,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     effectiveBalls.length,
                     patternMask,
                     appliedMultiplier,
-                    await getBoostNftIds(ticket.owner).catch(() => []),
+                    (boostNftIds = await getBoostNftIds(ticket.owner).catch(() => [])),
                 );
 
             if (txHash) {
@@ -664,8 +668,10 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
                     payout.amount,
                     payout.currency,
                 ).catch(() => {});
-                awardWinXP(ticket.owner, gameId).catch(() => {});
+                awardWinXP(ticket.owner, gameId, false, appliedMultiplier > 0).catch(() => {});
                 if (isCombo) awardComboXP(ticket.owner).catch(() => {});
+                // ADR-028 §3: decrementa usos de NFTs consumíveis usadas no boost
+                if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
             }
         }
     }

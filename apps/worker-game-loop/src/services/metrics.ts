@@ -114,6 +114,51 @@ export const slowRevealSessionsActive = new Gauge({
 });
 
 // ==========================================
+// MÉTRICAS DE XP / PROGRESSION (ADR-028)
+// ==========================================
+
+/** Total de operações de XP por tipo (game/streak/tier/purchase/burn/combo). */
+export const xpAwardedTotal = new Counter({
+    name:       'worker_xp_awarded_total',
+    help:       'Total de operações de XP concedidas, por tipo.',
+    labelNames: ['type'] as const,
+    registers:  [registry],
+});
+
+/** Total de pontos de XP acumulados por tipo. */
+export const xpAmountTotal = new Counter({
+    name:       'worker_xp_amount_total',
+    help:       'Total de pontos de XP concedidos, por tipo.',
+    labelNames: ['type'] as const,
+    registers:  [registry],
+});
+
+/** Erros em operações de XP, por tipo. */
+export const xpErrorsTotal = new Counter({
+    name:       'worker_xp_errors_total',
+    help:       'Total de erros em operações de XP, por tipo.',
+    labelNames: ['type'] as const,
+    registers:  [registry],
+});
+
+/** Duração das operações de XP em ms. */
+export const xpDurationHistogram = new Histogram({
+    name:       'worker_xp_duration_ms',
+    help:       'Duração das operações de XP em milissegundos.',
+    labelNames: ['type'] as const,
+    buckets:    [10, 25, 50, 100, 250, 500, 1000, 3000],
+    registers:  [registry],
+});
+
+/** Total de achievements desbloqueados, por achievement_id. */
+export const achievementsUnlockedTotal = new Counter({
+    name:       'worker_achievements_unlocked_total',
+    help:       'Total de achievements desbloqueados, por ID.',
+    labelNames: ['achievement_id'] as const,
+    registers:  [registry],
+});
+
+// ==========================================
 // SERVIDOR HTTP DE MÉTRICAS
 // ==========================================
 
