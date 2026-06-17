@@ -900,10 +900,12 @@ namespace bingo {
         }
 
         for (size_t i = 0; i < matrices.size(); ++i) {
-            size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
+            // ADR-028 §6: nft_id entra no hash assinado (matrix + game_id + buyer + nft_id),
+            // acoplando a NFT de benefício à assinatura — impede trocar a NFT pós-assinatura.
+            size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name) + sizeof(uint64_t);
             std::vector<char> buffer(buffer_size);
             datastream<char*> ds(buffer.data(), buffer.size());
-            ds << matrices[i] << game_id << buyer;
+            ds << matrices[i] << game_id << buyer << nft_id;
             auto hash = eosio::sha256(buffer.data(), buffer.size());
             assert_recover_key(hash, signatures[i], config.signer_key);
 
