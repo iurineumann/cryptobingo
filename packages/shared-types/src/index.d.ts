@@ -198,6 +198,15 @@ export interface RoomMetadata {
     auto_start_delay_sec: number;
     drops: RoomDropConfig[];
 }
+export interface LeaderboardXpEntry {
+    rank: number;
+    wallet: string;
+    nickname: string | null;
+    xp: number;
+    tier: string;
+    level: number;
+    games_played: number;
+}
 export interface RoomDropConfig {
     token_contract: string;
     symbol: string;

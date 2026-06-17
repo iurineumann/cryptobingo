@@ -754,10 +754,15 @@
     "title_global": "全球排行榜",
     "title_room": "房间排行榜",
     "updated_at": "更新于 {{time}}",
-    "empty": "暂无获奖记录。",
+    "empty": "暂无记录。",
     "col_player": "玩家",
     "col_total_won": "总赢得",
-    "col_games_won": "场次"
+    "col_games_won": "场次",
+    "col_xp": "经验值",
+    "col_tier": "段位",
+    "col_games": "场次",
+    "tab_winnings": "收益",
+    "tab_xp": "经验值"
   },
   "faq": {
     "title": "常见问题",

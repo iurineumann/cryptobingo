@@ -54,7 +54,7 @@ import {
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 import { getChatHistory } from './controllers/chatController';
-import { getLeaderboardGlobal, getLeaderboardByRoom } from './controllers/leaderboardController';
+import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
 dotenv.config();
@@ -292,6 +292,7 @@ function registerRoutes(): void {
 
     // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────
     app.get('/api/v1/leaderboard',                  playerLimiter, getLeaderboardGlobal);
+    app.get('/api/v1/leaderboard/xp',               playerLimiter, getLeaderboardXp);
     app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
 
     // ── Chat ────────────────────────────────────────────────────────────────────

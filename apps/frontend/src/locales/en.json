@@ -754,10 +754,15 @@
     "title_global": "Global Rankings",
     "title_room": "Room Rankings",
     "updated_at": "Updated at {{time}}",
-    "empty": "No winners recorded yet.",
+    "empty": "No entries yet.",
     "col_player": "Player",
     "col_total_won": "Total Won",
-    "col_games_won": "Games"
+    "col_games_won": "Games",
+    "col_xp": "XP",
+    "col_tier": "Tier",
+    "col_games": "Games",
+    "tab_winnings": "Winnings",
+    "tab_xp": "XP"
   },
   "faq": {
     "title": "Frequently Asked Questions",

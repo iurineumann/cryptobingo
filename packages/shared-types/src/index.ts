@@ -455,6 +455,19 @@ export interface LeaderboardEntry {
 }
 
 /**
+ * Entrada no ranking de XP. Fonte: MongoDB userprofiles (progression.xp).
+ */
+export interface LeaderboardXpEntry {
+    rank:       number;
+    wallet:     string;
+    nickname:   string | null;
+    xp:         number;
+    tier:       string;
+    level:      number;
+    games_played: number;
+}
+
+/**
  * Publicação de notícia/promoção. Armazenada em MongoDB (coleção news_feed).
  * Soft delete: active=false oculta da listagem pública.
  */
