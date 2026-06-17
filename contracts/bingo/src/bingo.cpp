@@ -25,6 +25,118 @@ namespace bingo {
     }
 
     // ==========================================
+    // ADR-028 §2 — Deserialização de schema field (ALPHA AtomicAssets) on-chain
+    // ==========================================
+
+    // Lê um varint sem sinal (LEB128) — encoding usado pelo atomicdata.
+    static uint64_t _aa_read_varuint(const std::vector<uint8_t>& d, size_t& i) {
+        uint64_t result = 0; int shift = 0;
+        while (i < d.size()) {
+            uint8_t b = d[i++];
+            result |= (uint64_t)(b & 0x7f) << shift;
+            if (!(b & 0x80)) break;
+            shift += 7;
+            if (shift >= 64) break;
+        }
+        return result;
+    }
+
+    // Avança o cursor `i` por UM valor do `type`, capturando o valor numérico quando
+    // aplicável. Retorna false se o tipo for desconhecido ou os dados truncarem.
+    static bool _aa_decode_value(const std::string& type, const std::vector<uint8_t>& d,
+                                 size_t& i, bool& is_num, uint64_t& num) {
+        is_num = false; num = 0;
+
+        // arrays "X[]" → varint(count) + count × elemento
+        if (type.size() >= 2 && type.compare(type.size() - 2, 2, "[]") == 0) {
+            std::string el = type.substr(0, type.size() - 2);
+            uint64_t count = _aa_read_varuint(d, i);
+            for (uint64_t k = 0; k < count; k++) {
+                bool b; uint64_t n;
+                if (!_aa_decode_value(el, d, i, b, n)) return false;
+            }
+            return true;
+        }
+        // length-prefixed (varint len + bytes)
+        if (type == "string" || type == "image" || type == "ipfs") {
+            uint64_t len = _aa_read_varuint(d, i);
+            i += (size_t)len;
+            return i <= d.size();
+        }
+        // 1 byte cru
+        if (type == "bool" || type == "byte") {
+            if (i >= d.size()) return false;
+            num = d[i++]; is_num = true; return true;
+        }
+        // inteiros sem sinal → varint
+        if (type == "uint8" || type == "uint16" || type == "uint32" || type == "uint64") {
+            num = _aa_read_varuint(d, i); is_num = true; return true;
+        }
+        // inteiros com sinal → varint zigzag
+        if (type == "int8" || type == "int16" || type == "int32" || type == "int64") {
+            uint64_t v = _aa_read_varuint(d, i);
+            int64_t sv = (int64_t)(v >> 1) ^ -(int64_t)(v & 1);
+            num = (uint64_t)sv; is_num = true; return true;
+        }
+        // fixedN (N = bits) → N/8 bytes little-endian
+        if (type.rfind("fixed", 0) == 0) {
+            int bits = atoi(type.c_str() + 5);
+            int bytes = bits / 8;
+            if (bytes <= 0 || bytes > 8 || i + (size_t)bytes > d.size()) return false;
+            uint64_t v = 0;
+            for (int k = 0; k < bytes; k++) v |= (uint64_t)d[i + k] << (8 * k);
+            i += (size_t)bytes; num = v; is_num = true; return true;
+        }
+        if (type == "float")  { i += 4; return i <= d.size(); }
+        if (type == "double") { i += 8; return i <= d.size(); }
+        return false; // tipo desconhecido → não dá para avançar com segurança
+    }
+
+    // Percorre `data` segundo `format` procurando `field` numérico. ALPHA: sequência
+    // de [identifier varint][valor]. No AtomicAssets os identificadores de atributo
+    // começam em 4 (valores 0-3 reservados): índice 0-based no format = identifier - 4.
+    // (Confirmado empiricamente nos schemas utility/prize do dev env.)
+    static constexpr uint64_t AA_ID_BASE = 4;
+    static bool _aa_walk(const std::vector<uint8_t>& data, const std::vector<aa_format>& format,
+                         const std::string& field, uint64_t& out) {
+        size_t i = 0;
+        while (i < data.size()) {
+            uint64_t identifier = _aa_read_varuint(data, i);
+            if (identifier < AA_ID_BASE) return false;
+            uint64_t idx = identifier - AA_ID_BASE;
+            if (idx >= format.size()) return false;
+            const aa_format& line = format[idx];
+            bool is_num; uint64_t num;
+            if (!_aa_decode_value(line.type, data, i, is_num, num)) return false;
+            if (line.name == field) {
+                if (!is_num) return false; // campo alvo não-numérico
+                out = num; return true;
+            }
+        }
+        return false; // campo não presente nestes dados
+    }
+
+    bool bingo_contract::_read_schema_numeric(name collection, name schema, int32_t template_id,
+                                              const std::vector<uint8_t>& asset_imm,
+                                              const std::string& field, uint64_t& out) {
+        atomic_schemas_table schemas("atomicassets"_n, collection.value);
+        auto sch_itr = schemas.find(schema.value);
+        if (sch_itr == schemas.end()) return false;
+        const auto& format = sch_itr->format;
+
+        // 1) tenta o immutable do próprio asset (dados únicos por asset)
+        if (!asset_imm.empty() && _aa_walk(asset_imm, format, field, out)) return true;
+
+        // 2) fallback: immutable compartilhado do template
+        atomic_templates_table templates("atomicassets"_n, collection.value);
+        auto tpl_itr = templates.find((uint64_t)(int64_t)template_id);
+        if (tpl_itr != templates.end() &&
+            _aa_walk(tpl_itr->immutable_serialized_data, format, field, out)) return true;
+
+        return false;
+    }
+
+    // ==========================================
     // CONFIGURAÇÃO
     // ==========================================
 
@@ -116,12 +228,17 @@ namespace bingo {
             check(r.condition == COND_OWNS || r.condition == COND_BURNED,
                 "rule.condition invalido (0=owns,1=burned).");
 
-            // BURN_TO_CLAIM implica condition=burned; demais implicam owns
+            // BURN_TO_CLAIM exige condition=burned + duração do grant. Demais tipos
+            // (discount/boost/access) aceitam owns OU burned: condition=burned = o
+            // benefício é concedido via grant após a queima (ADR-028 §8).
             if (r.type == RULE_BURN_TO_CLAIM) {
                 check(r.condition == COND_BURNED, "BURN_TO_CLAIM exige condition=burned.");
                 check(r.grant_duration_sec > 0, "BURN_TO_CLAIM exige grant_duration_sec > 0.");
-            } else {
-                check(r.condition == COND_OWNS, "regra nao-burn exige condition=owns.");
+            }
+            // benefícios burned devem ser FIXED (asset queimado não tem schema p/ ler)
+            if (r.condition == COND_BURNED && r.type != RULE_BURN_TO_CLAIM) {
+                check(r.value_origin == VALUE_FIXED,
+                    "regra burned (nao-burn) exige value_origin=fixed.");
             }
 
             if (r.value_origin == VALUE_FIXED) {
@@ -681,12 +798,16 @@ namespace bingo {
         total_cost.quantity.amount *= (int64_t)matrices.size();
 
         if (total_cost.quantity.amount > 0) {
+            // ADR-028 §6/§8: melhor TICKET_DISCOUNT elegível, em hundredths-de-%
+            // (10000 = 100%). Considera regras owns (NFT possuído via nft_id) e
+            // burned (grant BURN_TO_CLAIM ativo). Aplica UM desconto (o maior).
+            uint32_t best_hbp = 0;
+
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
 
-                // ADR-028 §4: quando um NFT é usado em sala com allowlist, o template
-                // precisa estar autorizado nela.
+                // ADR-028 §4: NFT usado em sala com allowlist → template autorizado.
                 if (game_itr->room_id != 0) {
                     rooms_table rooms(get_self(), get_self().value);
                     auto room_itr = rooms.find(game_itr->room_id);
@@ -707,20 +828,51 @@ namespace bingo {
                 if (conf_itr != _configs.end()) {
                     check(conf_itr->collection_name == nft_itr->collection_name,
                         "NFT nao pertence a colecao configurada para o template.");
-                    // ADR-028 §6: aplica o maior TICKET_DISCOUNT FIXED elegível (owns).
-                    // SCHEMA_FIELD e consumíveis: sub-fases 1c/1f.
-                    uint16_t best_discount = 0; // hundredths de %
+                    // owns: VALUE_FIXED (hundredths-de-%) ou VALUE_SCHEMA_FIELD
+                    // (campo do schema é PERCENT inteiro, ex. discount_pct=10 → ×100).
                     for (const auto& r : conf_itr->rules) {
                         if (r.type != RULE_TICKET_DISCOUNT) continue;
                         if (r.condition != COND_OWNS) continue;
-                        if (r.value_origin != VALUE_FIXED) continue;
-                        if (r.fixed_value > best_discount) best_discount = r.fixed_value;
-                    }
-                    if (best_discount > 0) {
-                        int64_t discount = (total_cost.quantity.amount * (int64_t)best_discount) / 10000;
-                        total_cost.quantity.amount -= discount;
+                        if (r.value_origin == VALUE_FIXED) {
+                            if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
+                        } else { // VALUE_SCHEMA_FIELD
+                            uint64_t v = 0;
+                            if (_read_schema_numeric(nft_itr->collection_name, nft_itr->schema_name,
+                                    nft_itr->template_id, nft_itr->immutable_serialized_data,
+                                    r.schema_field, v)) {
+                                uint32_t hbp = (v > 100 ? 100 : (uint32_t)v) * 100;
+                                if (hbp > best_hbp) best_hbp = hbp;
+                            }
+                        }
                     }
                 }
+            }
+
+            // ADR-028 §8: desconto via grant BURN_TO_CLAIM ativo (jogador queimou o
+            // NFT → não o possui; benefício só FIXED, pois não há asset p/ ler schema).
+            {
+                nft_grants_table grants(get_self(), get_self().value);
+                auto gidx = grants.get_index<"byowner"_n>();
+                uint32_t now_sec = current_time_point().sec_since_epoch();
+                nftconfigs_table _gconfigs(get_self(), get_self().value);
+                for (auto it = gidx.lower_bound(buyer.value);
+                     it != gidx.end() && it->owner == buyer; ++it) {
+                    if (it->grant_until.sec_since_epoch() <= now_sec) continue; // expirado
+                    auto conf_itr = _gconfigs.find(it->template_id);
+                    if (conf_itr == _gconfigs.end()) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_TICKET_DISCOUNT) continue;
+                        if (r.condition != COND_BURNED) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
+                    }
+                }
+            }
+
+            if (best_hbp > 10000) best_hbp = 10000; // cap 100%
+            if (best_hbp > 0) {
+                int64_t discount = (total_cost.quantity.amount * (int64_t)best_hbp) / 10000;
+                total_cost.quantity.amount -= discount;
             }
 
             balances_table balances(get_self(), buyer.value);
@@ -849,7 +1001,7 @@ namespace bingo {
     // golden_multiplier: 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode.
     // ==========================================
 
-    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
+    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids) {
         require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
@@ -896,8 +1048,30 @@ namespace bingo {
             payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
-        // ADR-028 §7: aplicação do Prize Boost (boost_nft_ids) foi adiada p/ a Fase 2
-        // (lockstep com o worker — wharfkit não omite binary_extension de array).
+        // ADR-028 §7: Prize Boost. O worker passa boost_nft_ids (ordenados por payout);
+        // o contrato valida ownership + regra PRIZE_BOOST (FIXED, owns) e aplica o maior
+        // boost elegível a este ticket. SCHEMA_FIELD boost → sub-fase 2B.
+        if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
+            atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
+            nftconfigs_table _bconfigs(get_self(), get_self().value);
+            uint16_t best_boost = 0; // hundredths (100 = 1.00×); só aplica se > 100
+            for (uint64_t boost_id : boost_nft_ids.value()) {
+                auto nft_itr = winner_nfts.find(boost_id);
+                if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
+                auto conf_itr = _bconfigs.find((uint64_t)nft_itr->template_id);
+                if (conf_itr == _bconfigs.end()) continue;
+                if (conf_itr->collection_name != nft_itr->collection_name) continue;
+                for (const auto& r : conf_itr->rules) {
+                    if (r.type != RULE_PRIZE_BOOST) continue;
+                    if (r.condition != COND_OWNS) continue;
+                    if (r.value_origin != VALUE_FIXED) continue;
+                    if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                }
+            }
+            if (best_boost > 100) {
+                payout.quantity.amount = payout.quantity.amount * (int64_t)best_boost / 100;
+            }
+        }
 
         if (payout.quantity.amount > 0) {
             // ADR-028 §7: em sala patrocinada, o payout é debitado do room_treasury
@@ -1327,17 +1501,19 @@ namespace bingo {
         }
     }
 
-    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
+    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty) {
         require_auth(permission_level{get_self(), "admin"_n});
         check(room_drop_chance_bps <= 10000, "room_drop_chance_bps deve ser 0–10000.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
+        check(difficulty <= 10, "difficulty deve ser 0-10.");
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
         rooms.modify(room_itr, same_payer, [&](auto& r) {
             r.room_drop_chance_bps   = room_drop_chance_bps;
             r.max_tickets_per_player = max_tickets_per_player;
+            r.difficulty.emplace(difficulty > 0 ? difficulty : 1);
         });
     }
 
