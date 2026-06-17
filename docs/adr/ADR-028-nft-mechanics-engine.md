@@ -5,7 +5,7 @@ ROOM_ACCESS, BURN_TO_CLAIM), treasury de sala para patrocinador, schema field
 deserialização dupla (worker + contrato), consumíveis via mutable data, XP/achievement
 engine off-chain, e suporte a coleções externas com field mapping.
 
-## Status: Aceito (Fases 1–2 implementadas; Fase 3 api-gateway pendente — `nft_id` no hash da signature §6)
+## Status: Aceito (Fases 1–3 implementadas)
 
 ## Contexto
 
@@ -379,9 +379,13 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
     via deserializador ALPHA no worker (`atomicSchema.ts`).
   - **2E — decremento de consumível (§3): implementado.** Mutable data via
     `setassetdata` decrementa `uses` da NFT consumível no consumo.
-- **Ainda pendente na Fase 2:**
-  - `nft_id` no **hash da signature** de `buytickets` (§6) — é a **Fase 3 (api-gateway)**:
-    a assinatura é gerada no `ticketController`, não no worker.
+- **Fase 3 (api-gateway + contrato, branch `feature/adr-028-fase3-apigateway`) — implementado:**
+  - **§6 — `nft_id` no hash da signature de `buytickets`:** o hash assinado passa a ser
+    `matrix + game_id + buyer + nft_id`, acoplando a NFT de benefício à assinatura
+    (impede troca pós-assinatura). Contrato adiciona `nft_id` ao buffer do `sha256`
+    (sem mudança de ABI — já era param); `ticketController.computeTicketHash` espelha
+    a serialização (uint64 LE) e valida/repassa `nft_id` no `/generate`. Validado E2E
+    (harness `SIG-1` divergente → rejeita; `SIG-2` correta → aceita) + unit na api.
 - Os campos novos de `rooms` usam `binary_extension` (trailing/`$`) → linhas de salas
   pré-existentes continuam desserializando; E2E permanece verde.
 - **Gotcha de assinatura no harness (ADR-026):** actions admin do `bingogamectr`
