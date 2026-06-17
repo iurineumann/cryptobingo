@@ -210,17 +210,80 @@ Worker services no `worker-game-loop`:
 | Evento | XP Base | Notas |
 |---|---|---|
 | Comprar N cartelas | `N × 1` | |
-| Vitória (dificuldade) | `10 × diff` | diff = parâmetro da sala (1-10) |
+| Vitória (dificuldade) | `10 × diff` | diff = parâmetro da sala, on-chain `room_record.difficulty` |
 | Vitória VIP | `25 × diff` | sala premium |
 | Completar combinação | `15` | |
 | Daily streak (dia N) | `N × 2` | cap 30 |
-| Queimar NFT | `50 + rarity × 10` | rarity lida do schema |
+| Queimar NFT | `50 + rarity × 10` | rarity lida do schema AtomicAssets |
 | Conquista | variável | definido por achievement |
 
-Armazenamento: MongoDB `player_progression` (estrutura `xp`/`tier`/`games_played`
-já existe, vazia). Sem retroatividade — só acumula da implementação em diante.
+#### Curva XP: φ-tier (Fibonacci é ratio)
 
-Curvas de level a calibrar via simulação: quadrática, Fibonacci, log-linear.
+9 tiers × 25 níveis = 225 níveis. Cada tier incremental = φ × 1.618 (razão áurea,sequência de Fibonacci).
+
+| Tier | Níveis | XP total | XP médio/lvl |
+|---|---|---|---|
+| Cobre | 1→25 | 906 | ~36 |
+| Bronze | 26→50 | 2.371 | ~59 |
+| Prata | 51→75 | 4.742 | ~95 |
+| Ouro | 76→100 | 8.579 | ~153 |
+| Platina | 101→125 | 14.788 | ~248 |
+| Esmeralda | 126→150 | 24.835 | ~402 |
+| Safira | 151→175 | 41.092 | ~650 |
+| Rubi | 176→200 | 67.397 | ~1.052 |
+| Diamante | 201→225 | 109.959 | ~1.702 |
+
+```ts
+const PHI = 1.618034;
+const BASE_XP = 906;
+const TIERS = ['Cobre','Bronze','Prata','Ouro','Platina','Esmeralda','Safira','Rubi','Diamante'];
+
+// XP incremental do tier t (0-indexado): BASE_XP × φ^t
+function tierXp(t: number): number {
+    return Math.floor(BASE_XP * Math.pow(PHI, t));
+}
+
+// XP total cumulativo ate o tier t (inclusive)
+function tierThreshold(t: number): number {
+    // Soma da PG: BASE_XP × (φ^(t+1) - 1) / (φ - 1)
+    return Math.floor(BASE_XP * (Math.pow(PHI, t + 1) - 1) / (PHI - 1));
+}
+
+// XP total cumulativo ate o level n (1-indexado, 1-225)
+function totalXp(level: number): number {
+    const t = Math.min(8, Math.floor((level - 1) / 25));
+    const inTier = level - t * 25; // 1-25 dentro do tier
+    const prev = t > 0 ? tierThreshold(t - 1) : 0;
+    const range = tierXp(t);
+    return prev + Math.floor(range * Math.pow(inTier / 25, 2)); // quadrático intra-tier
+}
+
+function deriveLevel(xp: number): { level: number; tier: string; sub_level: number } {
+    // busca binária em totalXp() para achar o level
+    let lo = 1, hi = 225;
+    while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (totalXp(mid) <= xp) lo = mid;
+        else hi = mid - 1;
+    }
+    const t = Math.min(8, Math.floor((lo - 1) / 25));
+    return { level: lo, tier: TIERS[t], sub_level: ((lo - 1) % 25) + 1 };
+}
+```
+
+#### Difficulty on-chain
+
+`room_record.difficulty` (uint8, binary_extension, 0-10, default 1) definido no contrato e populado via `setroommeta` — independência do contrato. Worker lê on-chain ao conceder XP de vitória.
+
+#### Daily streak (lazy)
+
+Checado dentro de `awardPlayerXP`: se `last_date` < hoje → incrementa streak (cap 30). Se gap > 1 dia → reset para 1. Streak bonus = `count × 2` XP adicionado ao award.
+
+#### Rarity da NFT queimada
+
+Worker implementa deserializador ALPHA AtomicAssets (`atomicSchema.ts`, espelhando o parser do contrato 2B) para ler `immutable_serialized_data` do template e extrair campo `rarity`. Fallback: 1 (raridade comum).
+
+Armazenamento: MongoDB `userprofiles.progression` — mesma collection do api-gateway. Worker escreve via `$inc` atômico. Sem retroatividade — só acumula da implementação em diante.
 
 ### 10. External Collections + Field Mapping
 
@@ -303,7 +366,10 @@ Implementação faseada — cada fase em sua branch, merge entre fases:
   - Decremento de **consumível** via mutable data (`setassetdata`) (§3).
   - 2C — burn sync cron (worker → AtomicAssets API → `recordburn`) + consumo dos
     **grants** `BURN_TO_CLAIM` em `buytickets`/`claimwin` (§8).
-  - 2D — XP/achievement engine (§9).
+  - **2D — XP/achievement engine (§9): implementado.** φ-tier curve, 225 níveis,
+    9 tiers (Cobre→Diamante). Difficulty on-chain no `room_record`. Worker
+    `xpEngine.ts` com hooks em win/combo/burn/compra. Daily streak lazy. Rarity
+    via deserializador ALPHA no worker (`atomicSchema.ts`).
   - `PRIZE_BOOST VALUE_SCHEMA_FIELD` (reusa o deserializador do 2B).
   - Param `boost_nft_ids` + aplicação do **prize boost** no `claimwin` (§7). Tentou-se
     adicioná-lo como `binary_extension` trailing, mas o wharfkit (antelope 1.2.0) **não
