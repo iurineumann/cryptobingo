@@ -61,6 +61,10 @@ const playerSession = makeSession('jogador1',     playerKey);
 const player2Session = makeSession('jogador2',    player2Key);
 const microSession  = makeSession('bingogamesvc', microserviceKey);
 
+// ADR-028 §6: nft_id faz parte do hash assinado de buytickets. Todos os buys do
+// harness usam nft_id=0 (sem NFT de benefício acoplada à compra).
+const nft0Buf = Serializer.encode({ type: 'uint64', object: UInt64.from(0) }).array;
+
 const MASK_ROW0 = BigInt(1082401); // bits 0,5,10,15,20
 const MASK_ROW1 = BigInt(2164802); // bits 1,6,11,16,21
 
@@ -229,7 +233,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mainGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -340,7 +344,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: abortGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -442,7 +446,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mmGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -525,7 +529,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: payingGameId }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -607,7 +611,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: gbGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -714,7 +718,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: ffGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -967,7 +971,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await expect(
             transact(playerSession, 'bingogamectr', 'buytickets', {
@@ -988,7 +992,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -1092,7 +1096,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: comboGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: comboGameId, matrices: [matrixBytes], signatures: [sig],
             nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
@@ -1285,7 +1289,7 @@ describe('FSM — PRIZE_BOOST VALUE_SCHEMA_FIELD [ADR-028 §7/2F]', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: boostGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: boostGameId,
             matrices: [matrixBytes], signatures: [sig],
@@ -1448,7 +1452,7 @@ describe('FSM — PRIZE_BOOST via GRANT BURN_TO_CLAIM [ADR-028 §8]', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: grantGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
         await transact(player2Session, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: grantGameId,
             matrices: [matrixBytes], signatures: [sig],
@@ -1491,5 +1495,66 @@ describe('FSM — PRIZE_BOOST via GRANT BURN_TO_CLAIM [ADR-028 §8]', () => {
         await transact(microSession, 'bingogamectr', 'closegame', { game_id: grantGameId });
         expect(await getGameStatus(grantGameIdStr)).toBe('archived');
         console.log('   ✅ status: archived');
+    });
+});
+
+// ==========================================
+// SUITE NFT_ID NO HASH — anti-troca de NFT [ADR-028 §6]
+// ==========================================
+// O hash assinado de buytickets inclui nft_id. Assinar com um nft_id e submeter
+// outro deve falhar no assert_recover_key (chave recuperada ≠ signer_key).
+describe('FSM — nft_id no hash da signature [ADR-028 §6]', () => {
+    let g: UInt64;
+    let gStr: string;
+
+    beforeAll(async () => {
+        const n = Name.from(randomGameName());
+        g = n.value; gStr = n.toString();
+        // GAMETYPE_ID_STD já criado pela suite Happy Path (primeira do arquivo).
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id: g, ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id: GAMETYPE_ID_STD, room_id: UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: g });
+        await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingogamectr', quantity: '100.0000 WAX', memo: 'Deposito nft_id hash',
+        });
+    });
+
+    test('SIG-1: sig assinada com nft_id divergente → buytickets rejeita', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: g }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner }).array;
+        // Assina sobre nft_id=5, mas submete nft_id=0 → hash on-chain diverge.
+        const nft5Buf = Serializer.encode({ type: 'uint64', object: UInt64.from(5) }).array;
+        const sig = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft5Buf])));
+
+        await expect(transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        })).rejects.toThrow();
+        console.log('   ✅ buytickets rejeitou sig com nft_id divergente');
+    });
+
+    test('SIG-2: sig correta (nft_id=0) → buytickets aceita', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: g }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner }).array;
+        const sig = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+
+        const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ buytickets aceitou sig correta');
+    });
+
+    afterAll(async () => {
+        try { await transact(microSession, 'bingogamectr', 'abortgame', { game_id: g }); } catch { /* best-effort */ }
     });
 });

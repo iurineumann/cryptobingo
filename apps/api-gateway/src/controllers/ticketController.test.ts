@@ -113,6 +113,19 @@ describe('computeTicketHash', () => {
         const h2 = computeTicketHash(diffMatrix, '1', 'jogador1');
         expect(h1.array).not.toEqual(h2.array);
     });
+
+    // ADR-028 §6: nft_id acoplado ao hash assinado
+    it('produz hash diferente para nft_id diferente', () => {
+        const h1 = computeTicketHash(MATRIX, '1', 'jogador1', '0');
+        const h2 = computeTicketHash(MATRIX, '1', 'jogador1', '12345');
+        expect(h1.array).not.toEqual(h2.array);
+    });
+
+    it('default de nft_id equivale a "0" explícito', () => {
+        const h1 = computeTicketHash(MATRIX, '1', 'jogador1');
+        const h2 = computeTicketHash(MATRIX, '1', 'jogador1', '0');
+        expect(h1.array).toEqual(h2.array);
+    });
 });
 
 // ==========================================

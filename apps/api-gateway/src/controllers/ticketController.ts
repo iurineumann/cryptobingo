@@ -107,18 +107,19 @@ function encodeVaruint32(value: number): Buffer {
  * Calcula o hash SHA-256 contextual de uma cartela para assinatura anti-replay.
  *
  * Serialização determinística equivalente ao eosio::datastream do C++:
- *   [ unsigned_int(matrix.size()) ][ matrix bytes ][ game_id(uint64 LE) ][ buyer(name uint64 LE) ]
+ *   [ unsigned_int(matrix.size()) ][ matrix bytes ][ game_id(uint64 LE) ][ buyer(name uint64 LE) ][ nft_id(uint64 LE) ]
  *
- * Deve ser idêntico a:
- *   size_t buf_size = pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
+ * Deve ser idêntico a (ADR-028 §6):
+ *   size_t buf_size = pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name) + sizeof(uint64_t);
  *   vector<char> buffer(buf_size);
  *   datastream ds(buffer.data(), buffer.size());
- *   ds << matrices[i] << game_id << buyer;
+ *   ds << matrices[i] << game_id << buyer << nft_id;
  *   auto hash = sha256(buffer.data(), buffer.size());
  *
- * Ref: ADR-001, contract: bingo.cpp buytickets()
+ * O nft_id acopla a NFT de benefício à assinatura — sem NFT, usar nftId='0'.
+ * Ref: ADR-001/ADR-028 §6, contract: bingo.cpp buytickets()
  */
-export function computeTicketHash(matrix: number[], gameId: string, accountName: string): Checksum256 {
+export function computeTicketHash(matrix: number[], gameId: string, accountName: string, nftId: string = '0'): Checksum256 {
     // 1. Matrix: unsigned_int(size) + raw bytes (pack_size = varuint32 + N)
     const rawMatrix = Buffer.from(new Uint8Array(matrix));
     const sizePrefix = encodeVaruint32(matrix.length);
@@ -131,8 +132,12 @@ export function computeTicketHash(matrix: number[], gameId: string, accountName:
     // 3. account name: uint64 LE (EOSIO name encoding, fixed 8 bytes)
     const nameBuf = encodeName(accountName);
 
-    // 4. Concatenação e hash
-    const payload = Buffer.concat([matrixBuf, gameIdBuf, nameBuf]);
+    // 4. nft_id: uint64 LE (ADR-028 §6)
+    const nftIdBuf = Buffer.allocUnsafe(8);
+    nftIdBuf.writeBigUInt64LE(BigInt(nftId));
+
+    // 5. Concatenação e hash
+    const payload = Buffer.concat([matrixBuf, gameIdBuf, nameBuf, nftIdBuf]);
     return Checksum256.hash(payload);
 }
 
@@ -200,6 +205,14 @@ export async function generateTickets(req: Request, res: Response): Promise<void
         res.status(400).json({
             error: `Campo "count" deve ser um inteiro entre 1 e ${MAX_TICKETS_PER_REQUEST}.`,
         });
+        return;
+    }
+
+    // ADR-028 §6: nft_id da NFT de benefício acoplada à compra entra no hash assinado.
+    // Sem NFT → '0'. Deve casar exatamente com o nft_id passado ao buytickets on-chain.
+    const nftId = String(req.body.nft_id ?? '0');
+    if (!/^\d{1,20}$/.test(nftId)) {
+        res.status(400).json({ error: 'Campo "nft_id" inválido. Deve ser um uint64 (use "0" se nenhuma).' });
         return;
     }
 
@@ -286,8 +299,8 @@ export async function generateTickets(req: Request, res: Response): Promise<void
             continue;
         }
 
-        // Computa hash contextual e assina com chave do microserviço
-        const digest = computeTicketHash(matrix, gameId, accountName);
+        // Computa hash contextual (inclui nft_id, ADR-028 §6) e assina com chave do microserviço
+        const digest = computeTicketHash(matrix, gameId, accountName, nftId);
         const signature = privateKey.signDigest(digest);
 
         tickets.push({
@@ -320,6 +333,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
     res.status(200).json({
         game_id: gameId,
         account: accountName,
+        nft_id: nftId, // ADR-028 §6: deve ser repassado idêntico ao buytickets on-chain
         count: tickets.length,
         tickets,
     });

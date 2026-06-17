@@ -188,6 +188,7 @@ describe('XP/Progression — awardXP apos FSM completa', () => {
             ...Serializer.encode({ type: 'bytes',  object: mb }).array,
             ...Serializer.encode({ type: 'uint64', object: xpGameId }).array,
             ...Serializer.encode({ type: 'name',   object: o }).array,
+            ...Serializer.encode({ type: 'uint64', object: UInt64.from(0) }).array, // ADR-028 §6: nft_id
         ])));
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: o, game_id: xpGameId, matrices: [mb], signatures: [sig],
