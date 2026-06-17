@@ -278,7 +278,12 @@
     "swap_quote_expired": "报价已过期，重新计算中",
     "swap_cost_preview": "费用：{{roomTotal}}（≈ {{altAmount}}）",
     "swap_via": "兑换途径",
-    "error_slippage": "价格变动过大，请重试。"
+    "error_slippage": "价格变动过大，请重试。",
+    "nft_discount_label": "折扣NFT",
+    "nft_discount_none": "不使用NFT",
+    "nft_discount_pct": "−{{pct}}%",
+    "nft_discount_variable": "可变折扣",
+    "nft_discount_locked": "生成预览后NFT已锁定。"
   },
   "admin": {
     "dashboard": "仪表盘",

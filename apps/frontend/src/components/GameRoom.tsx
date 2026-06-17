@@ -1224,6 +1224,7 @@ export default function GameRoom({
           roomPriceMin={room?.ticket_price_min}
           roomPriceMax={room?.ticket_price_max}
           roomPriceDefault={room?.ticket_price_default}
+          nftTemplateAllowlist={room?.nft_template_allowlist}
         />
       )}
     </div>

@@ -278,7 +278,12 @@
     "swap_quote_expired": "Quote expired — recalculating",
     "swap_cost_preview": "Cost: {{roomTotal}} (≈ {{altAmount}})",
     "swap_via": "Via swap",
-    "error_slippage": "Price moved too much. Please try again."
+    "error_slippage": "Price moved too much. Please try again.",
+    "nft_discount_label": "Discount NFT",
+    "nft_discount_none": "No NFT",
+    "nft_discount_pct": "−{{pct}}%",
+    "nft_discount_variable": "Variable discount",
+    "nft_discount_locked": "NFT locked after generating preview."
   },
   "admin": {
     "dashboard": "Dashboard",
