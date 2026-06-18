@@ -66,7 +66,7 @@ export async function revokeToken(jti: string, exp: number): Promise<void> {
  * Verifica se um jti está na blacklist do Redis.
  * Retorna true se o token foi revogado.
  */
-async function isTokenRevoked(jti: string): Promise<boolean> {
+export async function isTokenRevoked(jti: string): Promise<boolean> {
     try {
         const val = await redisClient.get(`${BLACKLIST_PREFIX}${jti}`);
         return val !== null;
