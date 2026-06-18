@@ -4,7 +4,7 @@ import type { EnrichedRoom, RoomDropConfig, BlockchainGametype } from '../../ser
 import {
     fetchRooms, createAdminRoom, updateRoomMetadata,
     activateRoom, pauseRoom, closeRoom, fetchAdminGametypes,
-    updateRoomSettings,
+    updateRoomSettings, setRoomNftConfig,
 } from '../../services/api';
 
 interface DropForm {
@@ -74,6 +74,11 @@ export default function RoomsAdmin() {
     const [submitting,     setSubmitting]     = useState(false);
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [closeTarget,    setCloseTarget]    = useState<EnrichedRoom | null>(null);
+    const [nftTarget,      setNftTarget]      = useState<EnrichedRoom | null>(null);
+    const [nftSubmitting,  setNftSubmitting]  = useState(false);
+    const [nftForm,        setNftForm]        = useState({
+        allowlist: '', house_fee_bps: 0, estimated_monthly_tickets: 0, campaign_id: 0,
+    });
 
     const loadGametypes = useCallback(async () => {
         try {
@@ -214,6 +219,39 @@ export default function RoomsAdmin() {
         await loadRooms();
     };
 
+    const openNftConfig = (room: EnrichedRoom) => {
+        setNftForm({
+            allowlist:                   (room.nft_template_allowlist ?? []).join(', '),
+            house_fee_bps:               (room as any).house_fee_bps ?? 0,
+            estimated_monthly_tickets:   (room as any).estimated_monthly_tickets ?? 0,
+            campaign_id:                 (room as any).campaign_id ?? 0,
+        });
+        setNftTarget(room);
+    };
+
+    const handleNftConfig = async () => {
+        if (!nftTarget) return;
+        setNftSubmitting(true);
+        setError(null);
+        try {
+            const allowlist = nftForm.allowlist
+                .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
+            await setRoomNftConfig(nftTarget.room_id, {
+                nft_template_allowlist:    allowlist,
+                campaign_id:               nftForm.campaign_id,
+                house_fee_bps:             nftForm.house_fee_bps,
+                estimated_monthly_tickets: nftForm.estimated_monthly_tickets,
+            });
+            setSuccess(t('admin.rooms_nft_success'));
+            setNftTarget(null);
+            await loadRooms();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('admin.rooms_nft_error'));
+        } finally {
+            setNftSubmitting(false);
+        }
+    };
+
     return (
         <section>
             <div className="flex items-center justify-between mb-4">
@@ -352,6 +390,11 @@ export default function RoomsAdmin() {
                                             {t('admin.rooms_edit')}
                                         </button>
                                     )}
+                                    {room.status !== 'closed' && (
+                                        <button className="cb-btn cb-btn-ghost cb-btn-xs" data-testid={`room-nft-config-${room.room_id}`} onClick={() => openNftConfig(room)}>
+                                            {t('admin.rooms_nft_config')}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             <div className="grid grid-cols-4 gap-2 mt-2 text-xs text-[--cb-text-secondary]">
@@ -406,6 +449,56 @@ export default function RoomsAdmin() {
                             </button>
                             <button data-testid="room-save" className="cb-btn cb-btn-primary cb-btn-sm" onClick={handleEdit} disabled={editSubmitting}>
                                 {editSubmitting ? t('admin.rooms_saving') : t('admin.rooms_save')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── NFT Config Modal ── */}
+            {nftTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setNftTarget(null)}>
+                    <div className="cb-card p-6 max-w-lg w-full mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-sm">{t('admin.rooms_nft_config')} — #{nftTarget.room_id}</h3>
+                        <div className="space-y-3">
+                            <label className="block text-xs text-[--cb-text-tertiary]">
+                                {t('admin.rooms_nft_allowlist')}
+                                <input className="cb-input w-full mt-1" placeholder="123, 456, 789"
+                                    value={nftForm.allowlist}
+                                    onChange={e => setNftForm(f => ({ ...f, allowlist: e.target.value }))}
+                                    data-testid="nft-config-allowlist" />
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="block text-xs text-[--cb-text-tertiary]">
+                                    {t('admin.rooms_nft_house_fee')}
+                                    <input className="cb-input w-full mt-1" type="number" min={0} max={10000}
+                                        value={nftForm.house_fee_bps}
+                                        onChange={e => setNftForm(f => ({ ...f, house_fee_bps: parseInt(e.target.value) || 0 }))}
+                                        data-testid="nft-config-house-fee" />
+                                </label>
+                                <label className="block text-xs text-[--cb-text-tertiary]">
+                                    {t('admin.rooms_nft_monthly_tickets')}
+                                    <input className="cb-input w-full mt-1" type="number" min={0}
+                                        value={nftForm.estimated_monthly_tickets}
+                                        onChange={e => setNftForm(f => ({ ...f, estimated_monthly_tickets: parseInt(e.target.value) || 0 }))}
+                                        data-testid="nft-config-monthly-tickets" />
+                                </label>
+                                <label className="block text-xs text-[--cb-text-tertiary]">
+                                    {t('admin.rooms_nft_campaign')}
+                                    <input className="cb-input w-full mt-1" type="number" min={0}
+                                        value={nftForm.campaign_id}
+                                        onChange={e => setNftForm(f => ({ ...f, campaign_id: parseInt(e.target.value) || 0 }))}
+                                        data-testid="nft-config-campaign-id" />
+                                </label>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setNftTarget(null)}>
+                                {t('admin.rooms_cancel')}
+                            </button>
+                            <button className="cb-btn cb-btn-primary cb-btn-sm" data-testid="nft-config-save"
+                                onClick={handleNftConfig} disabled={nftSubmitting}>
+                                {nftSubmitting ? '...' : t('admin.rooms_nft_save')}
                             </button>
                         </div>
                     </div>

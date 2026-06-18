@@ -760,6 +760,30 @@ export async function fetchSponsorRooms(): Promise<{ rooms: EnrichedRoom[] }> {
     return handleResponse(res);
 }
 
+export interface RoomTreasury {
+    room_id:  string;
+    balance:  { quantity: string; contract: string };
+    locked:   { quantity: string; contract: string };
+}
+
+export async function fetchRoomTreasury(roomId: string): Promise<{ treasury: RoomTreasury | null }> {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/treasury`);
+    return handleResponse(res);
+}
+
+export async function setRoomNftConfig(roomId: string, data: {
+    nft_template_allowlist:     number[];
+    campaign_id:                number;
+    house_fee_bps:              number;
+    estimated_monthly_tickets:  number;
+}): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/nft-config`, {
+        method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
 // ==========================================
 // DROP VAULT (ADR-011)
 // ==========================================
