@@ -807,19 +807,59 @@
       },
       {
         "question": "How do I play?",
-        "answer": "Connect your WAX wallet, choose a room, buy your tickets and wait for the draw. If you win, the prize is sent automatically."
+        "answer": "Connect your WAX wallet (Anchor, Wombat or similar), pick a room in the lobby, buy your tickets and wait for the draw. If you win, the prize is sent automatically by the smart contract — no intermediaries needed."
       },
       {
         "question": "Are the draws fair?",
-        "answer": "Yes. CryptoBingo uses the WAX randomness oracle (orng.wax), based on RSA-SHA256, whose output is verifiable on-chain by anyone."
+        "answer": "Yes. We use the official WAX randomness oracle (orng.wax), based on RSA-SHA256. The result is generated externally and verifiable by anyone directly on the blockchain — no platform code can influence the draw."
+      },
+      {
+        "question": "How much can I win per ticket?",
+        "answer": "The prize formula is: Ticket Price × Base Multiplier × (Pattern Weight / 100). Example: a 2 BINGO ticket, multiplier 1, pattern weight 150 (1.5×) pays 3 BINGO. The overall RTP (return to player) is 85%."
+      },
+      {
+        "question": "What are patterns and combinations?",
+        "answer": "Patterns are shapes on the 5×5 ticket that, when filled by drawn numbers, award a prize (e.g. line, diagonal, letter B, full card). Combinations are bonuses for completing multiple patterns in the same round. Each game type defines its own patterns and prize weights."
+      },
+      {
+        "question": "What draw modes are available?",
+        "answer": "The platform supports 4 modes: Standard (35 balls), Fixed (configured number of balls), First Full (balls drawn until someone completes their full card) and Golden Ball (35 balls + 1 golden ball with a random prize multiplier)."
       },
       {
         "question": "Which tokens can I use?",
-        "answer": "WAX is the default token. Rooms can accept BINGO, TLM or other supported tokens. You can also use the swap feature to pay with alternative tokens."
+        "answer": "WAX is the default token. Each room defines its base currency (WAX, BINGO, TLM or others). You can also pay with alternative tokens using the built-in Swap feature — the system converts automatically."
       },
       {
-        "question": "How does prize payment work?",
-        "answer": "After the draw, the smart contract automatically evaluates all tickets and transfers prizes directly to winners' wallets."
+        "question": "How do NFTs work on the platform?",
+        "answer": "NFTs from partner collections can grant: ticket purchase discounts (TICKET_DISCOUNT), prize boost (PRIZE_BOOST), access to exclusive rooms (ROOM_ACCESS), and unlocking benefits by burning an NFT (BURN_TO_CLAIM). All benefits are validated on-chain by the smart contract."
+      },
+      {
+        "question": "How do I use an NFT for a discount?",
+        "answer": "On the ticket purchase screen, select your eligible NFT in the discount selector. The system automatically checks your eligible NFTs and applies the corresponding discount. Once you confirm the preview, the NFT is locked for that purchase."
+      },
+      {
+        "question": "What are sponsored rooms?",
+        "answer": "Rooms created by projects or companies (sponsors) that deposit tokens into the room treasury to fund prizes. Each room has its own currency, ticket price and game type. Sponsors can also allocate NFT and token drops for players."
+      },
+      {
+        "question": "How does the leaderboard work?",
+        "answer": "The leaderboard shows top players by wins, wagered volume or accumulated XP. Positions update at the end of each game. XP is earned by playing, winning and completing achievements."
+      },
+      {
+        "question": "How do I update my profile?",
+        "answer": "Go to the Profile page to set your avatar (using an NFT from your wallet), nickname and other preferences. Changes are authenticated via WAX signature — only you can modify your data."
+      },
+      {
+        "question": "Is my wallet safe?",
+        "answer": "The platform never stores your private key. Authentication is done via WAX wallet signature (Anchor/Wombat) — you sign each transaction directly in your wallet app. The smart contract is public and auditable by anyone on the WAX blockchain."
+      },
+      {
+        "question": "What is GGR and where does it go?",
+        "answer": "GGR (Gross Gaming Revenue) is the 15% margin retained by the platform per game. These funds sustain operations, development and global treasury liquidity. The resulting RTP is 85% — statistically, 85% of everything wagered returns as prizes."
+      },
+      {
+        "question": "What happens if nobody wins a round?",
+        "answer": "In standard modes, the prize goes to the player with the most progressed ticket (highest completed pattern weight). In First Full mode, if no ticket completes the full card, the game is closed by the worker and a new round starts automatically."
       }
     ]
   },
