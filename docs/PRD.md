@@ -94,30 +94,30 @@ Plataforma descentralizada de bingo de quota fixa na WAX. Opera em modelo Web2.5
 - Pagamento via ledger interno (`balances`), não por transferência avulsa.
 - Ref: `SPEC.md §2.1`, `CONTEXT.md §Ticket`.
 
-### 4.3. Draw Modes e Payout 🚧
+### 4.3. Draw Modes e Payout ✅
 
 **✅ Standard/Fixed:** Sorteio de N bolas, paga max_weight ao vencedor.
 
-**🚧 Golden Ball:** Bola especial (posição configurável) que multiplica prêmio.
+**✅ Golden Ball:** Bola especial (posição configurável) que multiplica prêmio.
 
-**🚧 First Full:** Sorteio até primeira cartela completar padrão MASTER.
+**✅ First Full:** Sorteio até primeira cartela completar padrão MASTER.
 
-**🚧 Multi-match (Stages):** Múltiplos estágios pagantes no mesmo jogo.
+**✅ Multi-match (Stages):** Múltiplos estágios pagantes no mesmo jogo.
 
-**🚧 Combinações:** Vitória por combinação de padrões (all_of, any_of, n_of_type). `combo_id` alinhado entre Mongo e chain.
+**✅ Combinações:** Vitória por combinação de padrões (all_of, any_of, n_of_type). `combo_id` alinhado entre Mongo e chain.
 
 **Fórmula de prêmio (max_weight):**
 `Prize = paid_ticket_price × base_multiplier × win_weight / 100 × golden_multiplier`
 
 Ref: `SPEC.md §2.2` (claimwin), `SPEC.md §2.3` (stages), `SPEC.md §1.7` (gametypes), ADR-012, ADR-013, ADR-016.
 
-### 4.4. Salas (Rooms) 🚧
+### 4.4. Salas (Rooms) ✅
 
 **✅ On-chain:** FSM `inactive → active ⇌ paused → closed`. Tabela `rooms` com preços, gametype, sponsor, drop chance.
 
-**🚧 Auto-scheduling:** `roomManager.ts` cria nova partida automaticamente ao encerrar anterior.
+**✅ Auto-scheduling:** `roomManager.ts` cria nova partida automaticamente ao encerrar anterior, com `autoStartDelaySec` configurável.
 
-**🚧 Metadados off-chain:** Nome, descrição, cover image, chat config (MongoDB `roommetadata`).
+**✅ Metadados off-chain:** Nome, descrição, cover image, chat config (MongoDB `roommetadata`), via `setroommeta`.
 
 Ref: `SPEC.md §1.5`, `SPEC.md §2.4`, ADR-010.
 
@@ -125,7 +125,9 @@ Ref: `SPEC.md §1.5`, `SPEC.md §2.4`, ADR-010.
 
 **✅ On-chain:** Tabela `campaigns` com budget, payout por jogo, leftover policy. Sponsor deposita tokens.
 
-**🚧 Fluxo completo:** Vincular campanha a salas, distribuir por partida, encerrar campanha com devolução de saldo.
+**✅ API:** `GET/POST /api/v1/sponsors/campaigns`, `POST .../link` (`linkcampaign`), `POST .../close` (`closecmpgn`).
+
+**🚧 Falta:** Suite harness validando ciclo completo (criar → vincular → distribuir por partida → encerrar com devolução). Fluxo existe mas não tem cobertura E2E integrada.
 
 Ref: `SPEC.md §1.4`, ADR-008.
 
@@ -147,36 +149,40 @@ Ref: `SPEC.md §1.6`, ADR-011.
 
 Ref: `SPEC.md §5.2`, `CONTEXT.md §NFT & Utilidades`.
 
-### 4.8. WebSocket Slow Reveal 🚧
+### 4.8. WebSocket Slow Reveal ✅
 
 - Eventos em tempo real por canal `game.{game_id}`.
 - Broadcaster revela 1 bola a cada ~3s a partir do array resolvido.
 - Reconciliação via `sync_request / sync_response` em caso de perda de pacote.
 - Eventos: `ball_drawn`, `winner_found`, `golden_ball`, `stage_cleared`, `game_ended`.
-- Suporte a 50.000 conexões simultâneas.
+- Chat em tempo real por sala via Socket.io (`@mentions`, rate limit 5msg/5s, JWT auth).
+- Suporte a 50.000 conexões simultâneas (🔮 load test pendente).
 
 Ref: `SPEC.md §4`, ADR-007.
 
-### 4.9. Rankings e Conteúdo 🔮
+### 4.9. Rankings e Conteúdo ✅
 
 - News feed com suporte a locale (PT, EN, ZH).
 - Rankings de jogadores por volume, vitórias, XP.
-- Sistema de progressão (tiers, XP).
+- FAQ estática i18n pt/en/zh (15 perguntas por locale).
+- Cache Redis TTL 60s nos endpoints de leaderboard.
 
 Ref: ADR-024.
 
-### 4.10. Swap B2B 🔮
+### 4.10. Swap B2B ✅
 
 - Troca de BINGO por tokens de parceiros (e vice-versa).
-- Interface de swap na UI do jogador.
+- App dedicado `apps/swap-ui` (SwapPage, PoolPage, AnalyticsPage), acessível via `VITE_SWAP_URL`.
+- API: `GET /api/v1/swap/pools` e `/api/v1/swap/quote`.
 - Taxa de serviço sobre swap.
 
 Ref: ADR-018, ADR-019, ADR-022.
 
-### 4.11. Multicurrency Checkout 🔮
+### 4.11. Multicurrency Checkout ✅
 
-- Suporte a múltiplos tokens como moeda de pagamento nas salas.
-- Cotação on-chain entre tokens.
+- Suporte a múltiplos tokens como moeda de pagamento nas salas (via `bingogameswp`).
+- Cotação on-chain com expiração; swap integrado ao `BuyTicketModal` (ADR-021).
+- Apenas pares diretos — multi-hop reservado para ADR futuro.
 
 Ref: ADR-021.
 
