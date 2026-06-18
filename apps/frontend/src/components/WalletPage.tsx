@@ -2,94 +2,137 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Name, Session } from '@wharfkit/session';
 import type { BlockchainBalance } from '@cryptobingo/shared-types';
+import { fetchSupportedTokens, type SystemToken } from '../services/api';
 
-interface WalletPageProps { session: Session }
+interface Props { session: Session }
 
 const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
-const BINGO_TOKEN_CONTRACT = 'bingogametkn';
 
-export default function WalletPage({ session }: WalletPageProps) {
+interface TokenBalance {
+    label:       string;
+    symbol:      string;
+    amount:      number;
+    precision:   number;
+    is_native:   boolean;
+    location:    'wallet' | 'contract';
+}
+
+export default function WalletPage({ session }: Props) {
     const { t } = useTranslation();
 
-    const [gameBalances, setGameBalances] = useState<BlockchainBalance[]>([]);
-    const [walletBalances, setWalletBalances] = useState<BlockchainBalance[]>([]);
-    const [loadingBalances, setLoadingBalances] = useState(true);
+    const [tokens, setTokens]               = useState<SystemToken[]>([]);
+    const [walletBalances, setWalletBals]   = useState<TokenBalance[]>([]);
+    const [contractBalances, setContractBals] = useState<TokenBalance[]>([]);
+    const [loading, setLoading]             = useState(true);
 
-    const [amount, setAmount] = useState('');
-    const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
+    const [amount, setAmount]   = useState('');
+    const [mode, setMode]       = useState<'deposit' | 'withdraw'>('deposit');
     const [sending, setSending] = useState(false);
     const [txResult, setTxResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-    const getGameBalance = (): number => {
-        if (!gameBalances.length) return 0;
-        return parseFloat(gameBalances[0].balance.quantity) || 0;
-    };
-
-    const getWalletBalance = (): number => {
-        if (!walletBalances.length) return 0;
-        return parseFloat(walletBalances[0].balance.quantity) || 0;
-    };
+    // Token selecionado para depósito/saque (padrão: primeiro token não-nativo)
+    const [selectedSymbol, setSelectedSymbol] = useState<string>('BINGO');
 
     const loadBalances = useCallback(async () => {
-        setLoadingBalances(true);
+        setLoading(true);
         try {
+            const { tokens: cfg } = await fetchSupportedTokens();
+            setTokens(cfg);
+
             const ownerScope = Name.from(session.actor).value.toString();
-            const [gameRes, tokenRes] = await Promise.all([
-                session.client.v1.chain.get_table_rows({
-                    code: CONTRACT_ACCOUNT, scope: ownerScope,
-                    table: 'balances', limit: 20, json: true,
-                }),
-                session.client.v1.chain.get_table_rows({
-                    code: BINGO_TOKEN_CONTRACT, scope: ownerScope,
-                    table: 'accounts', limit: 20, json: true,
-                }),
-            ]);
-            setGameBalances(gameRes.rows as BlockchainBalance[]);
-            const walletBal: BlockchainBalance[] = (tokenRes.rows as Array<{ balance: string }>)
-                .filter(r => r.balance.endsWith('BINGO'))
-                .map(r => ({
-                    balance: { quantity: r.balance, contract: BINGO_TOKEN_CONTRACT },
-                }));
-            setWalletBalances(walletBal);
+            const actor      = String(session.actor);
+
+            // ── Saldos on-contract (multi-symbol) ────────────────────────
+            const contractRes = await session.client.v1.chain.get_table_rows({
+                code: CONTRACT_ACCOUNT, scope: ownerScope,
+                table: 'balances', limit: 50, json: true,
+            });
+            const contractBals: TokenBalance[] = (contractRes.rows as any[]).map(r => {
+                const qty: string = r.balance?.quantity ?? '0';
+                const sym = qty.split(' ')[1] ?? '';
+                const cfgT = cfg.find(c => c.symbol === sym);
+                return {
+                    label:     cfgT?.label ?? sym,
+                    symbol:    sym,
+                    amount:    parseFloat(qty) || 0,
+                    precision: cfgT?.precision ?? 4,
+                    is_native: false,
+                    location:  'contract' as const,
+                };
+            });
+            setContractBals(contractBals);
+
+            // ── Saldos off-contract por token cadastrado ──────────────────
+            const walletBals: TokenBalance[] = [];
+
+            for (const tok of cfg) {
+                if (tok.is_native) {
+                    // WAX nativo via get_account
+                    try {
+                        const acc: any = await session.client.v1.chain.get_account(actor as any);
+                        const liquid = parseFloat(String(acc?.core_liquid_balance ?? '0')) || 0;
+                        walletBals.push({ label: tok.label, symbol: tok.symbol, amount: liquid, precision: tok.precision, is_native: true, location: 'wallet' });
+                    } catch { walletBals.push({ label: tok.label, symbol: tok.symbol, amount: 0, precision: tok.precision, is_native: true, location: 'wallet' }); }
+                } else {
+                    // Token EOSIO: accounts table com scope = actor (string name, não UInt64)
+                    try {
+                        const res = await session.client.v1.chain.get_table_rows({
+                            code: tok.contract, scope: actor,
+                            table: 'accounts', limit: 10, json: true,
+                        });
+                        const row = (res.rows as any[]).find(r => String(r.balance ?? '').endsWith(tok.symbol));
+                        const amount = row ? parseFloat(String(row.balance)) || 0 : 0;
+                        walletBals.push({ label: tok.label, symbol: tok.symbol, amount, precision: tok.precision, is_native: false, location: 'wallet' });
+                    } catch { walletBals.push({ label: tok.label, symbol: tok.symbol, amount: 0, precision: tok.precision, is_native: false, location: 'wallet' }); }
+                }
+            }
+            setWalletBals(walletBals);
+
+            // Selecionar primeiro token não-nativo por padrão (depósito/saque)
+            const first = cfg.find(c => !c.is_native);
+            if (first) setSelectedSymbol(first.symbol);
+
         } catch (err) {
             console.error('[WalletPage] Erro ao carregar saldos:', err);
         } finally {
-            setLoadingBalances(false);
+            setLoading(false);
         }
     }, [session]);
 
     useEffect(() => { loadBalances(); }, [loadBalances]);
 
+    const selectedToken  = tokens.find(t => t.symbol === selectedSymbol);
+    const walletAmount   = walletBalances.find(b => b.symbol === selectedSymbol)?.amount ?? 0;
+    const contractAmount = contractBalances.find(b => b.symbol === selectedSymbol)?.amount ?? 0;
+    const maxAmount      = mode === 'deposit' ? walletAmount : contractAmount;
+
     const handleAction = async () => {
+        if (!selectedToken || selectedToken.is_native) return;
         const qty = parseFloat(amount);
         if (!qty || qty <= 0) return;
         setSending(true);
         setTxResult(null);
 
         try {
-            const quantityStr = qty.toFixed(4) + ' BINGO';
+            const quantityStr = qty.toFixed(selectedToken.precision) + ' ' + selectedToken.symbol;
+
             if (mode === 'deposit') {
-                if (qty > getWalletBalance()) {
+                if (qty > walletAmount) {
                     setTxResult({ ok: false, msg: t('wallet_page.no_balance') });
                     setSending(false);
                     return;
                 }
                 await session.transact({
                     actions: [{
-                        account: BINGO_TOKEN_CONTRACT,
+                        account: selectedToken.contract,
                         name: 'transfer',
                         authorization: [session.permissionLevel],
-                        data: {
-                            from: String(session.actor),
-                            to: CONTRACT_ACCOUNT,
-                            quantity: quantityStr,
-                            memo: 'deposit',
-                        },
+                        data: { from: String(session.actor), to: CONTRACT_ACCOUNT, quantity: quantityStr, memo: 'deposit' },
                     }],
                 }, { broadcast: true });
                 setTxResult({ ok: true, msg: t('wallet_page.success_deposit') });
             } else {
-                if (qty > getGameBalance()) {
+                if (qty > contractAmount) {
                     setTxResult({ ok: false, msg: t('wallet_page.insufficient_contract') });
                     setSending(false);
                     return;
@@ -99,13 +142,7 @@ export default function WalletPage({ session }: WalletPageProps) {
                         account: CONTRACT_ACCOUNT,
                         name: 'withdraw',
                         authorization: [session.permissionLevel],
-                        data: {
-                            owner: String(session.actor),
-                            amount: {
-                                quantity: quantityStr,
-                                contract: BINGO_TOKEN_CONTRACT,
-                            },
-                        },
+                        data: { owner: String(session.actor), amount: { quantity: quantityStr, contract: selectedToken.contract } },
                     }],
                 }, { broadcast: true });
                 setTxResult({ ok: true, msg: t('wallet_page.success_withdraw') });
@@ -120,105 +157,134 @@ export default function WalletPage({ session }: WalletPageProps) {
         }
     };
 
-    const maxAmount = mode === 'deposit' ? getWalletBalance() : getGameBalance();
-
     return (
         <div className="max-w-xl mx-auto space-y-6">
             <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('wallet_page.title')}</h2>
 
-            {/* Saldos */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="cb-card p-4">
-                    <p className="text-xs text-[--cb-text-tertiary] mb-1">{t('wallet_page.contract_balance')}</p>
-                    {loadingBalances ? (
-                        <p className="text-sm text-[--cb-text-tertiary]">{t('common.loading')}</p>
-                    ) : (
-                        <p className="text-lg font-mono font-bold text-[--cb-text-primary]">
-                            {getGameBalance().toFixed(4)} BINGO
-                        </p>
-                    )}
-                </div>
-                <div className="cb-card p-4">
-                    <p className="text-xs text-[--cb-text-tertiary] mb-1">{t('wallet_page.wallet_balance')}</p>
-                    {loadingBalances ? (
-                        <p className="text-sm text-[--cb-text-tertiary]">{t('common.loading')}</p>
-                    ) : (
-                        <p className="text-lg font-mono font-bold text-[--cb-text-primary]">
-                            {getWalletBalance().toFixed(4)} BINGO
-                        </p>
-                    )}
-                </div>
-            </div>
-
-            <button
-                className="cb-btn cb-btn-ghost cb-btn-sm text-xs"
-                onClick={loadBalances}
-                disabled={loadingBalances}
-            >
-                {t('wallet_page.refresh')}
-            </button>
-
-            {/* Formulário */}
-            <div className="cb-card p-5 space-y-4">
-                {/* Abas: Depositar / Sacar */}
-                <div className="flex gap-2">
-                    <button
-                        className={`cb-btn cb-btn-sm flex-1 ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
-                        onClick={() => { setMode('deposit'); setTxResult(null); }}
-                    >
-                        {t('wallet_page.deposit')}
-                    </button>
-                    <button
-                        className={`cb-btn cb-btn-sm flex-1 ${mode === 'withdraw' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
-                        onClick={() => { setMode('withdraw'); setTxResult(null); }}
-                    >
-                        {t('wallet_page.withdraw')}
-                    </button>
-                </div>
-
-                <p className="text-sm text-[--cb-text-tertiary]">
-                    {mode === 'deposit' ? t('wallet_page.deposit_desc') : t('wallet_page.withdraw_desc')}
+            {/* ── Saldos off-contract ───────────────────────────────── */}
+            <div>
+                <p className="text-xs font-semibold text-[--cb-text-tertiary] uppercase mb-2">
+                    {t('wallet_page.wallet_balance')}
                 </p>
-
-                <div>
-                    <label className="block text-sm text-[--cb-text-secondary] mb-1">
-                        {t('wallet_page.amount')}
-                    </label>
-                    <div className="flex gap-2 items-center">
-                        <input
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            className="cb-input flex-1"
-                            placeholder={t('wallet_page.amount_placeholder')}
-                            value={amount}
-                            onChange={e => setAmount(e.target.value)}
-                            disabled={sending}
-                        />
-                        <button
-                            className="cb-btn cb-btn-ghost cb-btn-xs text-xs"
-                            onClick={() => setAmount(maxAmount > 0 ? maxAmount.toFixed(4) : '0')}
-                            disabled={sending || maxAmount <= 0}
-                        >
-                            {t('wallet_page.max')}
-                        </button>
-                    </div>
-                </div>
-
-                <button
-                    className={`cb-btn w-full ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-danger'}`}
-                    onClick={handleAction}
-                    disabled={sending || !amount || parseFloat(amount) <= 0}
-                >
-                    {sending ? t('wallet_page.sending') : (mode === 'deposit' ? t('wallet_page.deposit_action') : t('wallet_page.withdraw_action'))}
-                </button>
-
-                {txResult && (
-                    <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
-                        {txResult.msg}
+                {loading ? (
+                    <p className="text-sm text-[--cb-text-tertiary]">{t('common.loading')}</p>
+                ) : walletBalances.length === 0 ? (
+                    <p className="text-sm text-[--cb-text-tertiary]">{t('wallet_page.no_tokens_configured')}</p>
+                ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                        {walletBalances.map(b => (
+                            <div key={b.symbol} className="cb-card p-3">
+                                <p className="text-xs text-[--cb-text-tertiary] mb-1">{b.label}</p>
+                                <p className="text-base font-mono font-bold text-[--cb-text-primary]">
+                                    {b.amount.toFixed(b.precision)} {b.symbol}
+                                </p>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
+
+            {/* ── Saldos on-contract ───────────────────────────────── */}
+            <div>
+                <p className="text-xs font-semibold text-[--cb-text-tertiary] uppercase mb-2">
+                    {t('wallet_page.on_contract')}
+                </p>
+                {loading ? (
+                    <p className="text-sm text-[--cb-text-tertiary]">{t('common.loading')}</p>
+                ) : contractBalances.length === 0 ? (
+                    <p className="text-sm text-[--cb-text-tertiary]">—</p>
+                ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                        {contractBalances.map(b => (
+                            <div key={b.symbol} className="cb-card p-3">
+                                <p className="text-xs text-[--cb-text-tertiary] mb-1">{b.label}</p>
+                                <p className="text-base font-mono font-bold text-[--cb-text-primary]">
+                                    {b.amount.toFixed(b.precision)} {b.symbol}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <button className="cb-btn cb-btn-ghost cb-btn-sm text-xs" onClick={loadBalances} disabled={loading}>
+                {t('wallet_page.refresh')}
+            </button>
+
+            {/* ── Formulário depósito/saque ─────────────────────────── */}
+            {tokens.filter(tk => !tk.is_native).length > 0 && (
+                <div className="cb-card p-5 space-y-4">
+                    {/* Seleção de token */}
+                    {tokens.filter(tk => !tk.is_native).length > 1 && (
+                        <div className="flex gap-2 flex-wrap">
+                            {tokens.filter(tk => !tk.is_native).map(tk => (
+                                <button
+                                    key={tk.symbol}
+                                    onClick={() => { setSelectedSymbol(tk.symbol); setTxResult(null); }}
+                                    className={`cb-btn cb-btn-sm ${selectedSymbol === tk.symbol ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                                >
+                                    {tk.symbol}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Abas depositar/sacar */}
+                    <div className="flex gap-2">
+                        <button
+                            className={`cb-btn cb-btn-sm flex-1 ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                            onClick={() => { setMode('deposit'); setTxResult(null); }}
+                        >
+                            {t('wallet_page.deposit')}
+                        </button>
+                        <button
+                            className={`cb-btn cb-btn-sm flex-1 ${mode === 'withdraw' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                            onClick={() => { setMode('withdraw'); setTxResult(null); }}
+                        >
+                            {t('wallet_page.withdraw')}
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-[--cb-text-tertiary]">
+                        {mode === 'deposit' ? t('wallet_page.deposit_desc') : t('wallet_page.withdraw_desc')}
+                    </p>
+
+                    <div>
+                        <label className="block text-sm text-[--cb-text-secondary] mb-1">{t('wallet_page.amount')}</label>
+                        <div className="flex gap-2 items-center">
+                            <input
+                                type="number" step={Math.pow(10, -(selectedToken?.precision ?? 4)).toFixed(selectedToken?.precision ?? 4)}
+                                min="0" className="cb-input flex-1"
+                                placeholder={t('wallet_page.amount_placeholder')}
+                                value={amount}
+                                onChange={e => setAmount(e.target.value)}
+                                disabled={sending}
+                            />
+                            <button
+                                className="cb-btn cb-btn-ghost cb-btn-xs text-xs"
+                                onClick={() => setAmount(maxAmount > 0 ? maxAmount.toFixed(selectedToken?.precision ?? 4) : '0')}
+                                disabled={sending || maxAmount <= 0}
+                            >
+                                {t('wallet_page.max')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <button
+                        className={`cb-btn w-full ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-danger'}`}
+                        onClick={handleAction}
+                        disabled={sending || !amount || parseFloat(amount) <= 0 || !selectedToken || selectedToken.is_native}
+                    >
+                        {sending ? t('wallet_page.sending') : (mode === 'deposit' ? t('wallet_page.deposit_action') : t('wallet_page.withdraw_action'))}
+                    </button>
+
+                    {txResult && (
+                        <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                            {txResult.msg}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

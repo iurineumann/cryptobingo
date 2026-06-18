@@ -929,3 +929,75 @@ export async function deleteNewsItem(id: string): Promise<{ message: string }> {
     });
     return handleResponse(res);
 }
+
+// ==========================================
+// SYNC BURNS (ADR-028 §8)
+// ==========================================
+
+export interface SyncBurnsResponse {
+    recorded:  number;
+    asset_ids: string[];
+}
+
+export async function syncBurns(): Promise<SyncBurnsResponse> {
+    const res = await fetch(`${API_BASE}/nfts/sync-burns`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse<SyncBurnsResponse>(res);
+}
+
+// ==========================================
+// PROFILE UPDATE (WAX-signed)
+// ==========================================
+
+export interface UpdateProfilePayload {
+    nickname?:            string;
+    locale?:              string;
+    avatar_nft_asset_id?: string | null;
+    signature?:           string;
+    ts?:                  number;
+}
+
+export async function updateProfile(payload: UpdateProfilePayload): Promise<void> {
+    const res = await fetch(`${API_BASE}/profile`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
+// SYSTEM TOKENS (config pública)
+// ==========================================
+
+export interface SystemToken {
+    _id:       string;
+    contract:  string;
+    symbol:    string;
+    precision: number;
+    label:     string;
+    is_native: boolean;
+    enabled:   boolean;
+}
+
+export async function fetchSupportedTokens(): Promise<{ tokens: SystemToken[] }> {
+    const res = await fetch(`${API_BASE}/config/tokens`);
+    return handleResponse<{ tokens: SystemToken[] }>(res);
+}
+
+export async function createSupportedToken(
+    data: Omit<SystemToken, '_id' | 'enabled'>,
+): Promise<{ token: SystemToken }> {
+    const res = await fetch(`${API_BASE}/admin/config/tokens`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
+    });
+    return handleResponse<{ token: SystemToken }>(res);
+}
+
+export async function deleteSupportedToken(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/config/tokens/${id}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}

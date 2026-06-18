@@ -2,14 +2,31 @@
 // Sincroniza o inventário AtomicAssets do jogador com o MongoDB (nfts_cache).
 // Ref: architecture.md §6.2, PROJECT-DETAILS.md §3 (ADR-004)
 
-import { Request, Response } from 'express';
-import { rpcClient }         from '@cryptobingo/blockchain-core';
-import { UserProfile }       from '../models/UserProfile';
-import type { MongoNftCache } from '@cryptobingo/shared-types';
+import { Request, Response }      from 'express';
+import { rpcClient }              from '@cryptobingo/blockchain-core';
+import { UserProfile }            from '../models/UserProfile';
+import type { MongoNftCache }     from '@cryptobingo/shared-types';
+import { Session }                from '@wharfkit/session';
+import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
+import { Checksum256 }            from '@wharfkit/antelope';
 
-const ATOMIC_CONTRACT  = 'atomicassets';
-const BINGO_COLLECTION = 'cryptobingo1';
-const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT ?? 'bingogamectr';
+const ATOMIC_CONTRACT    = 'atomicassets';
+const BINGO_COLLECTION   = 'cryptobingo1';
+const CONTRACT_ACCOUNT   = process.env.CONTRACT_ACCOUNT   ?? 'bingogamectr';
+const MICROSERVICE_ACTOR = process.env.MICROSERVICE_ACTOR ?? 'bingogamesvc';
+const CHAIN_ID           = process.env.CHAIN_ID           ?? '';
+const RPC_URL            = process.env.RPC_URL            ?? 'http://127.0.0.1:8888';
+
+function getMicroserviceSession(): Session {
+    const key = process.env.MICROSERVICE_PRIVATE_KEY;
+    if (!key) throw new Error('MICROSERVICE_PRIVATE_KEY não definida');
+    return new Session({
+        actor:        MICROSERVICE_ACTOR,
+        permission:   'active',
+        chain:        { id: Checksum256.from(CHAIN_ID), url: RPC_URL },
+        walletPlugin: new WalletPluginPrivateKey(key),
+    });
+}
 
 const RULE_TICKET_DISCOUNT = 1;
 const COND_OWNS            = 0;
@@ -178,5 +195,123 @@ export async function getEligibleDiscountNfts(req: Request, res: Response): Prom
     } catch (err) {
         console.error('[NFTCtrl] Erro ao buscar NFTs elegíveis:', err);
         res.status(503).json({ error: 'Erro ao buscar NFTs elegíveis.' });
+    }
+}
+
+// ==========================================
+// POST /api/v1/nfts/sync-burns
+// Sincronização manual de queimas (ADR-028 §8).
+// Detecta por ausência: assets que o jogador tinha (snapshot nftburns +
+// assets atuais) e não estão mais na carteira → recordburn.
+// ==========================================
+
+const RULE_BURN_TO_CLAIM = 2;
+
+async function fetchBurnToClaimTemplates(): Promise<Array<{ templateId: string; collection: string }>> {
+    const templates: Array<{ templateId: string; collection: string }> = [];
+    let lowerBound: string | undefined;
+    do {
+        const res: any = await rpcClient.v1.chain.get_table_rows({
+            code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT,
+            table: 'nftconfigs', limit: 200, json: true, lower_bound: lowerBound as any,
+        });
+        for (const cfg of res.rows as any[]) {
+            const hasBurnRule = (cfg.rules ?? []).some((r: any) => r.type === RULE_BURN_TO_CLAIM);
+            if (hasBurnRule) templates.push({ templateId: String(cfg.template_id), collection: String(cfg.collection_name) });
+        }
+        lowerBound = res.more && res.rows.length > 0
+            ? String(Number(res.rows.at(-1).template_id) + 1) : undefined;
+    } while (lowerBound);
+    return templates;
+}
+
+async function getRegisteredBurnAssetIds(owner: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+        code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT,
+        table: 'nftburns', limit: 500, json: true,
+        index_position: 2, key_type: 'name',
+        lower_bound: owner, upper_bound: owner,
+    });
+    for (const row of res.rows as any[]) ids.add(String(row.asset_id));
+    return ids;
+}
+
+async function getOwnedBurnCandidates(
+    owner: string,
+    templates: Array<{ templateId: string; collection: string }>,
+): Promise<Array<{ assetId: string; templateId: string; collection: string }>> {
+    const templateMap = new Map(templates.map(t => [t.templateId, t.collection]));
+    const candidates: Array<{ assetId: string; templateId: string; collection: string }> = [];
+    let lowerBound: string | undefined;
+    let hasMore = true;
+    while (hasMore) {
+        const res: any = await rpcClient.v1.chain.get_table_rows({
+            code: ATOMIC_CONTRACT, scope: owner, table: 'assets',
+            limit: 100, lower_bound: lowerBound as any, json: true,
+        });
+        for (const a of res.rows as any[]) {
+            const tpl = String(a.template_id);
+            if (templateMap.has(tpl) && templateMap.get(tpl) === a.collection_name)
+                candidates.push({ assetId: String(a.asset_id), templateId: tpl, collection: String(a.collection_name) });
+        }
+        hasMore = !!res.more && !!res.next_key;
+        lowerBound = res.next_key;
+    }
+    return candidates;
+}
+
+export async function syncBurns(req: Request, res: Response): Promise<void> {
+    const wallet = req.user!.wallet;
+    try {
+        const [templates, registeredIds] = await Promise.all([
+            fetchBurnToClaimTemplates(),
+            getRegisteredBurnAssetIds(wallet),
+        ]);
+
+        if (templates.length === 0) {
+            res.status(200).json({ recorded: 0, asset_ids: [] });
+            return;
+        }
+
+        const candidates = await getOwnedBurnCandidates(wallet, templates);
+        // Assets já registrados on-chain → pular (idempotência)
+        const toRegister = candidates.filter(c => !registeredIds.has(c.assetId));
+
+        if (toRegister.length === 0) {
+            res.status(200).json({ recorded: 0, asset_ids: [] });
+            return;
+        }
+
+        const session  = getMicroserviceSession();
+        const recorded: string[] = [];
+
+        for (const c of toRegister) {
+            try {
+                await session.transact({
+                    actions: [{
+                        account:       CONTRACT_ACCOUNT,
+                        name:          'recordburn',
+                        authorization: [session.permissionLevel],
+                        data: {
+                            owner:       wallet,
+                            asset_id:    c.assetId,
+                            template_id: c.templateId,
+                            collection:  c.collection,
+                        },
+                    }],
+                }, { broadcast: true });
+                recorded.push(c.assetId);
+            } catch (e: any) {
+                const msg = String(e?.message ?? e);
+                if (!/ja registrado/i.test(msg))
+                    console.warn(`⚠️ [syncBurns] recordburn falhou ${c.assetId}: ${msg}`);
+            }
+        }
+
+        res.status(200).json({ recorded: recorded.length, asset_ids: recorded });
+    } catch (err) {
+        console.error('[NFTCtrl] Erro ao sincronizar queimas:', err);
+        res.status(503).json({ error: 'Erro ao sincronizar queimas.' });
     }
 }

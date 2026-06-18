@@ -51,8 +51,9 @@ import GameRoom          from './components/GameRoom';
 import ReplayRoom        from './components/ReplayRoom';
 import RoomHistoryPanel  from './components/RoomHistoryPanel';
 import MyHistoryPage     from './components/MyHistoryPage';
-import WalletPage        from './components/WalletPage';
-import AdminLayout       from './components/admin/AdminLayout';
+import WalletPage           from './components/WalletPage';
+import PlayerProfilePage   from './components/PlayerProfilePage';
+import AdminLayout         from './components/admin/AdminLayout';
 import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
@@ -332,12 +333,14 @@ function AppRoot() {
     // ── activeTab derivado da URL (ADR-015) ───────────────────────────────────
     const activeTab = location.pathname.startsWith('/wallet')  ? 'wallet'
                     : location.pathname.startsWith('/history') ? 'my_history'
+                    : location.pathname.startsWith('/profile') ? 'profile'
                     : 'lobby';
 
     const NAV_TABS = [
         { id: 'lobby',      path: '/lobby',   label: t('nav.lobby')      ?? 'Salas'    },
         { id: 'my_history', path: '/history', label: t('nav.my_history') ?? 'Histórico' },
         { id: 'wallet',     path: '/wallet',  label: t('nav.wallet')     ?? 'Carteira' },
+        { id: 'profile',    path: '/profile', label: t('nav.profile')    ?? 'Perfil'   },
     ];
 
     // Shell do jogador — nav + conteúdo (Lobby / History / Wallet)
@@ -534,7 +537,14 @@ function AppRoot() {
                             onViewReplay={(gameId) => navigate(`/replay/${gameId}`)}
                         />
                     } />
-                    <Route path="/wallet" element={<WalletPage session={session!} />} />
+                    <Route path="/wallet"  element={<WalletPage session={session!} />} />
+                    <Route path="/profile" element={
+                        <PlayerProfilePage
+                            session={session!}
+                            profile={profile!}
+                            onProfileUpdated={loadProfile}
+                        />
+                    } />
                 </Route>
 
                 {/* ── Telas full-screen ── */}
