@@ -7,7 +7,7 @@ import {
     type BlockchainCampaign, type EnrichedRoom, type RoomTreasury,
 } from '../../services/api';
 
-interface SponsorDashboardProps { session?: Session }
+interface SponsorDashboardProps { readonly session?: Session }
 
 const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
@@ -72,7 +72,7 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
         const amountStr = depositAmounts[room.room_id]?.trim();
         if (!amountStr || !treasury) return;
 
-        const qty = `${parseFloat(amountStr).toFixed(
+        const qty = `${Number.parseFloat(amountStr).toFixed(
             treasury.balance.quantity.split(' ')[0].includes('.') ? treasury.balance.quantity.split(' ')[0].split('.')[1].length : 4
         )} ${treasury.balance.quantity.split(' ')[1]}`;
 
@@ -112,7 +112,7 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
         const precision = treasury.balance.quantity.split(' ')[0].includes('.')
             ? treasury.balance.quantity.split(' ')[0].split('.')[1].length : 4;
         const sym = treasury.balance.quantity.split(' ')[1];
-        const qty = `${parseFloat(amountStr).toFixed(precision)} ${sym}`;
+        const qty = `${Number.parseFloat(amountStr).toFixed(precision)} ${sym}`;
 
         setTxPending(p => ({ ...p, [`wd-${room.room_id}`]: true }));
         setError(null);
@@ -170,7 +170,7 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
             ) : (
                 <>
                     {/* ── Salas + Treasury ── */}
-                    {rooms.filter(r => r.sponsor_room).length > 0 && (
+                    {rooms.some(r => r.sponsor_room) && (
                         <section>
                             <h3 className="text-sm font-semibold text-[--cb-text-secondary] mb-3">
                                 {t('admin.treasury_title')}
@@ -178,8 +178,8 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
                             <div className="space-y-4">
                                 {rooms.filter(r => r.sponsor_room).map(room => {
                                     const treasury = treasuries[room.room_id];
-                                    const bal  = parseFloat(treasury?.balance.quantity ?? '0') || 0;
-                                    const lock = parseFloat(treasury?.locked.quantity  ?? '0') || 0;
+                                    const bal  = Number.parseFloat(treasury?.balance.quantity ?? '0') || 0;
+                                    const lock = Number.parseFloat(treasury?.locked.quantity  ?? '0') || 0;
                                     const sym  = treasury?.balance.quantity.split(' ')[1] ?? '';
                                     const prec = treasury?.balance.quantity.split(' ')[0].includes('.')
                                         ? treasury?.balance.quantity.split(' ')[0].split('.')[1].length : 4;
@@ -196,9 +196,7 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
                                                 </span>
                                             </div>
 
-                                            {!treasury ? (
-                                                <p className="text-xs text-[--cb-text-tertiary]">{t('admin.treasury_empty')}</p>
-                                            ) : (
+                                            {treasury ? (
                                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                                     <div className="bg-[--cb-bg-surface] p-2 rounded">
                                                         <span className="text-[--cb-text-tertiary] block">{t('admin.treasury_balance')}</span>
@@ -209,6 +207,8 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
                                                         <span className="font-mono text-[--cb-text-secondary]">{treasury.locked.quantity}</span>
                                                     </div>
                                                 </div>
+                                            ) : (
+                                                <p className="text-xs text-[--cb-text-tertiary]">{t('admin.treasury_empty')}</p>
                                             )}
 
                                             {session && (
@@ -264,8 +264,8 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
                         <p className="text-sm text-[--cb-text-tertiary] mb-4">{t('admin.campaigns_desc')}</p>
                         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(26rem, 1fr))' }}>
                             {campaigns.map(c => {
-                                const budget    = parseFloat(c.budget.quantity) || 0;
-                                const remaining = parseFloat(c.remaining.quantity) || 0;
+                                const budget    = Number.parseFloat(c.budget.quantity) || 0;
+                                const remaining = Number.parseFloat(c.remaining.quantity) || 0;
                                 const used      = budget - remaining;
                                 return (
                                     <div key={c.campaign_id} className="cb-card p-4 flex flex-col gap-3">
