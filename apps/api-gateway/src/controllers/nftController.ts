@@ -14,8 +14,9 @@ const ATOMIC_CONTRACT    = 'atomicassets';
 const BINGO_COLLECTION   = 'cryptobingo1';
 const CONTRACT_ACCOUNT   = process.env.CONTRACT_ACCOUNT   ?? 'bingogamectr';
 const MICROSERVICE_ACTOR = process.env.MICROSERVICE_ACTOR ?? 'bingogamesvc';
-const CHAIN_ID           = process.env.CHAIN_ID           ?? '';
+const CHAIN_ID           = process.env.CHAIN_ID;
 const RPC_URL            = process.env.RPC_URL            ?? 'http://127.0.0.1:8888';
+if (!CHAIN_ID) throw new Error('[nftController] CHAIN_ID não definido');
 
 function getMicroserviceSession(): Session {
     const key = process.env.MICROSERVICE_PRIVATE_KEY;
@@ -23,7 +24,7 @@ function getMicroserviceSession(): Session {
     return new Session({
         actor:        MICROSERVICE_ACTOR,
         permission:   'active',
-        chain:        { id: Checksum256.from(CHAIN_ID), url: RPC_URL },
+        chain:        { id: Checksum256.from(CHAIN_ID!), url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(key),
     });
 }
@@ -205,7 +206,7 @@ export async function getEligibleDiscountNfts(req: Request, res: Response): Prom
 // assets atuais) e não estão mais na carteira → recordburn.
 // ==========================================
 
-const RULE_BURN_TO_CLAIM = 2;
+const RULE_BURN_TO_CLAIM = 4;
 
 async function fetchBurnToClaimTemplates(): Promise<Array<{ templateId: string; collection: string }>> {
     const templates: Array<{ templateId: string; collection: string }> = [];
@@ -285,6 +286,7 @@ export async function syncBurns(req: Request, res: Response): Promise<void> {
 
         const session  = getMicroserviceSession();
         const recorded: string[] = [];
+        const failed:   string[] = [];
 
         for (const c of toRegister) {
             try {
@@ -304,12 +306,17 @@ export async function syncBurns(req: Request, res: Response): Promise<void> {
                 recorded.push(c.assetId);
             } catch (e: any) {
                 const msg = String(e?.message ?? e);
-                if (!/ja registrado/i.test(msg))
+                if (/ja registrado/i.test(msg)) {
+                    recorded.push(c.assetId); // já registrado = idempotente, conta como sucesso
+                } else {
                     console.warn(`⚠️ [syncBurns] recordburn falhou ${c.assetId}: ${msg}`);
+                    failed.push(c.assetId);
+                }
             }
         }
 
-        res.status(200).json({ recorded: recorded.length, asset_ids: recorded });
+        const status = failed.length > 0 && recorded.length === 0 ? 502 : 200;
+        res.status(status).json({ recorded: recorded.length, asset_ids: recorded, failed });
     } catch (err) {
         console.error('[NFTCtrl] Erro ao sincronizar queimas:', err);
         res.status(503).json({ error: 'Erro ao sincronizar queimas.' });

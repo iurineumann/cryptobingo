@@ -849,7 +849,10 @@
     "achievements_empty": "尚未解锁任何成就。",
     "games_played": "参与场次",
     "wins": "获胜",
-    "burns": "销毁"
+    "burns": "销毁",
+    "wallet_label": "钱包",
+    "achievement_locked": "{{name}}（未解锁）",
+    "native_badge": "原生"
   },
   "token_admin": {
     "title": "授权代币",
@@ -867,6 +870,7 @@
     "error_create": "创建代币失败。",
     "error_delete": "删除代币失败。",
     "success_create": "代币已添加！",
-    "success_delete": "代币已删除。"
+    "success_delete": "代币已删除。",
+    "native_badge": "原生"
   }
 }
