@@ -81,7 +81,7 @@ export default function SystemTokensAdmin() {
                                 </p>
                                 <p className="text-xs text-[--cb-text-tertiary] font-mono">{tk.contract}</p>
                                 {tk.is_native && (
-                                    <span className="text-xs bg-[--cb-brand]/10 text-[--cb-brand] px-1.5 py-0.5 rounded">native</span>
+                                    <span className="text-xs bg-[--cb-brand]/10 text-[--cb-brand] px-1.5 py-0.5 rounded">{t('token_admin.native_badge')}</span>
                                 )}
                             </div>
                             <button
@@ -144,7 +144,7 @@ export default function SystemTokensAdmin() {
                 </button>
 
                 {msg && (
-                    <div className={`text-sm p-3 rounded-lg ${msg.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                    <div className={`text-sm p-3 rounded-lg ${msg.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-[color-mix(in_srgb,var(--cb-danger)_10%,transparent)] text-[--cb-danger]'}`}>
                         {msg.text}
                     </div>
                 )}

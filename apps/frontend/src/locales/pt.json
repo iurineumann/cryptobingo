@@ -849,7 +849,10 @@
     "achievements_empty": "Nenhuma conquista desbloqueada ainda.",
     "games_played": "Partidas jogadas",
     "wins": "Vitórias",
-    "burns": "Queimas"
+    "burns": "Queimas",
+    "wallet_label": "Carteira",
+    "achievement_locked": "{{name}} (bloqueado)",
+    "native_badge": "nativo"
   },
   "token_admin": {
     "title": "Tokens Autorizados",
@@ -867,6 +870,7 @@
     "error_create": "Erro ao criar token.",
     "error_delete": "Erro ao remover token.",
     "success_create": "Token cadastrado!",
-    "success_delete": "Token removido."
+    "success_delete": "Token removido.",
+    "native_badge": "nativo"
   }
 }

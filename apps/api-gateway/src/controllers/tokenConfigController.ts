@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { isValidObjectId } from 'mongoose';
 import SystemToken from '../models/SystemToken';
 
 export const listTokens = async (_req: Request, res: Response): Promise<void> => {
@@ -36,6 +37,7 @@ export const createToken = async (req: Request, res: Response): Promise<void> =>
 
 export const deleteToken = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    if (!isValidObjectId(id)) { res.status(400).json({ error: 'ID inválido.' }); return; }
     try {
         const result = await SystemToken.findByIdAndDelete(id);
         if (!result) { res.status(404).json({ error: 'Token não encontrado.' }); return; }

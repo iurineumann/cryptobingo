@@ -135,7 +135,8 @@ async function verifyProfileSignature(
             ?.required_auth?.keys?.map((k: any) => String(k.key)) ?? [];
 
         return activeKeys.includes(recovered);
-    } catch {
+    } catch (err) {
+        console.error('[Profile] verifyProfileSignature erro interno:', err);
         return false;
     }
 }

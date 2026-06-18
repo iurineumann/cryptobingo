@@ -184,7 +184,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                 <div className="cb-card p-5 space-y-4">
                     {/* Wallet */}
                     <div>
-                        <p className="text-xs text-[--cb-text-tertiary] mb-1">Wallet</p>
+                        <p className="text-xs text-[--cb-text-tertiary] mb-1">{t('profile_page.wallet_label')}</p>
                         <p className="font-mono text-sm text-[--cb-text-primary]" data-testid="profile-wallet">
                             {String(session.actor)}
                         </p>
@@ -226,7 +226,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                     </button>
 
                     {saveMsg && (
-                        <div className={`text-sm p-3 rounded-lg ${saveMsg.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                        <div className={`text-sm p-3 rounded-lg ${saveMsg.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-red-500/10 text-red-500'}`}>
                             {saveMsg.text}
                         </div>
                     )}
@@ -300,7 +300,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                         </button>
                     )}
                     {saveMsg && tab === 'nfts' && (
-                        <div className={`text-sm p-3 rounded-lg ${saveMsg.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                        <div className={`text-sm p-3 rounded-lg ${saveMsg.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-red-500/10 text-red-500'}`}>
                             {saveMsg.text}
                         </div>
                     )}
@@ -355,6 +355,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                                     key={a.id}
                                     className={`cb-card p-3 flex gap-2 items-start ${!a.unlocked ? 'opacity-40' : ''}`}
                                     data-testid={`achievement-${a.id}`}
+                                    aria-label={a.unlocked ? a.label : t('profile_page.achievement_locked', { name: a.label })}
                                 >
                                     <span className="text-xl">{a.icon}</span>
                                     <div>

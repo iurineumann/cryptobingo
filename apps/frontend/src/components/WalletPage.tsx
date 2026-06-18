@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Name, Session } from '@wharfkit/session';
+import { Session } from '@wharfkit/session';
 import type { BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchSupportedTokens, type SystemToken } from '../services/api';
 
@@ -39,12 +39,11 @@ export default function WalletPage({ session }: Props) {
             const { tokens: cfg } = await fetchSupportedTokens();
             setTokens(cfg);
 
-            const ownerScope = Name.from(session.actor).value.toString();
-            const actor      = String(session.actor);
+            const actor = String(session.actor);
 
             // ── Saldos on-contract (multi-symbol) ────────────────────────
             const contractRes = await session.client.v1.chain.get_table_rows({
-                code: CONTRACT_ACCOUNT, scope: ownerScope,
+                code: CONTRACT_ACCOUNT, scope: actor,
                 table: 'balances', limit: 50, json: true,
             });
             const contractBals: TokenBalance[] = (contractRes.rows as any[]).map(r => {
@@ -101,7 +100,7 @@ export default function WalletPage({ session }: Props) {
 
     useEffect(() => { loadBalances(); }, [loadBalances]);
 
-    const selectedToken  = tokens.find(t => t.symbol === selectedSymbol);
+    const selectedToken  = tokens.find(tk => tk.symbol === selectedSymbol);
     const walletAmount   = walletBalances.find(b => b.symbol === selectedSymbol)?.amount ?? 0;
     const contractAmount = contractBalances.find(b => b.symbol === selectedSymbol)?.amount ?? 0;
     const maxAmount      = mode === 'deposit' ? walletAmount : contractAmount;
@@ -279,7 +278,7 @@ export default function WalletPage({ session }: Props) {
                     </button>
 
                     {txResult && (
-                        <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-500'}`}>
+                        <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-[color-mix(in_srgb,var(--cb-danger)_10%,transparent)] text-[--cb-danger]'}`}>
                             {txResult.msg}
                         </div>
                     )}

@@ -849,7 +849,10 @@
     "achievements_empty": "No achievements unlocked yet.",
     "games_played": "Games played",
     "wins": "Wins",
-    "burns": "Burns"
+    "burns": "Burns",
+    "wallet_label": "Wallet",
+    "achievement_locked": "{{name}} (locked)",
+    "native_badge": "native"
   },
   "token_admin": {
     "title": "Authorized Tokens",
@@ -867,6 +870,7 @@
     "error_create": "Error creating token.",
     "error_delete": "Error removing token.",
     "success_create": "Token added!",
-    "success_delete": "Token removed."
+    "success_delete": "Token removed.",
+    "native_badge": "native"
   }
 }
