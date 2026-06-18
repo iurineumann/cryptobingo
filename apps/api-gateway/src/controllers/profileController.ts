@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import UserProfile from '../models/UserProfile';
+import { Signature, Checksum256 } from '@wharfkit/antelope';
+import { rpcClient } from '@cryptobingo/blockchain-core';
 
 // Curva φ-tier (espelhada do xpEngine.ts — ADR-028 §9)
 const PHI = 1.618034;
@@ -90,36 +92,110 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
 };
 
 /**
+ * Verifica assinatura WAX para updates sensíveis de perfil.
+ *
+ * Dois modos (espelha authController):
+ *   - Digest (dev): cliente assina SHA256("UPDATE_PROFILE:<wallet>:<ts>:<bodyJson>") diretamente.
+ *   - Transação (prod): cliente assina eosio.null:nonce com payload em hex; server verifica
+ *     via transaction.id e checa que o nonce data == hex(payload).
+ */
+async function verifyProfileSignature(
+    wallet: string,
+    ts: number,
+    bodyJson: string,
+    signature: string,
+    transactionPayload?: object,
+): Promise<boolean> {
+    if (Math.abs(Date.now() - ts) > 5 * 60 * 1000) return false;
+
+    const payload    = `UPDATE_PROFILE:${wallet}:${ts}:${bodyJson}`;
+    const payloadHex = Buffer.from(payload, 'utf-8').toString('hex');
+
+    try {
+        const sig = Signature.from(signature);
+        let recovered: string;
+
+        if (transactionPayload) {
+            // Modo produção: verifica via transaction.id
+            const { Transaction } = await import('@wharfkit/antelope');
+            const tx = Transaction.from(transactionPayload as any);
+            // Valida que o data da action é o hex do payload esperado
+            const actionDataHex = tx.actions[0]?.data?.toString() ?? '';
+            if (actionDataHex.toLowerCase() !== payloadHex.toLowerCase()) return false;
+            recovered = sig.recoverDigest(tx.id).toString();
+        } else {
+            // Modo dev: verifica via digest direto
+            const digest = Checksum256.hash(Buffer.from(payload, 'utf-8'));
+            recovered    = sig.recoverDigest(digest).toString();
+        }
+
+        const accountInfo: any = await rpcClient.v1.chain.get_account(wallet as any);
+        const activeKeys: string[] = accountInfo.permissions
+            ?.find((p: any) => p.perm_name === 'active')
+            ?.required_auth?.keys?.map((k: any) => String(k.key)) ?? [];
+
+        return activeKeys.includes(recovered);
+    } catch {
+        return false;
+    }
+}
+
+/**
  * PUT /api/v1/profile
  *
- * Atualiza preferências do usuário autenticado.
+ * Atualiza preferências e dados de perfil do usuário autenticado.
+ * Campos sensíveis (nickname, avatar_nft_asset_id) requerem WAX signature.
  *
- * O wallet é lido de `req.user.wallet` — o body NÃO pode sobrescrever
- * o wallet_address (prevenção de privilege escalation).
- *
- * Body aceito: { nickname?: string, locale?: string }
+ * Body: { nickname?, locale?, avatar_nft_asset_id?, signature?, ts? }
+ * signature + ts obrigatórios se nickname ou avatar_nft_asset_id presentes.
  */
 export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
     const wallet_address = req.user!.wallet;
-    const { nickname, locale } = req.body;
+    const { nickname, locale, avatar_nft_asset_id, signature, ts, transactionPayload } = req.body;
 
-    // Validação mínima — expansível com zod/joi em iteração futura
+    const hasSensitive = nickname !== undefined || avatar_nft_asset_id !== undefined;
+
     if (nickname !== undefined && typeof nickname !== 'string') {
         res.status(400).json({ error: 'Campo "nickname" deve ser uma string.' });
+        return;
+    }
+    if (nickname !== undefined && (nickname.length < 1 || nickname.length > 32)) {
+        res.status(400).json({ error: 'nickname deve ter entre 1 e 32 caracteres.' });
         return;
     }
     if (locale !== undefined && typeof locale !== 'string') {
         res.status(400).json({ error: 'Campo "locale" deve ser uma string.' });
         return;
     }
+    if (avatar_nft_asset_id !== undefined && avatar_nft_asset_id !== null && typeof avatar_nft_asset_id !== 'string') {
+        res.status(400).json({ error: 'Campo "avatar_nft_asset_id" deve ser string ou null.' });
+        return;
+    }
 
-    // Constrói o update dinamicamente — só atualiza os campos enviados
+    // Campos sensíveis exigem WAX signature
+    if (hasSensitive) {
+        if (!signature || typeof ts !== 'number') {
+            res.status(400).json({ error: 'nickname/avatar requerem "signature" (WAX) e "ts" (timestamp).' });
+            return;
+        }
+        const sensitiveBody = JSON.stringify({
+            ...(nickname !== undefined           ? { nickname }              : {}),
+            ...(avatar_nft_asset_id !== undefined ? { avatar_nft_asset_id } : {}),
+        });
+        const valid = await verifyProfileSignature(wallet_address, ts, sensitiveBody, signature, transactionPayload);
+        if (!valid) {
+            res.status(401).json({ error: 'Assinatura WAX inválida ou expirada.' });
+            return;
+        }
+    }
+
     const updateFields: Record<string, unknown> = {};
-    if (nickname !== undefined) updateFields['nickname'] = nickname;
-    if (locale   !== undefined) updateFields['preferences.locale'] = locale;
+    if (nickname !== undefined)             updateFields['nickname']              = nickname;
+    if (locale   !== undefined)             updateFields['preferences.locale']   = locale;
+    if (avatar_nft_asset_id !== undefined)  updateFields['avatar_nft_asset_id']  = avatar_nft_asset_id;
 
     if (Object.keys(updateFields).length === 0) {
-        res.status(400).json({ error: 'Nenhum campo válido para atualizar (nickname, locale).' });
+        res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
         return;
     }
 
@@ -127,7 +203,7 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
         const updatedProfile = await UserProfile.findOneAndUpdate(
             { wallet_address },
             { $set: updateFields },
-            { new: true, runValidators: true } // runValidators: aplica enum do schema
+            { new: true, runValidators: true },
         );
 
         if (!updatedProfile) {
