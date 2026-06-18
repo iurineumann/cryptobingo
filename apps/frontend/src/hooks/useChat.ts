@@ -2,12 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
 
+export type MessageType = 'user' | 'system_draw' | 'system_drop' | 'system_status';
+
 export interface ChatMessage {
-    id:              string;
-    wallet_address:  string;
-    message:         string;
-    is_sponsor_drop: boolean;
-    timestamp:       string;
+    id:             string;
+    wallet_address: string;
+    message:        string;
+    message_type:   MessageType;
+    mentions:       string[];
+    timestamp:      string;
 }
 
 interface UseChatOptions {
@@ -26,11 +29,11 @@ interface UseChatReturn {
 }
 
 const API_URL = import.meta.env.VITE_API_GATEWAY_URL ?? '';
-const WS_URL  = import.meta.env.VITE_WS_URL ?? '';
+const WS_URL  = import.meta.env.VITE_WS_URL ?? API_URL;
 
-// ── Cache persistente entre montagens/desmontagens ──────────────
+// ── Cache e sockets persistentes entre montagens ─────────────────
 const messageCache = new Map<string, ChatMessage[]>();
-const wsSockets   = new Map<string, Socket>();
+const wsSockets    = new Map<string, Socket>();
 
 // Testing only
 export function __resetChatCache() { messageCache.clear(); wsSockets.clear(); }
@@ -42,7 +45,7 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
     const [unread,   setUnread]   = useState(0);
     const loadingRef = useRef(false);
     const roomRef    = useRef(roomId);
-    roomRef.current = roomId;
+    roomRef.current  = roomId;
 
     // ── REST: fetch histórico ────────────────────────────────────
     const fetchPage = useCallback(async (before?: string) => {
@@ -71,14 +74,14 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
             });
             setHasMore(data.hasMore);
         } catch {
-            // REST offline — WS continua funcionando
+            // silencia erro de rede
         } finally {
             setLoading(false);
             loadingRef.current = false;
         }
     }, [roomId]);
 
-    // Cache hit → pula fetchPage
+    // Cache hit → pula fetchPage inicial
     useEffect(() => {
         if (!messageCache.has(roomId)) {
             fetchPage();
@@ -89,26 +92,23 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
 
     // ── WS: tempo real ───────────────────────────────────────────
     useEffect(() => {
+        const token = getAuthToken();
+        if (!token) return;
+
         const existing = wsSockets.get(roomId);
-        if (existing && existing.connected) {
+        if (existing?.connected) {
+            existing.emit('chat:join', { roomId });
             return;
         }
 
         const s = io(`${WS_URL}/chat`, {
-            auth:       { wallet: walletAddress },
+            auth:       { token },
             transports: ['websocket'],
         });
 
         s.on('connect', () => s.emit('chat:join', { roomId }));
 
         s.on('chat:message', (msg: ChatMessage) => {
-            setMessages(prev => {
-                if (prev.some(m => m.id === msg.id)) return prev;
-                return [...prev, msg];
-            });
-        });
-
-        s.on('chat:sponsor_drop', (msg: ChatMessage) => {
             setMessages(prev => {
                 if (prev.some(m => m.id === msg.id)) return prev;
                 return [...prev, msg];

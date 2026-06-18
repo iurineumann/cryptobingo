@@ -639,3 +639,35 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
   background: linear-gradient(135deg, transparent 50%, var(--cb-text-muted, #6c6c80) 50%);
   border-radius: 0 0 12px 0;
 }
+/* ── Tipos de mensagem ───────────────────────────── */
+.gr-chat-bubble--drop {
+  background: linear-gradient(135deg, rgba(139,92,246,.18), rgba(236,72,153,.12));
+  border-color: #8b5cf6;
+  align-self: stretch;
+  max-width: 100%;
+}
+.gr-chat-bubble--system-draw {
+  background: linear-gradient(135deg, rgba(245,158,11,.18), rgba(234,179,8,.1));
+  border-color: #f59e0b;
+  align-self: stretch;
+  max-width: 100%;
+  font-weight: 600;
+}
+.gr-chat-bubble--system-status {
+  background: rgba(99,102,241,.1);
+  border-color: #6366f1;
+  align-self: stretch;
+  max-width: 100%;
+  font-style: italic;
+}
+/* ── @mention ────────────────────────────────────── */
+.gr-chat-bubble--mention {
+  background: rgba(245,158,11,.12);
+  border-color: var(--cb-primary, #f59e0b);
+  box-shadow: 0 0 0 1px rgba(245,158,11,.3);
+}
+.gr-chat-mention {
+  color: var(--cb-primary, #f59e0b);
+  font-weight: 700;
+  cursor: default;
+}
