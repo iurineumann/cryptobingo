@@ -20,7 +20,8 @@ import PlayerDashboard  from './PlayerDashboard';
 import RoomsAdmin       from './RoomsAdmin';
 import VaultAdmin       from './VaultAdmin';
 import NftAdmin         from './NftAdmin';
-import TokenAdmin       from './TokenAdmin';
+import TokenAdmin         from './TokenAdmin';
+import SystemTokensAdmin  from './SystemTokensAdmin';
 
 interface AdminLayoutProps {
   profile:        MongoUserProfile;
@@ -52,7 +53,8 @@ export default function AdminLayout({
     { id: 'campaigns',  label: t('admin.campaigns'),  icon: '▲', group: 'operation' },
     { id: 'vault',      label: t('admin.vault'),      icon: '◈', group: 'operation' },
     { id: 'nfts',       label: t('admin.nfts'),       icon: '🖼', group: 'assets'    },
-    { id: 'token',      label: t('admin.token'),      icon: '◉', group: 'assets'    },
+    { id: 'token',          label: t('admin.token'),          icon: '◉', group: 'assets'    },
+    { id: 'config-tokens',  label: t('token_admin.title'),    icon: '⊕', group: 'assets'    },
     { id: 'compliance', label: t('admin.compliance'), icon: '⚖', group: 'compliance' },
     { id: 'users',      label: t('admin.users'),      icon: '◍', group: 'compliance' },
     { id: 'mypanel',    label: t('admin.my_panel'),   icon: '●', group: 'personal'  },
@@ -67,7 +69,8 @@ export default function AdminLayout({
       case 'campaigns':  return <SponsorDashboard />;
       case 'vault':      return <VaultAdmin />;
       case 'nfts':       return <NftAdmin session={session} />;
-      case 'token':      return <TokenAdmin session={session} />;
+      case 'token':          return <TokenAdmin session={session} />;
+      case 'config-tokens':  return <SystemTokensAdmin />;
       case 'compliance': return <ComplianceAdmin />;
       case 'users':      return <UsersAdmin />;
       case 'mypanel':    return session ? <PlayerDashboard session={session} /> : null;
