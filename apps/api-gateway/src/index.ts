@@ -39,7 +39,8 @@ import {
     listCampaigns, getCampaign,
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
-import { getMyNfts, getEligibleDiscountNfts }        from './controllers/nftController';
+import { getMyNfts, getEligibleDiscountNfts, syncBurns } from './controllers/nftController';
+import { listTokens, createToken, deleteToken }          from './controllers/tokenConfigController';
 import { livenessCheck, readinessCheck }             from './controllers/healthController';
 import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winningsController';
 import {
@@ -274,6 +275,12 @@ function registerRoutes(): void {
     // ── NFTs (JWT) ───────────────────────────────────────────────────────
     app.get('/api/v1/nfts/my-assets',          playerLimiter, requireAuth, getMyNfts);
     app.get('/api/v1/nfts/eligible-discount',  playerLimiter, requireAuth, getEligibleDiscountNfts);
+    app.post('/api/v1/nfts/sync-burns',        playerLimiter, requireAuth, syncBurns);
+
+    // ── Config: tokens autorizados ───────────────────────────────────────
+    app.get('/api/v1/config/tokens',                 playerLimiter, listTokens);
+    app.post('/api/v1/admin/config/tokens',          adminLimiter,  requireAuth, requireRole('admin'), createToken);
+    app.delete('/api/v1/admin/config/tokens/:id',    adminLimiter,  requireAuth, requireRole('admin'), deleteToken);
 
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
