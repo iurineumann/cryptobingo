@@ -81,35 +81,39 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                         Nenhuma mensagem ainda. Seja o primeiro!
                     </p>
                 )}
-                {messages.map(msg => (
-                    <div key={msg.id} style={{
-                        padding: '0.35rem 0.5rem',
-                        borderRadius: '0.5rem',
-                        background: msg.is_sponsor_drop
-                            ? 'var(--cb-brand)'
-                            : msg.wallet_address === walletAddress
-                                ? 'var(--cb-bg-elevated)'
-                                : 'transparent',
-                        maxWidth: '90%',
-                        alignSelf: msg.wallet_address === walletAddress ? 'flex-end' : 'flex-start',
-                    }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: '0.25rem',
-                            fontSize: '0.6rem', fontWeight: 600,
-                            color: msg.is_sponsor_drop ? '#fff' : 'var(--cb-text-tertiary)',
-                            marginBottom: '0.15rem',
+                {messages.map(msg => {
+                    const isDrop = msg.message_type === 'system_drop';
+                    const isOwn  = msg.wallet_address === walletAddress;
+                    return (
+                        <div key={msg.id} style={{
+                            padding: '0.35rem 0.5rem',
+                            borderRadius: '0.5rem',
+                            background: isDrop
+                                ? 'var(--cb-brand)'
+                                : isOwn
+                                    ? 'var(--cb-bg-elevated)'
+                                    : 'transparent',
+                            maxWidth: '90%',
+                            alignSelf: isOwn ? 'flex-end' : 'flex-start',
                         }}>
-                            {msg.is_sponsor_drop && <span>🎁</span>}
-                            <span>{msg.wallet_address === walletAddress ? 'Você' : truncateWallet(msg.wallet_address)}</span>
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '0.25rem',
+                                fontSize: '0.6rem', fontWeight: 600,
+                                color: isDrop ? '#fff' : 'var(--cb-text-tertiary)',
+                                marginBottom: '0.15rem',
+                            }}>
+                                {isDrop && <span>🎁</span>}
+                                <span>{isOwn ? 'Você' : truncateWallet(msg.wallet_address)}</span>
+                            </div>
+                            <p style={{
+                                fontSize: '0.75rem', color: isDrop ? '#fff' : 'var(--cb-text-primary)',
+                                wordBreak: 'break-word',
+                            }}>
+                                {isDrop ? `🎉 Drop! ${msg.message}` : msg.message}
+                            </p>
                         </div>
-                        <p style={{
-                            fontSize: '0.75rem', color: msg.is_sponsor_drop ? '#fff' : 'var(--cb-text-primary)',
-                            wordBreak: 'break-word',
-                        }}>
-                            {msg.is_sponsor_drop ? `🎉 Drop! ${msg.message}` : msg.message}
-                        </p>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Input */}

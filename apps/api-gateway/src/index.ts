@@ -1,6 +1,8 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
+import { createServer }                              from 'http';
+import { Server as SocketIoServer }                  from 'socket.io';
 import express                                       from 'express';
 import cors, { CorsOptions }                         from 'cors';
 import helmet                                        from 'helmet';
@@ -54,7 +56,9 @@ import {
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
-import { getChatHistory } from './controllers/chatController';
+import { getChatHistory, saveChatMessage } from './controllers/chatController';
+import { setupChatSocket }                            from './socket/chatSocket';
+import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
@@ -106,13 +110,21 @@ async function bootstrap(): Promise<void> {
     registerMiddleware();
     registerRoutes();
 
-    app.listen(PORT, () => {
+    const httpServer = createServer(app);
+    const io = new SocketIoServer(httpServer, {
+        cors: { origin: ALLOWED_ORIGINS, credentials: true },
+    });
+    setIo(io);
+    setupChatSocket(io);
+
+    httpServer.listen(PORT, () => {
         console.log('=============================================');
         console.log(`🌐 CryptoBingo: API Gateway na porta ${PORT}`);
         console.log(`   Origins permitidas: ${ALLOWED_ORIGINS.join(', ')}`);
         console.log(`   Helmet: ativo`);
         console.log(`   RBAC:   ativo`);
         console.log(`   JWT Blacklist: ativo (Redis)`);
+        console.log(`   Socket.IO: ativo (/chat)`);
         console.log('=============================================');
     });
 }
@@ -306,7 +318,8 @@ function registerRoutes(): void {
     app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
 
     // ── Chat ────────────────────────────────────────────────────────────────────
-    app.get('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
+    app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
+    app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);

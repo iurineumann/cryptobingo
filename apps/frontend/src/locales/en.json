@@ -93,6 +93,8 @@
     "chat_send": "Send",
     "chat_close": "Close chat",
     "chat_drop_prefix": "Drop!",
+    "chat_system_draw": "Draw",
+    "chat_system_status": "System",
     "drops": "Drops",
     "back_to_lobby": "Back to Lobby",
     "breadcrumb_room": "Room",

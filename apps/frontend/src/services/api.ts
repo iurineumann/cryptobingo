@@ -1025,3 +1025,13 @@ export async function deleteSupportedToken(id: string): Promise<void> {
     });
     return handleResponse(res);
 }
+
+export async function sendChatMessage(
+    roomId: string,
+    message: string,
+): Promise<{ id: string; wallet_address: string; message: string; is_sponsor_drop: boolean; timestamp: string }> {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/chat`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ message }),
+    });
+    return handleResponse(res);
+}

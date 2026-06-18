@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useChat } from '../../hooks/useChat';
+import { useChat, type MessageType } from '../../hooks/useChat';
 import { useTranslation } from 'react-i18next';
 
 interface ChatFloatingProps {
@@ -30,6 +30,31 @@ function saveState(s: WindowState): void {
 
 function truncateWallet(w: string) {
     return w.length > 10 ? `${w.slice(0, 4)}...${w.slice(-4)}` : w;
+}
+
+const SYSTEM_TYPES = new Set<MessageType>(['system_draw', 'system_drop', 'system_status']);
+
+function bubbleClass(
+    msgType: MessageType,
+    isOwn: boolean,
+    isMentioned: boolean,
+): string {
+    if (msgType === 'system_draw')   return 'gr-chat-bubble gr-chat-bubble--system-draw';
+    if (msgType === 'system_drop')   return 'gr-chat-bubble gr-chat-bubble--drop';
+    if (msgType === 'system_status') return 'gr-chat-bubble gr-chat-bubble--system-status';
+    if (isMentioned)                 return 'gr-chat-bubble gr-chat-bubble--mention';
+    if (isOwn)                       return 'gr-chat-bubble gr-chat-bubble--own';
+    return 'gr-chat-bubble';
+}
+
+// Converte @wallet em <span> destacado
+function renderTextWithMentions(text: string): React.ReactNode[] {
+    const parts = text.split(/(@[a-z1-5.]{1,12})/gi);
+    return parts.map((part, i) =>
+        /^@[a-z1-5.]{1,12}$/i.test(part)
+            ? <span key={i} className="gr-chat-mention">{part}</span>
+            : part
+    );
 }
 
 const DEFAULT_W = 320;
@@ -224,34 +249,34 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                             </p>
                         )}
 
-                        {messages.map(msg => (
-                            <div
-                                key={msg.id}
-                                className={
-                                    `gr-chat-bubble ${
-                                        msg.wallet_address === walletAddress
-                                            ? 'gr-chat-bubble--own'
-                                            : ''
-                                    } ${
-                                        msg.is_sponsor_drop ? 'gr-chat-bubble--drop' : ''
-                                    }`
-                                }
-                            >
-                                <div className="gr-chat-bubble-author">
-                                    {msg.is_sponsor_drop && <span>🎁</span>}
-                                    <span>
-                                        {msg.wallet_address === walletAddress
-                                            ? t('game_room.chat_you') ?? 'Você'
-                                            : truncateWallet(msg.wallet_address)}
-                                    </span>
+                        {messages.map(msg => {
+                            const isOwn       = msg.wallet_address === walletAddress;
+                            const isSystem    = SYSTEM_TYPES.has(msg.message_type);
+                            const isMentioned = !isOwn && msg.mentions.includes(walletAddress);
+                            const authorLabel = isSystem
+                                ? msg.message_type === 'system_draw'
+                                    ? `🎲 ${t('game_room.chat_system_draw') ?? 'Sorteio'}`
+                                    : msg.message_type === 'system_drop'
+                                        ? `🎁 ${t('game_room.chat_drop_prefix') ?? 'Drop!'}`
+                                        : `ℹ️ ${t('game_room.chat_system_status') ?? 'Sistema'}`
+                                : isOwn
+                                    ? t('game_room.chat_you') ?? 'Você'
+                                    : truncateWallet(msg.wallet_address);
+
+                            return (
+                                <div
+                                    key={msg.id}
+                                    className={bubbleClass(msg.message_type, isOwn, isMentioned)}
+                                >
+                                    <div className="gr-chat-bubble-author">
+                                        <span>{authorLabel}</span>
+                                    </div>
+                                    <p className="gr-chat-bubble-text">
+                                        {renderTextWithMentions(msg.message)}
+                                    </p>
                                 </div>
-                                <p className="gr-chat-bubble-text">
-                                    {msg.is_sponsor_drop
-                                        ? `🎉 ${t('game_room.chat_drop_prefix') ?? 'Drop!'} ${msg.message}`
-                                        : msg.message}
-                                </p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* Input */}

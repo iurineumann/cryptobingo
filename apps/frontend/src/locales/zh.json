@@ -93,6 +93,8 @@
     "chat_send": "发送",
     "chat_close": "关闭聊天",
     "chat_drop_prefix": "空投!",
+    "chat_system_draw": "开奖",
+    "chat_system_status": "系统",
     "drops": "空投",
     "back_to_lobby": "返回大厅",
     "breadcrumb_room": "房间",
