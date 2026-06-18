@@ -1,9 +1,11 @@
 // Testes de regressão de segurança para chatSocket.
 // Invariantes críticos:
-//   1. Conexão sem token válido é rejeitada
+//   1. Conexão sem token válido / revogado / expirado é rejeitada
 //   2. message_type é sempre 'user' — cliente não controla
 //   3. wallet_address vem de socket.data (JWT), não de payload do cliente
 //   4. Mensagens vazias ou sem roomId são silenciadas
+//   5. Rate limit: máx 5 msgs/5s por wallet
+//   6. chat:join e chat:send rejeitam roomId inexistente
 
 process.env.JWT_SECRET = 'test-secret-32chars-xxxxxxxxxx!!';
 
@@ -19,6 +21,30 @@ jest.mock('../models/ChatMessage', () => ({
 
 import ChatMessageModel from '../models/ChatMessage';
 const mockCreate = ChatMessageModel.create as jest.Mock;
+
+// ── Mock RoomMetadataModel ────────────────────────────────────────────────────
+
+jest.mock('../models/RoomMetadata', () => ({
+    __esModule: true,
+    default: { findOne: jest.fn() },
+}));
+
+import RoomMetadataModel from '../models/RoomMetadata';
+const mockRoomFindOne = RoomMetadataModel.findOne as jest.Mock;
+
+// findOne retorna objeto com .lean() encadeável
+function roomFindOneResult(value: object | null) {
+    return { lean: jest.fn(async () => value) };
+}
+
+// ── Mock isTokenRevoked ───────────────────────────────────────────────────────
+
+jest.mock('../middleware/auth', () => ({
+    isTokenRevoked: jest.fn(async () => false),
+}));
+
+import { isTokenRevoked } from '../middleware/auth';
+const mockIsTokenRevoked = isTokenRevoked as jest.Mock;
 
 // ── Helpers para simular io/socket ────────────────────────────────────────────
 
@@ -97,6 +123,10 @@ beforeEach(() => {
         mentions:       [],
         timestamp:      new Date(),
     });
+    // sala existe por padrão nos testes
+    mockRoomFindOne.mockReturnValue(roomFindOneResult({ room_id: 'r1' }));
+    // token não revogado por padrão
+    mockIsTokenRevoked.mockResolvedValue(false);
 });
 
 // ── 1. Autenticação ───────────────────────────────────────────────────────────
@@ -229,7 +259,106 @@ describe('Validação no chat:send', () => {
     });
 });
 
-// ── 5. extractMentions ────────────────────────────────────────────────────────
+// ── 5. Revogação de token (blacklist Redis) ───────────────────────────────────
+
+describe('Segurança — revogação JWT', () => {
+    it('[SEC] token com jti revogado é rejeitado na conexão', async () => {
+        mockIsTokenRevoked.mockResolvedValueOnce(true);
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const token = jwt.sign({ wallet: 'x.wam', jti: 'revoked-jti' }, process.env.JWT_SECRET!);
+        const err = await runMiddleware(ns, makeSocket({ token }));
+        expect(err).toBeInstanceOf(Error);
+        expect(err?.message).toMatch(/revogado/i);
+    });
+
+    it('[REG] token não revogado passa normalmente', async () => {
+        mockIsTokenRevoked.mockResolvedValueOnce(false);
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const token = jwt.sign({ wallet: 'ok.wam', jti: 'valid-jti' }, process.env.JWT_SECRET!);
+        const socket = makeSocket({ token });
+        const err = await runMiddleware(ns, socket);
+        expect(err).toBeUndefined();
+    });
+
+    it('[REG] isTokenRevoked é chamado com o jti do token', async () => {
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const token = jwt.sign({ wallet: 'x.wam', jti: 'my-jti-123' }, process.env.JWT_SECRET!);
+        await runMiddleware(ns, makeSocket({ token }));
+        expect(mockIsTokenRevoked).toHaveBeenCalledWith('my-jti-123');
+    });
+});
+
+// ── 6. Rate limit ─────────────────────────────────────────────────────────────
+
+describe('Segurança — rate limit chat:send', () => {
+    it('[SEC] exceder 5 msgs na mesma janela emite chat:error RATE_LIMITED', async () => {
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const wallet = `rate-test-${Date.now()}.wam`; // wallet única p/ não poluir outros testes
+        const socket  = { ...makeSocket({ wallet }), emit: jest.fn() };
+
+        for (let i = 0; i < 5; i++) {
+            await triggerSend(ns, socket, { roomId: 'r1', message: `msg ${i}` });
+        }
+        // 6ª mensagem deve ser bloqueada
+        await triggerSend(ns, socket, { roomId: 'r1', message: 'msg bloqueada' });
+
+        expect(socket.emit).toHaveBeenCalledWith('chat:error',
+            expect.objectContaining({ code: 'RATE_LIMITED' }),
+        );
+    });
+
+    it('[REG] dentro do limite não emite chat:error', async () => {
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const wallet = `within-rate-${Date.now()}.wam`;
+        const socket = { ...makeSocket({ wallet }), emit: jest.fn() };
+
+        await triggerSend(ns, socket, { roomId: 'r1', message: 'oi' });
+        expect(socket.emit).not.toHaveBeenCalledWith('chat:error', expect.anything());
+    });
+});
+
+// ── 7. Autorização de sala ────────────────────────────────────────────────────
+
+describe('Segurança — autorização de sala', () => {
+    it('[SEC] chat:send com roomId inexistente não salva mensagem', async () => {
+        mockRoomFindOne.mockReturnValueOnce(roomFindOneResult(null));
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        await triggerSend(ns, makeSocket({ wallet: 'p.wam' }), { roomId: 'sala-invalida', message: 'oi' });
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('[SEC] chat:join com roomId inexistente não entra na sala', async () => {
+        mockRoomFindOne.mockReturnValueOnce(roomFindOneResult(null));
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const socket = makeSocket({ wallet: 'p.wam' });
+        const onConnection = ns.handlers.get('connection')!;
+        const socketHandlers = new Map<string, Function>();
+        await onConnection({ ...socket, on: (ev: string, fn: Function) => socketHandlers.set(ev, fn) });
+        await socketHandlers.get('chat:join')?.({ roomId: 'sala-invalida' });
+        expect(socket.join).not.toHaveBeenCalled();
+    });
+
+    it('[REG] chat:join com sala válida entra no room', async () => {
+        mockRoomFindOne.mockReturnValueOnce(roomFindOneResult({ room_id: 'sala-valida' }));
+        const { io, ns } = makeMockIo();
+        setupChatSocket(io);
+        const socket = makeSocket({ wallet: 'p.wam' });
+        const onConnection = ns.handlers.get('connection')!;
+        const socketHandlers = new Map<string, Function>();
+        await onConnection({ ...socket, on: (ev: string, fn: Function) => socketHandlers.set(ev, fn) });
+        await socketHandlers.get('chat:join')?.({ roomId: 'sala-valida' });
+        expect(socket.join).toHaveBeenCalledWith('sala-valida');
+    });
+});
+
+// ── 8. extractMentions ────────────────────────────────────────────────────────
 
 describe('extractMentions', () => {
     it('[REG] extrai mention simples', () => {
