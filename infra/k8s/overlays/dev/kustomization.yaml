@@ -27,11 +27,11 @@ patches:
     target:
       kind: Deployment
       name: frontend
-  # Dev: RPC local
+  # Dev: RPC local via host (nodeos roda no host, não no cluster)
   - patch: |-
       - op: replace
         path: /data/RPC_URL
-        value: "http://bingo_waxdev:8888"
+        value: "http://host.docker.internal:8888"
       - op: replace
         path: /data/NODE_ENV
         value: "development"
@@ -44,6 +44,28 @@ patches:
     target:
       kind: ConfigMap
       name: cryptobingo-config
+  # kind usa imagens carregadas localmente via `kind load docker-image` — não puxar da internet
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: api-gateway
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: worker-game-loop
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: frontend
 
 images:
   - name: cryptobingo/api-gateway

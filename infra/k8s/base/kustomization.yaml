@@ -13,5 +13,5 @@ resources:
   - frontend.yaml
   - ingress.yaml
   - poddisruptionbudget.yaml
-  - ../components/networking/network-policies.yaml
-  - ../components/monitoring/servicemonitor.yaml
+  - ../components/networking
+  - ../components/monitoring
