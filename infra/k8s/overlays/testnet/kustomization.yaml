@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - databases.yaml
+
+patches:
+  # Testnet: 1 réplica (custo menor)
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: api-gateway
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: worker-game-loop
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: frontend
+  # Testnet: WAX testnet, verificação on-chain habilitada
+  - patch: |-
+      - op: replace
+        path: /data/RPC_URL
+        value: "https://testnet.waxsweden.org"
+      - op: replace
+        path: /data/NODE_ENV
+        value: "staging"
+      - op: replace
+        path: /data/VERIFY_KEY_ONCHAIN
+        value: "true"
+      - op: replace
+        path: /data/ALLOWED_ORIGINS
+        value: "https://cryptobingo.SUBSTITUIR.vcluster.cloud"
+    target:
+      kind: ConfigMap
+      name: cryptobingo-config
+  # Substitui ingress base (hosts de produção) pelo ingress de testnet
+  - path: ingress-patch.yaml
+
+images:
+  - name: cryptobingo/api-gateway
+    newName: ghcr.io/iurineumann/cryptobingo-api-gateway
+    newTag: testnet
+  - name: cryptobingo/worker-game-loop
+    newName: ghcr.io/iurineumann/cryptobingo-worker-game-loop
+    newTag: testnet
+  - name: cryptobingo/frontend
+    newName: ghcr.io/iurineumann/cryptobingo-frontend
+    newTag: testnet
