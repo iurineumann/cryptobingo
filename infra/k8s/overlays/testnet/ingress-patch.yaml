@@ -1,0 +1,56 @@
+# Patch de ingress para testnet/vcluster.cloud.
+# Substituir <CLUSTER_ID> pelo ID real do cluster vcluster.cloud.
+# Sem TLS/cert-manager (vcluster.cloud gerencia TLS externamente).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cryptobingo-ingress
+  namespace: cryptobingo
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/websocket-services: "worker-svc,api-gateway-svc"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options DENY always;
+      add_header X-Content-Type-Options nosniff always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+spec:
+  ingressClassName: nginx
+  # vcluster.cloud expõe via subdomínio <namespace>.<cluster-id>.vcluster.cloud
+  # Ajuste o host após obter o cluster ID no painel vcluster.cloud
+  rules:
+    - host: "cryptobingo.SUBSTITUIR.vcluster.cloud"
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway-svc
+                port:
+                  name: http
+          - path: /socket.io
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway-svc
+                port:
+                  name: http
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: worker-svc
+                port:
+                  name: ws
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-svc
+                port:
+                  name: http
