@@ -46,7 +46,7 @@ import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winnin
 import {
     listRooms, getRoom, createRoom, upsertRoomMetadata,
     updateRoomSettings, activateRoom, pauseRoom, closeRoom,
-    listSponsorRooms,
+    listSponsorRooms, setRoomNft, getRoomTreasury,
 }                                                    from './controllers/roomController';
 import {
     listDeposits, getDeposit,
@@ -240,6 +240,8 @@ function registerRoutes(): void {
     app.post('/api/v1/rooms/:roomId/pause',          adminLimiter, requireAuth, requireRole('admin'), pauseRoom);
     app.post('/api/v1/rooms/:roomId/close',          adminLimiter, requireAuth, requireRole('admin'), closeRoom);
     app.get('/api/v1/sponsor/rooms',                       playerLimiter, requireAuth, requireRole('sponsor'), listSponsorRooms);
+    app.put('/api/v1/admin/rooms/:roomId/nft-config',      adminLimiter,  requireAuth, requireRole('admin'), setRoomNft);
+    app.get('/api/v1/rooms/:roomId/treasury',              playerLimiter, getRoomTreasury);
 
     // ── Admin: Monte Carlo ─────────────────────────────────────────────────
     app.post(
