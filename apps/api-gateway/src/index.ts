@@ -57,7 +57,7 @@ import {
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 import { getChatHistory, saveChatMessage } from './controllers/chatController';
-import { createSystemChatMessage }          from './controllers/internalChatController';
+import { createSystemChatMessage, requireInternalAuth } from './controllers/internalChatController';
 import { startMetricsServer, metricsMiddleware } from './services/metrics';
 import { setupChatSocket }                            from './socket/chatSocket';
 import { setIo }                                     from './socket';
@@ -326,7 +326,7 @@ function registerRoutes(): void {
     // ── Chat ────────────────────────────────────────────────────────────────────
     app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
     app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
-    app.post('/api/v1/internal/chat/system', createSystemChatMessage);
+    app.post('/api/v1/internal/chat/system', requireInternalAuth, createSystemChatMessage);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);

@@ -11,6 +11,7 @@ resources:
   - api-gateway.yaml
   - worker.yaml
   - frontend.yaml
+  - swap-ui.yaml
   - ingress.yaml
   - poddisruptionbudget.yaml
   - ../components/networking

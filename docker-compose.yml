@@ -313,7 +313,31 @@ services:
       - bingo_net
 
   # ==========================================
-  # 9. IPFS LOCAL — Gateway para imagens de NFT (ADR-027)
+  # 9. APPS — Swap UI (ADR-022 DEX)
+  # ==========================================
+  swap-ui:
+    build:
+      context: .
+      dockerfile: apps/swap-ui/Dockerfile
+      args:
+        VITE_WAX_RPC_URL: "http://localhost:5174"
+        VITE_API_GATEWAY_URL: ""
+        VITE_GAME_URL: "http://localhost:3000"
+        VITE_CHAIN_ID: ${CHAIN_ID}
+        VITE_SWAP_CONTRACT: bingogameswp
+    container_name: bingo_swap_ui
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    volumes:
+      - ./infra/nginx/swap-ui.compose.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - bingo_net
+
+  # ==========================================
+  # 10. IPFS LOCAL — Gateway para imagens de NFT (ADR-027)
   # ==========================================
   bingo_ipfs:
     image: ipfs/kubo:latest
