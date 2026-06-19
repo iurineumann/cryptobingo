@@ -22,7 +22,6 @@ export default defineConfig({
     },
     server: {
         port: 5174,  // porta diferente do game frontend (5173)
-        historyApiFallback: true,
         proxy: {
             '/v1': {
                 target:       'http://127.0.0.1:8888',

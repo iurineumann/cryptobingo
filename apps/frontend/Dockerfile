@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 ARG VITE_RPC_URL
 ARG VITE_API_GATEWAY_URL
 ARG VITE_WS_URL
