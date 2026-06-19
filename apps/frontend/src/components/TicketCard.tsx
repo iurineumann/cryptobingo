@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BINGO_COLORS, COLS, type Pattern } from './ticketUtils';
+import { Star, Link2 } from 'lucide-react';
 
 interface CompletedComboInfo {
   name:   string;
@@ -123,7 +124,7 @@ export function TicketCard({
                     ].filter(Boolean).join(' ')}
                     style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
                   >
-                    {isFree ? '⭐' : val}
+                    {isFree ? <Star className="size-3 shrink-0 fill-current" /> : val}
                   </div>
                 );
               })}
@@ -151,7 +152,7 @@ export function TicketCard({
               key={best.label}
               className={`gr-ticket-pattern-badge${best.isCombo ? ' gr-ticket-combo-badge' : ''}`}
             >
-              <span>{best.isCombo ? '🔗' : '⭐'}</span>{best.label}
+              <span>{best.isCombo ? <Link2 className="size-3 shrink-0" /> : <Star className="size-3 shrink-0" />}</span>{best.label}
             </span>
           </div>
         );

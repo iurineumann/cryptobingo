@@ -519,17 +519,19 @@ export async function closeCampaign(campaignId: string): Promise<{ transaction_i
 // ==========================================
 
 export interface NftAsset {
-    asset_id: string;
-    collection_name: string;
-    schema_name: string;
-    template_id: string;
-    name: string;
-    img_url: string;
+    asset_id:       string;
+    schema_name:    string;
+    name:           string;
+    backed_tokens:  string;
+    template_id?:   number;
+    collection_name?: string;
+    img_url?:       string;
 }
 
 export async function fetchMyNfts(): Promise<{ nfts: NftAsset[] }> {
     const res = await fetch(`${API_BASE}/nfts/my-assets`, { headers: authHeaders() });
-    return handleResponse(res);
+    const json = await handleResponse<{ assets: NftAsset[] }>(res);
+    return { nfts: json.assets };
 }
 
 export interface EligibleDiscountNft {

@@ -1,0 +1,21 @@
+{
+    "items": [
+        {
+            "id": "news-1", "title": "Grande Prêmio de BINGO", "content": "Prêmio acumulado em 500.000 BINGO nesta semana.",
+            "image_url": null, "locale_overrides": {}, "active": true, "pinned": true,
+            "published_at": "2025-06-01T10:00:00.000Z", "published_by": "admin1"
+        },
+        {
+            "id": "news-2", "title": "Novo padrão de vitória", "content": "Padrão 'X' adicionado com peso 5x.",
+            "image_url": null, "locale_overrides": {}, "active": true, "pinned": false,
+            "published_at": "2025-05-28T08:30:00.000Z", "published_by": "admin1"
+        },
+        {
+            "id": "news-3", "title": "Manutenção programada", "content": "Sistema offline 02/06 03:00-05:00 UTC.",
+            "image_url": null, "locale_overrides": {}, "active": true, "pinned": false,
+            "published_at": "2025-05-25T14:00:00.000Z", "published_by": "admin1"
+        }
+    ],
+    "total": 10,
+    "cached_at": "2025-06-01T12:00:00.000Z"
+}

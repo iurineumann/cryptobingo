@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { MongoUserProfile, BlockchainGameState, BlockchainBalance, ExtendedAsset } from '@cryptobingo/shared-types';
+import { Star, X } from 'lucide-react';
 import type { EnrichedRoom } from '../services/api';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
@@ -134,19 +135,29 @@ export default function GameRoom({
     isGameEnded, goldenBall, clearedStages, drawMode,
   } = useSlowReveal(gameId);
 
+  const STATUS_DOT: Record<string, string> = {
+    created: 'var(--cb-text-tertiary)',
+    funding: 'var(--cb-success)',
+    locked:  'var(--cb-accent)',
+    drawing: 'var(--color-danger-500)',
+    drawn:   'var(--cb-success)',
+    archived:'var(--cb-text-tertiary)',
+    aborted: 'var(--cb-danger)',
+    paying:  'var(--cb-accent)',
+  };
+
   const timeRemaining = useMemo(() => {
     if (!game) return '';
-    // Não mostrar contador se bolas já chegaram via WS — effectiveDisplayStatus já é 'drawing'
     if (game.status === 'funding' && drawnBalls.length === 0 && !isDrawing) {
       const closeAt = Number(game.game_id) + AUTO_LOCK_SEC * 1000;
       const diff = closeAt - now;
-      if (diff <= 0) return '🔒 Fechando...';
+      if (diff <= 0) return `${t('game_room.closing')}...`;
       const s = Math.ceil(diff / 1000);
-      if (s < 60) return `🔒 ${s}s`;
-      return `🔒 ${Math.floor(s / 60)}m ${s % 60}s`;
+      if (s < 60) return `${s}s`;
+      return `${Math.floor(s / 60)}m ${s % 60}s`;
     }
     return '';
-  }, [game, now, drawnBalls.length, isDrawing]);
+  }, [game, now, drawnBalls.length, isDrawing, t]);
 
   // ── Fallback para jogos archived/drawn sem eventos do WebSocket ───────────
   // O WS só envia eventos ao vivo; quando o jogo já encerrou, drawnBalls
@@ -191,8 +202,7 @@ export default function GameRoom({
 
   const gameStatusText = useMemo(() => {
     if (!effectiveDisplayStatus) return '';
-    const emoji: Record<string, string> = { created: '🕐', funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌', paying: '💸' };
-    return `${emoji[effectiveDisplayStatus] ?? ''} ${effectiveDisplayStatus}`;
+    return effectiveDisplayStatus;
   }, [effectiveDisplayStatus]);
 
   // ── Vencedores locais para estado archived sem WS ─────────────────────────
@@ -658,7 +668,8 @@ export default function GameRoom({
               {room?.metadata?.name ?? (room ? `Sala ${room.room_id}` : `#${gameId}`)}
             </span>
             {game && (
-              <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
+              <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary] inline-flex items-center gap-1">
+                {effectiveDisplayStatus && <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveDisplayStatus] }} />}
                 {gameStatusText}
               </span>
             )}
@@ -738,7 +749,7 @@ export default function GameRoom({
                     zIndex: 50, minWidth: '11rem',
                     background: 'var(--cb-bg-elevated)',
                     border: '1px solid var(--cb-border-default)',
-                    borderRadius: '0.75rem',
+                    borderRadius: '0.625rem',
                     boxShadow: 'var(--shadow-card-hover)',
                     padding: '0.375rem',
                     display: 'flex', flexDirection: 'column', gap: '0.125rem',
@@ -751,7 +762,7 @@ export default function GameRoom({
                     style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                     onClick={() => { setShowMenu(false); onLeave(); }}
                   >
-                    🏠 {t('game_room.back_to_lobby')}
+                    {t('game_room.back_to_lobby')}
                   </button>
 
                   {onGoToHistory && (
@@ -762,7 +773,7 @@ export default function GameRoom({
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToHistory(); }}
                     >
-                      📋 {t('nav.my_history') ?? 'Histórico'}
+                      {t('nav.my_history') ?? 'Histórico'}
                     </button>
                   )}
 
@@ -774,7 +785,7 @@ export default function GameRoom({
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToWallet(); }}
                     >
-                      💳 {t('nav.wallet') ?? 'Carteira'}
+                      {t('nav.wallet') ?? 'Carteira'}
                     </button>
                   )}
 
@@ -786,7 +797,7 @@ export default function GameRoom({
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onGoToAdmin(); }}
                     >
-                      ⚙ Admin
+                      Admin
                     </button>
                   )}
 
@@ -797,7 +808,7 @@ export default function GameRoom({
                       style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                       onClick={() => { setShowMenu(false); onToggleTheme(); }}
                     >
-                      {theme === 'dark' ? '☾' : '☀'} {theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+                      {theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
                     </button>
                   )}
 
@@ -810,7 +821,7 @@ export default function GameRoom({
                         style={{ justifyContent: 'flex-start', gap: '0.5rem', color: 'var(--cb-danger)' }}
                         onClick={() => { setShowMenu(false); onLogout(); }}
                       >
-                        ⏻ {t('nav.logout') ?? 'Desconectar'}
+                        {t('nav.logout') ?? 'Desconectar'}
                       </button>
                     </>
                   )}
@@ -860,7 +871,7 @@ export default function GameRoom({
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '⭐'}</span>
+                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? <Star className="size-6 shrink-0" />}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
                   )}
@@ -914,7 +925,7 @@ export default function GameRoom({
                   className="cb-btn cb-btn-ghost cb-btn-sm"
                   onClick={() => setShowPatterns(false)}
                   aria-label={t('game_room.patterns_hide_aria')}
-                >✕</button>
+                ><X className="size-4 shrink-0" /></button>
               </div>
               <div className="gr-patterns-list">
                 {roomPatterns.length === 0 ? (
@@ -965,8 +976,7 @@ export default function GameRoom({
                           </div>
                           <div className="gr-pattern-info">
                             <span className="name">
-                              {myCombo && <span title={t('game_room.my_combo_badge')}>⭐ </span>}
-                              🔗 {c.name}
+                              {c.name}
                             </span>
                             <div className="mini-progress">
                               <i style={{ width: comboWon ? '100%' : `${Math.round(proxPct * 100)}%` }} />
@@ -1001,7 +1011,7 @@ export default function GameRoom({
             {/* ADR-014: Golden Ball */}
             {goldenBall && (
               <div className="gr-golden-banner" role="status" aria-live="assertive">
-                <span className="gr-golden-icon">🌟</span>
+                <span className="gr-golden-icon" />
                 <div className="gr-golden-text">
                   <strong>{t('game_room.golden_ball_title')}</strong>
                   <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
@@ -1037,9 +1047,7 @@ export default function GameRoom({
                 role="status"
                 aria-live="polite"
               >
-                <span className="gr-ended-icon">
-                  {playerWinEntries.length > 0 ? '🏆' : '🏁'}
-                </span>
+                <span className={`gr-ended-icon${playerWinEntries.length > 0 ? ' gr-ended-icon--win' : ' gr-ended-icon--end'}`} />
                 <div className="gr-ended-text">
                   <strong>{t('game_room.game_ended_title')}</strong>
                   <span>
@@ -1057,7 +1065,7 @@ export default function GameRoom({
                       {playerWinEntries.map(({ name, total, currency, isCombination }) => (
                         <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                           <span className="gr-ended-breakdown-pattern">
-                            {isCombination && '🔗 '}{name}
+                            {name}
                           </span>
                           <span className="gr-ended-breakdown-prize">
                             {total.toFixed(4)} {currency}
@@ -1150,7 +1158,6 @@ export default function GameRoom({
             groupedTickets.map(group => (
               <div key={group.category} className="gr-tickets-group">
                 <div className="gr-tickets-group-label">
-                  <span className="gr-tickets-group-icon">{group.icon}</span>
                   <span className="gr-tickets-group-title">{group.label}</span>
                   <span className="gr-tickets-group-count">{group.tickets.length}</span>
                 </div>

@@ -1,0 +1,12 @@
+{
+  "nfts": [
+    {
+      "asset_id": "1099511627776",
+      "template_id": 1,
+      "collection_name": "cryptobingo1",
+      "discount_hundredths": 1000,
+      "discount_pct": 10,
+      "value_origin": 0
+    }
+  ]
+}

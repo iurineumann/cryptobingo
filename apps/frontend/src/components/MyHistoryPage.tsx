@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { useGamesHistory } from '../hooks/useGamesHistory';
+import { X } from 'lucide-react';
 
 interface MyHistoryPageProps {
   session: Session;
@@ -73,11 +74,11 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
   }, [rows, filtered, roomFilter]);
 
   return (
-    <div className="hist-shell">
+    <div className="hist-shell" data-testid="myhistory-page">
       {/* ── Cabeçalho ── */}
       <div className="hist-header">
-        <h2 className="hist-title">
-          📋 {t('replay.my_history_title')}
+        <h2 className="hist-title" data-testid="myhistory-title">
+          {t('replay.my_history_title')}
         </h2>
         {roomIds.length > 1 && (
           <select
@@ -86,6 +87,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
             onChange={e => setRoomFilter(e.target.value)}
             style={{ padding: '0.3rem 2rem 0.3rem 0.75rem', fontSize: '0.8rem', width: 'auto' }}
             aria-label={t('replay.filter_room')}
+            data-testid="myhistory-filter"
           >
             <option value="">{t('replay.filter_all')}</option>
             {roomIds.map(id => (
@@ -97,7 +99,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
       {/* ── Barra de resumo ── */}
       {summary.games > 0 && (
-        <div className="hist-summary" style={{ marginBottom: '0.875rem' }}>
+        <div className="hist-summary" data-testid="myhistory-summary" style={{ marginBottom: '0.875rem' }}>
           <div className="hist-summary-stat">
             <span className="label">{t('replay.summary_games', { count: summary.games, plural: summary.games !== 1 ? 's' : '' })}</span>
             <span className="value">{summary.winGames} vitória{summary.winGames !== 1 ? 's' : ''}</span>
@@ -129,9 +131,8 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
       {/* ── Lista de partidas ── */}
       {filtered.length === 0 && !loading && (
-        <div className="hist-empty">
-          <span className="hist-empty-icon">📋</span>
-          <span className="hist-empty-text">{t('replay.no_history')}</span>
+        <div className="hist-empty" data-testid="myhistory-empty">
+                          <span className="hist-empty-text">{t('replay.no_history')}</span>
         </div>
       )}
 
@@ -149,13 +150,14 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
               <div
                 key={r.gameId}
                 className={`hist-row${isWinner ? ' is-winner' : ''}${isAborted ? ' is-aborted' : ''}`}
+                data-testid={`myhistory-row-${r.gameId}`}
               >
                 {/* Col 1: badge */}
                 <div>
                   {isAborted ? (
-                    <span className="hist-badge aborted">✕ {t('replay.badge_aborted')}</span>
+                    <span className="hist-badge aborted"><X className="size-3 shrink-0" /> {t('replay.badge_aborted')}</span>
                   ) : isWinner ? (
-                    <span className="hist-badge won">🏆 {t('replay.badge_won')}</span>
+                    <span className="hist-badge won">{t('replay.badge_won')}</span>
                   ) : (
                     <span className="hist-badge lost">{t('replay.badge_lost')}</span>
                   )}
@@ -195,7 +197,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                     {/* ── Dados globais da partida (best-effort) ── */}
                     {r.allTickets != null && (
                       <div className="hist-row-amount" style={{ borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.5rem', marginLeft: '0.25rem' }}>
-                        <span className="alabel">🎫 {t('replay.col_all_tickets')}</span>
+                        <span className="alabel">{t('replay.col_all_tickets')}</span>
                         <span className="avalue">{r.allTickets}</span>
                       </div>
                     )}
@@ -220,8 +222,9 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
                     className="cb-btn cb-btn-primary cb-btn-sm"
                     onClick={() => onViewReplay(r.gameId)}
                     style={{ gap: '0.375rem' }}
+                    data-testid={`myhistory-replay-${r.gameId}`}
                   >
-                    ▶ {t('replay.view_replay')}
+                    {t('replay.view_replay')}
                   </button>
                 </div>
               </div>
@@ -239,7 +242,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
       {!allLoaded && !loading && rows.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
-          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={() => loadMore()}>
+          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={() => loadMore()} data-testid="myhistory-load-more">
             {t('common.load_more')}
           </button>
         </div>

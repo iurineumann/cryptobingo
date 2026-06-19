@@ -49,10 +49,10 @@ describe('TicketCard — estrutura básica', () => {
     expect(cells).toHaveLength(25);
   });
 
-  it('FREE SPACE exibe ⭐ na posição [2][2] (índice 12)', () => {
+  it('FREE SPACE exibe Star icon na posição [2][2] (índice 12)', () => {
     renderCard();
     const cells = screen.getAllByRole('gridcell');
-    expect(cells[12].textContent).toBe('⭐');
+    expect(cells[12].querySelector('svg')).toBeInTheDocument();
     expect(cells[12]).toHaveClass('is-free');
   });
 

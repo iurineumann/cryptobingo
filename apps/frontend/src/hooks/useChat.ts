@@ -29,7 +29,7 @@ interface UseChatReturn {
 }
 
 const API_URL = import.meta.env.VITE_API_GATEWAY_URL ?? '';
-const WS_URL  = import.meta.env.VITE_WS_URL ?? API_URL;
+const WS_URL  = import.meta.env.VITE_WS_URL || API_URL;
 
 // ── Cache e sockets persistentes entre montagens ─────────────────
 const messageCache = new Map<string, ChatMessage[]>();
@@ -98,6 +98,7 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
         const existing = wsSockets.get(roomId);
         if (existing?.connected) {
             existing.emit('chat:join', { roomId });
+            // Handlers já registrados na primeira montagem — segue
             return;
         }
 
@@ -106,10 +107,29 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
             transports: ['websocket'],
         });
 
-        s.on('connect', () => s.emit('chat:join', { roomId }));
+        s.on('connect', () => {
+            s.emit('chat:join', { roomId });
+        });
+
+        s.on('connect_error', (err) => {
+            console.warn('[ChatWS] connect_error:', err.message);
+        });
 
         s.on('chat:message', (msg: ChatMessage) => {
             setMessages(prev => {
+                // Substitui mensagem otimista (local_) pela do servidor
+                if (msg.wallet_address === walletAddress) {
+                    const localIdx = prev.findIndex(m =>
+                        m.id.startsWith('local_') &&
+                        m.wallet_address === msg.wallet_address &&
+                        m.message === msg.message
+                    );
+                    if (localIdx !== -1) {
+                        const next = [...prev];
+                        next[localIdx] = msg;
+                        return next;
+                    }
+                }
                 if (prev.some(m => m.id === msg.id)) return prev;
                 return [...prev, msg];
             });
@@ -134,9 +154,21 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
     const sendMessage = useCallback((text: string) => {
         const trimmed = text.trim();
         if (!trimmed) return;
+
+        // Otimista: mostra mensagem na hora, substituída pelo broadcast do servidor
+        const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        setMessages(prev => [...prev, {
+            id:             localId,
+            wallet_address: walletAddress,
+            message:        trimmed,
+            message_type:   'user' as MessageType,
+            mentions:       [],
+            timestamp:      new Date().toISOString(),
+        }]);
+
         const s = wsSockets.get(roomId);
         if (s?.connected) s.emit('chat:send', { roomId, message: trimmed });
-    }, [roomId]);
+    }, [roomId, walletAddress]);
 
     const loadMore = useCallback(() => {
         if (loadingRef.current || messages.length === 0) return;

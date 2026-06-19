@@ -9,6 +9,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import {
+  LayoutDashboard, Building2, Grid3x3, Puzzle, Megaphone, ShieldCheck,
+  Image, Coins, Settings, Users, UserCircle,
+} from 'lucide-react';
 import Logo from '../Logo';
 import AdminDashboard   from './AdminDashboard';
 import PatternsAdmin    from './PatternsAdmin';
@@ -46,18 +50,18 @@ export default function AdminLayout({
   };
 
   const ADMIN_NAV = [
-    { id: 'dashboard',  label: t('admin.dashboard'),  icon: '◆', group: 'operation' },
-    { id: 'rooms',      label: t('admin.rooms'),      icon: '🏠', group: 'operation' },
-    { id: 'patterns',   label: t('admin.patterns'),   icon: '▦', group: 'operation' },
-    { id: 'gametypes',  label: t('admin.gametypes'),  icon: '◇', group: 'operation' },
-    { id: 'campaigns',  label: t('admin.campaigns'),  icon: '▲', group: 'operation' },
-    { id: 'vault',      label: t('admin.vault'),      icon: '◈', group: 'operation' },
-    { id: 'nfts',       label: t('admin.nfts'),       icon: '🖼', group: 'assets'    },
-    { id: 'token',          label: t('admin.token'),          icon: '◉', group: 'assets'    },
-    { id: 'config-tokens',  label: t('token_admin.title'),    icon: '⊕', group: 'assets'    },
-    { id: 'compliance', label: t('admin.compliance'), icon: '⚖', group: 'compliance' },
-    { id: 'users',      label: t('admin.users'),      icon: '◍', group: 'compliance' },
-    { id: 'mypanel',    label: t('admin.my_panel'),   icon: '●', group: 'personal'  },
+    { id: 'dashboard',  label: t('admin.dashboard'),  group: 'operation',  icon: <LayoutDashboard className="size-4 shrink-0" /> },
+    { id: 'rooms',      label: t('admin.rooms'),      group: 'operation',  icon: <Building2 className="size-4 shrink-0" /> },
+    { id: 'patterns',   label: t('admin.patterns'),   group: 'operation',  icon: <Grid3x3 className="size-4 shrink-0" /> },
+    { id: 'gametypes',  label: t('admin.gametypes'),  group: 'operation',  icon: <Puzzle className="size-4 shrink-0" /> },
+    { id: 'campaigns',  label: t('admin.campaigns'),  group: 'operation',  icon: <Megaphone className="size-4 shrink-0" /> },
+    { id: 'vault',      label: t('admin.vault'),      group: 'operation',  icon: <ShieldCheck className="size-4 shrink-0" /> },
+    { id: 'nfts',       label: t('admin.nfts'),       group: 'assets',     icon: <Image className="size-4 shrink-0" /> },
+    { id: 'token',          label: t('admin.token'),          group: 'assets',     icon: <Coins className="size-4 shrink-0" /> },
+    { id: 'config-tokens',  label: t('token_admin.title'),    group: 'assets',     icon: <Settings className="size-4 shrink-0" /> },
+    { id: 'compliance', label: t('admin.compliance'), group: 'compliance', icon: <ShieldCheck className="size-4 shrink-0" /> },
+    { id: 'users',      label: t('admin.users'),      group: 'compliance', icon: <Users className="size-4 shrink-0" /> },
+    { id: 'mypanel',    label: t('admin.my_panel'),   group: 'personal',   icon: <UserCircle className="size-4 shrink-0" /> },
   ];
 
   function renderContent() {
@@ -111,14 +115,12 @@ export default function AdminLayout({
             onClick={() => navigate('/admin/dashboard')}
           />
           <span className="site-mode-pill">
-            <span aria-hidden="true">●</span>
             {t('nav.admin')}
           </span>
         </div>
 
         <div className="site-nav-right">
           <span className="cb-wallet-chip">
-            <span style={{ color: 'var(--cb-brand)' }} aria-hidden="true">◆</span>
             <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.75rem' }}>
               {profile.wallet_address}
             </span>
@@ -141,7 +143,6 @@ export default function AdminLayout({
             onClick={onToggleTheme}
             aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
           >
-            {theme === 'dark' ? '☾' : '☀'}
           </button>
 
           <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => navigate('/lobby')}>
@@ -165,7 +166,7 @@ export default function AdminLayout({
 
           <div className="site-sidebar-foot">
             <div className="site-sidebar-tier">
-              <span className="medal" aria-hidden="true">◆</span>
+              <span className="medal" aria-hidden="true"></span>
               <div className="tier-info">
                 <span className="tier-name">{profile.wallet_address}</span>
                 <span className="tier-role">{profile.role}</span>

@@ -36,6 +36,7 @@ import {
     useLocation,
     useParams,
 } from 'react-router-dom';
+import { Medal, FlaskConical, Moon, Sun }  from 'lucide-react';
 import { Session }                          from '@wharfkit/session';
 import {
     fetchUserProfile, updateUserLocale,
@@ -394,7 +395,7 @@ function AppRoot() {
                                 data-testid="nav-achievements"
                                 aria-label={t('achievements.title')}
                             >
-                                🏅
+                                <Medal className="size-4 shrink-0" />
                             </button>
                         </>
                     )}
@@ -446,7 +447,7 @@ function AppRoot() {
                         aria-label="Alternar tema"
                         title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
                     >
-                        {theme === 'dark' ? '☾' : '☀'}
+                        {theme === 'dark' ? <Moon className="size-4 shrink-0" /> : <Sun className="size-4 shrink-0" />}
                     </button>
 
                     <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={logout}>
@@ -466,7 +467,7 @@ function AppRoot() {
                         <div style={{ padding: '0.5rem 1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid var(--cb-border-subtle)', background: 'var(--cb-bg-sunken)', fontSize: '0.7rem' }}>
                             <span style={{ color: 'var(--cb-text-tertiary)', alignSelf: 'center' }}>DEV:</span>
                             <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={loginDev}>
-                                🧪 Dev Login
+                                <FlaskConical className="size-4 shrink-0" /> Dev Login
                             </button>
                         </div>
                     )}

@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useChat, type MessageType } from '../../hooks/useChat';
 import { useTranslation } from 'react-i18next';
+import { MessageCircle, X } from 'lucide-react';
+import { SystemChatMessage } from './SystemChatMessage';
 
 interface ChatFloatingProps {
     roomId:        string;
@@ -30,6 +32,12 @@ function saveState(s: WindowState): void {
 
 function truncateWallet(w: string) {
     return w.length > 10 ? `${w.slice(0, 4)}...${w.slice(-4)}` : w;
+}
+
+function formatChatTime(iso: string): string {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const SYSTEM_TYPES = new Set<MessageType>(['system_draw', 'system_drop', 'system_status']);
@@ -159,6 +167,14 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
         if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
     }, [messages]);
 
+    // Scroll to bottom on open
+    useEffect(() => {
+        if (open && listRef.current) {
+            listRef.current.scrollTop = listRef.current.scrollHeight;
+            autoScroll.current = true;
+        }
+    }, [open]);
+
     const handleScroll = useCallback(() => {
         if (!listRef.current) return;
         const el = listRef.current;
@@ -206,7 +222,7 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                 onClick={toggle}
                 aria-label={t('game_room.chat') ?? 'Chat'}
             >
-                {open ? '✕' : '💬'}
+                {open ? <X className="size-4 shrink-0" /> : <MessageCircle className="size-5 shrink-0" />}
                 {!open && unread > 0 && (
                     <span className="gr-chat-badge">{unread > 99 ? '99+' : unread}</span>
                 )}
@@ -231,7 +247,7 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                             className="cb-btn cb-btn-ghost cb-btn-sm"
                             onClick={toggle}
                             aria-label={t('game_room.chat_close') ?? 'Fechar'}
-                        >✕</button>
+                        ><X className="size-4 shrink-0" /></button>
                     </div>
 
                     {/* Messages */}
@@ -255,10 +271,10 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                             const isMentioned = !isOwn && msg.mentions.includes(walletAddress);
                             const authorLabel = isSystem
                                 ? msg.message_type === 'system_draw'
-                                    ? `🎲 ${t('game_room.chat_system_draw') ?? 'Sorteio'}`
+                                    ? `${t('game_room.chat_system_draw') ?? 'Sorteio'}`
                                     : msg.message_type === 'system_drop'
-                                        ? `🎁 ${t('game_room.chat_drop_prefix') ?? 'Drop!'}`
-                                        : `ℹ️ ${t('game_room.chat_system_status') ?? 'Sistema'}`
+                                        ? `${t('game_room.chat_drop_prefix') ?? 'Drop!'}`
+                                        : `${t('game_room.chat_system_status') ?? 'Sistema'}`
                                 : isOwn
                                     ? t('game_room.chat_you') ?? 'Você'
                                     : truncateWallet(msg.wallet_address);
@@ -272,8 +288,12 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                                         <span>{authorLabel}</span>
                                     </div>
                                     <p className="gr-chat-bubble-text">
-                                        {renderTextWithMentions(msg.message)}
+                                        {isSystem
+                                            ? <SystemChatMessage message={msg.message} />
+                                            : renderTextWithMentions(msg.message)
+                                        }
                                     </p>
+                                    <p className="gr-chat-bubble-time">{formatChatTime(msg.timestamp)}</p>
                                 </div>
                             );
                         })}
@@ -294,7 +314,7 @@ export default function ChatFloating({ roomId, roomName, walletAddress }: ChatFl
                             onClick={handleSend}
                             disabled={!input.trim()}
                             aria-label={t('game_room.chat_send') ?? 'Enviar'}
-                        >➤</button>
+                        >Enviar</button>
                     </div>
 
                     {/* Resize handle */}

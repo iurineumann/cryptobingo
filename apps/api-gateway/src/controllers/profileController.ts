@@ -131,7 +131,7 @@ async function verifyProfileSignature(
 
         const accountInfo: any = await rpcClient.v1.chain.get_account(wallet as any);
         const activeKeys: string[] = accountInfo.permissions
-            ?.find((p: any) => p.perm_name === 'active')
+            ?.find((p: any) => String(p.perm_name) === 'active')
             ?.required_auth?.keys?.map((k: any) => String(k.key)) ?? [];
 
         return activeKeys.includes(recovered);
