@@ -20,7 +20,7 @@
     "@wharfkit/antelope": "^1.0.0",
     "@wharfkit/session": "^1.0.0",
     "@wharfkit/wallet-plugin-anchor": "^1.6.1",
-    "@wharfkit/wallet-plugin-cloudwallet": "^1.6.4",
+    "@wharfkit/wallet-plugin-cloudwallet": "^1.6.5",
     "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
     "@wharfkit/web-renderer": "^1.0.0",
     "class-variance-authority": "^0.7.1",
@@ -37,21 +37,22 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.41",
     "@types/react": "^18.0.37",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "dotenv": "^17",
     "jsdom": "^29.1.1",
-    "tailwindcss": "^4.0.0",
+    "tailwindcss": "^4.3.1",
     "typescript": "^5.0.0",
     "vite": "^6.4.2",
     "vite-plugin-node-polyfills": "^0.28.0",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.9"
   }
 }

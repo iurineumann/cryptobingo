@@ -21,6 +21,7 @@ import {
 } from '../services/swapService';
 import type { SwapPoolSummary, SwapQuote } from '@cryptobingo/shared-types';
 import { fetchEligibleDiscountNfts, type EligibleDiscountNft } from '../services/api';
+import { X, PartyPopper, Check, Link2, Dices, Timer, TriangleAlert } from 'lucide-react';
 
 interface ExtendedAssetInput {
     quantity: string;
@@ -370,14 +371,14 @@ export default function BuyTicketModal({
 
                     <div className="cb-modal-header">
                         <h2 id="modal-success-title" className="cb-modal-title flex items-center gap-2">
-                            <span aria-hidden="true">🎉</span>
+                            <PartyPopper className="size-4 shrink-0" />
                             {t('buy_ticket.success_title')}
                         </h2>
-                        <button className="cb-modal-close" onClick={onClose} aria-label={t('common.close')}>✕</button>
+                        <button className="cb-modal-close" onClick={onClose} aria-label={t('common.close')}><X className="size-4 shrink-0" /></button>
                     </div>
 
                     <div className="cb-alert cb-alert-success mb-4">
-                        <span aria-hidden="true">✅</span>
+                        <Check className="size-4 shrink-0" />
                         <span>
                             <strong>{lastPurchase.ticketCount}</strong> {t('buy_ticket.success_msg', { count: lastPurchase.ticketCount, gameId })}
                         </span>
@@ -390,7 +391,7 @@ export default function BuyTicketModal({
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-[--cb-brand] hover:underline font-mono break-all mb-4"
                         >
-                            <span aria-hidden="true">🔗</span>
+                            <Link2 className="size-4 shrink-0" />
                             TX: {lastPurchase.transactionId.slice(0, 24)}…
                         </a>
                     )}
@@ -429,7 +430,7 @@ export default function BuyTicketModal({
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <div className="cb-modal-header">
                     <h2 id="modal-buy-title" className="cb-modal-title flex items-center gap-2">
-                        <span aria-hidden="true">🎲</span>
+                        <Dices className="size-4 shrink-0" />
                         {step === 'preview' ? t('buy_ticket.preview_title') : t('buy_ticket.title')}
                     </h2>
                     <button
@@ -439,7 +440,7 @@ export default function BuyTicketModal({
                         disabled={isPurchasing || generating}
                         aria-label={t('common.close')}
                     >
-                        ✕
+                        <X className="size-4 shrink-0" />
                     </button>
                 </div>
 
@@ -449,7 +450,7 @@ export default function BuyTicketModal({
                     </span>
                     {!isClosed && (
                         <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`}>
-                            ⏱ {t('buy_ticket.closes_in', { time: fmtCountdown(remaining) })}
+                            <Timer className="size-4 shrink-0" /> {t('buy_ticket.closes_in', { time: fmtCountdown(remaining) })}
                         </span>
                     )}
                     {isClosed && (
@@ -733,7 +734,7 @@ export default function BuyTicketModal({
                                                             onClick={() => handleRemoveTicket(batch.id, i)}
                                                             aria-label={t('buy_ticket.remove_ticket_aria')}
                                                             title={t('buy_ticket.remove_ticket')}
-                                                        >✕</button>
+                                                        ><X className="size-3 shrink-0" /></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -781,7 +782,7 @@ export default function BuyTicketModal({
 
                         {(purchaseError || localGenError) && (
                             <div className="cb-alert cb-alert-error mb-4" role="alert" data-testid="buy-error">
-                                <span aria-hidden="true">⚠️</span>
+                                <TriangleAlert className="size-4 shrink-0" />
                                 <span>{purchaseError || localGenError}</span>
                             </div>
                         )}

@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "faq-generator",
+  "owner": "jeremylongshore",
+  "repo": "claude-code-plugins-plus-skills",
+  "path": "skills/17-technical-docs/faq-generator",
+  "branch": "main",
+  "sha": "b9dc19c20de9467dc3b53338217af465216b6fce",
+  "source": "manual"
+}

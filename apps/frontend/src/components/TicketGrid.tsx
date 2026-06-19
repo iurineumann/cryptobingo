@@ -127,7 +127,7 @@ export default function TicketGrid({
                                     aria-label="Espaço livre"
                                     role="gridcell"
                                 >
-                                    ★
+                                    FREE
                                 </div>
                             );
                         }
@@ -140,7 +140,7 @@ export default function TicketGrid({
                                     className={[
                                         baseCell,
                                         'text-white font-bold relative overflow-hidden',
-                                        isLastHit ? 'animate-[cb-ball-drop_0.45s_cubic-bezier(0.34,1.56,0.64,1)_forwards]' : '',
+                                        isLastHit ? 'animate-[cb-ball-drop_0.45s_cubic-bezier(0.4,0,0.2,1)_forwards]' : '',
                                     ].join(' ')}
                                     style={{
                                         background: COL_VAR[colIdx],

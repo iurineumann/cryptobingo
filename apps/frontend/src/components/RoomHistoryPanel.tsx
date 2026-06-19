@@ -18,9 +18,6 @@ interface RoomHistoryPanelProps {
   roomName?:    string;
 }
 
-const STATUS_EMOJI: Record<string, string> = {
-  archived: '✅', drawn: '✅', aborted: '❌',
-};
 
 function formatDate(endTime: number): string {
   if (endTime <= 0) return '—';
@@ -61,21 +58,21 @@ export default function RoomHistoryPanel({
   }, [rows]);
 
   return (
-    <div className="hist-shell">
+    <div className="hist-shell" data-testid="room-history-page">
 
       {/* ── Cabeçalho ── */}
       <div className="hist-header">
-        <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onBack}>
+        <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onBack} data-testid="room-history-back">
           ← {t('replay.back_to_lobby')}
         </button>
-        <h2 className="hist-title">
-          📋 {roomName ? roomName : `${t('replay.room_history_title')} #${roomId}`}
+        <h2 className="hist-title" data-testid="room-history-title">
+          {roomName ? roomName : `${t('replay.room_history_title')} #${roomId}`}
         </h2>
       </div>
 
       {/* ── Barra de resumo lifetime ── */}
       {summary.games > 0 && (
-        <div className="hist-summary" style={{ marginBottom: '0.875rem' }}>
+        <div className="hist-summary" data-testid="room-history-summary" style={{ marginBottom: '0.875rem' }}>
           <div className="hist-summary-stat">
             <span className="label">{t('replay.summary_games', { count: summary.games, plural: summary.games !== 1 ? 's' : '' })}</span>
             <span className="value">{summary.games}</span>
@@ -104,8 +101,7 @@ export default function RoomHistoryPanel({
 
       {/* ── Estado vazio ── */}
       {rows.length === 0 && !loading && (
-        <div className="hist-empty">
-          <span className="hist-empty-icon">📋</span>
+        <div className="hist-empty" data-testid="room-history-empty">
           <span className="hist-empty-text">{t('replay.no_history')}</span>
         </div>
       )}
@@ -120,6 +116,7 @@ export default function RoomHistoryPanel({
             return (
               <div
                 key={r.gameId}
+                data-testid={`room-history-row-${r.gameId}`}
                 className={[
                   'hist-row',
                   r.myParticipation ? 'is-winner' : '',
@@ -130,10 +127,10 @@ export default function RoomHistoryPanel({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '4.5rem' }}>
                   <span className={`hist-badge${isAborted ? ' aborted' : r.myParticipation ? ' won' : ' lost'}`}>
                     {isAborted
-                      ? `✕ ${t('replay.badge_aborted')}`
+                      ? `${t('replay.badge_aborted')}`
                       : r.myParticipation
-                        ? `🎫 ${t('replay.participated')}`
-                        : `${STATUS_EMOJI[r.status] ?? ''} ${r.status}`
+                        ? t('replay.participated')
+                        : `${r.status}`
                     }
                   </span>
                   <span className="hist-row-date">{formatDate(r.endTime)}</span>
@@ -181,10 +178,11 @@ export default function RoomHistoryPanel({
                   {!isAborted && (
                     <button
                       className="cb-btn cb-btn-primary cb-btn-sm"
+                      data-testid={`room-history-replay-${r.gameId}`}
                       onClick={() => onViewReplay(r.gameId)}
                       style={{ gap: '0.375rem' }}
                     >
-                      ▶ {t('replay.view_replay')}
+                      {t('replay.view_replay')}
                     </button>
                   )}
                 </div>
@@ -204,7 +202,7 @@ export default function RoomHistoryPanel({
       {/* ── Load more ── */}
       {!allLoaded && !loading && rows.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
-          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={loadMore}>
+          <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={loadMore} data-testid="room-history-load-more">
             {t('common.load_more')}
           </button>
         </div>

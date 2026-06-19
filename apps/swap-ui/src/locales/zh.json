@@ -42,7 +42,8 @@
     "success": "兑换成功！",
     "error_generic": "兑换失败：{{msg}}",
     "connect_to_swap": "请连接钱包进行兑换",
-    "wallet_balance": "余额：{{amount}}"
+    "wallet_balance": "余额：{{amount}}",
+    "reverse": "反转"
   },
   "pool": {
     "title": "流动性池",

@@ -170,7 +170,6 @@ export function sortTickets(
 export interface GroupedTickets {
   category: string;
   label: string;
-  icon: string;
   tickets: TicketEntry[];
 }
 
@@ -209,9 +208,9 @@ export function groupTicketsByCategory(
 
   const groups: GroupedTickets[] = [];
   if (multiWinners.length > 0)
-    groups.push({ category: 'multi-winner', label: 'Multi-Winners', icon: '🏆', tickets: multiWinners });
+    groups.push({ category: 'multi-winner', label: 'Multi-Winners', tickets: multiWinners });
   if (singleWinners.length > 0)
-    groups.push({ category: 'single-winner', label: 'Winners', icon: '🥇', tickets: singleWinners });
+    groups.push({ category: 'single-winner', label: 'Winners', tickets: singleWinners });
 
   const scoreCache = new Map<string, { key: number; bestPattern: string }>();
   for (const t of others) {
@@ -260,7 +259,7 @@ export function groupTicketsByCategory(
         if (kA !== kB) return kB - kA;
         return a.id.localeCompare(b.id);
       });
-      return { category: `pattern:${name}`, label: name, icon: '🎲', tickets: ts };
+      return { category: `pattern:${name}`, label: name, tickets: ts };
     });
   groups.push(...groupEntries);
 
@@ -272,7 +271,7 @@ export function groupTicketsByCategory(
       if (kA !== kB) return kB - kA;
       return a.id.localeCompare(b.id);
     });
-    groups.push({ category: 'none', label: 'Other', icon: '📋', tickets: noneTickets });
+    groups.push({ category: 'none', label: 'Other', tickets: noneTickets });
   }
   return groups;
 }
@@ -319,7 +318,6 @@ export function getPatternCategory(
 export interface GroupedPatterns {
   category: PatternCategory;
   label: string;
-  icon: string;
   patterns: Pattern[];
 }
 
@@ -340,9 +338,9 @@ export function groupPatternsByCategory(
     groups[cat].push(p);
   }
   const result: GroupedPatterns[] = [
-    { category: 'completed', label: 'Completed', icon: '✅', patterns: groups.completed },
-    { category: 'progress',  label: 'In Progress', icon: '📈', patterns: groups.progress },
-    { category: 'pending',   label: 'Others',      icon: '📋', patterns: groups.pending },
+    { category: 'completed', label: 'Completed', patterns: groups.completed },
+    { category: 'progress',  label: 'In Progress', patterns: groups.progress },
+    { category: 'pending',   label: 'Others',      patterns: groups.pending },
   ];
   return result.filter(g => g.patterns.length > 0);
 }

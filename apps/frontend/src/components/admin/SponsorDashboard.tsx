@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
 import { UInt64 } from '@wharfkit/antelope';
 import {
@@ -151,14 +152,14 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
         <div className="space-y-8">
             {error && (
                 <div className="cb-alert cb-alert-error">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
             {success && (
                 <div className="cb-alert cb-alert-success">
                     <span>{success}</span>
-                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
+                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 

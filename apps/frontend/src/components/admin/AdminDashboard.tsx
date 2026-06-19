@@ -56,12 +56,12 @@ export default function AdminDashboard({ session }: AdminDashboardProps = {}) {
     const abortedCount = games.filter(g => g.status === 'aborted').length;
 
     const KPI_CARDS = [
-        { label: t('admin.dash_kpi_total'), value: games.length, color: 'var(--color-info-500)' },
-        { label: t('admin.dash_kpi_active'), value: activeGames.length, color: 'var(--color-success-500)' },
-        { label: t('admin.dash_kpi_archived'), value: archivedCount, color: 'var(--color-brand-500)' },
-        { label: t('admin.dash_kpi_cancelled'), value: abortedCount, color: 'var(--color-danger-500)' },
-        { label: t('admin.dash_kpi_prize'), value: totalPrizePool.toFixed(2), suffix: 'WAX', color: 'var(--color-accent-500)' },
-        { label: t('admin.dash_kpi_rtp'), value: rtp?.avg_rtp_display ?? '--', color: 'var(--color-info-400)' },
+        { label: t('admin.dash_kpi_total'), value: games.length, color: 'var(--cb-info)' },
+        { label: t('admin.dash_kpi_active'), value: activeGames.length, color: 'var(--cb-success)' },
+        { label: t('admin.dash_kpi_archived'), value: archivedCount, color: 'var(--cb-brand)' },
+        { label: t('admin.dash_kpi_cancelled'), value: abortedCount, color: 'var(--cb-danger)' },
+        { label: t('admin.dash_kpi_prize'), value: totalPrizePool.toFixed(2), suffix: 'WAX', color: 'var(--cb-accent)' },
+        { label: t('admin.dash_kpi_rtp'), value: rtp?.avg_rtp_display ?? '--', color: 'var(--cb-info)' },
     ];
 
     return (

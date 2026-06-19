@@ -1,0 +1,6 @@
+{
+    "tokens": [
+        { "_id": "t1", "contract": "eosio.token", "symbol": "WAX", "precision": 8, "label": "WAX", "is_native": true, "enabled": true },
+        { "_id": "t2", "contract": "bingogametkn", "symbol": "BINGO", "precision": 4, "label": "Bingo Token", "is_native": false, "enabled": true }
+    ]
+}

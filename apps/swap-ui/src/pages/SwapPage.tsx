@@ -207,7 +207,7 @@ export default function SwapPage() {
                             title="Inverter par"
                             data-testid="swap-reverse"
                         >
-                            ⇄
+                            {t('swap.reverse')}
                         </button>
                     </div>
 
@@ -264,7 +264,7 @@ export default function SwapPage() {
                 )}
 
                 {quote && !quoteLoading && (
-                    <div className={`cb-card mb-4 p-3 text-sm ${highImpact ? 'border-[--cb-warn]' : ''}`}
+                    <div className={`cb-card mb-4 p-3 text-sm ${highImpact ? 'border-[--cb-warning]' : ''}`}
                          data-testid="swap-quote-box">
                         <div className="flex justify-between">
                             <span className="cb-muted">{t('swap.you_send')}</span>
@@ -280,7 +280,7 @@ export default function SwapPage() {
                         </div>
                         <div className="flex justify-between">
                             <span className="cb-muted">{t('swap.price_impact')}</span>
-                            <span className={highImpact ? 'text-[--cb-warn] font-bold' : ''}>
+                            <span className={highImpact ? 'text-[--cb-warning] font-bold' : ''}>
                                 {quote.price_impact_pct.toFixed(2)}%
                             </span>
                         </div>
@@ -289,7 +289,7 @@ export default function SwapPage() {
                             <span className={countdown <= 5 ? 'text-[--cb-danger]' : ''}>{countdown}s</span>
                         </div>
                         {highImpact && (
-                            <p className="text-[--cb-warn] text-xs mt-1" data-testid="swap-high-impact-warn">
+                            <p className="text-[--cb-warning] text-xs mt-1" data-testid="swap-high-impact-warn">
                                 {t('swap.slippage_warning')}
                             </p>
                         )}

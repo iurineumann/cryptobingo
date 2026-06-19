@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Session } from '@wharfkit/session';
 import { useChat } from '../../hooks/useChat';
+import { X } from 'lucide-react';
 import type { ChatMessage } from '../../hooks/useChat';
+import { SystemChatMessage } from './SystemChatMessage';
 
 interface ChatPanelProps {
     roomId:        string;
@@ -62,13 +64,13 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                 padding: '0.75rem', borderBottom: '1px solid var(--cb-border-default)',
             }}>
                 <span className="font-bold text-sm text-[--cb-text-primary]">
-                    💬 {roomName}
+                    {roomName}
                 </span>
                 <button
                     className="cb-btn cb-btn-ghost cb-btn-sm"
                     onClick={onClose}
                     aria-label="Fechar chat"
-                >✕</button>
+                ><X className="size-4 shrink-0" /></button>
             </div>
 
             {/* Messages */}
@@ -82,8 +84,30 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                     </p>
                 )}
                 {messages.map(msg => {
-                    const isDrop = msg.message_type === 'system_drop';
-                    const isOwn  = msg.wallet_address === walletAddress;
+                    const isDrop   = msg.message_type === 'system_drop';
+                    const isSystem = msg.message_type === 'system_draw' || msg.message_type === 'system_status';
+                    const isOwn    = msg.wallet_address === walletAddress;
+                    if (isSystem) {
+                        return (
+                            <div key={msg.id} style={{
+                                padding: '0.3rem 0.5rem',
+                                borderRadius: '0.5rem',
+                                background: 'var(--cb-bg-elevated)',
+                                border: '1px solid var(--cb-border-default)',
+                                alignSelf: 'center',
+                                maxWidth: '95%',
+                                textAlign: 'center',
+                            }}>
+                                <p style={{
+                                    fontSize: '0.7rem',
+                                    color: 'var(--cb-text-secondary)',
+                                    wordBreak: 'break-word',
+                                }}>
+                                    <SystemChatMessage message={msg.message} />
+                                </p>
+                            </div>
+                        );
+                    }
                     return (
                         <div key={msg.id} style={{
                             padding: '0.35rem 0.5rem',
@@ -99,17 +123,16 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                             <div style={{
                                 display: 'flex', alignItems: 'center', gap: '0.25rem',
                                 fontSize: '0.6rem', fontWeight: 600,
-                                color: isDrop ? '#fff' : 'var(--cb-text-tertiary)',
+                                color: isDrop ? 'var(--cb-text-on-brand)' : 'var(--cb-text-tertiary)',
                                 marginBottom: '0.15rem',
                             }}>
-                                {isDrop && <span>🎁</span>}
                                 <span>{isOwn ? 'Você' : truncateWallet(msg.wallet_address)}</span>
                             </div>
                             <p style={{
-                                fontSize: '0.75rem', color: isDrop ? '#fff' : 'var(--cb-text-primary)',
+                                fontSize: '0.75rem', color: isDrop ? 'var(--cb-text-on-brand)' : 'var(--cb-text-primary)',
                                 wordBreak: 'break-word',
                             }}>
-                                {isDrop ? `🎉 Drop! ${msg.message}` : msg.message}
+                                {isDrop ? `Drop! ${msg.message}` : msg.message}
                             </p>
                         </div>
                     );
@@ -135,7 +158,7 @@ export default function ChatPanel({ roomId, roomName, walletAddress, onClose }: 
                     onClick={handleSend}
                     disabled={!input.trim()}
                 >
-                    ➤
+                    Enviar
                 </button>
             </div>
         </aside>

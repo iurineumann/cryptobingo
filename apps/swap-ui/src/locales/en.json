@@ -42,7 +42,8 @@
     "success": "Swap executed successfully!",
     "error_generic": "Swap failed: {{msg}}",
     "connect_to_swap": "Connect your wallet to swap",
-    "wallet_balance": "Balance: {{amount}}"
+    "wallet_balance": "Balance: {{amount}}",
+    "reverse": "Reverse"
   },
   "pool": {
     "title": "Liquidity Pools",

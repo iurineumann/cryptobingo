@@ -1,0 +1,9 @@
+{
+    "entries": [
+        { "rank": 1, "wallet": "player1", "nickname": "VencedorSupremo", "total_won": 12500.5, "currency": "BINGO", "games_won": 42 },
+        { "rank": 2, "wallet": "player2", "nickname": null, "total_won": 8900.25, "currency": "BINGO", "games_won": 31 },
+        { "rank": 3, "wallet": "player3", "nickname": "SorteGrande", "total_won": 5600.0, "currency": "BINGO", "games_won": 18 }
+    ],
+    "cached_at": "2025-06-01T12:00:00.000Z",
+    "currency_filter": null
+}

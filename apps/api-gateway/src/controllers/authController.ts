@@ -169,7 +169,7 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
             try {
                 const accountInfo = await rpcClient.v1.chain.get_account(wallet);
                 const activeKeys  = accountInfo.permissions
-                    .find((p: any) => p.perm_name === 'active')
+                    .find((p: any) => String(p.perm_name) === 'active')
                     ?.required_auth.keys ?? [];
 
                 const isAuthorized = activeKeys.some(

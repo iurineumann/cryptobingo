@@ -31,7 +31,7 @@ export default function WalletPage({ session }: Props) {
     const [txResult, setTxResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
     // Token selecionado para depósito/saque (padrão: primeiro token não-nativo)
-    const [selectedSymbol, setSelectedSymbol] = useState<string>('BINGO');
+    const [selectedSymbol, setSelectedSymbol] = useState<string>('');
 
     const loadBalances = useCallback(async () => {
         setLoading(true);
@@ -87,9 +87,9 @@ export default function WalletPage({ session }: Props) {
             }
             setWalletBals(walletBals);
 
-            // Selecionar primeiro token não-nativo por padrão (depósito/saque)
-            const first = cfg.find(c => !c.is_native);
-            if (first) setSelectedSymbol(first.symbol);
+            // Selecionar primeiro token não-nativo por padrão; fallback nativo
+            const firstNonNative = cfg.find(t => !t.is_native);
+            setSelectedSymbol(firstNonNative?.symbol ?? cfg[0]?.symbol ?? '');
 
         } catch (err) {
             console.error('[WalletPage] Erro ao carregar saldos:', err);
@@ -106,7 +106,7 @@ export default function WalletPage({ session }: Props) {
     const maxAmount      = mode === 'deposit' ? walletAmount : contractAmount;
 
     const handleAction = async () => {
-        if (!selectedToken || selectedToken.is_native) return;
+        if (!selectedToken) return;
         const qty = parseFloat(amount);
         if (!qty || qty <= 0) return;
         setSending(true);
@@ -157,8 +157,8 @@ export default function WalletPage({ session }: Props) {
     };
 
     return (
-        <div className="max-w-xl mx-auto space-y-6">
-            <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('wallet_page.title')}</h2>
+        <div className="max-w-xl mx-auto space-y-6" data-testid="wallet-page">
+            <h2 className="text-xl font-bold text-[--cb-text-primary]" data-testid="wallet-title">{t('wallet_page.title')}</h2>
 
             {/* ── Saldos off-contract ───────────────────────────────── */}
             <div>
@@ -168,11 +168,11 @@ export default function WalletPage({ session }: Props) {
                 {loading ? (
                     <p className="text-sm text-[--cb-text-tertiary]">{t('common.loading')}</p>
                 ) : walletBalances.length === 0 ? (
-                    <p className="text-sm text-[--cb-text-tertiary]">{t('wallet_page.no_tokens_configured')}</p>
+                    <p className="text-sm text-[--cb-text-tertiary]" data-testid="wallet-empty">{t('wallet_page.no_tokens_configured')}</p>
                 ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {walletBalances.map(b => (
-                            <div key={b.symbol} className="cb-card p-3">
+                            <div key={b.symbol} className="cb-card p-3" data-testid={`wallet-balance-${b.symbol}`}>
                                 <p className="text-xs text-[--cb-text-tertiary] mb-1">{b.label}</p>
                                 <p className="text-base font-mono font-bold text-[--cb-text-primary]">
                                     {b.amount.toFixed(b.precision)} {b.symbol}
@@ -195,7 +195,7 @@ export default function WalletPage({ session }: Props) {
                 ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {contractBalances.map(b => (
-                            <div key={b.symbol} className="cb-card p-3">
+                            <div key={b.symbol} className="cb-card p-3" data-testid={`wallet-contract-${b.symbol}`}>
                                 <p className="text-xs text-[--cb-text-tertiary] mb-1">{b.label}</p>
                                 <p className="text-base font-mono font-bold text-[--cb-text-primary]">
                                     {b.amount.toFixed(b.precision)} {b.symbol}
@@ -206,21 +206,22 @@ export default function WalletPage({ session }: Props) {
                 )}
             </div>
 
-            <button className="cb-btn cb-btn-ghost cb-btn-sm text-xs" onClick={loadBalances} disabled={loading}>
+            <button className="cb-btn cb-btn-ghost cb-btn-sm text-xs" onClick={loadBalances} disabled={loading} data-testid="wallet-refresh">
                 {t('wallet_page.refresh')}
             </button>
 
             {/* ── Formulário depósito/saque ─────────────────────────── */}
-            {tokens.filter(tk => !tk.is_native).length > 0 && (
+            {tokens.length > 0 && (
                 <div className="cb-card p-5 space-y-4">
                     {/* Seleção de token */}
-                    {tokens.filter(tk => !tk.is_native).length > 1 && (
+                    {tokens.length > 0 && (
                         <div className="flex gap-2 flex-wrap">
-                            {tokens.filter(tk => !tk.is_native).map(tk => (
+                            {tokens.map(tk => (
                                 <button
                                     key={tk.symbol}
                                     onClick={() => { setSelectedSymbol(tk.symbol); setTxResult(null); }}
                                     className={`cb-btn cb-btn-sm ${selectedSymbol === tk.symbol ? 'cb-btn-primary' : 'cb-btn-outline'}`}
+                                    data-testid={`wallet-token-${tk.symbol}`}
                                 >
                                     {tk.symbol}
                                 </button>
@@ -233,12 +234,14 @@ export default function WalletPage({ session }: Props) {
                         <button
                             className={`cb-btn cb-btn-sm flex-1 ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
                             onClick={() => { setMode('deposit'); setTxResult(null); }}
+                            data-testid="wallet-mode-deposit"
                         >
                             {t('wallet_page.deposit')}
                         </button>
                         <button
                             className={`cb-btn cb-btn-sm flex-1 ${mode === 'withdraw' ? 'cb-btn-primary' : 'cb-btn-outline'}`}
                             onClick={() => { setMode('withdraw'); setTxResult(null); }}
+                            data-testid="wallet-mode-withdraw"
                         >
                             {t('wallet_page.withdraw')}
                         </button>
@@ -258,11 +261,13 @@ export default function WalletPage({ session }: Props) {
                                 value={amount}
                                 onChange={e => setAmount(e.target.value)}
                                 disabled={sending}
+                                data-testid="wallet-amount-input"
                             />
                             <button
                                 className="cb-btn cb-btn-ghost cb-btn-xs text-xs"
                                 onClick={() => setAmount(maxAmount > 0 ? maxAmount.toFixed(selectedToken?.precision ?? 4) : '0')}
                                 disabled={sending || maxAmount <= 0}
+                                data-testid="wallet-max-btn"
                             >
                                 {t('wallet_page.max')}
                             </button>
@@ -272,13 +277,14 @@ export default function WalletPage({ session }: Props) {
                     <button
                         className={`cb-btn w-full ${mode === 'deposit' ? 'cb-btn-primary' : 'cb-btn-danger'}`}
                         onClick={handleAction}
-                        disabled={sending || !amount || parseFloat(amount) <= 0 || !selectedToken || selectedToken.is_native}
+                        disabled={sending || !amount || parseFloat(amount) <= 0 || !selectedToken}
+                        data-testid="wallet-action-btn"
                     >
                         {sending ? t('wallet_page.sending') : (mode === 'deposit' ? t('wallet_page.deposit_action') : t('wallet_page.withdraw_action'))}
                     </button>
 
                     {txResult && (
-                        <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-[color-mix(in_srgb,var(--cb-danger)_10%,transparent)] text-[--cb-danger]'}`}>
+                        <div className={`text-sm p-3 rounded-lg ${txResult.ok ? 'bg-[color-mix(in_srgb,var(--cb-success)_10%,transparent)] text-[--cb-success]' : 'bg-[color-mix(in_srgb,var(--cb-danger)_10%,transparent)] text-[--cb-danger]'}`} data-testid="wallet-result">
                             {txResult.msg}
                         </div>
                     )}

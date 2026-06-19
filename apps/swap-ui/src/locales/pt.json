@@ -42,7 +42,8 @@
     "success": "Swap realizado com sucesso!",
     "error_generic": "Erro ao executar swap: {{msg}}",
     "connect_to_swap": "Conecte sua carteira para fazer swap",
-    "wallet_balance": "Saldo: {{amount}}"
+    "wallet_balance": "Saldo: {{amount}}",
+    "reverse": "Inverter"
   },
   "pool": {
     "title": "Pools de Liquidez",

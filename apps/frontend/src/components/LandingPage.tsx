@@ -5,6 +5,7 @@ import { fetchRooms, fetchRtpReport, fetchGamesHistory } from '../services/api';
 import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
+import { Moon, Sun } from 'lucide-react';
 import Logo from './Logo';
 
 interface DevAccount {
@@ -91,9 +92,6 @@ function HeroBall() {
   );
 }
 
-const STATUS_EMOJI: Record<string, string> = {
-  funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌', created: '🕐',
-};
 const STATUS_LABEL: Record<string, string> = {
   inactive: 'Inativa', active: 'Ativa', paused: 'Pausada', closed: 'Fechada',
 };
@@ -181,18 +179,11 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
 
   const totalPrizes = rtpReport?.total_paid_out ?? 0;
   const avgRtp      = rtpReport?.avg_rtp_display ?? null;
-  const gamesCount  = gamesHistory.length > 0 ? gamesHistory.length : null;
-
-  const STATS = [
-    { value: totalPrizes > 0 ? formatLargeNumber(totalPrizes) : loadingStats ? '…' : '0', unit: rtpReport?.currency ?? '', label: t('landing.stats_prizes'), hint: t('landing.stats_prizes_hint') },
-    { value: avgRtp ?? (loadingStats ? '…' : '—'), unit: '%', label: t('landing.stats_rtp'), hint: t('landing.stats_rtp_hint') },
-    { value: gamesCount !== null ? `${gamesCount}` : loadingStats ? '…' : '—', unit: '', label: t('landing.stats_compliance'), hint: t('landing.stats_compliance_hint') },
-  ];
 
   const WHY_ITEMS = [
-    { icon: '⚡', title: t('landing.why_instant_title'), desc: t('landing.why_instant_desc') },
-    { icon: '🛡', title: t('landing.why_fair_title'), desc: t('landing.why_fair_desc') },
-    { icon: '◆', title: t('landing.why_multitoken_title'), desc: t('landing.why_multitoken_desc') },
+    { title: t('landing.why_instant_title'), desc: t('landing.why_instant_desc') },
+    { title: t('landing.why_fair_title'), desc: t('landing.why_fair_desc') },
+    { title: t('landing.why_multitoken_title'), desc: t('landing.why_multitoken_desc') },
   ];
 
   const [devOpen, setDevOpen] = useState(false);
@@ -258,10 +249,10 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
             </div>
             <button className="cb-theme-toggle" onClick={onToggleTheme}
               aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}>
-              {theme === 'dark' ? '☾' : '☀'}
+              {theme === 'dark' ? <Moon className="size-4 shrink-0" /> : <Sun className="size-4 shrink-0" />}
             </button>
             <button className="cb-btn cb-btn-primary cb-btn-sm cb-btn-pill" onClick={onConnect}>
-              ◆ {t('auth.connect_wallet')}
+              {t('auth.connect_wallet')}
             </button>
           </div>
         </div>
@@ -280,27 +271,26 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
               </div>
               <h1 className="font-display font-extrabold leading-tight tracking-tight mb-6 text-[clamp(2rem,5vw,3.5rem)]">
                 {t('landing.hero_title')}{' '}
-                <span className="bg-gradient-to-r from-[--color-accent-300] to-[--color-accent-500] bg-clip-text text-transparent">
+                <span className="text-[--cb-accent]">
                   {t('landing.hero_highlight')}
                 </span>
               </h1>
               <p className="text-lg text-[--cb-text-secondary] leading-relaxed mb-10">{t('landing.hero_desc')}</p>
               <div className="flex gap-4 flex-wrap">
                 <button className="cb-btn cb-btn-primary cb-btn-xl cb-btn-pill" onClick={onConnect} data-testid="landing-connect">
-                  ◆ {t('landing.hero_cta')}
+                  {t('landing.hero_cta')}
                 </button>
                 <a href="#como" className="cb-btn cb-btn-ghost cb-btn-lg no-underline">
                   {t('landing.hero_how_it_works')}
                 </a>
               </div>
               <div className="flex gap-6 flex-wrap mt-8 text-xs text-[--cb-text-tertiary]">
-                {(['⚡', '🛡', '◆', '⚖'] as const).map((icon, i) => {
-                  const label = [t('landing.trust_instant'), t('landing.trust_fair'), t('landing.trust_wax'), t('landing.trust_compliance')][i];
-                  return <span key={i} className="inline-flex items-center gap-1.5"><span>{icon}</span>{label}</span>;
-                })}
+                {([t('landing.trust_instant'), t('landing.trust_fair'), t('landing.trust_wax'), t('landing.trust_compliance')] as const).map((label, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 text-[--cb-text-tertiary]">{label}</span>
+                ))}
               </div>
             </div>
-            <div className="hidden lg:block"><HeroBall /></div>
+            <div><HeroBall /></div>
           </div>
         </div>
       </section>
@@ -310,7 +300,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
         <div className="cb-container">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="font-display text-2xl font-bold">🎮 {t('landing_lobby')}</h2>
+              <h2 className="font-display text-2xl font-bold">{t('landing_lobby')}</h2>
               {activeRoomsCount > 0 && (
                 <p className="text-sm text-[--cb-text-tertiary] mt-1">
                   {activeRoomsCount} sala{activeRoomsCount !== 1 ? 's' : ''} ativa{activeRoomsCount !== 1 ? 's' : ''}
@@ -318,7 +308,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
               )}
             </div>
             <button className="cb-btn cb-btn-primary cb-btn-sm cb-btn-pill" onClick={onConnect}>
-              ◆ {t('auth.connect_wallet')}
+              {t('auth.connect_wallet')}
             </button>
           </div>
 
@@ -329,7 +319,6 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
             </div>
           ) : rooms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-[--cb-text-tertiary]">
-              <span className="text-5xl">🎱</span>
               <p className="text-base font-medium">{t('game.waiting')}</p>
               <p className="text-sm">{t('game_room.tickets_empty_default')}</p>
             </div>
@@ -356,7 +345,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                         {/* Status da partida atual (slow-reveal aware) */}
                         {gameStatus && (
                           <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
-                            {STATUS_EMOJI[gameStatus] ?? ''} {gameStatus}
+                            {gameStatus}
                           </span>
                         )}
                         {/* Badge LIVE animado */}
@@ -365,7 +354,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                         )}
                         {/* Countdown de fechamento */}
                         {isFunding && countdown && (
-                          <span className="text-xs font-mono font-bold text-[--cb-accent]">🔒 {countdown}</span>
+                          <span className="text-xs font-mono font-bold text-[--cb-accent]">{countdown}</span>
                         )}
                         {/* Status da sala se não há partida ativa */}
                         {!gameStatus && (
@@ -373,13 +362,13 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                         )}
                         {/* Badges de drop */}
                         {hasNftDrop && (
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
-                            🎁 NFT
+                          <span className="cb-badge-nft">
+                            NFT
                           </span>
                         )}
                         {hasTokenDrop && (
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgb(234 179 8 / 0.12)', color: 'rgb(253 224 71)', border: '1px solid rgb(234 179 8 / 0.3)' }}>
-                            💰 Token
+                          <span className="cb-badge-token">
+                            Token
                           </span>
                         )}
                       </div>
@@ -401,7 +390,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                       {/* Cartelas vendidas na partida atual */}
                       {ticketsSold != null && ticketsSold > 0 && (
                         <div className="flex justify-between">
-                          <dt className="text-[--cb-text-tertiary]">🎫 {t('replay.col_tickets_sold')}</dt>
+                          <dt className="text-[--cb-text-tertiary]">{t('replay.col_tickets_sold')}</dt>
                           <dd className="font-mono font-medium text-[--cb-text-primary]">{ticketsSold}</dd>
                         </div>
                       )}
@@ -416,16 +405,15 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                     {/* CTAs: Entrar (abre auth) + Histórico (público) */}
                     <div className="flex gap-2 mt-2">
                       <button className="cb-btn cb-btn-outline flex-1 text-sm" onClick={onConnect}>
-                        ◆ {t('room.enter')}
+                        {t('room.enter')}
                       </button>
                       <button
                         className="cb-btn cb-btn-ghost cb-btn-sm"
                         title={t('replay.room_history_title')}
                         aria-label={`Histórico da sala ${meta?.name ?? roomId}`}
                         onClick={() => navigate(`/room/${roomId}/history`)}
-                        style={{ padding: '0 0.75rem' }}
                       >
-                        📋
+                        {t('replay.room_history_title')}
                       </button>
                     </div>
                   </article>
@@ -436,21 +424,67 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
         </div>
       </section>
 
-      {/* ── Stats Strip ── */}
+      {/* ── Audit Trail ── */}
       <section id="stats" className="py-12 bg-[--cb-bg-elevated] border-t border-b border-[--cb-border-subtle]">
         <div className="cb-container">
-          <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))' }}>
-            {STATS.map(stat => (
-              <div key={stat.label} className="text-center">
-                <div className="font-display font-extrabold tracking-tight text-[--cb-accent] leading-none text-[clamp(1.8rem,3vw,2.5rem)]">
-                  {stat.value}
-                  {stat.unit && <span className="text-base font-bold ml-1 text-[--cb-text-secondary]">{stat.unit}</span>}
-                </div>
-                <div className="text-sm font-semibold text-[--cb-text-primary] mt-2">{stat.label}</div>
-                <div className="text-[0.7rem] text-[--cb-text-tertiary] mt-1">{stat.hint}</div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="font-display text-xl font-bold text-[--cb-text-primary]">{t('landing.audit_trail_title')}</h2>
+              <p className="text-sm text-[--cb-text-tertiary] mt-1">{t('landing.audit_trail_desc')}</p>
+            </div>
+            {totalPrizes > 0 && (
+              <div className="text-right text-sm">
+                <span className="font-mono font-bold text-[--cb-accent]">{formatLargeNumber(totalPrizes)}</span>
+                <span className="text-[--cb-text-tertiary] ml-1">{t('landing.stats_prizes')}</span>
+                {avgRtp && (
+                  <span className="ml-3 font-mono text-[--cb-text-secondary]">{avgRtp}% <span className="text-[--cb-text-tertiary]">{t('landing.stats_rtp')}</span></span>
+                )}
               </div>
-            ))}
+            )}
           </div>
+          {loadingStats ? (
+            <div className="flex items-center justify-center py-10 text-[--cb-text-tertiary]">
+              <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+            </div>
+          ) : gamesHistory.length === 0 ? (
+            <div className="cb-audit-empty">
+              <span className="text">{t('landing.audit_trail_empty')}</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="cb-audit-trail">
+                <thead>
+                  <tr>
+                    <th>{t('landing.audit_trail_game_id')}</th>
+                    <th>{t('landing.audit_trail_status')}</th>
+                    <th>{t('landing.audit_trail_wagered')}</th>
+                    <th>{t('landing.audit_trail_paid')}</th>
+                    <th>{t('landing.audit_trail_rtp')}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gamesHistory.slice(0, 5).map(g => (
+                    <tr key={g.game_id}>
+                      <td className="mono text-xs text-[--cb-text-secondary]">#{g.game_id}</td>
+                      <td>
+                        <span className={`status-dot ${g.status === 'archived' || g.status === 'drawn' ? 'ok' : g.status === 'aborted' ? 'fail' : 'warn'}`} />
+                        {g.status}
+                      </td>
+                      <td className="mono">{g.total_wagered.toFixed(4)}</td>
+                      <td className="mono paid">{g.total_paid_out.toFixed(4)}</td>
+                      <td className="mono">{g.rtp_pct.toFixed(1)}%</td>
+                      <td>
+                        <a href={`/replay/${g.game_id}`} className="hash" onClick={e => { e.preventDefault(); navigate(`/replay/${g.game_id}`); }}>
+                          {t('landing.audit_trail_verify')}
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 
@@ -458,14 +492,17 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
       <section id="como" className="py-20">
         <div className="cb-container">
           <h2 className="font-display text-2xl md:text-3xl font-bold text-center mb-12 tracking-tight">{t('landing.why_title')}</h2>
-          <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(18rem, 1fr))' }}>
-            {WHY_ITEMS.map(item => (
-              <div key={item.title} className="cb-card p-7">
-                <div className="text-3xl mb-4">{item.icon}</div>
-                <h3 className="font-display text-lg font-bold mb-3 text-[--cb-text-primary]">{item.title}</h3>
-                <p className="text-sm text-[--cb-text-secondary] leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
+          <div className="landing-why-grid">
+            {WHY_ITEMS.map((item, i) => {
+              const bingoLetters = ['B', 'I', 'N'];
+              return (
+                <div key={item.title} className="why-item">
+                  <div className="why-accent">{bingoLetters[i]}</div>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -492,7 +529,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                 <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setDevOpen(o => !o)}
                   data-testid="dev-login-toggle"
                   style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', color: 'var(--cb-text-tertiary)' }}>
-                  🧪 {t('auth.dev_login')} ▾
+                                  {t('auth.dev_login')} ▾
                 </button>
                 {devOpen && (
                   <div className="absolute bottom-full right-0 mb-1 bg-[--cb-bg-elevated] border border-[--cb-border-subtle] rounded-lg p-1 min-w-[11rem] shadow-lg z-50">
@@ -500,7 +537,6 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                       <button key={acc.actor} className="cb-btn cb-btn-ghost block w-full text-left text-[0.7rem] px-2.5 py-1.5 whitespace-nowrap"
                         data-testid={`dev-login-${devRoleFromLabel(acc.label)}`}
                         onClick={() => { setDevOpen(false); onDevLogin(acc.actor, acc.key); }}>
-                        <span className="font-mono text-[--cb-brand] mr-1.5">◆</span>
                         <strong>{acc.label}</strong>
                         <span className="text-[0.6rem] text-[--cb-text-tertiary] ml-1.5">{acc.actor}</span>
                       </button>

@@ -13,6 +13,7 @@ import {
   BINGO_COLORS, getCol, type Pattern,
   sortTickets, sortPatterns, groupTicketsByCategory,
 } from './ticketUtils';
+import { Check, X } from 'lucide-react';
 
 interface ReplayRoomProps {
   gameId: string;
@@ -154,7 +155,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
   // ── Loading / not found ───────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+      <div data-testid="replay-loading" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
         <div style={{ textAlign: 'center' }}>
           <span className="cb-spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
           <p style={{ color: 'var(--cb-text-secondary)', fontSize: '0.875rem', marginTop: '1rem' }}>{t('common.loading')}</p>
@@ -165,7 +166,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
 
   if (!game) {
     return (
-      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
+      <div data-testid="replay-not-found" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cb-bg-base)' }}>
         <div style={{ textAlign: 'center', color: 'var(--cb-text-tertiary)' }}>
           <p>{t('replay.game_not_found')}</p>
           <button className="cb-btn cb-btn-outline cb-btn-sm mt-4" onClick={onLeave}>{t('common.back')}</button>
@@ -175,12 +176,12 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
   }
 
   return (
-    <div className="gr-shell">
+    <div className="gr-shell" data-testid="replay-page">
 
       {/* ── Navbar ── */}
       <header className="gr-navbar">
         <div className="gr-nav-left">
-          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onLeave}>
+          <button className="cb-btn cb-btn-ghost cb-btn-sm" data-testid="replay-back-btn" onClick={onLeave}>
             {t('replay.back_to_lobby')}
           </button>
           <div className="gr-nav-crumb">
@@ -231,6 +232,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                 <div
                   ref={heroRef}
                   className="gr-ball-hero"
+                  data-testid="replay-hero"
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
@@ -238,7 +240,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number">{lastDrawn ?? '—'}</span>
+                  <span className="ball-number" data-testid="replay-hero-number">{lastDrawn ?? '—'}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('replay.ball_order', { ordem: revealedBalls.length })}</span>
                   )}
@@ -252,7 +254,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
               </div>
 
               <div className="gr-stage-footer">
-                <div ref={seqRef} className="gr-sequence" aria-label={t('replay.history_aria')}>
+                <div ref={seqRef} className="gr-sequence" data-testid="replay-sequence" aria-label={t('replay.history_aria')}>
                   {[...revealedBalls].reverse().map((ball, idx) => {
                     const c = getCol(ball);
                     return (
@@ -289,7 +291,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                   className="cb-btn cb-btn-ghost cb-btn-sm"
                   onClick={() => setShowPatterns(false)}
                   aria-label={t('game_room.patterns_hide_aria')}
-                >✕</button>
+                ><X className="size-4 shrink-0" /></button>
               </div>
               <div className="gr-patterns-list">
                 {patterns.length === 0 ? (
@@ -334,7 +336,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                           <span className="name">{c.name}</span>
                           <span className="amt">{(c.weight / 100).toFixed(2)}x</span>
                           {won
-                            ? <span className="cnt">✅ {won} cartela{won > 1 ? 's' : ''}</span>
+                            ? <span className="cnt"><Check className="size-3 shrink-0" /> {won} cartela{won > 1 ? 's' : ''}</span>
                             : <span className="cnt">—</span>
                           }
                         </div>
@@ -353,34 +355,37 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           <div className="gr-replay-btn-group">
             <button
               className="cb-btn cb-btn-primary cb-btn-sm"
+              data-testid="replay-play-btn"
               onClick={isComplete ? restart : togglePlay}
               aria-label={isPlaying ? t('replay.btn_pause') : isComplete ? t('replay.btn_restart') : t('replay.btn_play')}
               title={isPlaying ? t('replay.btn_pause') : isComplete ? t('replay.btn_restart') : t('replay.btn_play')}
             >
-              {isPlaying ? `⏸ ${t('replay.btn_pause')}` : isComplete ? `↺ ${t('replay.btn_restart')}` : `▶ ${t('replay.btn_play')}`}
+              {isPlaying ? t('replay.btn_pause') : isComplete ? t('replay.btn_restart') : t('replay.btn_play')}
             </button>
 
             {!isComplete && (
               <button
                 className="cb-btn cb-btn-ghost cb-btn-sm"
+                data-testid="replay-restart-btn"
                 onClick={restart}
                 disabled={revealedBalls.length === 0}
                 title={t('replay.btn_restart')}
                 aria-label={t('replay.btn_restart')}
               >
-                ↺
+                {t('replay.btn_restart')}
               </button>
             )}
 
             <button
               className="cb-btn cb-btn-ghost cb-btn-sm"
+              data-testid="replay-end-btn"
               onClick={skipToEnd}
               disabled={isComplete}
               title={t('replay.btn_end')}
               aria-label={t('replay.btn_end')}
-            >
-              ⏭
-            </button>
+              >
+                {t('replay.btn_end')}
+              </button>
           </div>
 
           {/* Velocidade */}
@@ -394,6 +399,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                   style={{ fontSize: '0.7rem', padding: '0.2rem 0.45rem', minWidth: '2.2rem' }}
                   onClick={() => setSpeed(s)}
                   aria-pressed={speed === s}
+                  data-testid={`replay-speed-${s}`}
                 >
                   {s}×
                 </button>
@@ -404,7 +410,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           {/* Contador */}
           <div className="gr-replay-counter">
             <span>{revealedBalls.length}/{totalBalls}</span>
-            {isComplete && <span className="done">✓ {t('replay.complete')}</span>}
+            {isComplete && <span className="done"><Check className="size-3 shrink-0" /> {t('replay.complete')}</span>}
           </div>
 
           {/* Seek bar — linha completa abaixo */}
@@ -412,6 +418,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
             <div className="gr-replay-seek">
               <div
                 className="gr-replay-seek-track"
+                data-testid="replay-seek"
                 role="slider"
                 aria-label={t('replay.seek_aria')}
                 aria-valuenow={revealedBalls.length}
@@ -436,8 +443,8 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
         {hasBanners && (
           <div className="gr-banners-row" style={{ gridColumn: '1 / -1' }}>
             {goldenBall && (
-              <div className="gr-golden-banner" role="status" aria-live="assertive">
-                <span className="gr-golden-icon">🌟</span>
+              <div className="gr-golden-banner" data-testid="replay-golden-banner" role="status" aria-live="assertive">
+                <span className="gr-golden-icon" />
                 <div className="gr-golden-text">
                   <strong>{t('game_room.golden_ball_title')}</strong>
                   <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
@@ -446,8 +453,8 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
               </div>
             )}
             {gameEnded && (
-              <div className="gr-ended-banner" role="status" aria-live="polite">
-                <span className="gr-ended-icon">🏁</span>
+              <div className="gr-ended-banner" data-testid="replay-ended-banner" role="status" aria-live="polite">
+                <span className="gr-ended-icon" />
                 <div className="gr-ended-text">
                   <strong>{t('game_room.game_ended_title')}</strong>
                   <span>
@@ -463,12 +470,10 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
 
         {/* ── Painel de resumo — aparece quando o replay termina ── */}
         {showSummary && isComplete && (
-          <div className="gr-replay-summary">
+          <div className="gr-replay-summary" data-testid="replay-summary">
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
               <div className="gr-replay-summary-head">
-                <span className="gr-replay-summary-icon">
-                  {summaryStats.myWinning ? '🏆' : '🏁'}
-                </span>
+                <span className={`gr-replay-summary-icon${summaryStats.myWinning ? ' gr-replay-summary-icon--win' : ' gr-replay-summary-icon--end'}`} />
                 <div>
                   <div className="gr-replay-summary-title">
                     {summaryStats.myWinning
@@ -488,7 +493,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
                 className="cb-btn cb-btn-ghost cb-btn-sm"
                 onClick={() => setShowSummary(false)}
                 aria-label="Fechar resumo"
-              >✕</button>
+              ><X className="size-4 shrink-0" /></button>
             </div>
 
             {winnerMap.size > 0 && (
@@ -511,7 +516,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
 
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
               <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={restart}>
-                ↺ {t('replay.btn_restart')}
+                {t('replay.btn_restart')}
               </button>
               <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={onLeave}>
                 {t('replay.back_to_lobby')}
@@ -535,7 +540,6 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
             groupedTickets.map(group => (
               <div key={group.category} className="gr-tickets-group">
                 <div className="gr-tickets-group-label">
-                  <span className="gr-tickets-group-icon">{group.icon}</span>
                   <span className="gr-tickets-group-title">{group.label}</span>
                   <span className="gr-tickets-group-count">{group.tickets.length}</span>
                 </div>

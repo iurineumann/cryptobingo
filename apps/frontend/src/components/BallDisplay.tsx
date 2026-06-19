@@ -98,7 +98,7 @@ export default function BallDisplay({
             <div className="cb-card mt-4">
                 <div className="flex items-center justify-between flex-wrap gap-2 pb-3 mb-3 border-b border-[--cb-border-default]">
                     <span className="font-bold text-[--cb-text-primary]">
-                        🎱 {t('game_room.real_time_drawing')}
+                        {t('game_room.real_time_drawing')}
                     </span>
                     <span className="flex items-center gap-1.5 text-xs text-[--cb-text-secondary]">
                         <span className={wsDot} aria-hidden="true" />
@@ -106,7 +106,6 @@ export default function BallDisplay({
                     </span>
                 </div>
                 <div className="flex flex-col items-center justify-center py-10 gap-2 text-[--cb-text-tertiary]">
-                    <span className="text-4xl" aria-hidden="true">⏳</span>
                     <p className="text-sm">{t('game_room.waiting_start')}</p>
                 </div>
             </div>
@@ -119,7 +118,7 @@ export default function BallDisplay({
             {/* ── Header ── */}
             <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-[--cb-border-default]">
                 <span className="flex items-center gap-2 font-bold text-[--cb-text-primary]">
-                    🎱 {t('game_room.real_time_drawing')} — {t('game_room.breadcrumb_room')} #{gameId}
+                    {t('game_room.real_time_drawing')} — {t('game_room.breadcrumb_room')} #{gameId}
                     {isDrawing && (
                         <span className="cb-status-dot cb-status-dot-live text-xs font-bold text-[--cb-danger] uppercase tracking-wide"
                               aria-label={t('game_room.badge_live')} />
@@ -134,7 +133,6 @@ export default function BallDisplay({
             {/* ── Banner de Abort ── */}
             {isAborted && (
                 <div className="cb-alert cb-alert-error" role="alert" aria-live="assertive">
-                    <span className="text-lg" aria-hidden="true">❌</span>
                     <div>
                         <p className="font-bold">{t('game_room.draw_cancelled')}</p>
                         <p className="text-sm mt-0.5 opacity-90">
@@ -156,7 +154,6 @@ export default function BallDisplay({
                     aria-live="polite"
                     aria-label="Vencedor encontrado"
                 >
-                    <p className="text-3xl mb-2" aria-hidden="true">🏆</p>
                     <p className="text-xl font-black text-[--color-accent-300] tracking-wide mb-3">
                         {t('game_room.bingo')}
                     </p>
@@ -193,7 +190,7 @@ export default function BallDisplay({
                         style={{
                             background: `radial-gradient(circle at 35% 30%, color-mix(in srgb, ${COL_BG_VAR[getBingoCol(lastBall.number)]} 80%, white), ${COL_BG_VAR[getBingoCol(lastBall.number)]})`,
                             boxShadow: `0 8px 32px ${COL_BG_VAR[getBingoCol(lastBall.number)]}66, 0 0 0 4px ${COL_BG_VAR[getBingoCol(lastBall.number)]}22`,
-                            animation: 'cb-ball-drop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
+                            animation: 'cb-ball-drop 0.5s cubic-bezier(0.4,0,0.2,1) forwards',
                         }}
                         aria-label={`Bola ${lastBall.number}, coluna ${getBingoCol(lastBall.number)}, número ${lastBall.order} de 75`}
                     >
@@ -264,7 +261,7 @@ export default function BallDisplay({
                                         color:       isLast ? 'white' : color,
                                         border:      `1.5px solid ${color}`,
                                         boxShadow:   isLast ? `0 0 10px ${color}88` : 'none',
-                                        animation:   isLast ? 'cb-ball-drop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none',
+                                        animation:   isLast ? 'cb-ball-drop 0.45s cubic-bezier(0.4,0,0.2,1) forwards' : 'none',
                                     }}
                                     title={`${col}${ball.number} — bola #${ball.order}`}
                                     aria-label={`Bola ${ball.number}`}

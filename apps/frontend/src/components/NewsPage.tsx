@@ -82,7 +82,7 @@ export default function NewsPage() {
                             data-testid={`news-item-${item.id}`}
                             style={{
                                 border: '1px solid var(--cb-border)',
-                                borderRadius: '0.75rem',
+                                borderRadius: '0.625rem',
                                 overflow: 'hidden',
                                 background: 'var(--cb-bg-card)',
                             }}
@@ -103,7 +103,7 @@ export default function NewsPage() {
                                             data-testid={`news-pinned-${item.id}`}
                                             style={{
                                                 fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem',
-                                                background: 'var(--cb-primary)', color: '#fff', borderRadius: '999px',
+                                                background: 'var(--cb-primary)', color: 'var(--cb-text-on-brand)', borderRadius: '999px',
                                                 textTransform: 'uppercase', letterSpacing: '0.05em',
                                             }}
                                         >
@@ -145,7 +145,7 @@ export default function NewsPage() {
                         style={{
                             padding: '0.6rem 1.5rem',
                             background: 'var(--cb-primary)',
-                            color: '#fff',
+                            color: 'var(--cb-text-on-brand)',
                             border: 'none',
                             borderRadius: '0.5rem',
                             cursor: 'pointer',

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
 
 const ATOMIC_API   = import.meta.env.VITE_ATOMIC_API        ?? 'https://test.api.atomicassets.io';
@@ -321,18 +322,18 @@ export default function NftAdmin({ session }: NftAdminProps) {
             </div>
 
             {!session && (
-                <div className="cb-alert cb-alert-error mb-4">⚠️ {t('admin.nft_no_session')}</div>
+                <div className="cb-alert cb-alert-error mb-4"><TriangleAlert className="size-4 shrink-0" /> {t('admin.nft_no_session')}</div>
             )}
             {error && (
                 <div className="cb-alert cb-alert-error mb-4 flex items-center gap-2">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
             {success && (
                 <div className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
                     <span>{success}</span>
-                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
+                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 
@@ -464,7 +465,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                             </select>
                                             {schemaForm.fields.length > 1 && (
                                                 <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() =>
-                                                    setSchemaForm(f => ({ ...f, fields: f.fields.filter((_, j) => j !== i) }))}>✕</button>
+                                                    setSchemaForm(f => ({ ...f, fields: f.fields.filter((_, j) => j !== i) }))}><X className="size-4 shrink-0" /></button>
                                             )}
                                         </div>
                                     ))}
@@ -610,7 +611,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                 )}
                                 <button className="cb-btn cb-btn-danger cb-btn-sm text-xs"
                                     onClick={() => lockTemplate(tpl.template_id)}>
-                                    🔒 {t('admin.nft_lock_template')}
+                                    {t('admin.nft_lock_template')}
                                 </button>
                             </div>
                         ))}
@@ -692,7 +693,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                     </div>
                                     <button className="cb-btn cb-btn-danger cb-btn-sm text-xs shrink-0"
                                         onClick={e => { e.stopPropagation(); burnAsset(asset.asset_id); }}>
-                                        🔥
+                                        {t('admin.nft_burn')}
                                     </button>
                                 </div>
                             </div>

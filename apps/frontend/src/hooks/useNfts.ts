@@ -6,10 +6,13 @@ import { useState, useEffect } from 'react';
 import { getAuthToken }        from '../services/api';
 
 export interface NftAsset {
-    asset_id:     string;
-    schema_name:  string;
-    name:         string;
-    backed_tokens: string;
+    asset_id:       string;
+    schema_name:    string;
+    name:           string;
+    backed_tokens:  string;
+    template_id?:   number;
+    collection_name?: string;
+    img_url?:       string;
 }
 
 export function useNfts() {

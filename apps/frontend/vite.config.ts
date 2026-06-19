@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
     const wsUrl  = env.VITE_WS_URL_INTERNAL || 'http://127.0.0.1:8085';
 
     return {
+        resolve: {
+            alias: {
+                '@': path.resolve(__dirname, './src'),
+            },
+        },
         plugins: [
             tailwindcss(),    // Tailwind v4 — deve vir ANTES do react plugin
             react(),
