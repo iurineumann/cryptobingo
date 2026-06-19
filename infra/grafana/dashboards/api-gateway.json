@@ -1,0 +1,357 @@
+{
+  "id": null,
+  "uid": "cryptobingo-api-gateway",
+  "title": "CryptoBingo — API Gateway",
+  "tags": ["cryptobingo", "api-gateway", "http"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Taxa de Requisições (req/s) por Rota",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(api_http_requests_total[1m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Requisições em Voo",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "api_http_requests_in_flight",
+          "legendFormat": "Em Voo",
+          "refId": "A"
+        }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Total req/min",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 4, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(api_http_requests_total[1m])) * 60",
+          "legendFormat": "req/min",
+          "refId": "A"
+        }
+      ],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 4,
+      "title": "Taxa de Erros 4xx/5xx (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (route, status_code) (rate(api_http_requests_total{status_code=~\"4..|5..\"}[1m]))",
+          "legendFormat": "{{status_code}} {{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "% Erros sobre Total",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(api_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(api_http_requests_total[5m])) * 100",
+          "legendFormat": "5xx %",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(api_http_requests_total{status_code=~\"4..\"}[5m])) / sum(rate(api_http_requests_total[5m])) * 100",
+          "legendFormat": "4xx %",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Latência HTTP — p50 / p95 / p99 (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, route) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p50 {{route}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p95 {{route}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, route) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p99 {{route}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Latência p50 Global (ms)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 24, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 250 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Latência p95 Global (ms)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 24, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 2000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Latência p99 Global (ms)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 24, "w": 4, "h": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "A"
+        }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1000 },
+              { "color": "red", "value": 5000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Top Rotas por Volume (últimos 5min)",
+      "type": "bargauge",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (route) (increase(api_http_requests_total[5m])))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "displayMode": "gradient"
+      },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "id": 11,
+      "title": "Autenticação — challenge/verify (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (route, status_code) (rate(api_http_requests_total{route=~\"/api/v1/auth/.*\"}[1m]))",
+          "legendFormat": "{{status_code}} {{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Heap Node.js (API Gateway)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "api_nodejs_heap_size_used_bytes",
+          "legendFormat": "Heap Usado",
+          "refId": "A"
+        },
+        {
+          "expr": "api_nodejs_heap_size_total_bytes",
+          "legendFormat": "Heap Total",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "unit": "bytes"
+        }
+      }
+    }
+    ,{
+      "id": 13,
+      "title": "Socket.IO /chat — Conexões Ativas",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 40, "w": 4, "h": 4 },
+      "targets": [{ "expr": "api_socket_connections_active", "legendFormat": "ativas", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 500 }, { "color": "red", "value": 2000 }] }
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Socket.IO /chat — Auth Failures/min",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 40, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(increase(api_socket_auth_failures_total[1m]))", "legendFormat": "failures/min", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 20 }] }
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Socket.IO /chat — Rate Limited/min",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 40, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(increase(api_socket_rate_limited_total[1m]))", "legendFormat": "blocked/min", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 50 }] }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Socket.IO /chat — Eventos/s por Tipo",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 40, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(api_socket_messages_total{event=\"chat:send\"}[1m])", "legendFormat": "send/s", "refId": "A" },
+        { "expr": "rate(api_socket_messages_total{event=\"chat:join\"}[1m])", "legendFormat": "join/s", "refId": "B" },
+        { "expr": "rate(api_socket_messages_total{event=\"chat:leave\"}[1m])", "legendFormat": "leave/s", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Socket.IO /chat — Conexões ao Longo do Tempo",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "api_socket_connections_active", "legendFormat": "conexões ativas", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 } }
+      }
+    }
+  ]
+}

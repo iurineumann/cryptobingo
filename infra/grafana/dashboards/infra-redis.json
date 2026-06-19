@@ -1,0 +1,163 @@
+{
+  "id": null,
+  "uid": "cryptobingo-redis",
+  "title": "CryptoBingo — Redis",
+  "tags": ["cryptobingo", "redis", "infra"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Status",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "redis_up", "legendFormat": "up", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Clientes Conectados",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "redis_connected_clients", "legendFormat": "clientes", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 500 }] }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Memória Usada",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "redis_memory_used_bytes", "legendFormat": "usado", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 200000000 }, { "color": "red", "value": 245000000 }] }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Hit Rate Cache (%)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "rate(redis_keyspace_hits_total[1m]) / (rate(redis_keyspace_hits_total[1m]) + rate(redis_keyspace_misses_total[1m])) * 100",
+        "legendFormat": "hit rate", "refId": "A"
+      }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 70 }, { "color": "green", "value": 90 }] }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Total de Keys",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(redis_db_keys)", "legendFormat": "keys", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 6,
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "redis_uptime_in_seconds", "legendFormat": "uptime", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 7,
+      "title": "Comandos/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_commands_processed_total[1m])", "legendFormat": "ops/s", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Hits vs Misses/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_keyspace_hits_total[1m])", "legendFormat": "hits/s", "refId": "A" },
+        { "expr": "rate(redis_keyspace_misses_total[1m])", "legendFormat": "misses/s", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 } }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Memória Usada vs Pico vs Limite (256MB)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "redis_memory_used_bytes", "legendFormat": "usado", "refId": "A" },
+        { "expr": "redis_memory_used_peak_bytes", "legendFormat": "pico histórico", "refId": "B" },
+        { "expr": "redis_memory_max_bytes", "legendFormat": "limite (maxmemory)", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "bytes" }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Conexões Bloqueadas / Rejeitadas",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "redis_blocked_clients", "legendFormat": "bloqueados", "refId": "A" },
+        { "expr": "rate(redis_rejected_connections_total[1m])", "legendFormat": "rejeitadas/s", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "red", "mode": "fixed" }, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Evicções/s (maxmemory-policy: allkeys-lru)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "rate(redis_evicted_keys_total[1m])", "legendFormat": "evicções/s", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "orange", "mode": "fixed" }, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Keys Expiradas/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "rate(redis_expired_keys_total[1m])", "legendFormat": "expiradas/s", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    }
+  ]
+}

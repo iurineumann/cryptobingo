@@ -30,6 +30,10 @@ import {
     notifyWinners,
     type WinnerPayload,
 }                          from './broadcaster';
+import {
+    sendGameLockedMessage,
+    sendDrawStartedMessage,
+}                          from './chatSystemHelper';
 import { fetchGame }       from '@cryptobingo/blockchain-core';
 import { rpcClient }       from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
@@ -40,6 +44,9 @@ import {
     eventsDeadLetteredTotal,
     eventProcessingDuration,
     oraclePollAttempts,
+    autoAdvanceRunsTotal,
+    autoAdvanceErrorsTotal,
+    autoAdvanceGamesTotal,
 }                          from './metrics';
 import dotenv from 'dotenv';
 
@@ -244,6 +251,7 @@ function consumeMessages(): void {
                     awardTicketPurchaseXP(gameId).catch(err =>
                         console.error(`[RabbitMQ] Erro ao conceder XP de compra para jogo ${gameId}:`, err)
                     );
+                    sendGameLockedMessage(gameId).catch(() => {});
                     break;
                 }
 
@@ -269,6 +277,13 @@ function consumeMessages(): void {
                     // ACK antes de iniciar o reveal longo — libera o consumidor RabbitMQ
                     timer();
                     channel.ack(msg);
+
+                    // Envia mensagem de sistema após oracle confirmar (room_id do jogo)
+                    fetchGame(gameId).then(game => {
+                        if (game?.room_id && game.room_id !== '0') {
+                            sendDrawStartedMessage(game.room_id).catch(() => {});
+                        }
+                    }).catch(() => {});
 
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
                     orchestrateGame(gameId).catch(err =>
@@ -466,6 +481,7 @@ async function fetchActiveRoomGameIds(): Promise<string[]> {
 }
 
 export async function autoLockFundingGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'lock_funding' });
     const cutoff = Date.now() - AUTO_LOCK_DELAY_SEC * 1000;
     const seen = new Set<string>();
 
@@ -502,11 +518,13 @@ export async function autoLockFundingGames(): Promise<void> {
             await processFundingGame(game, gameId);
         }
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'lock_funding' });
         console.error('[AutoAdvance] Erro no polling funding:', err);
     }
 }
 
 async function processFundingGame(game: BlockchainGameState, gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'lock_funding' });
     processedGames.add(gameId);
 
     const wagered = (game as any).total_wagered;
@@ -534,6 +552,7 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
     try {
         await executeLockGame(gameId);
         notifyGameLocked(gameId);
+        sendGameLockedMessage(gameId).catch(() => {});
 
         buildInvertedIndex(gameId).catch(err =>
             console.error(`[AutoAdvance] Erro índice invertido (jogo ${gameId}):`, err)
@@ -550,6 +569,7 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
 }
 
 export async function autoClaimDrawnGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'claim_drawn' });
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
@@ -580,11 +600,13 @@ export async function autoClaimDrawnGames(): Promise<void> {
             await processDrawnGame(gameId);
         }
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'claim_drawn' });
         console.error('[AutoAdvance] Erro no polling drawn:', err);
     }
 }
 
 async function processDrawnGame(gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'claim_drawn' });
     processedGames.add(gameId);
     console.log(`[AutoAdvance] 🏁 Jogo ${gameId} em DRAWN. Orquestrando conclusão...`);
     orchestrateGame(gameId).catch(err => {
@@ -594,6 +616,7 @@ async function processDrawnGame(gameId: string): Promise<void> {
 }
 
 export async function autoStartLockedGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'start_locked' });
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
@@ -624,11 +647,13 @@ export async function autoStartLockedGames(): Promise<void> {
             await processLockedGame(gameId);
         }
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'start_locked' });
         console.error('[AutoAdvance] Erro no polling locked:', err);
     }
 }
 
 async function processLockedGame(gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'start_locked' });
     processedGames.add(gameId);
     autoStartDraw(gameId).catch(err => {
         console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err);
@@ -651,6 +676,12 @@ async function autoStartDraw(gameId: string): Promise<void> {
     }
 
     console.log(`[AutoAdvance] ✅ Oráculo respondeu (jogo ${gameId}). Orquestrando...`);
+    fetchGame(gameId).then(game => {
+        if (game?.room_id && game.room_id !== '0') {
+            sendDrawStartedMessage(game.room_id).catch(() => {});
+        }
+    }).catch(() => {});
+
     await orchestrateGame(gameId);
 }
 

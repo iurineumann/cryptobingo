@@ -1,0 +1,139 @@
+{
+  "id": null,
+  "uid": "cryptobingo-postgres",
+  "title": "CryptoBingo — PostgreSQL",
+  "tags": ["cryptobingo", "postgres", "infra"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Status",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "pg_up", "legendFormat": "up", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Conexões Ativas",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(pg_stat_database_numbackends)", "legendFormat": "conexões", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 100 }] }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Tamanho DB (cryptobingo_ledger)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "pg_database_size_bytes{datname=\"cryptobingo_ledger\"}", "legendFormat": "tamanho", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "id": 4,
+      "title": "Transações Commitadas/s",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(rate(pg_stat_database_xact_commit{datname=\"cryptobingo_ledger\"}[1m]))", "legendFormat": "commits/s", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 5,
+      "title": "Deadlocks",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(increase(pg_stat_database_deadlocks{datname=\"cryptobingo_ledger\"}[5m]))", "legendFormat": "deadlocks/5m", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Cache Hit Ratio (%)",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(pg_stat_database_blks_hit{datname=\"cryptobingo_ledger\"}) / (sum(pg_stat_database_blks_hit{datname=\"cryptobingo_ledger\"}) + sum(pg_stat_database_blks_read{datname=\"cryptobingo_ledger\"})) * 100",
+        "legendFormat": "cache hit %", "refId": "A"
+      }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 90 }, { "color": "green", "value": 98 }] }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Operações/s (Fetch / Insert / Update / Delete)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(pg_stat_database_tup_fetched{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "fetch/s", "refId": "A" },
+        { "expr": "rate(pg_stat_database_tup_inserted{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "insert/s", "refId": "B" },
+        { "expr": "rate(pg_stat_database_tup_updated{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "update/s", "refId": "C" },
+        { "expr": "rate(pg_stat_database_tup_deleted{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "delete/s", "refId": "D" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Conexões por Database",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "pg_stat_database_numbackends", "legendFormat": "{{datname}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Commits e Rollbacks/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(pg_stat_database_xact_commit{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "commits/s", "refId": "A" },
+        { "expr": "rate(pg_stat_database_xact_rollback{datname=\"cryptobingo_ledger\"}[1m])", "legendFormat": "rollbacks/s", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Locks em Espera",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "pg_locks_count{mode=\"ExclusiveLock\"}", "legendFormat": "ExclusiveLock", "refId": "A" },
+        { "expr": "pg_locks_count{mode=\"RowExclusiveLock\"}", "legendFormat": "RowExclusiveLock", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    }
+  ]
+}
