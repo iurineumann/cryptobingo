@@ -178,7 +178,7 @@ export function matrixRedisKey(gameId: string, matrix: number[]): string {
  * Ref:   ADR-001, SPEC.md §2.1, §3.1
  */
 export async function generateTickets(req: Request, res: Response): Promise<void> {
-    const { gameId } = req.params;
+    const { gameId } = req.params as Record<string, string>;
     const accountName = req.body.account || req.user!.wallet;
     const rawCount = req.body.count;
     const count = Number(rawCount ?? 1);

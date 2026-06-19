@@ -4,7 +4,9 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import type { NewsItem } from '@cryptobingo/shared-types';
 
-export interface NewsFeedDocument extends Omit<NewsItem, 'id'>, Document {}
+export interface NewsFeedDocument extends Omit<NewsItem, 'id' | 'published_at'>, Document {
+    published_at: Date;  // armazenado como Date no MongoDB; convertido para ISO string em docToNewsItem()
+}
 
 const LocaleOverrideSchema = new Schema(
     {

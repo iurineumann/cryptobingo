@@ -204,7 +204,7 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
         const updatedProfile = await UserProfile.findOneAndUpdate(
             { wallet_address },
             { $set: updateFields },
-            { new: true, runValidators: true },
+            { returnDocument: 'after', runValidators: true },
         );
 
         if (!updatedProfile) {
