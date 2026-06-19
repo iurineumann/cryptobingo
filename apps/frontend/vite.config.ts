@@ -6,6 +6,7 @@ import react                     from '@vitejs/plugin-react';
 import tailwindcss               from '@tailwindcss/vite';
 import { nodePolyfills }         from 'vite-plugin-node-polyfills';
 import { VitePWA }               from 'vite-plugin-pwa';
+import path                      from 'path';
 
 export default defineConfig(({ mode }) => {
     const env    = loadEnv(mode, process.cwd(), '');
@@ -69,6 +70,11 @@ export default defineConfig(({ mode }) => {
             globals:      true,
             include:      ['src/**/*.test.ts', 'src/**/*.test.tsx'],
             setupFiles:   ['./src/vitest.setup.ts'],
+            // shared-types só emite .d.ts (emitDeclarationOnly). Alias aponta para source TS
+            // para que vitest possa transformar e eraser as importações de tipo em runtime.
+            alias: {
+                '@cryptobingo/shared-types': path.resolve(__dirname, '../../packages/shared-types/src/index.ts'),
+            },
             coverage: {
                 provider:   'v8',
                 include:    ['src/**/*.ts', 'src/**/*.tsx'],

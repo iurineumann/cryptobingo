@@ -25,6 +25,118 @@ namespace bingo {
     }
 
     // ==========================================
+    // ADR-028 §2 — Deserialização de schema field (ALPHA AtomicAssets) on-chain
+    // ==========================================
+
+    // Lê um varint sem sinal (LEB128) — encoding usado pelo atomicdata.
+    static uint64_t _aa_read_varuint(const std::vector<uint8_t>& d, size_t& i) {
+        uint64_t result = 0; int shift = 0;
+        while (i < d.size()) {
+            uint8_t b = d[i++];
+            result |= (uint64_t)(b & 0x7f) << shift;
+            if (!(b & 0x80)) break;
+            shift += 7;
+            if (shift >= 64) break;
+        }
+        return result;
+    }
+
+    // Avança o cursor `i` por UM valor do `type`, capturando o valor numérico quando
+    // aplicável. Retorna false se o tipo for desconhecido ou os dados truncarem.
+    static bool _aa_decode_value(const std::string& type, const std::vector<uint8_t>& d,
+                                 size_t& i, bool& is_num, uint64_t& num) {
+        is_num = false; num = 0;
+
+        // arrays "X[]" → varint(count) + count × elemento
+        if (type.size() >= 2 && type.compare(type.size() - 2, 2, "[]") == 0) {
+            std::string el = type.substr(0, type.size() - 2);
+            uint64_t count = _aa_read_varuint(d, i);
+            for (uint64_t k = 0; k < count; k++) {
+                bool b; uint64_t n;
+                if (!_aa_decode_value(el, d, i, b, n)) return false;
+            }
+            return true;
+        }
+        // length-prefixed (varint len + bytes)
+        if (type == "string" || type == "image" || type == "ipfs") {
+            uint64_t len = _aa_read_varuint(d, i);
+            i += (size_t)len;
+            return i <= d.size();
+        }
+        // 1 byte cru
+        if (type == "bool" || type == "byte") {
+            if (i >= d.size()) return false;
+            num = d[i++]; is_num = true; return true;
+        }
+        // inteiros sem sinal → varint
+        if (type == "uint8" || type == "uint16" || type == "uint32" || type == "uint64") {
+            num = _aa_read_varuint(d, i); is_num = true; return true;
+        }
+        // inteiros com sinal → varint zigzag
+        if (type == "int8" || type == "int16" || type == "int32" || type == "int64") {
+            uint64_t v = _aa_read_varuint(d, i);
+            int64_t sv = (int64_t)(v >> 1) ^ -(int64_t)(v & 1);
+            num = (uint64_t)sv; is_num = true; return true;
+        }
+        // fixedN (N = bits) → N/8 bytes little-endian
+        if (type.rfind("fixed", 0) == 0) {
+            int bits = atoi(type.c_str() + 5);
+            int bytes = bits / 8;
+            if (bytes <= 0 || bytes > 8 || i + (size_t)bytes > d.size()) return false;
+            uint64_t v = 0;
+            for (int k = 0; k < bytes; k++) v |= (uint64_t)d[i + k] << (8 * k);
+            i += (size_t)bytes; num = v; is_num = true; return true;
+        }
+        if (type == "float")  { i += 4; return i <= d.size(); }
+        if (type == "double") { i += 8; return i <= d.size(); }
+        return false; // tipo desconhecido → não dá para avançar com segurança
+    }
+
+    // Percorre `data` segundo `format` procurando `field` numérico. ALPHA: sequência
+    // de [identifier varint][valor]. No AtomicAssets os identificadores de atributo
+    // começam em 4 (valores 0-3 reservados): índice 0-based no format = identifier - 4.
+    // (Confirmado empiricamente nos schemas utility/prize do dev env.)
+    static constexpr uint64_t AA_ID_BASE = 4;
+    static bool _aa_walk(const std::vector<uint8_t>& data, const std::vector<aa_format>& format,
+                         const std::string& field, uint64_t& out) {
+        size_t i = 0;
+        while (i < data.size()) {
+            uint64_t identifier = _aa_read_varuint(data, i);
+            if (identifier < AA_ID_BASE) return false;
+            uint64_t idx = identifier - AA_ID_BASE;
+            if (idx >= format.size()) return false;
+            const aa_format& line = format[idx];
+            bool is_num; uint64_t num;
+            if (!_aa_decode_value(line.type, data, i, is_num, num)) return false;
+            if (line.name == field) {
+                if (!is_num) return false; // campo alvo não-numérico
+                out = num; return true;
+            }
+        }
+        return false; // campo não presente nestes dados
+    }
+
+    bool bingo_contract::_read_schema_numeric(name collection, name schema, int32_t template_id,
+                                              const std::vector<uint8_t>& asset_imm,
+                                              const std::string& field, uint64_t& out) {
+        atomic_schemas_table schemas("atomicassets"_n, collection.value);
+        auto sch_itr = schemas.find(schema.value);
+        if (sch_itr == schemas.end()) return false;
+        const auto& format = sch_itr->format;
+
+        // 1) tenta o immutable do próprio asset (dados únicos por asset)
+        if (!asset_imm.empty() && _aa_walk(asset_imm, format, field, out)) return true;
+
+        // 2) fallback: immutable compartilhado do template
+        atomic_templates_table templates("atomicassets"_n, collection.value);
+        auto tpl_itr = templates.find((uint64_t)(int64_t)template_id);
+        if (tpl_itr != templates.end() &&
+            _aa_walk(tpl_itr->immutable_serialized_data, format, field, out)) return true;
+
+        return false;
+    }
+
+    // ==========================================
     // CONFIGURAÇÃO
     // ==========================================
 
@@ -100,27 +212,117 @@ namespace bingo {
     // GESTÃO DE NFTs
     // ==========================================
 
-    void bingo_contract::setnftconf(int32_t template_id, uint8_t discount_pct, bool is_vip, uint32_t valid_until) {
+    // ADR-028 §1: configura motor multi-regra por template.
+    // Substitui setnftconf. Valida cada regra (tipo, origem do valor, limites).
+    void bingo_contract::confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules) {
         require_auth(permission_level{get_self(), "admin"_n});
-        check(discount_pct <= 100, "Desconto maximo e 100%");
+        check(collection_name.value != 0, "collection_name obrigatorio.");
+        check(rules.size() > 0,  "rules deve ter pelo menos 1 elemento.");
+        check(rules.size() <= 16, "rules: maximo 16 por template.");
+
+        for (const auto& r : rules) {
+            check(r.type >= RULE_TICKET_DISCOUNT && r.type <= RULE_BURN_TO_CLAIM,
+                "rule.type invalido (1=discount,2=boost,3=access,4=burn).");
+            check(r.value_origin == VALUE_FIXED || r.value_origin == VALUE_SCHEMA_FIELD,
+                "rule.value_origin invalido (0=fixed,1=schema_field).");
+            check(r.condition == COND_OWNS || r.condition == COND_BURNED,
+                "rule.condition invalido (0=owns,1=burned).");
+
+            // BURN_TO_CLAIM exige condition=burned + duração do grant. Demais tipos
+            // (discount/boost/access) aceitam owns OU burned: condition=burned = o
+            // benefício é concedido via grant após a queima (ADR-028 §8).
+            if (r.type == RULE_BURN_TO_CLAIM) {
+                check(r.condition == COND_BURNED, "BURN_TO_CLAIM exige condition=burned.");
+                check(r.grant_duration_sec > 0, "BURN_TO_CLAIM exige grant_duration_sec > 0.");
+            }
+            // benefícios burned devem ser FIXED (asset queimado não tem schema p/ ler)
+            if (r.condition == COND_BURNED && r.type != RULE_BURN_TO_CLAIM) {
+                check(r.value_origin == VALUE_FIXED,
+                    "regra burned (nao-burn) exige value_origin=fixed.");
+            }
+
+            if (r.value_origin == VALUE_FIXED) {
+                // hundredths: discount cap 100% (10000); boost cap 255x (25500)
+                if (r.type == RULE_TICKET_DISCOUNT) {
+                    check(r.fixed_value > 0 && r.fixed_value <= 10000,
+                        "TICKET_DISCOUNT fixed_value: 1..10000 (hundredths de %).");
+                } else if (r.type == RULE_PRIZE_BOOST) {
+                    check(r.fixed_value > 0 && r.fixed_value <= 25500,
+                        "PRIZE_BOOST fixed_value: 1..25500 (hundredths).");
+                }
+            } else { // VALUE_SCHEMA_FIELD
+                check(!r.schema_field.empty(), "VALUE_SCHEMA_FIELD exige schema_field.");
+                check(r.schema_field.size() <= 64, "schema_field muito longo (max 64).");
+            }
+        }
+
         nftconfigs_table _configs(get_self(), get_self().value);
         auto itr = _configs.find(template_id);
         if (itr == _configs.end()) {
             _configs.emplace(get_self(), [&](auto& row) {
-                row.template_id = template_id; row.discount_pct = discount_pct;
-                row.is_vip = is_vip; row.valid_until = valid_until;
+                row.template_id     = template_id;
+                row.collection_name = collection_name;
+                row.rules           = rules;
             });
         } else {
             _configs.modify(itr, get_self(), [&](auto& row) {
-                row.discount_pct = discount_pct; row.is_vip = is_vip; row.valid_until = valid_until;
+                row.collection_name = collection_name;
+                row.rules           = rules;
             });
         }
     }
 
-    void bingo_contract::delnftconf(int32_t template_id) {
+    void bingo_contract::delnftconf(uint64_t template_id) {
         require_auth(permission_level{get_self(), "admin"_n});
         nftconfigs_table _configs(get_self(), get_self().value);
         _configs.erase(_configs.require_find(template_id, "Template ID nao encontrado."));
+    }
+
+    // ADR-028 §8: registra um burn provado off-chain (AtomicAssets API) pelo worker.
+    // Trust model: worker é trusted (igual claimwin). Idempotente por asset_id.
+    // Para cada regra BURN_TO_CLAIM do template, cria um grant temporário.
+    void bingo_contract::recordburn(name owner, uint64_t asset_id, uint64_t template_id, name collection) {
+        require_auth("bingogamesvc"_n);
+
+        nft_burns_table burns(get_self(), get_self().value);
+        auto by_asset = burns.get_index<"byasset"_n>();
+        check(by_asset.find(asset_id) == by_asset.end(), "Burn ja registrado para este asset_id.");
+
+        nft_seq_singleton seq_t(get_self(), get_self().value);
+        nft_seq seq = seq_t.get_or_default(nft_seq{});
+
+        // RAM pago pelo contrato: em recordburn quem assina é o worker
+        // (bingogamesvc), não o player — não dá para cobrar RAM do owner sem a
+        // autorização dele. (Diverge do ADR §Consequências, que assumia buyer.)
+        uint64_t burn_id = seq.next_burn_id++;
+        burns.emplace(get_self(), [&](auto& b) {
+            b.burn_id     = burn_id;
+            b.owner       = owner;
+            b.asset_id    = asset_id;
+            b.template_id = template_id;
+            b.collection  = collection;
+            b.burned_at   = current_time_point();
+        });
+
+        nftconfigs_table _configs(get_self(), get_self().value);
+        auto conf_itr = _configs.find(template_id);
+        if (conf_itr != _configs.end()) {
+            nft_grants_table grants(get_self(), get_self().value);
+            for (const auto& r : conf_itr->rules) {
+                if (r.type != RULE_BURN_TO_CLAIM) continue;
+                uint64_t grant_id = seq.next_grant_id++;
+                time_point until = current_time_point() + eosio::seconds(r.grant_duration_sec);
+                grants.emplace(get_self(), [&](auto& g) {
+                    g.grant_id    = grant_id;
+                    g.owner       = owner;
+                    g.template_id = template_id;
+                    g.rule_type   = r.type;
+                    g.grant_until = until;
+                });
+            }
+        }
+
+        seq_t.set(seq, get_self());
     }
 
     // ==========================================
@@ -459,6 +661,32 @@ namespace bingo {
             return;
         }
 
+        // Memo: "room:{id}" → custeio do treasury de sala patrocinada (ADR-028 §5)
+        const std::string ROOM_PREFIX = "room:";
+        if (memo.rfind(ROOM_PREFIX, 0) == 0) {
+            uint64_t room_id = std::stoull(memo.substr(ROOM_PREFIX.size()));
+            rooms_table rooms(get_self(), get_self().value);
+            auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+            check(room_itr->sponsor_room, "Sala nao e patrocinada (sponsor_room=false).");
+            check(room_itr->sponsor == from, "Apenas o sponsor da sala pode custear o treasury.");
+
+            room_treasuries_table treasuries(get_self(), get_self().value);
+            auto t_itr = treasuries.find(room_id);
+            if (t_itr == treasuries.end()) {
+                treasuries.emplace(get_self(), [&](auto& t) {
+                    t.room_id = room_id;
+                    t.balance = deposit_asset;
+                    t.locked  = extended_asset(asset(0, quantity.symbol), token_contract);
+                });
+            } else {
+                check(t_itr->balance.quantity.symbol == quantity.symbol &&
+                      t_itr->balance.contract == token_contract,
+                    "Token do deposito difere do treasury da sala.");
+                treasuries.modify(t_itr, get_self(), [&](auto& t) { t.balance += deposit_asset; });
+            }
+            return;
+        }
+
         // Depósito de jogador (wallet interna)
         balances_table balances(get_self(), from.value);
         auto bal_itr = balances.find(deposit_asset.quantity.symbol.code().raw());
@@ -570,22 +798,81 @@ namespace bingo {
         total_cost.quantity.amount *= (int64_t)matrices.size();
 
         if (total_cost.quantity.amount > 0) {
+            // ADR-028 §6/§8: melhor TICKET_DISCOUNT elegível, em hundredths-de-%
+            // (10000 = 100%). Considera regras owns (NFT possuído via nft_id) e
+            // burned (grant BURN_TO_CLAIM ativo). Aplica UM desconto (o maior).
+            uint32_t best_hbp = 0;
+
             if (nft_id != 0) {
                 atomic_assets_table buyer_nfts("atomicassets"_n, buyer.value);
                 auto nft_itr = buyer_nfts.require_find(nft_id, "NFT nao pertence a sua carteira.");
-                check(nft_itr->collection_name == "cryptobingo1"_n, "NFT nao pertence a colecao oficial.");
-                nftconfigs_table _configs(get_self(), get_self().value);
-                auto conf_itr = _configs.find(nft_itr->template_id);
-                if (conf_itr != _configs.end()) {
-                    if (conf_itr->valid_until > 0) {
-                        check(current_time_point().sec_since_epoch() <= conf_itr->valid_until,
-                            "Utilidade do NFT expirou.");
-                    }
-                    if (conf_itr->discount_pct > 0) {
-                        int64_t discount = (total_cost.quantity.amount * conf_itr->discount_pct) / 100;
-                        total_cost.quantity.amount -= discount;
+
+                // ADR-028 §4: NFT usado em sala com allowlist → template autorizado.
+                if (game_itr->room_id != 0) {
+                    rooms_table rooms(get_self(), get_self().value);
+                    auto room_itr = rooms.find(game_itr->room_id);
+                    if (room_itr != rooms.end() && room_itr->nft_template_allowlist.has_value()) {
+                        const auto& allow = room_itr->nft_template_allowlist.value();
+                        if (!allow.empty()) {
+                            bool ok = false;
+                            for (auto t : allow) {
+                                if (t == (uint64_t)nft_itr->template_id) { ok = true; break; }
+                            }
+                            check(ok, "NFT nao esta na allowlist de templates desta sala.");
+                        }
                     }
                 }
+
+                nftconfigs_table _configs(get_self(), get_self().value);
+                auto conf_itr = _configs.find((uint64_t)nft_itr->template_id);
+                if (conf_itr != _configs.end()) {
+                    check(conf_itr->collection_name == nft_itr->collection_name,
+                        "NFT nao pertence a colecao configurada para o template.");
+                    // owns: VALUE_FIXED (hundredths-de-%) ou VALUE_SCHEMA_FIELD
+                    // (campo do schema é PERCENT inteiro, ex. discount_pct=10 → ×100).
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_TICKET_DISCOUNT) continue;
+                        if (r.condition != COND_OWNS) continue;
+                        if (r.value_origin == VALUE_FIXED) {
+                            if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
+                        } else { // VALUE_SCHEMA_FIELD
+                            uint64_t v = 0;
+                            if (_read_schema_numeric(nft_itr->collection_name, nft_itr->schema_name,
+                                    nft_itr->template_id, nft_itr->immutable_serialized_data,
+                                    r.schema_field, v)) {
+                                uint32_t hbp = (v > 100 ? 100 : (uint32_t)v) * 100;
+                                if (hbp > best_hbp) best_hbp = hbp;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ADR-028 §8: desconto via grant BURN_TO_CLAIM ativo (jogador queimou o
+            // NFT → não o possui; benefício só FIXED, pois não há asset p/ ler schema).
+            {
+                nft_grants_table grants(get_self(), get_self().value);
+                auto gidx = grants.get_index<"byowner"_n>();
+                uint32_t now_sec = current_time_point().sec_since_epoch();
+                nftconfigs_table _gconfigs(get_self(), get_self().value);
+                for (auto it = gidx.lower_bound(buyer.value);
+                     it != gidx.end() && it->owner == buyer; ++it) {
+                    if (it->grant_until.sec_since_epoch() <= now_sec) continue; // expirado
+                    auto conf_itr = _gconfigs.find(it->template_id);
+                    if (conf_itr == _gconfigs.end()) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_TICKET_DISCOUNT) continue;
+                        if (r.condition != COND_BURNED) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_hbp) best_hbp = r.fixed_value;
+                    }
+                }
+            }
+
+            if (best_hbp > 10000) best_hbp = 10000; // cap 100%
+            if (best_hbp > 0) {
+                int64_t discount = (total_cost.quantity.amount * (int64_t)best_hbp) / 10000;
+                total_cost.quantity.amount -= discount;
             }
 
             balances_table balances(get_self(), buyer.value);
@@ -594,13 +881,31 @@ namespace bingo {
             check(bal_itr->balance >= total_cost, "Saldo insuficiente.");
             balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance -= total_cost; });
             games.modify(game_itr, get_self(), [&](auto& g) { g.total_wagered += total_cost; });
+
+            // ADR-028 §6: em sala patrocinada, ticket sales creditam o room_treasury
+            // (o desconto TICKET_DISCOUNT é absorvido pelo sponsor: já está no total_cost).
+            if (game_itr->room_id != 0) {
+                rooms_table rooms(get_self(), get_self().value);
+                auto room_itr = rooms.find(game_itr->room_id);
+                if (room_itr != rooms.end() && room_itr->sponsor_room) {
+                    room_treasuries_table treasuries(get_self(), get_self().value);
+                    auto t_itr = treasuries.require_find(game_itr->room_id,
+                        "Treasury da sala patrocinada nao inicializado.");
+                    check(t_itr->balance.quantity.symbol == total_cost.quantity.symbol &&
+                          t_itr->balance.contract == total_cost.contract,
+                        "Token do ticket difere do treasury da sala.");
+                    treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance += total_cost; });
+                }
+            }
         }
 
         for (size_t i = 0; i < matrices.size(); ++i) {
-            size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name);
+            // ADR-028 §6: nft_id entra no hash assinado (matrix + game_id + buyer + nft_id),
+            // acoplando a NFT de benefício à assinatura — impede trocar a NFT pós-assinatura.
+            size_t buffer_size = eosio::pack_size(matrices[i]) + sizeof(uint64_t) + sizeof(name) + sizeof(uint64_t);
             std::vector<char> buffer(buffer_size);
             datastream<char*> ds(buffer.data(), buffer.size());
-            ds << matrices[i] << game_id << buyer;
+            ds << matrices[i] << game_id << buyer << nft_id;
             auto hash = eosio::sha256(buffer.data(), buffer.size());
             assert_recover_key(hash, signatures[i], config.signer_key);
 
@@ -698,7 +1003,7 @@ namespace bingo {
     // golden_multiplier: 0 ou 1 = sem efeito; >1 = GOLDEN_BALL mode.
     // ==========================================
 
-    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier) {
+    void bingo_contract::claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids) {
         require_auth("bingogamesvc"_n);
 
         games_table games(get_self(), get_self().value);
@@ -745,7 +1050,88 @@ namespace bingo {
             payout.quantity.amount *= (int64_t)golden_multiplier;
         }
 
+        // ADR-028 §7/§8: Prize Boost. Aplica o maior boost elegível ao vencedor entre:
+        //  (a) NFTs possuídas passadas em boost_nft_ids (PRIZE_BOOST owns; FIXED ou
+        //      SCHEMA_FIELD — o worker as ordena por payout);
+        //  (b) grants BURN_TO_CLAIM ativos do vencedor (PRIZE_BOOST burned, sempre FIXED —
+        //      o asset foi queimado, não há schema p/ ler). Os grants são descobertos
+        //      on-chain por owner (o worker não precisa passá-los).
+        {
+            nftconfigs_table _bconfigs(get_self(), get_self().value);
+            uint16_t best_boost = 0; // hundredths (100 = 1.00×); só aplica se > 100
+
+            // (a) NFTs possuídas
+            if (boost_nft_ids.has_value() && !boost_nft_ids.value().empty()) {
+                atomic_assets_table winner_nfts("atomicassets"_n, winner.value);
+                for (uint64_t boost_id : boost_nft_ids.value()) {
+                    auto nft_itr = winner_nfts.find(boost_id);
+                    if (nft_itr == winner_nfts.end()) continue; // não pertence: ignora
+                    auto conf_itr = _bconfigs.find((uint64_t)nft_itr->template_id);
+                    if (conf_itr == _bconfigs.end()) continue;
+                    if (conf_itr->collection_name != nft_itr->collection_name) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_PRIZE_BOOST) continue;
+                        if (r.condition != COND_OWNS) continue;
+                        if (r.value_origin == VALUE_FIXED) {
+                            if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                        } else { // VALUE_SCHEMA_FIELD
+                            uint64_t v = 0;
+                            if (_read_schema_numeric(nft_itr->collection_name,
+                                    nft_itr->schema_name,
+                                    nft_itr->template_id,
+                                    nft_itr->immutable_serialized_data,
+                                    r.schema_field, v)) {
+                                if (v > 25500) v = 25500;
+                                if ((uint16_t)v > best_boost) best_boost = (uint16_t)v;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // (b) grants BURN_TO_CLAIM ativos (benefício burned é sempre FIXED)
+            {
+                nft_grants_table grants(get_self(), get_self().value);
+                auto gidx = grants.get_index<"byowner"_n>();
+                uint32_t now_sec = current_time_point().sec_since_epoch();
+                for (auto it = gidx.lower_bound(winner.value);
+                     it != gidx.end() && it->owner == winner; ++it) {
+                    if (it->grant_until.sec_since_epoch() <= now_sec) continue; // expirado
+                    auto conf_itr = _bconfigs.find(it->template_id);
+                    if (conf_itr == _bconfigs.end()) continue;
+                    for (const auto& r : conf_itr->rules) {
+                        if (r.type != RULE_PRIZE_BOOST) continue;
+                        if (r.condition != COND_BURNED) continue;
+                        if (r.value_origin != VALUE_FIXED) continue;
+                        if (r.fixed_value > best_boost) best_boost = r.fixed_value;
+                    }
+                }
+            }
+
+            if (best_boost > 100) {
+                payout.quantity.amount = payout.quantity.amount * (int64_t)best_boost / 100;
+            }
+        }
+
         if (payout.quantity.amount > 0) {
+            // ADR-028 §7: em sala patrocinada, o payout é debitado do room_treasury
+            // (nunca do house balance). Sala house: comportamento legado.
+            if (game_itr->room_id != 0) {
+                rooms_table rooms(get_self(), get_self().value);
+                auto room_itr = rooms.find(game_itr->room_id);
+                if (room_itr != rooms.end() && room_itr->sponsor_room) {
+                    room_treasuries_table treasuries(get_self(), get_self().value);
+                    auto t_itr = treasuries.require_find(game_itr->room_id,
+                        "Treasury da sala patrocinada nao encontrado.");
+                    check(t_itr->balance.quantity.symbol == payout.quantity.symbol &&
+                          t_itr->balance.contract == payout.contract,
+                        "Token do payout difere do treasury da sala.");
+                    check(t_itr->balance >= payout,
+                        "Treasury da sala sem saldo para cobrir o payout.");
+                    treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= payout; });
+                }
+            }
+
             auto bal_itr = balances.find(payout.quantity.symbol.code().raw());
             if (bal_itr == balances.end()) {
                 balances.emplace(get_self(), [&](auto& b) { b.balance = payout; });
@@ -787,30 +1173,60 @@ namespace bingo {
         check(needs_archive || already_done,
             "Game deve estar em PAYING, DRAWN ou ARCHIVED para closegame.");
 
-        // Libera o slot da sala para que uma nova partida possa ser criada
+        // Libera o slot da sala + detecta economia de sala patrocinada (ADR-028)
+        bool     is_sponsor_room = false;
+        uint16_t house_fee_bps   = 0;
         if (game_itr->room_id != 0) {
             rooms_table rooms(get_self(), get_self().value);
             auto room_itr = rooms.find(game_itr->room_id);
-            if (room_itr != rooms.end() && room_itr->current_game_id == game_id) {
-                rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+            if (room_itr != rooms.end()) {
+                is_sponsor_room = room_itr->sponsor_room;
+                if (room_itr->house_fee_bps.has_value()) house_fee_bps = room_itr->house_fee_bps.value();
+                if (room_itr->current_game_id == game_id) {
+                    rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+                }
             }
         }
 
         if (needs_archive) {
-            // ADR-005: calcula GGR = total_wagered - total_paid e acumula no pool
             int64_t ggr_amount = game_itr->total_wagered.quantity.amount - game_itr->total_paid;
             if (ggr_amount > 0) {
                 ggr_pool_table ggr_pool(get_self(), get_self().value);
                 auto ggr_key = game_itr->total_wagered.quantity.symbol.code().raw();
-                auto ggr_itr = ggr_pool.find(ggr_key);
-                if (ggr_itr == ggr_pool.end()) {
-                    extended_asset ggr_entry = game_itr->total_wagered;
-                    ggr_entry.quantity.amount = ggr_amount;
-                    ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
+
+                if (is_sponsor_room) {
+                    // ADR-028 §5: o lucro fica no treasury do sponsor; a casa retém
+                    // apenas house_fee_bps do GGR, debitado do treasury.balance.
+                    int64_t house_fee = (int64_t)(((__int128)ggr_amount * house_fee_bps) / 10000);
+                    if (house_fee > 0) {
+                        room_treasuries_table treasuries(get_self(), get_self().value);
+                        auto t_itr = treasuries.find(game_itr->room_id);
+                        if (t_itr != treasuries.end() && t_itr->balance.quantity.amount >= house_fee) {
+                            extended_asset fee_asset = game_itr->total_wagered;
+                            fee_asset.quantity.amount = house_fee;
+                            treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= fee_asset; });
+                            auto ggr_itr = ggr_pool.find(ggr_key);
+                            if (ggr_itr == ggr_pool.end()) {
+                                ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = fee_asset; });
+                            } else {
+                                ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
+                                    r.ggr.quantity.amount += house_fee;
+                                });
+                            }
+                        }
+                    }
                 } else {
-                    ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
-                        r.ggr.quantity.amount += ggr_amount;
-                    });
+                    // ADR-005: sala house — GGR inteiro acumula no pool da casa
+                    auto ggr_itr = ggr_pool.find(ggr_key);
+                    if (ggr_itr == ggr_pool.end()) {
+                        extended_asset ggr_entry = game_itr->total_wagered;
+                        ggr_entry.quantity.amount = ggr_amount;
+                        ggr_pool.emplace(get_self(), [&](auto& r) { r.ggr = ggr_entry; });
+                    } else {
+                        ggr_pool.modify(ggr_itr, same_payer, [&](auto& r) {
+                            r.ggr.quantity.amount += ggr_amount;
+                        });
+                    }
                 }
             }
 
@@ -1030,6 +1446,11 @@ namespace bingo {
             r.room_drop_chance_bps    = 10000;
             r.sponsor_room            = sponsor_room;
             r.created_at              = time_point_sec(current_time_point().sec_since_epoch());
+            // ADR-028 §4: defaults dos campos de economia de sala patrocinada
+            r.nft_template_allowlist.emplace(std::vector<uint64_t>{});
+            r.campaign_id.emplace(0);
+            r.house_fee_bps.emplace(0);
+            r.estimated_monthly_tickets.emplace(0);
         });
     }
 
@@ -1041,6 +1462,50 @@ namespace bingo {
             room_itr->status == "inactive"_n || room_itr->status == "paused"_n,
             "activateroom: sala deve estar em inactive ou paused."
         );
+
+        // ADR-028 §5: sala patrocinada exige colateral no treasury cobrindo o
+        // pior caso de payout (RTP worst-case) antes de ativar.
+        if (room_itr->sponsor_room) {
+            uint32_t est_tickets = room_itr->estimated_monthly_tickets.has_value()
+                ? room_itr->estimated_monthly_tickets.value() : 0;
+
+            // max multiplier do gametype = base_multiplier × maior weight (hundredths)
+            gametypes_table gametypes(get_self(), get_self().value);
+            auto gt_itr = gametypes.require_find(room_itr->gametype_id, "gametype_id da sala invalido.");
+            uint32_t max_weight = 0;
+            for (const auto& r : gt_itr->rules)  if (r.weight > max_weight) max_weight = r.weight;
+            for (const auto& s : gt_itr->stages) if (s.weight > max_weight) max_weight = s.weight;
+            if (gt_itr->combinations.has_value())
+                for (const auto& c : gt_itr->combinations.value())
+                    if (c.weight > max_weight) max_weight = c.weight;
+
+            // required = est_tickets × ticket_price_max × base_multiplier × max_weight / 100
+            __int128 required = (__int128)est_tickets
+                * (__int128)room_itr->ticket_price_max.quantity.amount
+                * (__int128)gt_itr->base_multiplier
+                * (__int128)max_weight / 100;
+
+            if (required > 0) {
+                check(max_weight > 0, "gametype sem weight valido para colateral.");
+                room_treasuries_table treasuries(get_self(), get_self().value);
+                auto t_itr = treasuries.require_find(room_id,
+                    "Treasury vazio: deposite colateral (memo room:<id>) antes de ativar.");
+                check(t_itr->balance.quantity.symbol == room_itr->ticket_price_max.quantity.symbol,
+                    "Token do treasury difere do preco da sala.");
+
+                __int128 total = (__int128)t_itr->balance.quantity.amount
+                               + (__int128)t_itr->locked.quantity.amount;
+                check(total >= required, "Colateral insuficiente no treasury para ativar a sala.");
+
+                // trava exatamente `required`; excedente volta a ficar disponível
+                int64_t req64 = (int64_t)required;
+                treasuries.modify(t_itr, same_payer, [&](auto& t) {
+                    t.locked.quantity.amount  = req64;
+                    t.balance.quantity.amount = (int64_t)(total - required);
+                });
+            }
+        }
+
         rooms.modify(room_itr, same_payer, [&](auto& r) { r.status = "active"_n; });
     }
 
@@ -1061,20 +1526,77 @@ namespace bingo {
         check(room_itr->current_game_id == 0,
             "closeroom: aguarde a partida corrente terminar antes de fechar a sala.");
         rooms.modify(room_itr, same_payer, [&](auto& r) { r.status = "closed"_n; });
+
+        // ADR-028 §5: ao fechar, libera o colateral travado para que o sponsor
+        // possa sacar o saldo total via withdrawroom.
+        if (room_itr->sponsor_room) {
+            room_treasuries_table treasuries(get_self(), get_self().value);
+            auto t_itr = treasuries.find(room_id);
+            if (t_itr != treasuries.end() && t_itr->locked.quantity.amount > 0) {
+                treasuries.modify(t_itr, same_payer, [&](auto& t) {
+                    t.balance.quantity.amount += t.locked.quantity.amount;
+                    t.locked.quantity.amount = 0;
+                });
+            }
+        }
     }
 
-    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player) {
+    void bingo_contract::setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty) {
         require_auth(permission_level{get_self(), "admin"_n});
         check(room_drop_chance_bps <= 10000, "room_drop_chance_bps deve ser 0–10000.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
+        check(difficulty <= 10, "difficulty deve ser 0-10.");
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
         rooms.modify(room_itr, same_payer, [&](auto& r) {
             r.room_drop_chance_bps   = room_drop_chance_bps;
             r.max_tickets_per_player = max_tickets_per_player;
+            r.difficulty.emplace(difficulty > 0 ? difficulty : 1);
         });
+    }
+
+    // ADR-028 §4: configura economia da sala patrocinada (allowlist de templates
+    // NFT, vínculo de campanha, taxa da casa e projeção de tickets p/ colateral).
+    void bingo_contract::setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets) {
+        require_auth(permission_level{get_self(), "admin"_n});
+        check(house_fee_bps <= 10000, "house_fee_bps deve ser 0–10000.");
+        check(nft_template_allowlist.size() <= 100, "allowlist: maximo 100 templates.");
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
+        rooms.modify(room_itr, same_payer, [&](auto& r) {
+            r.nft_template_allowlist.emplace(nft_template_allowlist);
+            r.campaign_id.emplace(campaign_id);
+            r.house_fee_bps.emplace(house_fee_bps);
+            r.estimated_monthly_tickets.emplace(estimated_monthly_tickets);
+        });
+    }
+
+    // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala.
+    // `locked` (colateral) não é sacável enquanto travado.
+    void bingo_contract::withdrawroom(uint64_t room_id, extended_asset amount) {
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        require_auth(room_itr->sponsor);
+        check(amount.quantity.amount > 0, "amount deve ser maior que zero.");
+
+        room_treasuries_table treasuries(get_self(), get_self().value);
+        auto t_itr = treasuries.require_find(room_id, "Treasury da sala nao encontrado.");
+        check(t_itr->balance.quantity.symbol == amount.quantity.symbol &&
+              t_itr->balance.contract == amount.contract,
+            "Token do saque difere do treasury.");
+        check(t_itr->balance >= amount, "Saldo disponivel insuficiente (locked nao e sacavel).");
+
+        treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= amount; });
+
+        action(
+            permission_level{get_self(), "active"_n},
+            amount.contract, "transfer"_n,
+            std::make_tuple(get_self(), room_itr->sponsor, amount.quantity,
+                std::string("Saque treasury sala #" + std::to_string(room_id)))
+        ).send();
     }
 
     // ==========================================

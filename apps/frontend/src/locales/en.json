@@ -87,6 +87,14 @@
     "tickets_empty_funding": "You don't have tickets in this room yet.",
     "tickets_empty_default": "No tickets this round.",
     "chat": "Room Chat",
+    "chat_you": "You",
+    "chat_empty": "No messages yet. Be the first!",
+    "chat_placeholder": "Type your message...",
+    "chat_send": "Send",
+    "chat_close": "Close chat",
+    "chat_drop_prefix": "Drop!",
+    "chat_system_draw": "Draw",
+    "chat_system_status": "System",
     "drops": "Drops",
     "back_to_lobby": "Back to Lobby",
     "breadcrumb_room": "Room",
@@ -214,7 +222,12 @@
     "max": "Max",
     "sending": "Sending...",
     "deposit_action": "Deposit",
-    "withdraw_action": "Withdraw"
+    "withdraw_action": "Withdraw",
+    "native_balance": "WAX balance (wallet)",
+    "token_balance": "{{symbol}} balance (wallet)",
+    "on_contract": "On contract",
+    "no_tokens_configured": "No tokens configured by admin.",
+    "balances_title": "Balances"
   },
   "buy_ticket": {
     "title": "Buy Tickets",
@@ -272,7 +285,12 @@
     "swap_quote_expired": "Quote expired — recalculating",
     "swap_cost_preview": "Cost: {{roomTotal}} (≈ {{altAmount}})",
     "swap_via": "Via swap",
-    "error_slippage": "Price moved too much. Please try again."
+    "error_slippage": "Price moved too much. Please try again.",
+    "nft_discount_label": "Discount NFT",
+    "nft_discount_none": "No NFT",
+    "nft_discount_pct": "−{{pct}}%",
+    "nft_discount_variable": "Variable discount",
+    "nft_discount_locked": "NFT locked after generating preview."
   },
   "admin": {
     "dashboard": "Dashboard",
@@ -608,7 +626,28 @@
     "token_memo": "Memo",
     "token_memo_placeholder": "optional",
     "token_retire_warning": "Retiring tokens permanently destroys them, reducing circulating supply. This cannot be undone.",
-    "token_err_no_recipient": "Please provide a recipient for the transfer."
+    "token_err_no_recipient": "Please provide a recipient for the transfer.",
+    "rooms_nft_config": "Configure NFT",
+    "rooms_nft_allowlist": "Allowed templates (IDs, comma-separated)",
+    "rooms_nft_house_fee": "House fee (bps, 0–10000)",
+    "rooms_nft_monthly_tickets": "Estimated monthly tickets",
+    "rooms_nft_campaign": "Campaign ID (0 = none)",
+    "rooms_nft_save": "Save NFT config",
+    "rooms_nft_success": "NFT configuration saved.",
+    "rooms_nft_error": "Error saving NFT configuration.",
+    "treasury_title": "Room Treasury",
+    "treasury_balance": "Available balance",
+    "treasury_locked": "Locked (collateral)",
+    "treasury_deposit": "Deposit",
+    "treasury_deposit_amount": "Amount to deposit",
+    "treasury_withdraw": "Withdraw",
+    "treasury_withdraw_amount": "Amount to withdraw",
+    "treasury_empty": "Treasury empty. Deposit via transfer with memo \"room:<id>\".",
+    "treasury_success_withdraw": "Withdrawal sent successfully.",
+    "treasury_error_withdraw": "Error withdrawing from treasury.",
+    "treasury_success_deposit": "Deposit sent.",
+    "treasury_error_deposit": "Error depositing.",
+    "treasury_no_sponsor_room": "Only sponsored rooms have a treasury."
   },
   "replay": {
     "back_to_lobby": "Back to Lobby",
@@ -748,10 +787,15 @@
     "title_global": "Global Rankings",
     "title_room": "Room Rankings",
     "updated_at": "Updated at {{time}}",
-    "empty": "No winners recorded yet.",
+    "empty": "No entries yet.",
     "col_player": "Player",
     "col_total_won": "Total Won",
-    "col_games_won": "Games"
+    "col_games_won": "Games",
+    "col_xp": "XP",
+    "col_tier": "Tier",
+    "col_games": "Games",
+    "tab_winnings": "Winnings",
+    "tab_xp": "XP"
   },
   "faq": {
     "title": "Frequently Asked Questions",
@@ -763,19 +807,59 @@
       },
       {
         "question": "How do I play?",
-        "answer": "Connect your WAX wallet, choose a room, buy your tickets and wait for the draw. If you win, the prize is sent automatically."
+        "answer": "Connect your WAX wallet (Anchor, Wombat or similar), pick a room in the lobby, buy your tickets and wait for the draw. If you win, the prize is sent automatically by the smart contract — no intermediaries needed."
       },
       {
         "question": "Are the draws fair?",
-        "answer": "Yes. CryptoBingo uses the WAX randomness oracle (orng.wax), based on RSA-SHA256, whose output is verifiable on-chain by anyone."
+        "answer": "Yes. We use the official WAX randomness oracle (orng.wax), based on RSA-SHA256. The result is generated externally and verifiable by anyone directly on the blockchain — no platform code can influence the draw."
+      },
+      {
+        "question": "How much can I win per ticket?",
+        "answer": "The prize formula is: Ticket Price × Base Multiplier × (Pattern Weight / 100). Example: a 2 BINGO ticket, multiplier 1, pattern weight 150 (1.5×) pays 3 BINGO. The overall RTP (return to player) is 85%."
+      },
+      {
+        "question": "What are patterns and combinations?",
+        "answer": "Patterns are shapes on the 5×5 ticket that, when filled by drawn numbers, award a prize (e.g. line, diagonal, letter B, full card). Combinations are bonuses for completing multiple patterns in the same round. Each game type defines its own patterns and prize weights."
+      },
+      {
+        "question": "What draw modes are available?",
+        "answer": "The platform supports 4 modes: Standard (35 balls), Fixed (configured number of balls), First Full (balls drawn until someone completes their full card) and Golden Ball (35 balls + 1 golden ball with a random prize multiplier)."
       },
       {
         "question": "Which tokens can I use?",
-        "answer": "WAX is the default token. Rooms can accept BINGO, TLM or other supported tokens. You can also use the swap feature to pay with alternative tokens."
+        "answer": "WAX is the default token. Each room defines its base currency (WAX, BINGO, TLM or others). You can also pay with alternative tokens using the built-in Swap feature — the system converts automatically."
       },
       {
-        "question": "How does prize payment work?",
-        "answer": "After the draw, the smart contract automatically evaluates all tickets and transfers prizes directly to winners' wallets."
+        "question": "How do NFTs work on the platform?",
+        "answer": "NFTs from partner collections can grant: ticket purchase discounts (TICKET_DISCOUNT), prize boost (PRIZE_BOOST), access to exclusive rooms (ROOM_ACCESS), and unlocking benefits by burning an NFT (BURN_TO_CLAIM). All benefits are validated on-chain by the smart contract."
+      },
+      {
+        "question": "How do I use an NFT for a discount?",
+        "answer": "On the ticket purchase screen, select your eligible NFT in the discount selector. The system automatically checks your eligible NFTs and applies the corresponding discount. Once you confirm the preview, the NFT is locked for that purchase."
+      },
+      {
+        "question": "What are sponsored rooms?",
+        "answer": "Rooms created by projects or companies (sponsors) that deposit tokens into the room treasury to fund prizes. Each room has its own currency, ticket price and game type. Sponsors can also allocate NFT and token drops for players."
+      },
+      {
+        "question": "How does the leaderboard work?",
+        "answer": "The leaderboard shows top players by wins, wagered volume or accumulated XP. Positions update at the end of each game. XP is earned by playing, winning and completing achievements."
+      },
+      {
+        "question": "How do I update my profile?",
+        "answer": "Go to the Profile page to set your avatar (using an NFT from your wallet), nickname and other preferences. Changes are authenticated via WAX signature — only you can modify your data."
+      },
+      {
+        "question": "Is my wallet safe?",
+        "answer": "The platform never stores your private key. Authentication is done via WAX wallet signature (Anchor/Wombat) — you sign each transaction directly in your wallet app. The smart contract is public and auditable by anyone on the WAX blockchain."
+      },
+      {
+        "question": "What is GGR and where does it go?",
+        "answer": "GGR (Gross Gaming Revenue) is the 15% margin retained by the platform per game. These funds sustain operations, development and global treasury liquidity. The resulting RTP is 85% — statistically, 85% of everything wagered returns as prizes."
+      },
+      {
+        "question": "What happens if nobody wins a round?",
+        "answer": "In standard modes, the prize goes to the player with the most progressed ticket (highest completed pattern weight). In First Full mode, if no ticket completes the full card, the game is closed by the worker and a new round starts automatically."
       }
     ]
   },
@@ -788,5 +872,68 @@
   "loading": "Loading profile...",
   "language": "Language",
   "landing_lobby": "Game Lobbies",
-  "wallet_connected": "Wallet Connected:"
+  "wallet_connected": "Wallet Connected:",
+  "progression": {
+    "level": "Lv. {{level}}",
+    "sub_level": "Sub-level {{subLevel}}",
+    "xp_to_next": "{{xp}} XP to next",
+    "xp_progress": "{{pct}}% progress",
+    "tier_label": "{{tier}} tier"
+  },
+  "achievements": {
+    "title": "Achievements",
+    "progress": "{{unlocked}} / {{total}} unlocked",
+    "recent_unlock": "New achievement unlocked!"
+  },
+  "profile_page": {
+    "title": "My Profile",
+    "tab_profile": "Profile",
+    "tab_nfts": "NFTs",
+    "tab_xp": "Progression",
+    "nickname_label": "Display name",
+    "nickname_placeholder": "Your chat name",
+    "nickname_hint": "Shown in chat and rankings",
+    "avatar_label": "Avatar (NFT)",
+    "avatar_none": "No avatar",
+    "save": "Save",
+    "saving": "Saving...",
+    "save_success": "Profile updated!",
+    "save_error": "Error saving. Please try again.",
+    "sig_error": "Signing failed. Check your wallet.",
+    "sync_burns": "Sync burns",
+    "syncing": "Syncing...",
+    "sync_success_zero": "No new burns detected.",
+    "sync_success": "{{count}} burn(s) recorded!",
+    "sync_error": "Error syncing burns.",
+    "nfts_empty": "No NFTs found in wallet.",
+    "nfts_loading": "Loading NFTs...",
+    "burn_to_claim_label": "BURN TO CLAIM",
+    "achievements_title": "Achievements",
+    "achievements_empty": "No achievements unlocked yet.",
+    "games_played": "Games played",
+    "wins": "Wins",
+    "burns": "Burns",
+    "wallet_label": "Wallet",
+    "achievement_locked": "{{name}} (locked)",
+    "native_badge": "native"
+  },
+  "token_admin": {
+    "title": "Authorized Tokens",
+    "add": "Add token",
+    "contract_label": "Contract",
+    "symbol_label": "Symbol",
+    "precision_label": "Precision",
+    "label_label": "Display name",
+    "is_native_label": "Native WAX token (get_account)",
+    "save": "Save",
+    "remove": "Remove",
+    "remove_confirm": "Remove this token?",
+    "empty": "No tokens configured.",
+    "duplicate": "Token already exists.",
+    "error_create": "Error creating token.",
+    "error_delete": "Error removing token.",
+    "success_create": "Token added!",
+    "success_delete": "Token removed.",
+    "native_badge": "native"
+  }
 }

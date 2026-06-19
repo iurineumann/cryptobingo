@@ -226,9 +226,19 @@ export interface MongoUserProfile {
     };
     progression: {
         xp:           number;
-        tier:         'Bronze' | 'Silver' | 'Gold' | 'Diamond';
+        tier:         'Cobre' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Safira' | 'Rubi' | 'Diamante';
+        level:        number;
+        sub_level:    number;
         games_played: number;
+        wins_count?:   number;
+        combos_count?: number;
+        tickets_bought?: number;
+        burns_count?:  number;
+        next_level_xp?:  number;
+        xp_to_next_level?: number;
+        progress_pct?:   number;
     };
+    achievements?: AchievementEntry[];
 }
 
 export interface MongoChatMessage {
@@ -406,6 +416,28 @@ export interface SwapPoolSummary {
     service_fee_bps: number;
 }
 
+// ── Achievement Definitions (ADR-028 2D) ─────────────────────────────────────
+
+/**
+ * Definição de uma conquista no sistema de progressão.
+ * Fonte: achievementEngine.ts (worker-game-loop).
+ */
+export interface AchievementDefinition {
+    id:    string;
+    label: string;
+    desc:  string;
+    icon:  string;
+}
+
+/**
+ * Conquista desbloqueada por um jogador.
+ * Armazenada em MongoUserProfile.achievements[] como subdocumento.
+ */
+export interface AchievementEntry {
+    id:          string;
+    unlocked_at: Date;
+}
+
 // ── Rankings & Conteúdo (ADR-024) ────────────────────────────────────────────
 
 /**
@@ -420,6 +452,19 @@ export interface LeaderboardEntry {
     currency:  string;   // 'WAX', 'BINGO', 'TLM', etc.
     games_won: number;   // número de transações claim_win
     room_id?:  string;   // presente apenas no leaderboard por sala
+}
+
+/**
+ * Entrada no ranking de XP. Fonte: MongoDB userprofiles (progression.xp).
+ */
+export interface LeaderboardXpEntry {
+    rank:       number;
+    wallet:     string;
+    nickname:   string | null;
+    xp:         number;
+    tier:       string;
+    level:      number;
+    games_played: number;
 }
 
 /**

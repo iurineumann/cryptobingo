@@ -123,11 +123,12 @@ export interface GenerateTicketsResponse {
 export async function generateSignedTickets(
     gameId: string,
     count: number,
+    nftId?: string,
 ): Promise<GenerateTicketsResponse> {
     const res = await fetch(`${API_BASE}/games/${gameId}/tickets/generate`, {
         method:  'POST',
         headers: authHeaders(),
-        body:    JSON.stringify({ count }),
+        body:    JSON.stringify({ count, ...(nftId && nftId !== '0' ? { nft_id: nftId } : {}) }),
     });
     return handleResponse<GenerateTicketsResponse>(res);
 }
@@ -531,6 +532,20 @@ export async function fetchMyNfts(): Promise<{ nfts: NftAsset[] }> {
     return handleResponse(res);
 }
 
+export interface EligibleDiscountNft {
+    asset_id:            string;
+    template_id:         number;
+    collection_name:     string;
+    discount_hundredths: number;
+    discount_pct:        number; // float para exibição (ex: 5.0 = 5%)
+    value_origin:        number; // 0=FIXED, 1=SCHEMA_FIELD
+}
+
+export async function fetchEligibleDiscountNfts(): Promise<{ nfts: EligibleDiscountNft[] }> {
+    const res = await fetch(`${API_BASE}/nfts/eligible-discount`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
 // ==========================================
 // WINNINGS
 // ==========================================
@@ -559,6 +574,29 @@ export async function fetchBatchWinnings(gameIds: string[]): Promise<BatchWinnin
         body: JSON.stringify({ gameIds }),
     });
     return handleResponse<BatchWinningsResponse>(res);
+}
+
+// ==========================================
+// ACHIEVEMENTS (ADR-028 2D)
+// ==========================================
+
+export interface AchievementDef {
+    id:       string;
+    label:    string;
+    desc:     string;
+    icon:     string;
+    unlocked: boolean;
+}
+
+export interface AchievementsResponse {
+    achievements: AchievementDef[];
+}
+
+export async function fetchAchievements(): Promise<AchievementsResponse> {
+    const res = await fetch(`${API_BASE}/profile/achievements`, {
+        headers: authHeaders(),
+    });
+    return handleResponse<AchievementsResponse>(res);
 }
 
 // ==========================================
@@ -722,6 +760,30 @@ export async function fetchSponsorRooms(): Promise<{ rooms: EnrichedRoom[] }> {
     return handleResponse(res);
 }
 
+export interface RoomTreasury {
+    room_id:  string;
+    balance:  { quantity: string; contract: string };
+    locked:   { quantity: string; contract: string };
+}
+
+export async function fetchRoomTreasury(roomId: string): Promise<{ treasury: RoomTreasury | null }> {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/treasury`);
+    return handleResponse(res);
+}
+
+export async function setRoomNftConfig(roomId: string, data: {
+    nft_template_allowlist:     number[];
+    campaign_id:                number;
+    house_fee_bps:              number;
+    estimated_monthly_tickets:  number;
+}): Promise<{ transaction_id: string }> {
+    const res = await fetch(`${API_BASE}/admin/rooms/${roomId}/nft-config`, {
+        method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
 // ==========================================
 // DROP VAULT (ADR-011)
 // ==========================================
@@ -822,12 +884,22 @@ export interface RoomLeaderboardResponse {
     cached_at: string;
 }
 
+export interface LeaderboardXpResponse {
+    entries:   import('@cryptobingo/shared-types').LeaderboardXpEntry[];
+    cached_at: string;
+}
+
 export async function fetchLeaderboard(opts?: { currency?: string; limit?: number }): Promise<LeaderboardResponse> {
     const params = new URLSearchParams();
     if (opts?.currency) params.set('currency', opts.currency);
     if (opts?.limit)    params.set('limit',    String(opts.limit));
     const res = await fetch(`${API_BASE}/leaderboard?${params}`, { headers: publicHeaders() });
     return handleResponse(res);
+}
+
+export async function fetchLeaderboardXp(limit = 20): Promise<LeaderboardXpResponse> {
+    const res = await fetch(`${API_BASE}/leaderboard/xp?limit=${limit}`, { headers: publicHeaders() });
+    return handleResponse<LeaderboardXpResponse>(res);
 }
 
 export async function fetchRoomLeaderboard(roomId: string, limit = 10): Promise<RoomLeaderboardResponse> {
@@ -878,6 +950,88 @@ export async function updateNewsItem(id: string, data: {
 export async function deleteNewsItem(id: string): Promise<{ message: string }> {
     const res = await fetch(`${API_BASE}/news/${encodeURIComponent(id)}`, {
         method: 'DELETE', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
+// SYNC BURNS (ADR-028 §8)
+// ==========================================
+
+export interface SyncBurnsResponse {
+    recorded:  number;
+    asset_ids: string[];
+}
+
+export async function syncBurns(): Promise<SyncBurnsResponse> {
+    const res = await fetch(`${API_BASE}/nfts/sync-burns`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    return handleResponse<SyncBurnsResponse>(res);
+}
+
+// ==========================================
+// PROFILE UPDATE (WAX-signed)
+// ==========================================
+
+export interface UpdateProfilePayload {
+    nickname?:            string;
+    locale?:              string;
+    avatar_nft_asset_id?: string | null;
+    signature?:           string;
+    ts?:                  number;
+}
+
+export async function updateProfile(payload: UpdateProfilePayload): Promise<void> {
+    const res = await fetch(`${API_BASE}/profile`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
+// SYSTEM TOKENS (config pública)
+// ==========================================
+
+export interface SystemToken {
+    _id:       string;
+    contract:  string;
+    symbol:    string;
+    precision: number;
+    label:     string;
+    is_native: boolean;
+    enabled:   boolean;
+}
+
+export async function fetchSupportedTokens(): Promise<{ tokens: SystemToken[] }> {
+    const res = await fetch(`${API_BASE}/config/tokens`);
+    return handleResponse<{ tokens: SystemToken[] }>(res);
+}
+
+export async function createSupportedToken(
+    data: Omit<SystemToken, '_id' | 'enabled'>,
+): Promise<{ token: SystemToken }> {
+    const res = await fetch(`${API_BASE}/admin/config/tokens`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
+    });
+    return handleResponse<{ token: SystemToken }>(res);
+}
+
+export async function deleteSupportedToken(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/config/tokens/${id}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function sendChatMessage(
+    roomId: string,
+    message: string,
+): Promise<{ id: string; wallet_address: string; message: string; is_sponsor_drop: boolean; timestamp: string }> {
+    const res = await fetch(`${API_BASE}/rooms/${roomId}/chat`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ message }),
     });
     return handleResponse(res);
 }

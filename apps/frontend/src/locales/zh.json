@@ -87,6 +87,14 @@
     "tickets_empty_funding": "您还没有此房间的卡。",
     "tickets_empty_default": "本轮没有卡。",
     "chat": "房间聊天",
+    "chat_you": "你",
+    "chat_empty": "暂无消息，快来第一条吧！",
+    "chat_placeholder": "输入消息...",
+    "chat_send": "发送",
+    "chat_close": "关闭聊天",
+    "chat_drop_prefix": "空投!",
+    "chat_system_draw": "开奖",
+    "chat_system_status": "系统",
     "drops": "空投",
     "back_to_lobby": "返回大厅",
     "breadcrumb_room": "房间",
@@ -214,7 +222,12 @@
     "max": "最大",
     "sending": "发送中...",
     "deposit_action": "充值",
-    "withdraw_action": "提现"
+    "withdraw_action": "提现",
+    "native_balance": "WAX 余额（钱包）",
+    "token_balance": "{{symbol}} 余额（钱包）",
+    "on_contract": "合约中",
+    "no_tokens_configured": "管理员未配置任何代币。",
+    "balances_title": "余额"
   },
   "buy_ticket": {
     "title": "购买票券",
@@ -272,7 +285,12 @@
     "swap_quote_expired": "报价已过期，重新计算中",
     "swap_cost_preview": "费用：{{roomTotal}}（≈ {{altAmount}}）",
     "swap_via": "兑换途径",
-    "error_slippage": "价格变动过大，请重试。"
+    "error_slippage": "价格变动过大，请重试。",
+    "nft_discount_label": "折扣NFT",
+    "nft_discount_none": "不使用NFT",
+    "nft_discount_pct": "−{{pct}}%",
+    "nft_discount_variable": "可变折扣",
+    "nft_discount_locked": "生成预览后NFT已锁定。"
   },
   "admin": {
     "dashboard": "仪表盘",
@@ -608,7 +626,28 @@
     "token_memo": "备注",
     "token_memo_placeholder": "可选",
     "token_retire_warning": "销毁代币将永久减少流通供应量，此操作无法撤销。",
-    "token_err_no_recipient": "请提供转账的收款方。"
+    "token_err_no_recipient": "请提供转账的收款方。",
+    "rooms_nft_config": "配置NFT",
+    "rooms_nft_allowlist": "允许的模板（ID，用逗号分隔）",
+    "rooms_nft_house_fee": "平台费用（bps，0–10000）",
+    "rooms_nft_monthly_tickets": "预计每月票数",
+    "rooms_nft_campaign": "活动ID（0=无）",
+    "rooms_nft_save": "保存NFT配置",
+    "rooms_nft_success": "NFT配置已保存。",
+    "rooms_nft_error": "保存NFT配置时出错。",
+    "treasury_title": "房间金库",
+    "treasury_balance": "可用余额",
+    "treasury_locked": "锁定（抵押品）",
+    "treasury_deposit": "存入",
+    "treasury_deposit_amount": "存入金额",
+    "treasury_withdraw": "提取",
+    "treasury_withdraw_amount": "提取金额",
+    "treasury_empty": "金库为空。通过备注\"room:<id>\"转账存入。",
+    "treasury_success_withdraw": "提款已成功发送。",
+    "treasury_error_withdraw": "从金库提款时出错。",
+    "treasury_success_deposit": "存款已发送。",
+    "treasury_error_deposit": "存款时出错。",
+    "treasury_no_sponsor_room": "只有赞助房间才有金库。"
   },
   "replay": {
     "back_to_lobby": "返回大厅",
@@ -748,10 +787,15 @@
     "title_global": "全球排行榜",
     "title_room": "房间排行榜",
     "updated_at": "更新于 {{time}}",
-    "empty": "暂无获奖记录。",
+    "empty": "暂无记录。",
     "col_player": "玩家",
     "col_total_won": "总赢得",
-    "col_games_won": "场次"
+    "col_games_won": "场次",
+    "col_xp": "经验值",
+    "col_tier": "段位",
+    "col_games": "场次",
+    "tab_winnings": "收益",
+    "tab_xp": "经验值"
   },
   "faq": {
     "title": "常见问题",
@@ -763,19 +807,59 @@
       },
       {
         "question": "如何游玩？",
-        "answer": "连接您的WAX钱包，选择房间，购买彩票并等待开奖。如果获胜，奖励将自动发送。"
+        "answer": "连接您的WAX钱包（Anchor、Wombat等），在大厅选择房间，购买彩票并等待开奖。获胜后，智能合约将自动发送奖励——无需中间商。"
       },
       {
         "question": "抽奖公平吗？",
-        "answer": "是的。CryptoBingo使用WAX随机性预言机（orng.wax），基于RSA-SHA256，任何人都可以在链上验证其结果。"
+        "answer": "是的。我们使用WAX官方随机性预言机（orng.wax），基于RSA-SHA256。结果由外部生成，任何人都可以直接在区块链上验证——平台代码无法影响抽奖结果。"
+      },
+      {
+        "question": "每张彩票能赢多少？",
+        "answer": "奖励公式：彩票价格 × 基础倍数 × （图案权重 / 100）。示例：2 BINGO彩票，倍数1，图案权重150（1.5倍）→ 奖励3 BINGO。整体RTP（玩家回报率）为85%。"
+      },
+      {
+        "question": "什么是图案和组合？",
+        "answer": "图案是5×5彩票上的形状，当开出的号码完成这些形状时即可获奖（如横线、对角线、字母B、全卡）。组合是同一轮内完成多个图案的额外奖励。每种游戏类型有其自定义图案和奖励权重。"
+      },
+      {
+        "question": "有哪些抽奖模式？",
+        "answer": "平台支持4种模式：标准（35球）、固定（自定义球数）、首次全满（开球直到有人完成整张彩票）和黄金球（35球+1个带随机奖励倍数的黄金球）。"
       },
       {
         "question": "可以使用哪些代币？",
-        "answer": "WAX是默认代币。房间可以接受BINGO、TLM或其他支持的代币。您也可以使用兑换功能以其他代币支付。"
+        "answer": "WAX是默认代币。每个房间定义其基础货币（WAX、BINGO、TLM等）。您也可以使用内置兑换功能以其他代币支付——系统自动换算。"
       },
       {
-        "question": "奖励如何支付？",
-        "answer": "开奖后，智能合约自动评估所有彩票并直接将奖励转账到获奖者钱包。"
+        "question": "NFT在平台上如何使用？",
+        "answer": "合作系列的NFT可授予：购票折扣（TICKET_DISCOUNT）、奖励加成（PRIZE_BOOST）、专属房间访问权（ROOM_ACCESS）以及通过销毁NFT解锁权益（BURN_TO_CLAIM）。所有权益均由智能合约在链上验证。"
+      },
+      {
+        "question": "如何使用NFT获得折扣？",
+        "answer": "在购票页面，在折扣选择器中选择符合条件的NFT。系统自动检查您的可用NFT并将对应折扣应用到票价。确认预览后，该NFT将锁定用于本次购买。"
+      },
+      {
+        "question": "什么是赞助房间？",
+        "answer": "由项目方或企业（赞助商）创建的房间，他们向房间金库存入代币以资助奖励。每个房间有独立的货币、票价和游戏类型。赞助商还可以为玩家分配NFT和代币空投。"
+      },
+      {
+        "question": "排行榜如何运作？",
+        "answer": "排行榜按胜场、下注量或累积XP显示顶级玩家。每场游戏结束后更新排名。通过游玩、获胜和完成成就可获得XP。"
+      },
+      {
+        "question": "如何更新个人资料？",
+        "answer": "前往个人资料页面设置头像（使用钱包中的NFT）、昵称及其他偏好。资料变更通过WAX签名验证，确保只有您可以修改自己的数据。"
+      },
+      {
+        "question": "我的钱包安全吗？",
+        "answer": "平台不存储您的私钥。身份验证通过WAX钱包签名（Anchor/Wombat）完成——您在钱包应用中直接签署每笔交易。智能合约公开且可由任何人在WAX区块链上审计。"
+      },
+      {
+        "question": "GGR是什么，去哪里了？",
+        "answer": "GGR（毛利润）是平台从每场游戏中收取的15%费用，用于维持运营、平台开发和全球金库流动性。玩家回报率（RTP）为85%——即85%的下注将以奖励形式返还。"
+      },
+      {
+        "question": "如果没有人在某轮获胜会怎样？",
+        "answer": "在标准模式中，奖励发放给进度最高的玩家（完成权重最高的图案）。在首次全满模式中，若无彩票完成全卡，游戏由工作程序关闭，房间自动开始新一轮。"
       }
     ]
   },
@@ -788,5 +872,68 @@
   "landing_lobby": "游戏大厅",
   "loading": "加载个人资料...",
   "language": "语言",
-  "wallet_connected": "钱包已连接："
+  "wallet_connected": "钱包已连接：",
+  "progression": {
+    "level": "Lv. {{level}}",
+    "sub_level": "子等级 {{subLevel}}",
+    "xp_to_next": "还需 {{xp}} XP",
+    "xp_progress": "进度 {{pct}}%",
+    "tier_label": "{{tier}} 段位"
+  },
+  "achievements": {
+    "title": "成就",
+    "progress": "已解锁 {{unlocked}} / {{total}}",
+    "recent_unlock": "新成就已解锁!"
+  },
+  "profile_page": {
+    "title": "我的资料",
+    "tab_profile": "资料",
+    "tab_nfts": "NFT",
+    "tab_xp": "进度",
+    "nickname_label": "显示名称",
+    "nickname_placeholder": "聊天昵称",
+    "nickname_hint": "显示在聊天和排行榜中",
+    "avatar_label": "头像（NFT）",
+    "avatar_none": "无头像",
+    "save": "保存",
+    "saving": "保存中...",
+    "save_success": "资料已更新！",
+    "save_error": "保存失败，请重试。",
+    "sig_error": "签名失败，请检查钱包。",
+    "sync_burns": "同步销毁记录",
+    "syncing": "同步中...",
+    "sync_success_zero": "未检测到新的销毁。",
+    "sync_success": "已记录 {{count}} 个销毁！",
+    "sync_error": "同步销毁时出错。",
+    "nfts_empty": "钱包中未找到 NFT。",
+    "nfts_loading": "加载 NFT 中...",
+    "burn_to_claim_label": "销毁领取",
+    "achievements_title": "成就",
+    "achievements_empty": "尚未解锁任何成就。",
+    "games_played": "参与场次",
+    "wins": "获胜",
+    "burns": "销毁",
+    "wallet_label": "钱包",
+    "achievement_locked": "{{name}}（未解锁）",
+    "native_badge": "原生"
+  },
+  "token_admin": {
+    "title": "授权代币",
+    "add": "添加代币",
+    "contract_label": "合约",
+    "symbol_label": "符号",
+    "precision_label": "精度",
+    "label_label": "显示名称",
+    "is_native_label": "原生 WAX 代币（get_account）",
+    "save": "保存",
+    "remove": "删除",
+    "remove_confirm": "删除此代币？",
+    "empty": "未配置任何代币。",
+    "duplicate": "代币已存在。",
+    "error_create": "创建代币失败。",
+    "error_delete": "删除代币失败。",
+    "success_create": "代币已添加！",
+    "success_delete": "代币已删除。",
+    "native_badge": "原生"
+  }
 }

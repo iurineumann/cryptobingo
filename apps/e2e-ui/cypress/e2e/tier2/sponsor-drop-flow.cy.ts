@@ -120,7 +120,7 @@ describe('Sponsor · Fluxo de Drop completo (ADR-011, Tier 2 real)', () => {
 
         it('compra cartela e aguarda encerramento do jogo', () => {
             // Compra cartela.
-            cy.get('[data-testid="buy-ticket-btn"]', { timeout: DEFAULT_TIMEOUT })
+            cy.get('[data-testid="gr-buy-more"]', { timeout: DEFAULT_TIMEOUT })
                 .should('not.be.disabled')
                 .click();
             cy.get('[data-testid="buy-modal"]', { timeout: DEFAULT_TIMEOUT }).should('be.visible');

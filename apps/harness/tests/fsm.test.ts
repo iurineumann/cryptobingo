@@ -34,24 +34,36 @@ const url     = process.env.RPC_URL  || 'http://127.0.0.1:8888';
 const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 
 
+// Resolução de chaves resiliente ao naming do .waxdev.env: o reset grava
+// BINGOGAMECTR_KEY/BINGOGAMESVC_KEY; o worker usa CONTRACT/MICROSERVICE_PRIVATE_KEY.
 const eosioKey         = PrivateKey.from(process.env.EOSIO_KEY!);
 const playerKey        = PrivateKey.from(process.env.JOGADOR1_KEY!);
-const bingoKey         = PrivateKey.from(process.env.BINGO_GAME_KEY!);
-const microserviceKey  = PrivateKey.from(process.env.MICROSERVICE_KEY!);
+const player2Key       = PrivateKey.from(process.env.JOGADOR2_KEY!);
+const bingoKey         = PrivateKey.from((process.env.BINGO_GAME_KEY  || process.env.BINGOGAMECTR_KEY || process.env.CONTRACT_PRIVATE_KEY)!);
+const microserviceKey  = PrivateKey.from((process.env.MICROSERVICE_KEY || process.env.BINGOGAMESVC_KEY || process.env.MICROSERVICE_PRIVATE_KEY)!);
 
-function makeSession(actor: string, key: PrivateKey) {
+function makeSession(actor: string, key: PrivateKey, permission = 'active') {
     return new Session({
         actor,
-        permission:   'active',
+        permission,
         chain:        { id: chainId, url },
         walletPlugin: new WalletPluginPrivateKey(key),
     });
 }
 
 const rootSession   = makeSession('eosio',        eosioKey);
-const bingoSession  = makeSession('bingogamectr',   bingoKey);
+// ADR-026: actions de admin do bingogamectr exigem a permissão `admin`
+// (linkauth). A chave de bingogamectr@active pertence ao threshold admin.
+const bingoSession  = makeSession('bingogamectr', bingoKey, 'admin');
+// AtomicAssets (createtempl/mintasset) exige require_auth(bingogamectr) → @active.
+const bingoActiveSession = makeSession('bingogamectr', bingoKey, 'active');
 const playerSession = makeSession('jogador1',     playerKey);
+const player2Session = makeSession('jogador2',    player2Key);
 const microSession  = makeSession('bingogamesvc', microserviceKey);
+
+// ADR-028 §6: nft_id faz parte do hash assinado de buytickets. Todos os buys do
+// harness usam nft_id=0 (sem NFT de benefício acoplada à compra).
+const nft0Buf = Serializer.encode({ type: 'uint64', object: UInt64.from(0) }).array;
 
 const MASK_ROW0 = BigInt(1082401); // bits 0,5,10,15,20
 const MASK_ROW1 = BigInt(2164802); // bits 1,6,11,16,21
@@ -89,6 +101,13 @@ function randomGameName(): string {
     return s;
 }
 
+// room_id único por execução — IDs fixos (999/42) colidem em re-run no mesmo chain
+// (createroom/activateroom falham com "sala já existe / não está inactive"), forçando
+// reset. ID aleatório torna as suites de sala idempotentes entre runs.
+function randomRoomId(): UInt64 {
+    return UInt64.from(Math.floor(Math.random() * 1_000_000_000) + 1_000_000);
+}
+
 async function transact(session: Session, account: string, name: string, data: object) {
     return session.transact({
         actions: [{
@@ -124,6 +143,21 @@ async function waitForDrawn(gameIdStr: string, attempts = 30): Promise<void> {
         if (status !== 'drawing') throw new Error(`Estado inesperado: ${status}`);
     }
     throw new Error(`Timeout: jogo ${gameIdStr} ainda em 'drawing' após ${attempts * 2}s. Oracle daemon rodando?`);
+}
+
+// Lê a linha do jogo na tabela games. Usa bound UInt64 (key i64) — bound como string
+// no wharfkit é intermitente (CLAUDE.md gotcha) e devolve rows vazio esporadicamente.
+// Pequeno retry tolera o lag de leitura do nodeos logo após a transição de estado.
+async function getGameRow(gameId: UInt64, retries = 5): Promise<any> {
+    for (let i = 0; i < retries; i++) {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
+            lower_bound: gameId, upper_bound: gameId, limit: 1, json: true,
+        });
+        if (res.rows[0]) return res.rows[0];
+        await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error(`getGameRow: jogo ${gameId} não encontrado após ${retries} tentativas`);
 }
 
 // ==========================================
@@ -221,7 +255,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mainGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -254,17 +288,14 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
 
     // ──────────────────────────────────────────────────────────────────────────
     test('Passo 6: claimwin → DRAWN → PAYING (ADR-012: multi-winner)', async () => {
-        const [gameRes, ticketRes] = await Promise.all([
-            rpcClient.v1.chain.get_table_rows({
-                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-                lower_bound: mainGameIdStr, upper_bound: mainGameIdStr, limit: 1, json: true,
-            }),
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(mainGameId),
             rpcClient.v1.chain.get_table_rows({
                 code: 'bingogamectr', scope: mainGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const drawnBalls: number[] = gameRow.drawn_balls;
         const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
         const ticketId = UInt64.from(ticket.ticket_id);
 
@@ -284,6 +315,7 @@ describe('FSM — Happy Path (CREATED → FUNDING → PAYING → ARCHIVED)', () 
             ball_count:        35,
             win_pattern_mask:  winPatternMask,
             golden_multiplier: 0,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
 
@@ -331,7 +363,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: abortGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -377,7 +409,7 @@ describe('FSM — Fail-Safe (LOCKED → ABORTED → GC)', () => {
         });
         const check = await rpcClient.v1.chain.get_table_rows({
             code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-            lower_bound: abortGameIdStr, upper_bound: abortGameIdStr, limit: 1, json: true,
+            lower_bound: abortGameId, upper_bound: abortGameId, limit: 1, json: true,
         });
         expect(check.rows.length).toBe(0);
         console.log('   ✅ Jogo apagado da RAM');
@@ -433,7 +465,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: mmGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -516,7 +548,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes  }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: payingGameId }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -537,7 +569,7 @@ describe('FSM — MULTI_MATCH (DRAWN → PAYING → ARCHIVED por estágios)', ()
         await transact(microSession, 'bingogamectr', 'claimwin', {
             game_id: payingGameId, ticket_id: UInt64.from(ticketRes.rows[0].ticket_id),
             ball_count: 35, win_pattern_mask: UInt64.from(MASK_ROW0.toString()),
-            golden_multiplier: 0,
+            golden_multiplier: 0, boost_nft_ids: [],
         });
         expect(await getGameStatus(payingGameStr)).toBe('paying');
 
@@ -598,7 +630,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: gbGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -616,17 +648,14 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
     }, 90_000);
 
     test('GB-2: claimwin com golden_multiplier derivado de drawn_balls → PAYING', async () => {
-        const [gameRes, ticketRes] = await Promise.all([
-            rpcClient.v1.chain.get_table_rows({
-                code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-                lower_bound: gbGameIdStr, upper_bound: gbGameIdStr, limit: 1, json: true,
-            }),
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(gbGameId),
             rpcClient.v1.chain.get_table_rows({
                 code: 'bingogamectr', scope: gbGameIdStr, table: 'tickets', limit: 1, json: true,
             }),
         ]);
 
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const drawnBalls: number[] = gameRow.drawn_balls;
         const goldenBallAfter = 4;
         // ball_count = goldenBallAfter + 1: inclui as bolas normais + a golden ball
         const ballCount       = goldenBallAfter + 1;
@@ -642,6 +671,7 @@ describe('FSM — GOLDEN_BALL (DRAWN → PAYING → ARCHIVED com multiplicador)'
             ball_count:        ballCount,
             win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: goldenMultiplier,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(gbGameIdStr)).toBe('paying');
@@ -704,7 +734,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: ffGameId    }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -722,11 +752,13 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
     }, 90_000);
 
     test('FF-2: computa cutoff ball e claimwin com ball_count=cutoff → PAYING', async () => {
-        const gameRes = await rpcClient.v1.chain.get_table_rows({
-            code: 'bingogamectr', scope: 'bingogamectr', table: 'games',
-            lower_bound: ffGameIdStr, upper_bound: ffGameIdStr, limit: 1, json: true,
-        });
-        const drawnBalls: number[] = gameRes.rows[0].drawn_balls;
+        const ffGameRow = await getGameRow(ffGameId);
+        // drawn_balls é `bytes` no ABI → get_table_rows(json) pode devolver hex string.
+        // Normaliza para number[] (cada byte = 1 bola, 1..75).
+        const rawBalls = ffGameRow.drawn_balls as unknown;
+        const drawnBalls: number[] = typeof rawBalls === 'string'
+            ? (rawBalls.match(/.{2}/g) ?? []).map(h => parseInt(h, 16))
+            : (rawBalls as number[]);
         expect(drawnBalls.length).toBe(75);
 
         // Computa o cutoff: posição em que o ticket TEST_MATRIX fica completo
@@ -750,6 +782,7 @@ describe('FSM — FIRST_FULL (DRAWN → PAYING → ARCHIVED com cutoff dinamico)
             ball_count:        cutoff,
             win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
             golden_multiplier: 0,
+            boost_nft_ids:     [],
         });
         expect(r.response).toBeDefined();
         expect(await getGameStatus(ffGameIdStr)).toBe('paying');
@@ -776,10 +809,10 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     let allocId:     number;
 
     beforeAll(async () => {
-        vaultRoomId = UInt64.from(999);
+        vaultRoomId = randomRoomId();
     });
 
-    test('DV-0: createroom id=999 para suportar allocatedrop', async () => {
+    test('DV-0: createroom (id aleatório) para suportar allocatedrop', async () => {
         const price50 = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
             const r = await transact(bingoSession, 'bingogamectr', 'createroom', {
@@ -796,8 +829,8 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
         } catch {
             // sala pode já existir de uma execução anterior — ok
         }
-        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
-        console.log('   ✅ Sala 999 criada/ativa para DROP_VAULT');
+        await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: vaultRoomId });
+        console.log(`   ✅ Sala ${vaultRoomId} criada/ativa para DROP_VAULT`);
     });
 
     test('DV-1: transfer memo=vault → deposit criado no Drop Vault', async () => {
@@ -860,6 +893,8 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
     });
 
     test('DV-3: deallocdrop por conta sem auth (microservice) → falha', async () => {
+        // Teste negativo: microSession (bingogamesvc@active) NÃO satisfaz a permissão
+        // admin exigida por deallocdrop (linkauth ADR-026) → deve ser rejeitado.
         await expect(
             transact(microSession, 'bingogamectr', 'deallocdrop', {
                 caller:   Name.from('bingogamesvc'),
@@ -898,7 +933,7 @@ describe('DROP_VAULT — deposit via transfer + alloc + exec + guarda de autoriz
 
 describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price', () => {
 
-    const ROOM_ID = UInt64.from(42);
+    const ROOM_ID = randomRoomId();
     let pricedGameId:    UInt64;
     let pricedGameIdStr: string;
 
@@ -909,7 +944,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         console.log(`\n💰 Jogo ROOM_PRICING: ${pricedGameIdStr} (${pricedGameId})\n`);
     });
 
-    test('RP-0: createroom id=42 com price_min=10 WAX, price_max=50 WAX', async () => {
+    test('RP-0: createroom (id aleatório) com price_min=10 WAX, price_max=50 WAX', async () => {
         const min = ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' });
         const max = ExtendedAsset.from({ quantity: '50.0000 WAX', contract: 'eosio.token' });
         try {
@@ -927,11 +962,11 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         } catch {
             // sala pode já existir — ok
         }
-        await transact(microSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
-        console.log('   ✅ Sala 42 criada/ativa (min=10 WAX, max=50 WAX)');
+        await transact(bingoSession, 'bingogamectr', 'activateroom', { room_id: ROOM_ID });
+        console.log(`   ✅ Sala ${ROOM_ID} criada/ativa (min=10 WAX, max=50 WAX)`);
     });
 
-    test('RP-1: creategame vinculado a room_id=42', async () => {
+    test('RP-1: creategame vinculado à sala (id aleatório)', async () => {
         const r = await transact(bingoSession, 'bingogamectr', 'creategame', {
             game_id:      pricedGameId,
             ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
@@ -940,7 +975,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         });
         expect(r.response).toBeDefined();
         await transact(microSession, 'bingogamectr', 'fundgame', { game_id: pricedGameId });
-        console.log('   ✅ Jogo criado e financiado em sala 42');
+        console.log(`   ✅ Jogo criado e financiado em sala ${ROOM_ID}`);
     });
 
     test('RP-2: buytickets com requested_price=5 WAX (< min=10 WAX) → falha', async () => {
@@ -949,7 +984,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         await expect(
             transact(playerSession, 'bingogamectr', 'buytickets', {
@@ -970,7 +1005,7 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes   }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: pricedGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner         }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
 
         const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer:           owner,
@@ -1074,7 +1109,7 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
         const gameBuf = Serializer.encode({ type: 'uint64', object: comboGameId  }).array;
         const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
-        const sig     = bingoKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf])));
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
         await transact(playerSession, 'bingogamectr', 'buytickets', {
             buyer: owner, game_id: comboGameId, matrices: [matrixBytes], signatures: [sig],
             nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
@@ -1127,5 +1162,409 @@ describe('FSM — COMBINAÇÕES (setcombos + claimcombo) [ADR-016]', () => {
         await transact(microSession, 'bingogamectr', 'closegame', { game_id: comboGameId });
         expect(await getGameStatus(comboGameIdStr)).toBe('archived');
         console.log('   ✅ status: archived');
+    });
+});
+
+// ==========================================
+// SUITE PRIZE_BOOST — VALUE_SCHEMA_FIELD [ADR-028 §7 / sub-fase 2F]
+// ==========================================
+// Valida o caminho on-chain do prize boost cujo valor vem de um campo numérico
+// do schema da NFT (não FIXED). claimwin recebe boost_nft_ids; o contrato lê
+// `discount_pct` (hundredths) do immutable do template via _read_schema_numeric
+// e multiplica o payout. Aqui discount_pct=200 → boost 2.00× sobre o prêmio base.
+describe('FSM — PRIZE_BOOST VALUE_SCHEMA_FIELD [ADR-028 §7/2F]', () => {
+    const COLLECTION  = 'cryptobingo1';
+    const SCHEMA      = 'utility';
+    const BOOST_HUND  = 200; // discount_pct=200 → boost 2.00× (hundredths)
+    const GAMETYPE_ID_BOOST = UInt64.from(5);
+
+    let boostGameId:    UInt64;
+    let boostGameIdStr: string;
+    let templateId:     number;
+    let assetId:        string;
+
+    // Lê o saldo interno (extended_asset) do owner na tabela balances (scope=owner).
+    async function getInternalWax(owner: string): Promise<number> {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: owner, table: 'balances', limit: 10, json: true,
+        });
+        for (const row of res.rows as any[]) {
+            const q: string = row.balance?.quantity ?? '';
+            if (q.endsWith('WAX')) return Math.round(parseFloat(q) * 10000); // → unidades (4 casas)
+        }
+        return 0;
+    }
+
+    beforeAll(async () => {
+        const n = Name.from(randomGameName());
+        boostGameId    = n.value;
+        boostGameIdStr = n.toString();
+        console.log(`\n🎁 Jogo boost-schema: ${boostGameIdStr} (${boostGameId})\n`);
+
+        // Padrão ROW_0 (idempotente) + gametype 5 Standard (base_mult=1, weight=10).
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addpattern', {
+                pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: Number(MASK_ROW0),
+            });
+        } catch { /* já existe */ }
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addgametype', {
+                gametype_id:        GAMETYPE_ID_BOOST,
+                name:               'BoostSchema',
+                base_multiplier:    1,
+                rules:              [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+                draw_mode:          'standard',
+                max_balls:          35,
+                golden_ball_after:  0,
+                master_weight_ovrd: 0,
+            });
+        } catch { /* já existe */ }
+    });
+
+    test('BS-0: createtempl utility com discount_pct=200 (hundredths do boost)', async () => {
+        await transact(bingoActiveSession, 'atomicassets', 'createtempl', {
+            authorized_creator: 'bingogamectr',
+            collection_name:    COLLECTION,
+            schema_name:        SCHEMA,
+            transferable:       true,
+            burnable:           false,
+            max_supply:         0,
+            immutable_data: [
+                { first: 'discount_pct', second: ['uint8', BOOST_HUND] },
+                { first: 'name',         second: ['string', 'Boost x2 NFT'] },
+            ],
+        });
+
+        // template_id é auto-incremental por coleção; pega o maior recém-criado.
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'atomicassets', scope: COLLECTION, table: 'templates',
+            limit: 1000, json: true,
+        });
+        templateId = Math.max(...(res.rows as any[]).map(r => Number(r.template_id)));
+        expect(templateId).toBeGreaterThan(0);
+        console.log(`   ✅ template ${templateId} criado (discount_pct=${BOOST_HUND})`);
+    });
+
+    test('BS-1: confignft PRIZE_BOOST VALUE_SCHEMA_FIELD (discount_pct, owns)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'confignft', {
+            template_id:     UInt64.from(templateId),
+            collection_name: COLLECTION,
+            rules: [{
+                type: 2,             // RULE_PRIZE_BOOST
+                value_origin: 1,     // VALUE_SCHEMA_FIELD
+                fixed_value: 0,
+                schema_field: 'discount_pct',
+                max_uses: 0,
+                grant_duration_sec: 0,
+                condition: 0,        // COND_OWNS
+                room_ids: [],
+            }],
+        });
+        console.log('   ✅ nftconfig SCHEMA_FIELD gravado');
+    });
+
+    test('BS-2: mintasset do template para jogador1 → boost NFT possuído', async () => {
+        await transact(bingoActiveSession, 'atomicassets', 'mintasset', {
+            authorized_minter: 'bingogamectr',
+            collection_name:   COLLECTION,
+            schema_name:       SCHEMA,
+            template_id:       templateId,
+            new_asset_owner:   'jogador1',
+            immutable_data:    [],   // vazio → _read_schema_numeric usa fallback do template
+            mutable_data:      [],
+            tokens_to_back:    [],
+        });
+
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'atomicassets', scope: 'jogador1', table: 'assets', limit: 1000, json: true,
+        });
+        const mine = (res.rows as any[]).filter(r => Number(r.template_id) === templateId);
+        assetId = String(Math.max(...mine.map(r => Number(r.asset_id))));
+        expect(Number(assetId)).toBeGreaterThan(0);
+        console.log(`   ✅ asset ${assetId} mintado para jogador1`);
+    });
+
+    test('BS-3: FSM completa (create→fund→buy→lock→draw)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id:      boostGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_BOOST,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: boostGameId });
+        await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingogamectr',
+            quantity: '500.0000 WAX', memo: 'Deposito boost-schema',
+        });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: boostGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: boostGameId,
+            matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: boostGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: boostGameId });
+        await waitForDrawn(boostGameIdStr);
+        console.log('   ✅ status: drawn');
+    }, 90_000);
+
+    test('BS-4: claimwin com boost_nft_ids → payout 2.00× (schema field)', async () => {
+        const [gameRow, ticketRes] = await Promise.all([
+            getGameRow(boostGameId),
+            rpcClient.v1.chain.get_table_rows({
+                code: 'bingogamectr', scope: boostGameIdStr, table: 'tickets', limit: 1, json: true,
+            }),
+        ]);
+        const drawnBalls: number[] = gameRow.drawn_balls;
+        const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
+        const ticketId = UInt64.from(ticket.ticket_id);
+
+        // ADR-026: claimwin confia na avaliação do worker (valida só peso on-chain),
+        // logo o payout independe do estado real do bitmask — submetemos ROW_0 e o
+        // foco do teste é o multiplicador SCHEMA_FIELD aplicado ao prêmio.
+        void drawnBalls;
+
+        // Prêmio base: price(10) × base_mult(1) × weight(10)/100 = 1.0000 WAX = 10000.
+        const baseUnits   = 10000;
+        const boostedUnits = baseUnits * BOOST_HUND / 100; // ×2.00 = 20000
+
+        const before = await getInternalWax('jogador1');
+        await transact(microSession, 'bingogamectr', 'claimwin', {
+            game_id:           boostGameId,
+            ticket_id:         ticketId,
+            ball_count:        35,
+            win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+            golden_multiplier: 0,
+            boost_nft_ids:     [UInt64.from(assetId)],
+        });
+        const after = await getInternalWax('jogador1');
+
+        expect(after - before).toBe(boostedUnits);
+        console.log(`   ✅ payout com boost SCHEMA_FIELD: +${(boostedUnits/10000).toFixed(4)} WAX (base ${(baseUnits/10000).toFixed(4)} × ${BOOST_HUND/100})`);
+    });
+
+    test('BS-5: closegame → ARCHIVED', async () => {
+        await transact(microSession, 'bingogamectr', 'closegame', { game_id: boostGameId });
+        expect(await getGameStatus(boostGameIdStr)).toBe('archived');
+        console.log('   ✅ status: archived');
+    });
+});
+
+// ==========================================
+// SUITE PRIZE_BOOST via GRANT — BURN_TO_CLAIM [ADR-028 §8]
+// ==========================================
+// O jogador queima uma NFT (recordburn) cujo template tem BURN_TO_CLAIM + um
+// PRIZE_BOOST condicionado a `burned` (FIXED). Como o asset foi queimado, o
+// vencedor já não o possui; o benefício é honrado no claimwin via grant ativo
+// (descoberto on-chain por owner — boost_nft_ids vazio). discount/boost burned
+// é sempre FIXED (sem asset p/ ler schema).
+describe('FSM — PRIZE_BOOST via GRANT BURN_TO_CLAIM [ADR-028 §8]', () => {
+    const COLLECTION   = 'cryptobingo1';
+    const TEMPLATE_ID  = 9001;          // sintético (FIXED não lê atomicassets)
+    const BOOST_HUND   = 300;           // 3.00×
+    const GAMETYPE_ID_GRANT = UInt64.from(6);
+
+    let grantGameId:    UInt64;
+    let grantGameIdStr: string;
+    const burnAssetId = Math.floor(Math.random() * 1e9) + 2_000_000; // único p/ dedup de burn
+
+    async function getInternalWax(owner: string): Promise<number> {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: owner, table: 'balances', limit: 10, json: true,
+        });
+        for (const row of res.rows as any[]) {
+            const q: string = row.balance?.quantity ?? '';
+            if (q.endsWith('WAX')) return Math.round(parseFloat(q) * 10000);
+        }
+        return 0;
+    }
+
+    beforeAll(async () => {
+        const n = Name.from(randomGameName());
+        grantGameId    = n.value;
+        grantGameIdStr = n.toString();
+        console.log(`\n🔥 Jogo boost-grant: ${grantGameIdStr} (${grantGameId})\n`);
+
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addpattern', {
+                pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: Number(MASK_ROW0),
+            });
+        } catch { /* já existe */ }
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addgametype', {
+                gametype_id:        GAMETYPE_ID_GRANT,
+                name:               'BoostGrant',
+                base_multiplier:    1,
+                rules:              [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+                draw_mode:          'standard',
+                max_balls:          35,
+                golden_ball_after:  0,
+                master_weight_ovrd: 0,
+            });
+        } catch { /* já existe */ }
+    });
+
+    test('BG-0: confignft BURN_TO_CLAIM + PRIZE_BOOST(burned, FIXED 300)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'confignft', {
+            template_id:     UInt64.from(TEMPLATE_ID),
+            collection_name: COLLECTION,
+            rules: [
+                { type: 4, value_origin: 0, fixed_value: 0,          // BURN_TO_CLAIM
+                  schema_field: '', max_uses: 0, grant_duration_sec: 3600,
+                  condition: 1, room_ids: [] },
+                { type: 2, value_origin: 0, fixed_value: BOOST_HUND, // PRIZE_BOOST burned
+                  schema_field: '', max_uses: 0, grant_duration_sec: 0,
+                  condition: 1, room_ids: [] },
+            ],
+        });
+        console.log('   ✅ nftconfig BURN_TO_CLAIM + PRIZE_BOOST(burned) gravado');
+    });
+
+    test('BG-1: recordburn (jogador2 queima NFT) → grant ativo criado', async () => {
+        await transact(microSession, 'bingogamectr', 'recordburn', {
+            owner: 'jogador2', asset_id: UInt64.from(burnAssetId),
+            template_id: UInt64.from(TEMPLATE_ID), collection: COLLECTION,
+        });
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: 'bingogamectr', table: 'nftgrants', limit: 100, json: true,
+        });
+        const grant = (res.rows as any[]).find(
+            g => g.owner === 'jogador2' && Number(g.template_id) === TEMPLATE_ID);
+        expect(grant).toBeDefined();
+        console.log(`   ✅ grant ${grant.grant_id} ativo até ${grant.grant_until}`);
+    });
+
+    test('BG-2: FSM completa (create→fund→buy→lock→draw)', async () => {
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id:      grantGameId,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_GRANT,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: grantGameId });
+        // jogador2 é o burner E o vencedor: o boost vem só do grant burned, nunca de
+        // NFT possuída. Isolado de jogador1 (usado pela suite BS) p/ não cruzar grants.
+        await transact(player2Session, 'eosio.token', 'transfer', {
+            from: 'jogador2', to: 'bingogamectr',
+            quantity: '500.0000 WAX', memo: 'Deposito boost-grant',
+        });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador2');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: grantGameId  }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner        }).array;
+        const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+        await transact(player2Session, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: grantGameId,
+            matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0,
+            requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: grantGameId });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: grantGameId });
+        await waitForDrawn(grantGameIdStr);
+        console.log('   ✅ status: drawn');
+    }, 90_000);
+
+    test('BG-3: claimwin SEM boost_nft_ids → grant aplica payout 3.00×', async () => {
+        const ticketRes = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: grantGameIdStr, table: 'tickets', limit: 1, json: true,
+        });
+        const ticket = ticketRes.rows[0] as BlockchainTicketRecord;
+        const ticketId = UInt64.from(ticket.ticket_id);
+
+        const baseUnits    = 10000;                       // 1.0000 WAX
+        const boostedUnits = baseUnits * BOOST_HUND / 100; // ×3.00 = 30000
+
+        const before = await getInternalWax('jogador2');
+        await transact(microSession, 'bingogamectr', 'claimwin', {
+            game_id:           grantGameId,
+            ticket_id:         ticketId,
+            ball_count:        35,
+            win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+            golden_multiplier: 0,
+            boost_nft_ids:     [], // sem NFT possuída: o boost vem só do grant
+        });
+        const after = await getInternalWax('jogador2');
+
+        expect(after - before).toBe(boostedUnits);
+        console.log(`   ✅ payout via grant burned: +${(boostedUnits/10000).toFixed(4)} WAX (×${BOOST_HUND/100})`);
+    });
+
+    test('BG-4: closegame → ARCHIVED', async () => {
+        await transact(microSession, 'bingogamectr', 'closegame', { game_id: grantGameId });
+        expect(await getGameStatus(grantGameIdStr)).toBe('archived');
+        console.log('   ✅ status: archived');
+    });
+});
+
+// ==========================================
+// SUITE NFT_ID NO HASH — anti-troca de NFT [ADR-028 §6]
+// ==========================================
+// O hash assinado de buytickets inclui nft_id. Assinar com um nft_id e submeter
+// outro deve falhar no assert_recover_key (chave recuperada ≠ signer_key).
+describe('FSM — nft_id no hash da signature [ADR-028 §6]', () => {
+    let g: UInt64;
+    let gStr: string;
+
+    beforeAll(async () => {
+        const n = Name.from(randomGameName());
+        g = n.value; gStr = n.toString();
+        // GAMETYPE_ID_STD já criado pela suite Happy Path (primeira do arquivo).
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id: g, ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id: GAMETYPE_ID_STD, room_id: UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: g });
+        await transact(playerSession, 'eosio.token', 'transfer', {
+            from: 'jogador1', to: 'bingogamectr', quantity: '100.0000 WAX', memo: 'Deposito nft_id hash',
+        });
+    });
+
+    test('SIG-1: sig assinada com nft_id divergente → buytickets rejeita', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: g }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner }).array;
+        // Assina sobre nft_id=5, mas submete nft_id=0 → hash on-chain diverge.
+        const nft5Buf = Serializer.encode({ type: 'uint64', object: UInt64.from(5) }).array;
+        const sig = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft5Buf])));
+
+        await expect(transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        })).rejects.toThrow();
+        console.log('   ✅ buytickets rejeitou sig com nft_id divergente');
+    });
+
+    test('SIG-2: sig correta (nft_id=0) → buytickets aceita', async () => {
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: g }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner }).array;
+        const sig = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+
+        const r = await transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        expect(r.response).toBeDefined();
+        console.log('   ✅ buytickets aceitou sig correta');
+    });
+
+    afterAll(async () => {
+        try { await transact(microSession, 'bingogamectr', 'abortgame', { game_id: g }); } catch { /* best-effort */ }
     });
 });

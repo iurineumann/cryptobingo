@@ -7,7 +7,7 @@ jest.mock('./blockchain', () => ({
     microserviceSession: { transact: jest.fn(), permissionLevel: { actor: 'test', permission: 'active' } },
 }));
 jest.mock('./broadcaster', () => ({
-    io: { to: jest.fn(() => ({ emit: jest.fn() })) },
+    io: { of: jest.fn(() => ({ to: jest.fn(() => ({ emit: jest.fn() })) })) },
 }));
 jest.mock('./redis', () => ({
     redisClient: { set: jest.fn().mockResolvedValue('OK'), isOpen: true },

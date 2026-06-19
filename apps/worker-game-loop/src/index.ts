@@ -3,11 +3,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import mongoose from 'mongoose';
 import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
+import { startBurnSyncCron }   from './services/burnCron';
 
 console.log('=============================================');
 console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
@@ -28,10 +30,14 @@ async function bootstrap(): Promise<void> {
     // Iniciado primeiro para estar disponível desde o início do processo.
     startMetricsServer();
 
-    // ── 2. Redis (Inverted Index) ─────────────────────────────────────────────
+    // ── 2. MongoDB (Chat persistence) ─────────────────────────────────────────
+    await mongoose.connect(process.env.MONGO_URL as string);
+    console.log('✅ [MongoDB] Conectado (chat).');
+
+    // ── 3. Redis (Inverted Index) ─────────────────────────────────────────────
     await connectRedis();
 
-    // ── 3. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
+    // ── 4. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
     startBroadcaster();
 
     // ── 4. Auto-advance do ciclo de vida (independente do RabbitMQ) ───────────
@@ -48,7 +54,10 @@ async function bootstrap(): Promise<void> {
     setInterval(autoClaimDrawnGames,   15_000);
     setInterval(autoStartLockedGames,  30_000);
 
-    // ── 5. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
+    // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
+    startBurnSyncCron();
+
+    // ── 6. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
     // Não await: a conexão pode demorar ou precisar de retry sem bloquear o worker.
     connectRabbitMQ();
 }

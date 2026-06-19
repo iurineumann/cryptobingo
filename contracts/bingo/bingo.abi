@@ -178,24 +178,150 @@
       ]
     },
     {
+      "name": "nft_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "type",
+          "type": "uint8"
+        },
+        {
+          "name": "value_origin",
+          "type": "uint8"
+        },
+        {
+          "name": "fixed_value",
+          "type": "uint16"
+        },
+        {
+          "name": "schema_field",
+          "type": "string"
+        },
+        {
+          "name": "max_uses",
+          "type": "uint8"
+        },
+        {
+          "name": "grant_duration_sec",
+          "type": "uint32"
+        },
+        {
+          "name": "condition",
+          "type": "uint8"
+        },
+        {
+          "name": "room_ids",
+          "type": "uint64[]"
+        }
+      ]
+    },
+    {
       "name": "nft_config",
       "base": "",
       "fields": [
         {
           "name": "template_id",
-          "type": "int32"
+          "type": "uint64"
         },
         {
-          "name": "discount_pct",
+          "name": "collection_name",
+          "type": "name"
+        },
+        {
+          "name": "rules",
+          "type": "nft_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "nft_seq",
+      "base": "",
+      "fields": [
+        {
+          "name": "next_burn_id",
+          "type": "uint64"
+        },
+        {
+          "name": "next_grant_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "nft_burn",
+      "base": "",
+      "fields": [
+        {
+          "name": "burn_id",
+          "type": "uint64"
+        },
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "collection",
+          "type": "name"
+        },
+        {
+          "name": "burned_at",
+          "type": "time_point"
+        }
+      ]
+    },
+    {
+      "name": "nft_grant",
+      "base": "",
+      "fields": [
+        {
+          "name": "grant_id",
+          "type": "uint64"
+        },
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "rule_type",
           "type": "uint8"
         },
         {
-          "name": "is_vip",
-          "type": "bool"
+          "name": "grant_until",
+          "type": "time_point"
+        }
+      ]
+    },
+    {
+      "name": "recordburn",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
         },
         {
-          "name": "valid_until",
-          "type": "uint32"
+          "name": "asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "collection",
+          "type": "name"
         }
       ]
     },
@@ -348,6 +474,44 @@
         {
           "name": "created_at",
           "type": "time_point_sec"
+        },
+        {
+          "name": "nft_template_allowlist",
+          "type": "uint64[]$"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64$"
+        },
+        {
+          "name": "house_fee_bps",
+          "type": "uint16$"
+        },
+        {
+          "name": "estimated_monthly_tickets",
+          "type": "uint32$"
+        },
+        {
+          "name": "difficulty",
+          "type": "uint8$"
+        }
+      ]
+    },
+    {
+      "name": "room_treasury",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "balance",
+          "type": "extended_asset"
+        },
+        {
+          "name": "locked",
+          "type": "extended_asset"
         }
       ]
     },
@@ -656,6 +820,10 @@
         {
           "name": "golden_multiplier",
           "type": "uint16"
+        },
+        {
+          "name": "boost_nft_ids",
+          "type": "uint64[]$"
         }
       ]
     },
@@ -778,12 +946,30 @@
       ]
     },
     {
+      "name": "confignft",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "collection_name",
+          "type": "name"
+        },
+        {
+          "name": "rules",
+          "type": "nft_rule[]"
+        }
+      ]
+    },
+    {
       "name": "delnftconf",
       "base": "",
       "fields": [
         {
           "name": "template_id",
-          "type": "int32"
+          "type": "uint64"
         }
       ]
     },
@@ -912,28 +1098,6 @@
       ]
     },
     {
-      "name": "setnftconf",
-      "base": "",
-      "fields": [
-        {
-          "name": "template_id",
-          "type": "int32"
-        },
-        {
-          "name": "discount_pct",
-          "type": "uint8"
-        },
-        {
-          "name": "is_vip",
-          "type": "bool"
-        },
-        {
-          "name": "valid_until",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
       "name": "setroommeta",
       "base": "",
       "fields": [
@@ -948,6 +1112,50 @@
         {
           "name": "max_tickets_per_player",
           "type": "uint32"
+        },
+        {
+          "name": "difficulty",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "setroomnft",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "nft_template_allowlist",
+          "type": "uint64[]"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "house_fee_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "estimated_monthly_tickets",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "withdrawroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "amount",
+          "type": "extended_asset"
         }
       ]
     },
@@ -1170,8 +1378,18 @@
       "ricardian_contract": ""
     },
     {
+      "name": "confignft",
+      "type": "confignft",
+      "ricardian_contract": ""
+    },
+    {
       "name": "delnftconf",
       "type": "delnftconf",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "recordburn",
+      "type": "recordburn",
       "ricardian_contract": ""
     },
     {
@@ -1225,13 +1443,18 @@
       "ricardian_contract": ""
     },
     {
-      "name": "setnftconf",
-      "type": "setnftconf",
+      "name": "setroommeta",
+      "type": "setroommeta",
       "ricardian_contract": ""
     },
     {
-      "name": "setroommeta",
-      "type": "setroommeta",
+      "name": "setroomnft",
+      "type": "setroomnft",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "withdrawroom",
+      "type": "withdrawroom",
       "ricardian_contract": ""
     },
     {
@@ -1322,7 +1545,36 @@
         "template_id"
       ],
       "key_types": [
-        "int32"
+        "uint64"
+      ]
+    },
+    {
+      "name": "nftseq",
+      "type": "nft_seq",
+      "index_type": "i64",
+      "key_names": [],
+      "key_types": []
+    },
+    {
+      "name": "nftburns",
+      "type": "nft_burn",
+      "index_type": "i64",
+      "key_names": [
+        "burn_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "nftgrants",
+      "type": "nft_grant",
+      "index_type": "i64",
+      "key_names": [
+        "grant_id"
+      ],
+      "key_types": [
+        "uint64"
       ]
     },
     {
@@ -1361,6 +1613,17 @@
     {
       "name": "rooms",
       "type": "room_record",
+      "index_type": "i64",
+      "key_names": [
+        "room_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
+    },
+    {
+      "name": "roomtresry",
+      "type": "room_treasury",
       "index_type": "i64",
       "key_names": [
         "room_id"

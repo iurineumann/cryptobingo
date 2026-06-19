@@ -52,6 +52,58 @@ async function transact(actionName: string, data: object): Promise<string | unde
 
 // ── FSM Transitions ────────────────────────────────────────────────────────────
 
+/**
+ * ADR-028 §3: atualiza mutable_data de uma NFT via atomicassets::setassetdata.
+ * Requer que bingogamesvc seja authorized_account da coleção.
+ * new_mutable_data = ATTRIBUTE_MAP no formato [{first, second: [variant, value]}].
+ */
+export async function executeSetAssetData(
+    owner:          string,
+    assetId:        string,
+    collection:     string,
+    newMutableData: Array<{ first: string; second: [string, any] }>,
+): Promise<string | undefined> {
+    const atomicAccount = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
+    console.log(`✏️ [Blockchain] setassetdata → ${owner} asset ${assetId} (${newMutableData.length} campos)`);
+    const result = await microserviceSession.transact({
+        actions: [{
+            account:       atomicAccount,
+            name:          'setassetdata',
+            authorization: [microserviceSession.permissionLevel],
+            data: {
+                authorized_editor: 'bingogamesvc',
+                asset_owner:       owner,
+                asset_id:          assetId,
+                new_mutable_data:  newMutableData,
+            },
+        }],
+    }, { broadcast: true });
+    const txId = result.response?.transaction_id;
+    console.log(`✅ Mutable data atualizado. TX: ${txId}`);
+    return txId;
+}
+
+/**
+ * ADR-028 §8: registra um burn provado off-chain (recordburn, auth bingogamesvc).
+ * Idempotente no contrato (rejeita asset_id já registrado). Gera grants BURN_TO_CLAIM.
+ */
+export async function executeRecordBurn(
+    owner:      string,
+    assetId:    string,
+    templateId: number | string,
+    collection: string,
+): Promise<string | undefined> {
+    console.log(`🔥 [Blockchain] recordburn → ${owner} queimou asset ${assetId} (tpl ${templateId})`);
+    const txId = await transact('recordburn', {
+        owner,
+        asset_id:    assetId,
+        template_id: templateId,
+        collection,
+    });
+    console.log(`✅ Burn registrado. TX: ${txId}`);
+    return txId;
+}
+
 /** CREATED → FUNDING: abre as vendas. */
 export async function executeFundGame(gameId: string): Promise<string | undefined> {
     console.log(`🟢 [Blockchain] fundgame → jogo ${gameId}`);
@@ -89,18 +141,23 @@ export async function executeClaimWin(
     ballCount:        number,
     winPatternMask:   bigint,
     goldenMultiplier: number = 0,
+    boostNftIds:      string[] = [],
 ): Promise<string | undefined> {
     console.log(
         `🏆 [Blockchain] claimwin → jogo ${gameId}, cartela #${ticketId}, ` +
         `${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}` +
-        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '')
+        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '') +
+        (boostNftIds.length ? ` 🚀boost[${boostNftIds.join(',')}]` : '')
     );
+    // ADR-028 §7: boost_nft_ids é binary_extension (uint64[]$). Sempre enviado
+    // explicitamente (mesmo vazio) — wharfkit não omite binary_extension de array.
     const txId = await transact('claimwin', {
         game_id:           gameId,
         ticket_id:         ticketId,
         ball_count:        ballCount,
         win_pattern_mask:  winPatternMask.toString(),
         golden_multiplier: goldenMultiplier,
+        boost_nft_ids:     boostNftIds,
     });
     console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;

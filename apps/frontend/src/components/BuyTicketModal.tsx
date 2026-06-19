@@ -20,6 +20,7 @@ import {
     type QuoteParams,
 } from '../services/swapService';
 import type { SwapPoolSummary, SwapQuote } from '@cryptobingo/shared-types';
+import { fetchEligibleDiscountNfts, type EligibleDiscountNft } from '../services/api';
 
 interface ExtendedAssetInput {
     quantity: string;
@@ -37,6 +38,7 @@ interface BuyTicketModalProps {
     roomPriceMax?: ExtendedAssetInput;
     roomPriceDefault?: ExtendedAssetInput;
     gameEndTime?: number; // Unix timestamp (seconds) — para limitar TTL da cotação
+    nftTemplateAllowlist?: number[]; // templates permitidos na sala (vazio = todos)
 }
 
 interface AltToken {
@@ -89,7 +91,7 @@ let batchIdCounter = 0;
 export default function BuyTicketModal({
     gameId, ticketPrice, session, onClose, onSuccess,
     maxTicketsPerPlayer, roomPriceMin, roomPriceMax, roomPriceDefault,
-    gameEndTime,
+    gameEndTime, nftTemplateAllowlist,
 }: BuyTicketModalProps) {
 
     const { t } = useTranslation();
@@ -115,6 +117,30 @@ export default function BuyTicketModal({
     const [generating, setGenerating] = useState(false);
     const [removed, setRemoved] = useState<Set<string>>(new Set());
     const [localGenError, setLocalGenError] = useState<string | null>(null);
+
+    // ── ADR-028 §6: Seletor de NFT de desconto ───────────────────────────────
+    const [eligibleNfts,   setEligibleNfts]   = useState<EligibleDiscountNft[]>([]);
+    const [selectedNftId,  setSelectedNftId]  = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function loadNfts() {
+            try {
+                const { nfts } = await fetchEligibleDiscountNfts();
+                if (cancelled) return;
+                const filtered = nftTemplateAllowlist && nftTemplateAllowlist.length > 0
+                    ? nfts.filter(n => nftTemplateAllowlist.includes(n.template_id))
+                    : nfts;
+                setEligibleNfts(filtered);
+                // default = melhor desconto (já vem ordenado desc da API)
+                setSelectedNftId(filtered[0]?.asset_id ?? null);
+            } catch {
+                // falha silenciosa — seletor simplesmente não aparece
+            }
+        }
+        loadNfts();
+        return () => { cancelled = true; };
+    }, [session, nftTemplateAllowlist]);
 
     // ── ADR-021: Seletor de moeda ─────────────────────────────────────────────
     const roomSymbol   = extractSymbol(ticketPrice.quantity);
@@ -250,7 +276,7 @@ export default function BuyTicketModal({
 
         setGenerating(true);
         try {
-            const tickets = await generateForPreview(gameId, count);
+            const tickets = await generateForPreview(gameId, count, selectedNftId ?? undefined);
             const newBatch: TicketBatch = {
                 id:      `b${++batchIdCounter}`,
                 price:   { quantity: customPrice, contract: ticketPrice.contract },
@@ -312,7 +338,7 @@ export default function BuyTicketModal({
             };
         }
 
-        const result = await purchaseTickets(session, gameId, groups, swapAction);
+        const result = await purchaseTickets(session, gameId, groups, swapAction, selectedNftId ?? undefined);
         if (result) onSuccess();
     };
 
@@ -408,6 +434,7 @@ export default function BuyTicketModal({
                     </h2>
                     <button
                         className="cb-modal-close"
+                        data-testid="buy-modal-close"
                         onClick={onClose}
                         disabled={isPurchasing || generating}
                         aria-label={t('common.close')}
@@ -440,6 +467,54 @@ export default function BuyTicketModal({
                 {/* ── Step: FORM ──────────────────────────────────────────── */}
                 {step === 'form' && (
                     <>
+                        {/* ADR-028 §6: Seletor de NFT de desconto */}
+                        {eligibleNfts.length > 0 && (
+                            <fieldset className="mb-5" data-testid="nft-discount-selector">
+                                <legend className="block text-sm font-semibold text-[--cb-text-primary] mb-2">
+                                    {t('buy_ticket.nft_discount_label')}
+                                </legend>
+                                <div className="flex gap-2 flex-wrap" role="group">
+                                    <button
+                                        type="button"
+                                        className={[
+                                            'cb-btn cb-btn-sm cb-btn-pill',
+                                            !selectedNftId ? 'cb-btn-primary' : 'cb-btn-ghost',
+                                        ].join(' ')}
+                                        onClick={() => setSelectedNftId(null)}
+                                        disabled={batches.length > 0}
+                                        aria-pressed={!selectedNftId}
+                                        data-testid="nft-discount-none"
+                                    >
+                                        {t('buy_ticket.nft_discount_none')}
+                                    </button>
+                                    {eligibleNfts.map(nft => (
+                                        <button
+                                            key={nft.asset_id}
+                                            type="button"
+                                            className={[
+                                                'cb-btn cb-btn-sm cb-btn-pill',
+                                                selectedNftId === nft.asset_id ? 'cb-btn-primary' : 'cb-btn-ghost',
+                                            ].join(' ')}
+                                            onClick={() => setSelectedNftId(nft.asset_id)}
+                                            disabled={batches.length > 0}
+                                            aria-pressed={selectedNftId === nft.asset_id}
+                                            data-testid={`nft-discount-${nft.asset_id}`}
+                                            title={`#${nft.asset_id}`}
+                                        >
+                                            {nft.value_origin === 0
+                                                ? t('buy_ticket.nft_discount_pct', { pct: nft.discount_pct.toFixed(nft.discount_pct % 1 === 0 ? 0 : 2) })
+                                                : t('buy_ticket.nft_discount_variable')}
+                                        </button>
+                                    ))}
+                                </div>
+                                {batches.length > 0 && (
+                                    <p className="text-xs text-[--cb-text-tertiary] mt-1">
+                                        {t('buy_ticket.nft_discount_locked')}
+                                    </p>
+                                )}
+                            </fieldset>
+                        )}
+
                         {/* ADR-021: Seletor de moeda (só aparece quando há alternativas com saldo) */}
                         {altTokens.length > 0 && (
                             <fieldset className="mb-5" data-testid="swap-currency-selector">

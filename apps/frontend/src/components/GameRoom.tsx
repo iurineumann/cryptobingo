@@ -13,7 +13,7 @@ import type { MongoUserProfile, BlockchainGameState, BlockchainBalance, Extended
 import type { EnrichedRoom } from '../services/api';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
-import ChatPanel from './chat/ChatPanel';
+import ChatFloating from './chat/ChatFloating';
 import Logo from './Logo';
 import { TicketCard } from './TicketCard';
 import {
@@ -82,7 +82,7 @@ export default function GameRoom({
   const [room,         setRoom]         = useState<EnrichedRoom | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
-  const [showChat,     setShowChat]     = useState(false);
+
   const [loadingGame,  setLoadingGame]  = useState(true);
   const [now,          setNow]          = useState(Date.now());
   const [maxBalls,          setMaxBalls]          = useState(75);
@@ -647,7 +647,7 @@ export default function GameRoom({
     <div className="gr-shell">
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <header className="gr-navbar">
+      <header className="gr-navbar" data-testid="gr-room-header">
 
         {/* ── Esquerda: logo + crumb ── */}
         <div className="gr-nav-left">
@@ -658,7 +658,7 @@ export default function GameRoom({
               {room?.metadata?.name ?? (room ? `Sala ${room.room_id}` : `#${gameId}`)}
             </span>
             {game && (
-              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
+              <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
                 {gameStatusText}
               </span>
             )}
@@ -689,17 +689,6 @@ export default function GameRoom({
                 </span>
               ))}
             </span>
-          )}
-
-          {/* Chat */}
-          {room?.metadata?.chat_enabled !== false && (
-            <button
-              className={`cb-btn cb-btn-sm ${showChat ? 'cb-btn-primary' : 'cb-btn-ghost'}`}
-              onClick={() => setShowChat(s => !s)}
-              aria-label="Chat da sala"
-            >
-              💬
-            </button>
           )}
 
           {/* Seletor de idioma */}
@@ -871,7 +860,7 @@ export default function GameRoom({
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '—'}</span>
+                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '⭐'}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
                   )}
@@ -1066,7 +1055,7 @@ export default function GameRoom({
                   {playerWinEntries.length > 0 && (
                     <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
                       {playerWinEntries.map(({ name, total, currency, isCombination }) => (
-                        <div key={name} className="gr-ended-breakdown-row">
+                        <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                           <span className="gr-ended-breakdown-pattern">
                             {isCombination && '🔗 '}{name}
                           </span>
@@ -1109,10 +1098,20 @@ export default function GameRoom({
                 </div>
                 {nextGame && nextGame.status === 'funding' && (
                   <button
+                    data-testid="gr-next-game-btn"
                     className="cb-btn cb-btn-primary cb-btn-sm"
                     onClick={onLeave}
                   >
                     {t('game_room.go_to_next')}
+                  </button>
+                )}
+                {onGoToHistory && (
+                  <button
+                    data-testid="gr-view-history"
+                    className="cb-btn cb-btn-ghost cb-btn-sm"
+                    onClick={onGoToHistory}
+                  >
+                    {t('nav.my_history') ?? 'Histórico'}
                   </button>
                 )}
               </div>
@@ -1122,7 +1121,7 @@ export default function GameRoom({
         )}
 
         {/* ── Cartelas ──────────────────────────────────────────────────────── */}
-        <div className="gr-tickets-section">
+        <div className="gr-tickets-section" data-testid="gr-my-tickets">
           <div className="gr-tickets-head">
             <span className="title">
               {t('game_room.my_tickets_heading')}
@@ -1204,14 +1203,12 @@ export default function GameRoom({
         </div>
       )}
 
-      {/* ── Chat Panel ─────────────────────────────────────────────────────── */}
-      {showChat && room && (
-        <ChatPanel
+      {/* ── Chat Floating ──────────────────────────────────────────────────── */}
+      {room && (
+        <ChatFloating
           roomId={room.room_id}
           roomName={room.metadata?.name ?? `Sala #${room.room_id}`}
-          session={session}
           walletAddress={profile.wallet_address}
-          onClose={() => setShowChat(false)}
         />
       )}
 
@@ -1227,6 +1224,7 @@ export default function GameRoom({
           roomPriceMin={room?.ticket_price_min}
           roomPriceMax={room?.ticket_price_max}
           roomPriceDefault={room?.ticket_price_default}
+          nftTemplateAllowlist={room?.nft_template_allowlist}
         />
       )}
     </div>

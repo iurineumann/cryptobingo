@@ -87,6 +87,14 @@
     "tickets_empty_funding": "Você ainda não tem cartelas nesta sala.",
     "tickets_empty_default": "Sem cartelas nesta rodada.",
     "chat": "Chat da Sala",
+    "chat_you": "Você",
+    "chat_empty": "Nenhuma mensagem ainda. Seja o primeiro!",
+    "chat_placeholder": "Digite sua mensagem...",
+    "chat_send": "Enviar",
+    "chat_close": "Fechar chat",
+    "chat_drop_prefix": "Drop!",
+    "chat_system_draw": "Sorteio",
+    "chat_system_status": "Sistema",
     "drops": "Drops",
     "back_to_lobby": "Voltar ao Lobby",
     "breadcrumb_room": "Sala",
@@ -214,7 +222,12 @@
     "max": "Máx",
     "sending": "Enviando...",
     "deposit_action": "Depositar",
-    "withdraw_action": "Sacar"
+    "withdraw_action": "Sacar",
+    "native_balance": "Saldo WAX (carteira)",
+    "token_balance": "Saldo {{symbol}} (carteira)",
+    "on_contract": "No contrato",
+    "no_tokens_configured": "Nenhum token configurado pelo admin.",
+    "balances_title": "Saldos"
   },
   "buy_ticket": {
     "title": "Comprar Cartelas",
@@ -272,7 +285,12 @@
     "swap_quote_expired": "Cotação expirada — aguarde recálculo",
     "swap_cost_preview": "Custo: {{roomTotal}} (≈ {{altAmount}})",
     "swap_via": "Via swap",
-    "error_slippage": "Variação de preço excessiva. Tente novamente."
+    "error_slippage": "Variação de preço excessiva. Tente novamente.",
+    "nft_discount_label": "NFT de desconto",
+    "nft_discount_none": "Sem NFT",
+    "nft_discount_pct": "−{{pct}}%",
+    "nft_discount_variable": "Desconto variável",
+    "nft_discount_locked": "NFT bloqueada após gerar prévia."
   },
   "admin": {
     "dashboard": "Dashboard",
@@ -608,7 +626,28 @@
     "token_memo": "Memo",
     "token_memo_placeholder": "opcional",
     "token_retire_warning": "Retirar tokens destrói-os permanentemente, reduzindo o supply circulante. Esta ação não pode ser desfeita.",
-    "token_err_no_recipient": "Informe o destinatário para transferência."
+    "token_err_no_recipient": "Informe o destinatário para transferência.",
+    "rooms_nft_config": "Configurar NFT",
+    "rooms_nft_allowlist": "Templates permitidos (IDs, separados por vírgula)",
+    "rooms_nft_house_fee": "Taxa da casa (bps, 0–10000)",
+    "rooms_nft_monthly_tickets": "Projeção mensal de cartelas",
+    "rooms_nft_campaign": "ID de campanha (0 = nenhuma)",
+    "rooms_nft_save": "Salvar configuração NFT",
+    "rooms_nft_success": "Configuração NFT salva.",
+    "rooms_nft_error": "Erro ao salvar configuração NFT.",
+    "treasury_title": "Treasury da Sala",
+    "treasury_balance": "Saldo disponível",
+    "treasury_locked": "Bloqueado (colateral)",
+    "treasury_deposit": "Depositar",
+    "treasury_deposit_amount": "Valor a depositar",
+    "treasury_withdraw": "Sacar",
+    "treasury_withdraw_amount": "Valor a sacar",
+    "treasury_empty": "Treasury vazio. Deposite via transferência com memo \"room:<id>\".",
+    "treasury_success_withdraw": "Saque enviado com sucesso.",
+    "treasury_error_withdraw": "Erro ao sacar do treasury.",
+    "treasury_success_deposit": "Depósito enviado.",
+    "treasury_error_deposit": "Erro ao depositar.",
+    "treasury_no_sponsor_room": "Apenas salas patrocinadas têm treasury."
   },
   "replay": {
     "back_to_lobby": "Voltar ao Lobby",
@@ -748,10 +787,15 @@
     "title_global": "Ranking Global",
     "title_room": "Ranking da Sala",
     "updated_at": "Atualizado às {{time}}",
-    "empty": "Nenhum vencedor registrado ainda.",
+    "empty": "Nenhum registro ainda.",
     "col_player": "Jogador",
     "col_total_won": "Total Ganho",
-    "col_games_won": "Partidas"
+    "col_games_won": "Partidas",
+    "col_xp": "XP",
+    "col_tier": "Rank",
+    "col_games": "Jogos",
+    "tab_winnings": "Ganhos",
+    "tab_xp": "XP"
   },
   "faq": {
     "title": "Perguntas Frequentes",
@@ -763,19 +807,59 @@
       },
       {
         "question": "Como faço para jogar?",
-        "answer": "Conecte sua carteira WAX, escolha uma sala, compre suas cartelas e aguarde o sorteio. Se ganhar, o prêmio é enviado automaticamente."
+        "answer": "Conecte sua carteira WAX (Anchor, Wombat ou similar), escolha uma sala no lobby, compre suas cartelas e aguarde o sorteio. Se ganhar, o prêmio é enviado automaticamente pelo contrato inteligente — sem intermediários."
       },
       {
         "question": "Os sorteios são justos?",
-        "answer": "Sim. O CryptoBingo usa o oráculo de aleatoriedade da WAX (orng.wax), baseado em RSA-SHA256, cujo resultado é verificável on-chain por qualquer pessoa."
+        "answer": "Sim. Usamos o oráculo de aleatoriedade oficial da WAX (orng.wax), baseado em RSA-SHA256. O resultado é gerado externamente e verificável por qualquer pessoa diretamente na blockchain — nenhum código da plataforma pode influenciar o sorteio."
+      },
+      {
+        "question": "Quanto posso ganhar com uma cartela?",
+        "answer": "O prêmio segue a fórmula: Valor da Cartela × Multiplicador Base × (Peso do Padrão / 100). Exemplo: cartela de 2 BINGO, multiplicador 1, padrão peso 150 (1.5×) → prêmio de 3 BINGO. O RTP global é de 85%."
+      },
+      {
+        "question": "O que são padrões e combinações?",
+        "answer": "Padrões são formas na cartela 5×5 que, quando preenchidas pelos números sorteados, geram prêmio (ex: linha, diagonal, letra B, cartela cheia). Combinações são bônus por completar múltiplos padrões na mesma rodada. Cada tipo de jogo define seus próprios padrões e pesos."
+      },
+      {
+        "question": "Quais modos de sorteio existem?",
+        "answer": "A plataforma suporta 4 modos: Standard (35 bolas padrão), Fixed (número configurado de bolas), First Full (bolas até alguém completar a cartela inteira) e Golden Ball (35 bolas + 1 bola dourada com multiplicador aleatório de prêmio)."
       },
       {
         "question": "Quais tokens posso usar?",
-        "answer": "WAX é o token padrão. Salas podem aceitar BINGO, TLM ou outros tokens suportados. Você também pode usar a funcionalidade de swap para pagar com tokens alternativos."
+        "answer": "WAX é o token padrão. Cada sala define sua moeda base (WAX, BINGO, TLM ou outros). Você também pode pagar com tokens alternativos usando a funcionalidade de Swap integrada — a conversão é feita automaticamente."
       },
       {
-        "question": "Como funciona o pagamento de prêmios?",
-        "answer": "Após o sorteio, o contrato inteligente avalia automaticamente todas as cartelas e transfere os prêmios diretamente para as carteiras dos vencedores."
+        "question": "Como funcionam as NFTs na plataforma?",
+        "answer": "NFTs de coleções parceiras podem conceder: desconto na compra de cartelas (TICKET_DISCOUNT), aumento de prêmio (PRIZE_BOOST), acesso a salas exclusivas (ROOM_ACCESS) e desbloqueio de benefícios via queima de NFT (BURN_TO_CLAIM). Todos os benefícios são validados on-chain pelo contrato inteligente."
+      },
+      {
+        "question": "Como uso um NFT para desconto?",
+        "answer": "Na tela de compra, selecione seu NFT elegível no seletor de desconto. O sistema verifica automaticamente seus NFTs e aplica o desconto ao valor da cartela. Após confirmar a geração da prévia, o NFT fica bloqueado para aquela compra."
+      },
+      {
+        "question": "O que são salas patrocinadas?",
+        "answer": "Salas criadas por projetos ou empresas (sponsors) que depositam tokens no tesouro da sala para custear os prêmios. Cada sala tem configurações próprias de moeda, preço de cartela e tipo de jogo. Patrocinadores também podem alocar drops de NFTs e tokens para os jogadores."
+      },
+      {
+        "question": "Como funciona o ranking/leaderboard?",
+        "answer": "O leaderboard exibe os melhores jogadores por vitórias, volume apostado ou XP acumulado. As posições atualizam ao fim de cada partida. XP é ganho jogando, vencendo e completando conquistas."
+      },
+      {
+        "question": "Como atualizo meu perfil?",
+        "answer": "Acesse a página de Perfil para definir avatar (via NFT da sua carteira), nickname e outras preferências. Alterações são autenticadas via assinatura WAX — só você pode modificar seus dados."
+      },
+      {
+        "question": "Minha carteira e dados estão seguros?",
+        "answer": "A plataforma nunca armazena sua chave privada. Autenticação é feita via assinatura na sua carteira WAX (Anchor/Wombat) — você assina cada transação no próprio app da carteira. O contrato é público e auditável por qualquer pessoa na blockchain WAX."
+      },
+      {
+        "question": "O que é GGR e para onde vai?",
+        "answer": "GGR (Gross Gaming Revenue) é a margem de 15% retida pela plataforma por partida. Esses fundos sustentam a operação, o desenvolvimento e a liquidez da tesouraria global. O RTP resultante é 85% — estatisticamente, 85% de tudo apostado retorna como prêmio."
+      },
+      {
+        "question": "O que acontece se ninguém ganhar numa rodada?",
+        "answer": "Em modos standard, o prêmio vai ao jogador com a cartela de maior progresso (maior peso de padrão completado). No modo First Full, se nenhuma cartela completar a cartela inteira, o jogo é encerrado pelo worker e uma nova rodada é iniciada automaticamente."
       }
     ]
   },
@@ -788,5 +872,68 @@
   "loading": "Carregando perfil...",
   "language": "Idioma",
   "landing_lobby": "Salas de Jogo",
-  "wallet_connected": "Carteira Conectada:"
+  "wallet_connected": "Carteira Conectada:",
+  "progression": {
+    "level": "Nv. {{level}}",
+    "sub_level": "Sub-nível {{subLevel}}",
+    "xp_to_next": "{{xp}} XP para o próximo",
+    "xp_progress": "{{pct}}% de progresso",
+    "tier_label": "Nível {{tier}}"
+  },
+  "achievements": {
+    "title": "Conquistas",
+    "progress": "{{unlocked}} / {{total}} desbloqueadas",
+    "recent_unlock": "Nova conquista desbloqueada!"
+  },
+  "profile_page": {
+    "title": "Meu Perfil",
+    "tab_profile": "Perfil",
+    "tab_nfts": "NFTs",
+    "tab_xp": "Progressão",
+    "nickname_label": "Nome de exibição",
+    "nickname_placeholder": "Seu nome no chat",
+    "nickname_hint": "Exibido no chat e no ranking",
+    "avatar_label": "Avatar (NFT)",
+    "avatar_none": "Sem avatar",
+    "save": "Salvar",
+    "saving": "Salvando...",
+    "save_success": "Perfil atualizado!",
+    "save_error": "Erro ao salvar. Tente novamente.",
+    "sig_error": "Falha ao assinar. Verifique sua carteira.",
+    "sync_burns": "Sincronizar queimas",
+    "syncing": "Sincronizando...",
+    "sync_success_zero": "Nenhuma queima nova detectada.",
+    "sync_success": "{{count}} queima(s) registrada(s)!",
+    "sync_error": "Erro ao sincronizar queimas.",
+    "nfts_empty": "Nenhum NFT encontrado na carteira.",
+    "nfts_loading": "Carregando NFTs...",
+    "burn_to_claim_label": "BURN TO CLAIM",
+    "achievements_title": "Conquistas",
+    "achievements_empty": "Nenhuma conquista desbloqueada ainda.",
+    "games_played": "Partidas jogadas",
+    "wins": "Vitórias",
+    "burns": "Queimas",
+    "wallet_label": "Carteira",
+    "achievement_locked": "{{name}} (bloqueado)",
+    "native_badge": "nativo"
+  },
+  "token_admin": {
+    "title": "Tokens Autorizados",
+    "add": "Adicionar token",
+    "contract_label": "Contrato",
+    "symbol_label": "Símbolo",
+    "precision_label": "Precisão",
+    "label_label": "Nome de exibição",
+    "is_native_label": "Token nativo WAX (get_account)",
+    "save": "Salvar",
+    "remove": "Remover",
+    "remove_confirm": "Remover este token?",
+    "empty": "Nenhum token cadastrado.",
+    "duplicate": "Token já cadastrado.",
+    "error_create": "Erro ao criar token.",
+    "error_delete": "Erro ao remover token.",
+    "success_create": "Token cadastrado!",
+    "success_delete": "Token removido.",
+    "native_badge": "nativo"
+  }
 }

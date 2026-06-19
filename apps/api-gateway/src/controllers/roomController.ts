@@ -347,3 +347,76 @@ export async function listSponsorRooms(req: Request, res: Response): Promise<voi
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
+
+// ==========================================
+// PUT /api/v1/admin/rooms/:roomId/nft-config
+// Configura NFT allowlist + taxa + colateral da sala (ADR-028 §4).
+// Auth: JWT admin
+// ==========================================
+export async function setRoomNft(req: Request, res: Response): Promise<void> {
+    const { roomId } = req.params;
+    const { nft_template_allowlist = [], campaign_id = 0, house_fee_bps = 0, estimated_monthly_tickets = 0 } = req.body;
+
+    if (!Array.isArray(nft_template_allowlist)) {
+        res.status(400).json({ error: 'nft_template_allowlist deve ser um array de números.' });
+        return;
+    }
+    if (typeof house_fee_bps !== 'number' || house_fee_bps < 0 || house_fee_bps > 10000) {
+        res.status(400).json({ error: 'house_fee_bps deve ser 0–10000.' });
+        return;
+    }
+
+    try {
+        const session = getAdminSession();
+        const result = await session.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'setroomnft',
+                authorization: [session.permissionLevel],
+                data: {
+                    room_id:                   UInt64.from(roomId),
+                    nft_template_allowlist:     nft_template_allowlist.map((id: number) => UInt64.from(id)),
+                    campaign_id:               UInt64.from(campaign_id),
+                    house_fee_bps:             house_fee_bps,
+                    estimated_monthly_tickets: estimated_monthly_tickets,
+                },
+            }],
+        }, { broadcast: true });
+
+        res.status(200).json({
+            message:        `Configuração NFT da sala ${roomId} atualizada.`,
+            transaction_id: result.response?.transaction_id,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: `Erro ao configurar NFT da sala: ${msg}` });
+    }
+}
+
+// ==========================================
+// GET /api/v1/rooms/:roomId/treasury
+// Saldo do treasury da sala (balance + locked).
+// Público para leitura (exibição no lobby e dashboard sponsor).
+// ==========================================
+export async function getRoomTreasury(req: Request, res: Response): Promise<void> {
+    const { roomId } = req.params;
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:        CONTRACT_ACCOUNT,
+            scope:       CONTRACT_ACCOUNT,
+            table:       'roomtresry',
+            lower_bound: UInt64.from(roomId),
+            upper_bound: UInt64.from(roomId),
+            limit:       1,
+            json:        true,
+        });
+        if (!response.rows.length) {
+            res.status(200).json({ treasury: null });
+            return;
+        }
+        res.status(200).json({ treasury: response.rows[0] });
+    } catch (err) {
+        console.error('[RoomCtrl] Erro ao buscar treasury:', err);
+        res.status(503).json({ error: 'Nó blockchain indisponível.' });
+    }
+}

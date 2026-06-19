@@ -291,7 +291,7 @@ export default function PatternsAdmin() {
                         {t('admin.patterns_suggest')}
                     </span>
                     {suggestMsg && (
-                        <span className={`text-xs ${suggestMsg.created === suggestMsg.total ? 'text-[--cb-success]' : 'text-[--cb-warning]'}`}>
+                        <span data-testid="patterns-suggest-result" className={`text-xs ${suggestMsg.created === suggestMsg.total ? 'text-[--cb-success]' : 'text-[--cb-warning]'}`}>
                             {suggestMsg.created === suggestMsg.total
                                 ? t('admin.patterns_suggest_done', { created: suggestMsg.created, skipped: suggestMsg.skipped })
                                 : t('admin.patterns_suggest_error', { created: suggestMsg.created, total: suggestMsg.total })}
@@ -305,6 +305,7 @@ export default function PatternsAdmin() {
                 </div>
                 <button
                     type="button"
+                    data-testid="patterns-suggest-btn"
                     className="cb-btn cb-btn-outline self-start"
                     disabled={suggesting}
                     onClick={handleSuggest}

@@ -1,20 +1,23 @@
-// apps/frontend/src/components/LeaderboardPage.tsx
-// Ranking público de maiores vencedores — global e por sala. Ref: ADR-024.
-
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchLeaderboard, fetchRoomLeaderboard } from '../services/api';
-import type { LeaderboardEntry } from '@cryptobingo/shared-types';
+import { fetchLeaderboard, fetchLeaderboardXp, fetchRoomLeaderboard } from '../services/api';
+import type { LeaderboardEntry, LeaderboardXpEntry } from '@cryptobingo/shared-types';
 
 interface Props {
     roomId?: string;
 }
 
+type Tab = 'winnings' | 'xp';
+
+const TIER_ORDER = ['Cobre','Bronze','Prata','Ouro','Platina','Esmeralda','Safira','Rubi','Diamante'];
+
 export default function LeaderboardPage({ roomId }: Props) {
     const { t } = useTranslation();
-    const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
-    const [loading, setLoading]   = useState(true);
-    const [error, setError]       = useState<string | null>(null);
+    const [tab, setTab] = useState<Tab>('winnings');
+    const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+    const [xpEntries, setXpEntries] = useState<LeaderboardXpEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [cachedAt, setCachedAt] = useState<string | null>(null);
 
     const load = useCallback(async () => {
@@ -24,10 +27,17 @@ export default function LeaderboardPage({ roomId }: Props) {
             if (roomId) {
                 const data = await fetchRoomLeaderboard(roomId, 20);
                 setEntries(data.entries);
+                setXpEntries([]);
+                setCachedAt(data.cached_at);
+            } else if (tab === 'xp') {
+                const data = await fetchLeaderboardXp(50);
+                setXpEntries(data.entries);
+                setEntries([]);
                 setCachedAt(data.cached_at);
             } else {
                 const data = await fetchLeaderboard({ limit: 50 });
                 setEntries(data.entries);
+                setXpEntries([]);
                 setCachedAt(data.cached_at);
             }
         } catch (err: any) {
@@ -35,9 +45,12 @@ export default function LeaderboardPage({ roomId }: Props) {
         } finally {
             setLoading(false);
         }
-    }, [roomId, t]);
+    }, [roomId, tab, t]);
 
     useEffect(() => { load(); }, [load]);
+
+    const isXp = tab === 'xp';
+    const data: any[] = isXp ? xpEntries : entries;
 
     return (
         <div
@@ -50,6 +63,25 @@ export default function LeaderboardPage({ roomId }: Props) {
             >
                 {roomId ? t('leaderboard.title_room') : t('leaderboard.title_global')}
             </h1>
+
+            {!roomId && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <button
+                        className={`cb-btn cb-btn-sm ${tab === 'winnings' ? 'cb-btn-primary' : 'cb-btn-ghost'}`}
+                        onClick={() => setTab('winnings')}
+                        data-testid="leaderboard-tab-winnings"
+                    >
+                        {t('leaderboard.tab_winnings')}
+                    </button>
+                    <button
+                        className={`cb-btn cb-btn-sm ${tab === 'xp' ? 'cb-btn-primary' : 'cb-btn-ghost'}`}
+                        onClick={() => setTab('xp')}
+                        data-testid="leaderboard-tab-xp"
+                    >
+                        {t('leaderboard.tab_xp')}
+                    </button>
+                </div>
+            )}
 
             {cachedAt && (
                 <p style={{ fontSize: '0.75rem', color: 'var(--cb-text-secondary)', marginBottom: '1.5rem' }}>
@@ -76,13 +108,13 @@ export default function LeaderboardPage({ roomId }: Props) {
                 </div>
             )}
 
-            {!loading && !error && entries.length === 0 && (
+            {!loading && !error && data.length === 0 && (
                 <p data-testid="leaderboard-empty" style={{ color: 'var(--cb-text-secondary)', textAlign: 'center', padding: '3rem' }}>
                     {t('leaderboard.empty')}
                 </p>
             )}
 
-            {!loading && entries.length > 0 && (
+            {!loading && data.length > 0 && (
                 <table
                     data-testid="leaderboard-table"
                     style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}
@@ -91,40 +123,71 @@ export default function LeaderboardPage({ roomId }: Props) {
                         <tr style={{ borderBottom: '2px solid var(--cb-border)', color: 'var(--cb-text-secondary)', textAlign: 'left' }}>
                             <th style={{ padding: '0.5rem 0.75rem', width: '3rem' }}>#</th>
                             <th style={{ padding: '0.5rem 0.75rem' }}>{t('leaderboard.col_player')}</th>
-                            <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_total_won')}</th>
-                            <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_games_won')}</th>
+                            {isXp ? (
+                                <>
+                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_xp')}</th>
+                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_tier')}</th>
+                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_games')}</th>
+                                </>
+                            ) : (
+                                <>
+                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_total_won')}</th>
+                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>{t('leaderboard.col_games_won')}</th>
+                                </>
+                            )}
                         </tr>
                     </thead>
                     <tbody>
-                        {entries.map((entry) => (
-                            <tr
-                                key={`${entry.wallet}-${entry.currency}`}
-                                data-testid={`leaderboard-row-${entry.rank}`}
-                                style={{ borderBottom: '1px solid var(--cb-border)' }}
-                            >
-                                <td style={{ padding: '0.75rem', fontWeight: entry.rank <= 3 ? 700 : 400, color: rankColor(entry.rank) }}>
-                                    {rankIcon(entry.rank)}
-                                </td>
-                                <td style={{ padding: '0.75rem' }}>
-                                    <span data-testid={`leaderboard-nickname-${entry.rank}`} style={{ fontWeight: 500 }}>
-                                        {entry.nickname ?? truncateWallet(entry.wallet)}
-                                    </span>
-                                    {entry.nickname && (
-                                        <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--cb-text-secondary)' }}>
-                                            {truncateWallet(entry.wallet)}
+                        {data.map((entry: any) => {
+                            const rank = entry.rank;
+                            return (
+                                <tr
+                                    key={isXp ? `xp-${entry.wallet}` : `${entry.wallet}-${entry.currency}`}
+                                    data-testid={`leaderboard-row-${rank}`}
+                                    style={{ borderBottom: '1px solid var(--cb-border)' }}
+                                >
+                                    <td style={{ padding: '0.75rem', fontWeight: rank <= 3 ? 700 : 400, color: rankColor(rank) }}>
+                                        {rankIcon(rank)}
+                                    </td>
+                                    <td style={{ padding: '0.75rem' }}>
+                                        <span data-testid={`leaderboard-nickname-${rank}`} style={{ fontWeight: 500 }}>
+                                            {entry.nickname ?? truncateWallet(entry.wallet)}
                                         </span>
+                                        {entry.nickname && (
+                                            <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--cb-text-secondary)' }}>
+                                                {truncateWallet(entry.wallet)}
+                                            </span>
+                                        )}
+                                    </td>
+                                    {isXp ? (
+                                        <>
+                                            <td data-testid={`leaderboard-xp-${rank}`} style={{ padding: '0.75rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                {entry.xp.toLocaleString()}
+                                            </td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                                <span className={`cb-tier-${tierClass(entry.tier)}`} style={{ fontSize: '0.8rem' }}>
+                                                    {entry.tier}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--cb-text-secondary)' }}>
+                                                {entry.games_played}
+                                            </td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                <span data-testid={`leaderboard-total-${rank}`}>
+                                                    {entry.total_won.toLocaleString(undefined, { maximumFractionDigits: 4 })} {entry.currency}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--cb-text-secondary)' }}>
+                                                {entry.games_won}
+                                            </td>
+                                        </>
                                     )}
-                                </td>
-                                <td style={{ padding: '0.75rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                    <span data-testid={`leaderboard-total-${entry.rank}`}>
-                                        {entry.total_won.toLocaleString(undefined, { maximumFractionDigits: 4 })} {entry.currency}
-                                    </span>
-                                </td>
-                                <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--cb-text-secondary)' }}>
-                                    {entry.games_won}
-                                </td>
-                            </tr>
-                        ))}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             )}
@@ -149,4 +212,8 @@ function rankColor(rank: number): string {
 function truncateWallet(wallet: string): string {
     if (wallet.length <= 12) return wallet;
     return `${wallet.slice(0, 6)}…${wallet.slice(-4)}`;
+}
+
+function tierClass(tier: string): string {
+    return TIER_ORDER.includes(tier) ? tier.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : 'cobre';
 }

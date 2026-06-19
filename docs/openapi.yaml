@@ -1316,8 +1316,15 @@ components:
           type: object
           properties:
             xp: { type: integer }
-            tier: { type: string, enum: [Bronze, Silver, Gold, Diamond] }
+            tier:
+              type: string
+              enum: [Cobre, Bronze, Prata, Ouro, Platina, Esmeralda, Safira, Rubi, Diamante]
+            level: { type: integer }
+            sub_level: { type: integer }
             games_played: { type: integer }
+            next_level_xp: { type: integer }
+            xp_to_next_level: { type: integer }
+            progress_pct: { type: integer }
 
     ExtendedAsset:
       type: object

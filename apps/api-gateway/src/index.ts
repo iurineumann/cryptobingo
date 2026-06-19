@@ -1,6 +1,8 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
+import { createServer }                              from 'http';
+import { Server as SocketIoServer }                  from 'socket.io';
 import express                                       from 'express';
 import cors, { CorsOptions }                         from 'cors';
 import helmet                                        from 'helmet';
@@ -23,7 +25,7 @@ import {
     ensureNonceTable,
     logout,
 } from './controllers/authController';
-import { getProfile, updatePreferences, listUsers }   from './controllers/profileController';
+import { getProfile, updatePreferences, getAchievements, listUsers } from './controllers/profileController';
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
@@ -39,13 +41,14 @@ import {
     listCampaigns, getCampaign,
     linkCampaignToGame, closeCampaign,
 }                                                    from './controllers/sponsorController';
-import { getMyNfts }                                 from './controllers/nftController';
+import { getMyNfts, getEligibleDiscountNfts, syncBurns } from './controllers/nftController';
+import { listTokens, createToken, deleteToken }          from './controllers/tokenConfigController';
 import { livenessCheck, readinessCheck }             from './controllers/healthController';
 import { getPlayerWinnings, getPlayerWinningsBatch }  from './controllers/winningsController';
 import {
     listRooms, getRoom, createRoom, upsertRoomMetadata,
     updateRoomSettings, activateRoom, pauseRoom, closeRoom,
-    listSponsorRooms,
+    listSponsorRooms, setRoomNft, getRoomTreasury,
 }                                                    from './controllers/roomController';
 import {
     listDeposits, getDeposit,
@@ -53,7 +56,10 @@ import {
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
-import { getLeaderboardGlobal, getLeaderboardByRoom } from './controllers/leaderboardController';
+import { getChatHistory, saveChatMessage } from './controllers/chatController';
+import { setupChatSocket }                            from './socket/chatSocket';
+import { setIo }                                     from './socket';
+import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
 
 dotenv.config();
@@ -104,13 +110,21 @@ async function bootstrap(): Promise<void> {
     registerMiddleware();
     registerRoutes();
 
-    app.listen(PORT, () => {
+    const httpServer = createServer(app);
+    const io = new SocketIoServer(httpServer, {
+        cors: { origin: ALLOWED_ORIGINS, credentials: true },
+    });
+    setIo(io);
+    setupChatSocket(io);
+
+    httpServer.listen(PORT, () => {
         console.log('=============================================');
         console.log(`🌐 CryptoBingo: API Gateway na porta ${PORT}`);
         console.log(`   Origins permitidas: ${ALLOWED_ORIGINS.join(', ')}`);
         console.log(`   Helmet: ativo`);
         console.log(`   RBAC:   ativo`);
         console.log(`   JWT Blacklist: ativo (Redis)`);
+        console.log(`   Socket.IO: ativo (/chat)`);
         console.log('=============================================');
     });
 }
@@ -166,6 +180,7 @@ function registerRoutes(): void {
     // ── Perfil (JWT + player rate limit) ─────────────────────────────────────
     app.get('/api/v1/profile', playerLimiter, requireAuth, getProfile);
     app.put('/api/v1/profile', playerLimiter, requireAuth, updatePreferences);
+    app.get('/api/v1/profile/achievements', playerLimiter, requireAuth, getAchievements);
 
     // ── Cartelas (JWT + ticket rate limit) ───────────────────────────────────
     app.post(
@@ -237,6 +252,8 @@ function registerRoutes(): void {
     app.post('/api/v1/rooms/:roomId/pause',          adminLimiter, requireAuth, requireRole('admin'), pauseRoom);
     app.post('/api/v1/rooms/:roomId/close',          adminLimiter, requireAuth, requireRole('admin'), closeRoom);
     app.get('/api/v1/sponsor/rooms',                       playerLimiter, requireAuth, requireRole('sponsor'), listSponsorRooms);
+    app.put('/api/v1/admin/rooms/:roomId/nft-config',      adminLimiter,  requireAuth, requireRole('admin'), setRoomNft);
+    app.get('/api/v1/rooms/:roomId/treasury',              playerLimiter, getRoomTreasury);
 
     // ── Admin: Monte Carlo ─────────────────────────────────────────────────
     app.post(
@@ -270,7 +287,14 @@ function registerRoutes(): void {
     app.post('/api/v1/sponsors/campaigns/:campaignId/close', adminLimiter, requireAuth, requireRole('admin'), closeCampaign);
 
     // ── NFTs (JWT) ───────────────────────────────────────────────────────
-    app.get('/api/v1/nfts/my-assets', playerLimiter, requireAuth, getMyNfts);
+    app.get('/api/v1/nfts/my-assets',          playerLimiter, requireAuth, getMyNfts);
+    app.get('/api/v1/nfts/eligible-discount',  playerLimiter, requireAuth, getEligibleDiscountNfts);
+    app.post('/api/v1/nfts/sync-burns',        playerLimiter, requireAuth, syncBurns);
+
+    // ── Config: tokens autorizados ───────────────────────────────────────
+    app.get('/api/v1/config/tokens',                 playerLimiter, listTokens);
+    app.post('/api/v1/admin/config/tokens',          adminLimiter,  requireAuth, requireRole('admin'), createToken);
+    app.delete('/api/v1/admin/config/tokens/:id',    adminLimiter,  requireAuth, requireRole('admin'), deleteToken);
 
     // ── Winnings (JWT) ───────────────────────────────────────────────────
     app.get('/api/v1/player/winnings/:gameId', playerLimiter, requireAuth, getPlayerWinnings);
@@ -284,13 +308,18 @@ function registerRoutes(): void {
     app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);
     app.get('/api/v1/vault/deposits/:depositId', playerLimiter, requireAuth, getDeposit);
     app.get('/api/v1/vault/allocations',      playerLimiter, requireAuth, listAllocations);
-    app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin'), allocateDrop);
-    app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin'), deallocateDrop);
+    app.post('/api/v1/vault/allocate',   adminLimiter, requireAuth, requireRole('admin', 'sponsor'), allocateDrop);
+    app.post('/api/v1/vault/deallocate', adminLimiter, requireAuth, requireRole('admin', 'sponsor'), deallocateDrop);
     app.post('/api/v1/vault/reclaim',    playerLimiter, requireAuth, reclaimAsset);
 
     // ── Leaderboard (ADR-024) ─────────────────────────────────────────────────
     app.get('/api/v1/leaderboard',                  playerLimiter, getLeaderboardGlobal);
+    app.get('/api/v1/leaderboard/xp',               playerLimiter, getLeaderboardXp);
     app.get('/api/v1/leaderboard/rooms/:roomId',    playerLimiter, getLeaderboardByRoom);
+
+    // ── Chat ────────────────────────────────────────────────────────────────────
+    app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
+    app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);

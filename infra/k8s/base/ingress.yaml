@@ -20,9 +20,9 @@ metadata:
     # Rate limiting no ingress (camada adicional ao rate limit da aplicação)
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "20"
-    # WebSocket (worker broadcaster)
+    # WebSocket (worker broadcaster + api-gateway socket.io /chat)
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/websocket-services: "worker-svc"
+    nginx.ingress.kubernetes.io/websocket-services: "worker-svc,api-gateway-svc"
 spec:
   ingressClassName: nginx
   tls:
