@@ -38,6 +38,12 @@ import {
 import { executeCloseGame }                                          from './blockchain';
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
+import { sendGameSummaryMessage }                                    from './chatSystemHelper';
+import {
+    gameResolutionTotal,
+    gameResolutionDuration,
+    gameWinnersTotal,
+}                                                                    from './metrics';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
@@ -235,6 +241,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
     const drawnBalls = game.drawn_balls;
     let totalWinners = 0;
+    const resolutionTimer = gameResolutionDuration.startTimer({ draw_mode: drawMode });
 
     try {
         switch (drawMode) {
@@ -259,6 +266,15 @@ export async function orchestrateGame(gameId: string): Promise<void> {
                 console.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`);
                 totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
         }
+
+        resolutionTimer();
+        gameResolutionTotal.inc({ draw_mode: drawMode, result: 'success' });
+        gameWinnersTotal.inc({ draw_mode: drawMode }, totalWinners);
+
+    } catch (err) {
+        resolutionTimer();
+        gameResolutionTotal.inc({ draw_mode: drawMode, result: 'failure' });
+        throw err;
     } finally {
         // Garante limpeza do índice e do reveal mesmo em caso de erro parcial
         endRevealSession(gameId);
@@ -267,6 +283,12 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
     // Sinaliza fim do jogo para a UI (antes de criar a próxima partida)
     notifyGameEnded(gameId, drawMode, totalWinners);
+
+    // Envia resumo da partida ao chat da sala
+    const roomId = game.room_id;
+    if (roomId && roomId !== '0') {
+        sendGameSummaryMessage(roomId, totalWinners).catch(() => {});
+    }
 
     // Cria próxima partida da sala (ADR-010) — APÓS o reveal completo
     await onGameResolved(gameId).catch(err =>

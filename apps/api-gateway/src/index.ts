@@ -57,6 +57,8 @@ import {
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 import { getChatHistory, saveChatMessage } from './controllers/chatController';
+import { createSystemChatMessage }          from './controllers/internalChatController';
+import { startMetricsServer, metricsMiddleware } from './services/metrics';
 import { setupChatSocket }                            from './socket/chatSocket';
 import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
@@ -95,6 +97,7 @@ const corsOptions: CorsOptions = {
 // ==========================================
 
 async function bootstrap(): Promise<void> {
+    startMetricsServer();
     await connectMongo();
     await connectPostgres();
     await connectRedis();
@@ -134,6 +137,9 @@ async function bootstrap(): Promise<void> {
 // ==========================================
 
 function registerMiddleware(): void {
+    // Métricas Prometheus — antes de todos os handlers para capturar 100% das requisições
+    app.use(metricsMiddleware);
+
     // Helmet — headers de segurança HTTP
     // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
     app.use(helmet({
@@ -320,6 +326,7 @@ function registerRoutes(): void {
     // ── Chat ────────────────────────────────────────────────────────────────────
     app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
     app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
+    app.post('/api/v1/internal/chat/system', createSystemChatMessage);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);

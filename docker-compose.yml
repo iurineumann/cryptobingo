@@ -181,6 +181,52 @@ services:
     networks:
       - bingo_net
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: bingo_postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: bingo_redis_exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: bingo_mongodb_exporter
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: "mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/?authSource=admin"
+    ports:
+      - "9216:9216"
+    command:
+      - "--mongodb.uri=mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/?authSource=admin"
+      - "--web.listen-address=:9216"
+      - "--collect-all"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - bingo_net
+
   # ==========================================
   # 6. APPS — API Gateway
   # ==========================================
@@ -192,6 +238,7 @@ services:
     restart: unless-stopped
     ports:
       - "8083:8083"
+      - "9092:9092"
     env_file:
       - apps/api-gateway/.env
     environment:
