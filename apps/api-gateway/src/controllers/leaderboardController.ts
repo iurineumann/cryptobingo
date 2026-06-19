@@ -44,7 +44,7 @@ export async function getLeaderboardGlobal(req: Request, res: Response): Promise
 // ==========================================
 
 export async function getLeaderboardByRoom(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     if (!roomId || !/^\d+$/.test(roomId)) {
         res.status(400).json({ error: 'roomId inválido.' });
         return;

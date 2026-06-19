@@ -150,7 +150,7 @@ function registerMiddleware(): void {
 
     // CORS restrito
     app.use(cors(corsOptions));
-    app.options('*', cors(corsOptions)); // Preflight
+    app.options('/*splat', cors(corsOptions)); // Preflight
 
     // Body parser
     app.use(express.json({ limit: '1mb' })); // Limite explícito — previne body too large attacks
