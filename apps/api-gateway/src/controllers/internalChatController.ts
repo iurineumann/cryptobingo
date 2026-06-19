@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'node:crypto';
 import ChatMessageModel from '../models/ChatMessage';
 import { getIo } from '../socket';
 

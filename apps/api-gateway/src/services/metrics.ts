@@ -13,7 +13,7 @@
 //
 // Ref: ADR-007 (observabilidade)
 
-import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import {
     Registry,
     Counter,
@@ -23,7 +23,7 @@ import {
 } from 'prom-client';
 import type { Request, Response, NextFunction } from 'express';
 
-const METRICS_PORT = parseInt(process.env.METRICS_PORT ?? '9092', 10);
+const METRICS_PORT = Number.parseInt(process.env.METRICS_PORT ?? '9092', 10);
 
 export const registry = new Registry();
 

@@ -48,9 +48,9 @@ import {
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
 // Pausa visual entre o reveal da golden ball e o anúncio de vencedores
-const GOLDEN_BALL_PAUSE_MS = parseInt(process.env.GOLDEN_BALL_PAUSE_MS ?? '3000', 10);
+const GOLDEN_BALL_PAUSE_MS = Number.parseInt(process.env.GOLDEN_BALL_PAUSE_MS ?? '3000', 10);
 // Pausa entre estágios no MULTI_MATCH (jogador lê resultado antes de continuar)
-const STAGE_PAUSE_MS = parseInt(process.env.STAGE_PAUSE_MS ?? '4000', 10);
+const STAGE_PAUSE_MS = Number.parseInt(process.env.STAGE_PAUSE_MS ?? '4000', 10);
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
