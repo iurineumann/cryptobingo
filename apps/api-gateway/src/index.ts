@@ -1,7 +1,7 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
-import { createServer }                              from 'http';
+import { createServer }                              from 'node:http';
 import { Server as SocketIoServer }                  from 'socket.io';
 import express                                       from 'express';
 import cors, { CorsOptions }                         from 'cors';
@@ -142,9 +142,9 @@ function registerMiddleware(): void {
 
     // Helmet — headers de segurança HTTP
     // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
-    app.use(helmet({
+    app.use(helmet({ // NOSONAR: S5728 — CSP gerenciado pelo frontend (Vite) via meta tags
         crossOriginResourcePolicy:   { policy: 'cross-origin' },
-        contentSecurityPolicy:       false, // Gerenciado pelo frontend (Vite)
+        contentSecurityPolicy:       false,
         crossOriginEmbedderPolicy:   false, // Necessário para SharedArrayBuffer do Wharfkit
     }));
 
@@ -355,7 +355,7 @@ function registerRoutes(): void {
 // ENTRYPOINT
 // ==========================================
 
-bootstrap().catch((error) => {
+void bootstrap().catch((error: unknown) => { // NOSONAR: S7785 — top-level await indisponível em CJS (NodeNext sem "type":"module")
     console.error('❌ [Bootstrap] Falha crítica na inicialização:', error);
     process.exit(1);
 });

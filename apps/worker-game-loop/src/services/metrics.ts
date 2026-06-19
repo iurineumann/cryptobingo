@@ -16,7 +16,7 @@
 //
 // Ref: ADR-007 (observabilidade), ENGINEERING_PROTOCOL.md
 
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import {
     Registry,
     Counter,
@@ -25,7 +25,7 @@ import {
     collectDefaultMetrics,
 } from 'prom-client';
 
-const METRICS_PORT = parseInt(process.env.METRICS_PORT ?? '9091', 10);
+const METRICS_PORT = Number.parseInt(process.env.METRICS_PORT ?? '9091', 10);
 
 // ==========================================
 // REGISTRY ISOLADO
@@ -232,6 +232,7 @@ export function startMetricsServer(): void {
                 res.setHeader('Content-Type', registry.contentType);
                 res.end(await registry.metrics());
             } catch (err) {
+                console.error('[Metrics] Erro ao coletar métricas:', err);
                 res.writeHead(500);
                 res.end('Erro ao coletar métricas.');
             }
