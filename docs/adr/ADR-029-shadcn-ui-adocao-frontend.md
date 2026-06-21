@@ -1,6 +1,6 @@
 # ADR-029 — Adoção de ShadCN/ui no Frontend
 
-**Status:** Proposto
+**Status:** Aceito
 **Data:** 2026-06-18
 
 ---

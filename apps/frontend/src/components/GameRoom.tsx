@@ -10,8 +10,9 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { MongoUserProfile, BlockchainGameState, BlockchainBalance, ExtendedAsset } from '@cryptobingo/shared-types';
-import { Star, X } from 'lucide-react';
 import type { EnrichedRoom } from '../services/api';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { useSlowReveal } from '../hooks/useSlowReveal';
 import BuyTicketModal from './BuyTicketModal';
 import ChatFloating from './chat/ChatFloating';
@@ -91,7 +92,6 @@ export default function GameRoom({
   const [gameCombinations,  setGameCombinations]  = useState<CombinationRuleInput[]>([]);
   const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
   const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
-  const [showMenu,          setShowMenu]          = useState(false);
   const density                         = 'comfortable' as const;
 
   const AUTO_LOCK_SEC = 60;
@@ -109,7 +109,6 @@ export default function GameRoom({
     setGameCombinations([]);
     setExtendedRules([]);
     setIngameBalances([]);
-    setShowMenu(false);
     setLoadingGame(true);
   }, [gameId]);
 
@@ -154,7 +153,7 @@ export default function GameRoom({
       if (diff <= 0) return `${t('game_room.closing')}...`;
       const s = Math.ceil(diff / 1000);
       if (s < 60) return `${s}s`;
-      return `${Math.floor(s / 60)}m ${s % 60}s`;
+      return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
     }
     return '';
   }, [game, now, drawnBalls.length, isDrawing, t]);
@@ -706,8 +705,7 @@ export default function GameRoom({
           <select
             value={i18n.language}
             onChange={e => { i18n.changeLanguage(e.target.value); onLanguageChange?.(e.target.value); }}
-            className="cb-input cb-select"
-            style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '0.72rem', height: '2rem', width: 'auto' }}
+            className="h-8 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             aria-label={t('common.language') ?? 'Idioma'}
           >
             <option value="pt-BR">PT</option>
@@ -723,112 +721,44 @@ export default function GameRoom({
           />
 
           {/* Menu dropdown ⋮ */}
-          <div style={{ position: 'relative' }}>
-            <button
-              className="cb-btn cb-btn-ghost cb-btn-sm"
-              style={{ width: '2rem', padding: 0, fontSize: '1.1rem' }}
-              onClick={() => setShowMenu(s => !s)}
-              aria-label="Menu"
-              aria-expanded={showMenu}
-              aria-haspopup="menu"
-            >
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Menu" />}>
               ⋮
-            </button>
-            {showMenu && (
-              <>
-                {/* Overlay para fechar ao clicar fora */}
-                <div
-                  style={{ position: 'fixed', inset: 0, zIndex: 49 }}
-                  onClick={() => setShowMenu(false)}
-                  aria-hidden="true"
-                />
-                <div
-                  role="menu"
-                  style={{
-                    position: 'absolute', right: 0, top: 'calc(100% + 0.375rem)',
-                    zIndex: 50, minWidth: '11rem',
-                    background: 'var(--cb-bg-elevated)',
-                    border: '1px solid var(--cb-border-default)',
-                    borderRadius: '0.625rem',
-                    boxShadow: 'var(--shadow-card-hover)',
-                    padding: '0.375rem',
-                    display: 'flex', flexDirection: 'column', gap: '0.125rem',
-                  }}
-                >
-                  <button
-                    role="menuitem"
-                    data-testid="gr-nav-lobby"
-                    className="cb-btn cb-btn-ghost cb-btn-sm"
-                    style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
-                    onClick={() => { setShowMenu(false); onLeave(); }}
-                  >
-                    {t('game_room.back_to_lobby')}
-                  </button>
-
-                  {onGoToHistory && (
-                    <button
-                      role="menuitem"
-                      data-testid="gr-nav-history"
-                      className="cb-btn cb-btn-ghost cb-btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
-                      onClick={() => { setShowMenu(false); onGoToHistory(); }}
-                    >
-                      {t('nav.my_history') ?? 'Histórico'}
-                    </button>
-                  )}
-
-                  {onGoToWallet && (
-                    <button
-                      role="menuitem"
-                      data-testid="gr-nav-wallet"
-                      className="cb-btn cb-btn-ghost cb-btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
-                      onClick={() => { setShowMenu(false); onGoToWallet(); }}
-                    >
-                      {t('nav.wallet') ?? 'Carteira'}
-                    </button>
-                  )}
-
-                  {isAdmin && onGoToAdmin && (
-                    <button
-                      role="menuitem"
-                      data-testid="gr-nav-admin"
-                      className="cb-btn cb-btn-ghost cb-btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
-                      onClick={() => { setShowMenu(false); onGoToAdmin(); }}
-                    >
-                      Admin
-                    </button>
-                  )}
-
-                  {onToggleTheme && (
-                    <button
-                      role="menuitem"
-                      className="cb-btn cb-btn-ghost cb-btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
-                      onClick={() => { setShowMenu(false); onToggleTheme(); }}
-                    >
-                      {theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
-                    </button>
-                  )}
-
-                  {onLogout && (
-                    <>
-                      <div style={{ height: '1px', background: 'var(--cb-border-subtle)', margin: '0.25rem 0.375rem' }} />
-                      <button
-                        role="menuitem"
-                        className="cb-btn cb-btn-ghost cb-btn-sm"
-                        style={{ justifyContent: 'flex-start', gap: '0.5rem', color: 'var(--cb-danger)' }}
-                        onClick={() => { setShowMenu(false); onLogout(); }}
-                      >
-                        {t('nav.logout') ?? 'Desconectar'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem data-testid="gr-nav-lobby" onClick={onLeave}>
+                🏠 {t('game_room.back_to_lobby')}
+              </DropdownMenuItem>
+              {onGoToHistory && (
+                <DropdownMenuItem data-testid="gr-nav-history" onClick={onGoToHistory}>
+                  📋 {t('nav.my_history') ?? 'Histórico'}
+                </DropdownMenuItem>
+              )}
+              {onGoToWallet && (
+                <DropdownMenuItem data-testid="gr-nav-wallet" onClick={onGoToWallet}>
+                  💳 {t('nav.wallet') ?? 'Carteira'}
+                </DropdownMenuItem>
+              )}
+              {isAdmin && onGoToAdmin && (
+                <DropdownMenuItem data-testid="gr-nav-admin" onClick={onGoToAdmin}>
+                  ⚙ Admin
+                </DropdownMenuItem>
+              )}
+              {onToggleTheme && (
+                <DropdownMenuItem onClick={onToggleTheme}>
+                  {theme === 'dark' ? '☾' : '☀'} {theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
+                </DropdownMenuItem>
+              )}
+              {onLogout && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={onLogout}>
+                    ⏻ {t('nav.logout') ?? 'Desconectar'}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
         </div>
       </header>
@@ -871,7 +801,7 @@ export default function GameRoom({
                 >
                   <div className="ball-surface" aria-hidden="true" />
                   <span className="ball-letter">{col}</span>
-                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? <Star className="size-6 shrink-0" />}</span>
+                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '⭐'}</span>
                   {lastDrawn != null && (
                     <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
                   )}
@@ -921,11 +851,12 @@ export default function GameRoom({
             <aside ref={patternsRef} data-testid="gr-patterns-panel" className="gr-patterns" aria-label={t('game_room.patterns_heading')}>
               <div className="gr-patterns-head">
                 <span className="title">{t('game_room.patterns_heading')}</span>
-                <button
-                  className="cb-btn cb-btn-ghost cb-btn-sm"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowPatterns(false)}
                   aria-label={t('game_room.patterns_hide_aria')}
-                ><X className="size-4 shrink-0" /></button>
+                >✕</Button>
               </div>
               <div className="gr-patterns-list">
                 {roomPatterns.length === 0 ? (
@@ -968,6 +899,7 @@ export default function GameRoom({
                       const comboWon  = winCount > 0;
                       const proxPct   = combinationProximityMap.get(c.name) ?? 0;
                       const cells     = combinationCells.get(c.name) ?? new Array(25).fill(0);
+                      const myCombo   = [...completedCombinationsPerTicket.values()].some(v => v.some(cc => cc.name === c.name));
                       return (
                         <div key={c.name} className={`gr-pattern gr-pattern--combo${comboWon ? ' is-close' : ''}`}>
                           <div className="gr-pattern-mini">
@@ -975,7 +907,8 @@ export default function GameRoom({
                           </div>
                           <div className="gr-pattern-info">
                             <span className="name">
-                              {c.name}
+                              {myCombo && <span title={t('game_room.my_combo_badge')}>⭐ </span>}
+                              🔗 {c.name}
                             </span>
                             <div className="mini-progress">
                               <i style={{ width: comboWon ? '100%' : `${Math.round(proxPct * 100)}%` }} />
@@ -1010,7 +943,7 @@ export default function GameRoom({
             {/* ADR-014: Golden Ball */}
             {goldenBall && (
               <div className="gr-golden-banner" role="status" aria-live="assertive">
-                <span className="gr-golden-icon" />
+                <span className="gr-golden-icon">🌟</span>
                 <div className="gr-golden-text">
                   <strong>{t('game_room.golden_ball_title')}</strong>
                   <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
@@ -1046,7 +979,9 @@ export default function GameRoom({
                 role="status"
                 aria-live="polite"
               >
-                <span className={`gr-ended-icon${playerWinEntries.length > 0 ? ' gr-ended-icon--win' : ' gr-ended-icon--end'}`} />
+                <span className="gr-ended-icon">
+                  {playerWinEntries.length > 0 ? '🏆' : '🏁'}
+                </span>
                 <div className="gr-ended-text">
                   <strong>{t('game_room.game_ended_title')}</strong>
                   <span>
@@ -1064,7 +999,7 @@ export default function GameRoom({
                       {playerWinEntries.map(({ name, total, currency, isCombination }) => (
                         <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                           <span className="gr-ended-breakdown-pattern">
-                            {name}
+                            {isCombination && '🔗 '}{name}
                           </span>
                           <span className="gr-ended-breakdown-prize">
                             {total.toFixed(4)} {currency}
@@ -1104,22 +1039,24 @@ export default function GameRoom({
                   })()}
                 </div>
                 {nextGame && nextGame.status === 'funding' && (
-                  <button
+                  <Button
+                    variant="default"
+                    size="sm"
                     data-testid="gr-next-game-btn"
-                    className="cb-btn cb-btn-primary cb-btn-sm"
                     onClick={onLeave}
                   >
                     {t('game_room.go_to_next')}
-                  </button>
+                  </Button>
                 )}
                 {onGoToHistory && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     data-testid="gr-view-history"
-                    className="cb-btn cb-btn-ghost cb-btn-sm"
                     onClick={onGoToHistory}
                   >
                     {t('nav.my_history') ?? 'Histórico'}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -1135,13 +1072,14 @@ export default function GameRoom({
               <span className="count">{playerTickets.length}</span>
             </span>
             {game?.status === 'funding' && ticketPrice && (
-              <button
-                className="cb-btn cb-btn-primary cb-btn-sm"
+              <Button
+                variant="default"
+                size="sm"
                 data-testid="gr-buy-more"
                 onClick={() => setShowBuyModal(true)}
               >
                 {t('game_room.buy_more')}
-              </button>
+              </Button>
             )}
           </div>
 
