@@ -49,8 +49,8 @@ async function resolveSchemaFieldBoost(
         const attrs = await getTemplateSchema(collection, templateId);
         const raw = attrs[fieldName];
         if (raw === undefined || raw === null) return 0;
-        const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw);
-        return isNaN(n) || n <= 0 ? 0 : n;
+        const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
+        return Number.isNaN(n) || n <= 0 ? 0 : n;
     } catch {
         return 0;
     }

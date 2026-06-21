@@ -101,9 +101,9 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
         setSaving(true);
         setSaveMsg(null);
         try {
-        const sensitiveFields: Record<string, unknown> = {};
-        if (nickname !== (profile.nickname ?? ''))       sensitiveFields.nickname              = nickname;
-        if (avatarId !== profile.avatar_nft_asset_id)   sensitiveFields.avatar_nft_asset_id  = avatarId;
+            const sensitiveFields: Record<string, unknown> = {};
+            if (nickname !== (profile.nickname ?? ''))       sensitiveFields.nickname              = nickname;
+            if (avatarId !== profile.avatar_nft_asset_id)   sensitiveFields.avatar_nft_asset_id  = avatarId;
             const hasSensitive = Object.keys(sensitiveFields).length > 0;
 
             let signature: string | undefined;

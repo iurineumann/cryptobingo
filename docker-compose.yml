@@ -186,7 +186,7 @@ services:
     container_name: bingo_postgres_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cryptobingo_ledger?sslmode=disable"
     ports:
       - "9187:9187"
     depends_on:
@@ -214,11 +214,11 @@ services:
     container_name: bingo_mongodb_exporter
     restart: unless-stopped
     environment:
-      MONGODB_URI: "mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/?authSource=admin"
+      MONGODB_URI: "mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/?authSource=admin"
     ports:
       - "9216:9216"
     command:
-      - "--mongodb.uri=mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/?authSource=admin"
+      - "--mongodb.uri=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/?authSource=admin"
       - "--web.listen-address=:9216"
       - "--collect-all"
     depends_on:
@@ -243,8 +243,8 @@ services:
       - apps/api-gateway/.env
     environment:
       PORT: "8083"
-      POSTGRES_URL: postgres://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger
-      MONGO_URL: mongodb://mongo_admin:mongo_secure_pass_2026@mongodb:27017/cryptobingo_edge?authSource=admin
+      POSTGRES_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cryptobingo_ledger
+      MONGO_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/cryptobingo_edge?authSource=admin
       REDIS_URL: redis://redis:6379
       RPC_URL: http://bingo_waxdev:8888
       ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:8083
@@ -299,7 +299,7 @@ services:
       - apps/worker-game-loop/.env
     environment:
       RPC_URL: http://bingo_waxdev:8888
-      POSTGRES_URL: postgres://bingo_admin:bingo_secure_pass_2026@postgres:5432/cryptobingo_ledger
+      POSTGRES_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cryptobingo_ledger
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://rabbit_admin:rabbit_secure_pass_2026@rabbitmq:5672
     depends_on:

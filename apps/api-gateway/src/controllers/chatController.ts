@@ -4,7 +4,7 @@ import { getIo } from '../socket';
 
 export async function getChatHistory(req: Request, res: Response) {
     const { roomId } = req.params as Record<string, string>;
-    const limit  = Math.min(parseInt(req.query.limit  as string) || 30, 200);
+    const limit  = Math.min(Number.parseInt(req.query.limit  as string) || 30, 200);
     const before = req.query.before as string | undefined;
 
     const filter: Record<string, unknown> = { lobby_id: roomId };

@@ -968,7 +968,6 @@ export default function GameRoom({
                       const comboWon  = winCount > 0;
                       const proxPct   = combinationProximityMap.get(c.name) ?? 0;
                       const cells     = combinationCells.get(c.name) ?? new Array(25).fill(0);
-                      const myCombo   = [...completedCombinationsPerTicket.values()].some(v => v.some(cc => cc.name === c.name));
                       return (
                         <div key={c.name} className={`gr-pattern gr-pattern--combo${comboWon ? ' is-close' : ''}`}>
                           <div className="gr-pattern-mini">

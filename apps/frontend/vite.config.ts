@@ -6,7 +6,7 @@ import react                     from '@vitejs/plugin-react';
 import tailwindcss               from '@tailwindcss/vite';
 import { nodePolyfills }         from 'vite-plugin-node-polyfills';
 import { VitePWA }               from 'vite-plugin-pwa';
-import path                      from 'path';
+import path                      from 'node:path';
 
 export default defineConfig(({ mode }) => {
     const env    = loadEnv(mode, process.cwd(), '');

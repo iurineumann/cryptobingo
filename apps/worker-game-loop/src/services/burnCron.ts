@@ -18,7 +18,7 @@ import { syncBurns, BurnCandidate } from './burnSync';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT    || 'bingogamectr';
 const ATOMIC_ACCOUNT        = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
-const BURN_CRON_INTERVAL_MS = parseInt(process.env.BURN_CRON_INTERVAL_MS || '60000');
+const BURN_CRON_INTERVAL_MS = Number.parseInt(process.env.BURN_CRON_INTERVAL_MS || '60000');
 
 // Lidos em runtime para permitir override nos testes (não capturar no module load)
 const getApiUrl   = () => process.env.ATOMICASSETS_API_URL;

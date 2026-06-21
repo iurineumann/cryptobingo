@@ -1,7 +1,7 @@
 // apps/api-gateway/src/services/translation/index.ts
 // TranslationService: router por par linguístico + cache Redis 24h. Ref: ADR-025.
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { redisClient } from '../../database/redis';
 import { LibreTranslateProvider } from './providers/libretranslate';
 import { DeepLProvider }          from './providers/deepl';
@@ -45,8 +45,7 @@ function routeProviders( // NOSONAR — roteamento de providers com fallback enc
     from: TranslatableLocale,
     to:   TranslatableLocale,
 ): TranslationProvider[] {
-    const isToZh   = to === 'zh-CN';
-    const isPtEn   = (from === 'pt' && to === 'en-US') || (from === 'en-US' && to === 'pt');
+    const isToZh = to === 'zh-CN';
 
     // Separa por nome para reordenar sem remover
     const byName = new Map(all.map(p => [p.name, p]));
