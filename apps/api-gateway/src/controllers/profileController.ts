@@ -63,7 +63,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
         }
 
         // Enriquecimento de progressão (ADR-028 2D)
-        const { xp = 0, tier, level, sub_level, games_played = 0 } = profile.progression || {};
+        const { xp = 0, games_played = 0 } = profile.progression || {};
         const currentXp = xp || 0;
         const derived = deriveLevel(currentXp);
         const nextLevel = Math.min(derived.level + 1, MAX_LEVEL);
@@ -150,7 +150,7 @@ async function verifyProfileSignature(
  * Body: { nickname?, locale?, avatar_nft_asset_id?, signature?, ts? }
  * signature + ts obrigatórios se nickname ou avatar_nft_asset_id presentes.
  */
-export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
+export const updatePreferences = async (req: Request, res: Response): Promise<void> => { // NOSONAR — validação de nickname/avatar com assinatura WAX e múltiplos campos opcionais; complexidade inerente à ADR-028 §2D
     const wallet_address = req.user!.wallet;
     const { nickname, locale, avatar_nft_asset_id, signature, ts, transactionPayload } = req.body;
 

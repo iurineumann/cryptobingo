@@ -92,7 +92,7 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
         ticket_price_min_quantity, ticket_price_min_contract,
         ticket_price_max_quantity, ticket_price_max_contract,
         ticket_price_default_quantity, ticket_price_default_contract,
-        weight, max_tickets_per_player, nft_template_allowlist,
+        max_tickets_per_player,
         name, description, cover_image_url, rules_summary,
         chat_enabled, auto_start_delay_sec, drops,
     } = req.body;

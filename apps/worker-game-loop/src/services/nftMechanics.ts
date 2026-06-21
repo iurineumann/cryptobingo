@@ -57,7 +57,7 @@ async function resolveSchemaFieldBoost(
 }
 
 /** Lê nftconfigs on-chain e indexa templates com PRIZE_BOOST (FIXED ou SCHEMA_FIELD) owns. Cache 60s. */
-async function getBoostTemplates(): Promise<BoostMap> {
+async function getBoostTemplates(): Promise<BoostMap> { // NOSONAR — leitura e indexação de múltiplas tabelas on-chain (nftconfigs, schema_fields); complexidade necessária para o modelo de PRIZE_BOOST (ADR-028)
     if (_boostCache && Date.now() - _boostCache.at < BOOST_TTL_MS) return _boostCache.map;
 
     const map: BoostMap = new Map();

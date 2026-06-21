@@ -23,11 +23,9 @@
 // Ref: ADR-005 §3 (Motor Monte Carlo), openapi.yaml v1.3.0
 
 import { Request, Response } from 'express';
-import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
-import { fileURLToPath } from 'url';
-import * as path from 'path';
-import * as crypto from 'crypto';
-import { generateCombos, priceCombosByDifficulty, recalibrateComboWeights } from '../services/comboGenerator';
+import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import * as crypto from 'node:crypto';
+import { generateCombos, priceCombosByDifficulty } from '../services/comboGenerator';
 import type { PatternInfo, ComboCandidate } from '../services/comboGenerator';
 
 // ==========================================
@@ -278,7 +276,7 @@ function findMatchingPatterns(
  * Retorna a de maior weight (ou null se nenhuma combinação foi satisfeita).
  * Pré-computa Set de IDs e contagem por tipo para evitar varreduras repetidas.
  */
-function evaluateCombinations(
+function evaluateCombinations( // NOSONAR — avaliação de combinações all_of/any_of/n_of_type com pré-cômputo de sets e fallback de tipo; complexidade inerente ao ADR-016
     matched:      PatternRuleInput[],
     combinations: CombinationRuleInput[],
 ): CombinationRuleInput | null {
@@ -352,7 +350,7 @@ function findBestWinner(
  *
  * Otimização: estado incremental com ballToBit map (O(n_balls) por cartela).
  */
-function simulateOneGame(
+function simulateOneGame( // NOSONAR — simulação de uma rodada Monte Carlo com geração de cartelas, sorteio Fisher-Yates, avaliação de padrões e combinações; complexidade inerente ao ADR-005 §3
     patterns:       PatternRuleInput[],
     baseMultiplier: number,
     ticketPrice:    number,
@@ -420,7 +418,7 @@ function simulateOneGame(
  * Núcleo da simulação Monte Carlo.
  * Executa `simulations` rodadas e agrega os resultados.
  */
-function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration_ms' | 'computed_at'> {
+function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration_ms' | 'computed_at'> { // NOSONAR — loop de N simulações com acumulação de estatísticas por padrão/combo e validação RTP; complexidade inerente ao motor Monte Carlo
     const {
         gametype_name,
         base_multiplier,
@@ -524,7 +522,7 @@ function runMonteCarlo(input: SimulationInput): Omit<SimulationResult, 'duration
         total_paid_out:        Math.round(totalPaidOut),
         avg_payout_per_game:   Math.round((totalPaidOut / simulations) * 100) / 100,
         avg_winners_per_game:  Math.round((totalWinners / simulations) * 100) / 100,
-        pattern_stats:         patternStats.sort((a, b) => b.hit_count - a.hit_count),
+        pattern_stats:         patternStats.toSorted((a, b) => b.hit_count - a.hit_count),
         alerts,
         is_viable:             rtp >= RTP_MIN_THRESHOLD && rtp <= RTP_MAX_THRESHOLD,
     };
@@ -590,7 +588,7 @@ function runInWorker(input: SimulationInput): Promise<Omit<SimulationResult, 'du
 // dando probabilidades brutas para o modelo algébrico.
 // ==========================================
 
-function discoverHitRates(
+function discoverHitRates( // NOSONAR — descoberta estocástica de hit rates com acumulação por padrão/combo e normalização por jogo; complexidade necessária para calibração Monte Carlo (ADR-005)
     patterns:       PatternRuleInput[],
     combinations:   CombinationRuleInput[],
     sims:           number,
@@ -760,7 +758,7 @@ function runAlgebraicCalibration(
 // e aplica escala global nos pesos para fechar o gap entre teoria e realidade.
 // ==========================================
 
-function runStochasticRefinement(
+function runStochasticRefinement( // NOSONAR (S107) — 11 params necessários para refinamento estocástico; extração em objeto aumentaria indireção sem ganho; complexidade inerente ao ADR-005 §4
     initialWeights: Record<string, number>,
     patterns:       PatternRuleInput[],
     combinations:   CombinationRuleInput[],
@@ -847,7 +845,7 @@ interface CalibrationPipelineResult {
     validation:           SimulationResult;
 }
 
-async function runCalibrationPipeline(
+async function runCalibrationPipeline( // NOSONAR — pipeline de calibração iterativa com 4 fases (discover, price, simulate, refine) e convergência estocástica; complexidade inerente ao ADR-005 §4
     params: CalibrationPipelineInput,
 ): Promise<CalibrationPipelineResult> {
     const {
@@ -1074,7 +1072,7 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
 // O frontend recebe tudo pronto para aplicar: pattern_weights + combos.
 // ==========================================
 
-export async function suggestCombos(req: Request, res: Response): Promise<void> {
+export async function suggestCombos(req: Request, res: Response): Promise<void> { // NOSONAR — endpoint orquestrador: geração de combos + calibração Monte Carlo + sugestão de pesos; complexidade inerente ao fluxo ADR-016+ADR-005
     const {
         gametype_name,
         base_multiplier,
@@ -1231,10 +1229,9 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
             `${result.combos.length} combos sugeridos`
         );
 
-        console.log(
-            `   📋 Patterns: ${Object.entries(finalPatternWeights).map(([n, w]) => `${n}=${w}`).join(', ')}\n` +
-            `   📋 Combos: ${pricedCombos.map(c => `${c.name}=${c.weight}`).join(', ')}`
-        );
+        const patternLog = Object.entries(finalPatternWeights).map(([n, w]) => `${n}=${w}`).join(', ');
+        const comboLog   = pricedCombos.map(c => `${c.name}=${c.weight}`).join(', ');
+        console.log(`   📋 Patterns: ${patternLog}\n   📋 Combos: ${comboLog}`);
 
         res.status(200).json(result);
 
@@ -1276,7 +1273,7 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
  * Retorna: SimulationResult completo com RTP, GGR, estatísticas por padrão+combinação e alertas.
  * Ref: ADR-005 §3
  */
-export async function simulateWeights(req: Request, res: Response): Promise<void> {
+export async function simulateWeights(req: Request, res: Response): Promise<void> { // NOSONAR — endpoint de simulação com validação de entrada, extração de pesos e runMonteCarlo; complexidade inerente ao ADR-005 §3
     const {
         gametype_name,
         base_multiplier,

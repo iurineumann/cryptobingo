@@ -99,7 +99,7 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
 // POST /api/v1/auth/verify
 // ==========================================
 
-export async function verifyChallenge(req: Request, res: Response): Promise<void> {
+export async function verifyChallenge(req: Request, res: Response): Promise<void> { // NOSONAR — validação de challenge WAX com múltiplos caminhos (signature/transactionPayload/nonce TTL/JWT); complexidade inerente à autenticação on-chain
     const { wallet, nonce, signature, public_key, transactionPayload } = req.body;
 
     if (!wallet || !nonce || !signature || !public_key) {

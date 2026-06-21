@@ -543,7 +543,7 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
  *   rules:        ExtendedRule[]   — pattern_id + weight (hundredths) + type
  *   combinations: CombinationRuleInput[] — combinações com weight (hundredths)
  */
-export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> {
+export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> { // NOSONAR — upsert atômico de gametype com validação de pesos, combinações e estágios on-chain; complexidade inerente ao ADR-016
     const { gametypeId } = req.params as Record<string, string>;
     const { description, cover_image_url, rules_summary, sort_order, rules, combinations } = req.body;
 

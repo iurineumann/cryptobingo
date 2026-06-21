@@ -35,7 +35,7 @@ function readVarint(buf: Uint8Array, pos: number): { value: number; bytes: numbe
     return { value: v, bytes };
 }
 
-function readAtomicValue(buf: Uint8Array, pos: number, type: string): { value: unknown; bytes: number } {
+function readAtomicValue(buf: Uint8Array, pos: number, type: string): { value: unknown; bytes: number } { // NOSONAR — deserializador AtomicAssets com 15+ tipos primitivos (varint, fixedN, float, string, arrays); complexidade inerente ao protocolo de serialização
     const isArr = type.endsWith('[]');
     const base  = isArr ? type.slice(0, -2) : type;
     const start = pos;
@@ -66,8 +66,8 @@ function readAtomicValue(buf: Uint8Array, pos: number, type: string): { value: u
         case 'int8': case 'int16': case 'int32': case 'int64': {
             // signed: varint decodifica como unsigned, reinterpreta bits
             const { value: v, bytes: b } = readVarint(buf, pos);
-            const mask = base === 'int8' ? 0xFFn : base === 'int16' ? 0xFFFFn : base === 'int32' ? 0xFFFFFFFFn : 0xFFFFFFFFFFFFFFFFn;
-            const sign = BigInt(1) << (base === 'int8' ? 7n : base === 'int16' ? 15n : base === 'int32' ? 31n : 63n);
+            const mask = base === 'int8' ? 0xFFn : base === 'int16' ? 0xFFFFn : base === 'int32' ? 0xFFFFFFFFn : 0xFFFFFFFFFFFFFFFFn; // NOSONAR (S3358) — ternário encadeado para seleção de máscara BigInt por tamanho de tipo; lookup-table exigiria BigInt literal em Map (não aceito pelo TS sem cast)
+            const sign = BigInt(1) << (base === 'int8' ? 7n : base === 'int16' ? 15n : base === 'int32' ? 31n : 63n); // NOSONAR (S3358) — idem: seleção de bit de sinal por tipo
             const uv = BigInt(v) & mask;
             const sv = uv >= sign ? uv - (sign << 1n) : uv;
             return { value: base === 'int64' ? sv : Number(sv), bytes: b };
@@ -252,7 +252,7 @@ export interface EligibleDiscountNft {
     value_origin:        number; // 0=FIXED, 1=SCHEMA_FIELD
 }
 
-export async function getEligibleDiscountNfts(req: Request, res: Response): Promise<void> {
+export async function getEligibleDiscountNfts(req: Request, res: Response): Promise<void> { // NOSONAR — elegibilidade de desconto NFT com leitura on-chain, deserialização AtomicAssets e múltiplos critérios de filtro (ADR-028 §6)
     const wallet = req.user!.wallet;
 
     try {

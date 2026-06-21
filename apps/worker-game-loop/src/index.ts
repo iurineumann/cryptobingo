@@ -62,6 +62,7 @@ async function bootstrap(): Promise<void> {
     connectRabbitMQ();
 }
 
+// NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro
 bootstrap().catch((err) => {
     console.error('❌ [Bootstrap] Falha crítica:', err);
     process.exit(1);
