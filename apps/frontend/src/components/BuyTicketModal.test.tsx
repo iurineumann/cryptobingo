@@ -128,11 +128,9 @@ describe('BuyTicketModal — fechamento', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('clique no overlay (fora do modal) chama onClose', () => {
+  it('tecla Escape chama onClose (dismiss via Dialog)', () => {
     const { onClose } = renderModal();
-    // O overlay é o elemento role=dialog com onClick
-    const overlay = screen.getByRole('dialog');
-    fireEvent.click(overlay);
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape', keyCode: 27 });
     expect(onClose).toHaveBeenCalled();
   });
 });

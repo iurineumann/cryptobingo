@@ -15,6 +15,9 @@ import { fetchRooms, type EnrichedRoom } from '../services/api';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
 import RoomHistoryPanel                  from './RoomHistoryPanel';
+import { Badge }                         from '@/components/ui/badge';
+import { Button }                        from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 
 interface LobbyProps {
     session:       Session;
@@ -230,7 +233,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
             {/* ── Header ── */}
             <div className="lobby-header">
                 <div className="lobby-header-left">
-                    <h2 className="lobby-header-title">{t('lobby.title')}</h2>
+                    <h2 className="lobby-header-title">🎮 {t('lobby.title')}</h2>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                     {/* Saldo */}
@@ -245,9 +248,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         </div>
                     )}
                     {/* Refresh */}
-                    <button
-                        className="cb-btn cb-btn-ghost cb-btn-sm"
-                        style={{ width: '2.25rem', height: '2.25rem', padding: 0, borderRadius: '0.5rem' }}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-9 h-9 p-0 rounded-lg"
                         onClick={loadData}
                         disabled={loading}
                         aria-label={t('lobby.refresh_aria')}
@@ -257,7 +261,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                             ? <span className="cb-spinner" style={{ width: '1rem', height: '1rem' }} />
                             : <span aria-hidden="true">↻</span>
                         }
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -271,11 +275,12 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         </>
                     ) : (
                         <>
+                            <span className="lobby-empty-icon" aria-hidden="true">🎱</span>
                             <span className="lobby-empty-title">{t('lobby.no_active_rooms')}</span>
                             <span className="lobby-empty-sub">{t('lobby.check_back')}</span>
-                            <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={loadData} style={{ marginTop: '0.5rem' }}>
-                                {t('lobby.refresh')}
-                            </button>
+                            <Button variant="outline" size="sm" onClick={loadData} className="mt-2">
+                                ↻ {t('lobby.refresh')}
+                            </Button>
                         </>
                     )}
                 </div>
@@ -382,10 +387,14 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         {isDrawing ? (
                                             <span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>
                                         ) : (
-                                            <span className={`cb-badge ${isFunding ? 'cb-badge-success' : isIdle ? 'cb-badge-neutral' : 'cb-badge-neutral'}`} data-testid={`lobby-status-${room.room_id}`}>
+                                            <Badge
+                                                variant="secondary"
+                                                className={isFunding ? 'text-success-400' : ''}
+                                                data-testid={`lobby-status-${room.room_id}`}
+                                            >
                                                 {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }} />}
                                                 {statusLabel}
-                                            </span>
+                                            </Badge>
                                         )}
                                         {hasMyTickets && (
                                             <span className="lobby-card-mine">
@@ -393,14 +402,14 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                             </span>
                                         )}
                                         {hasNftDrop && (
-                                            <span className="cb-badge-nft">
-                                                {t('lobby.drop_nft')}
-                                            </span>
+                                            <Badge variant="outline" className="text-violet-400 border-violet-400/30 bg-violet-400/10">
+                                                🎁 {t('lobby.drop_nft')}
+                                            </Badge>
                                         )}
                                         {hasTokenDrop && (
-                                            <span className="cb-badge-token">
-                                                {t('lobby.drop_token')}
-                                            </span>
+                                            <Badge variant="outline" className="text-yellow-300 border-yellow-400/30 bg-yellow-400/10">
+                                                💰 {t('lobby.drop_token')}
+                                            </Badge>
                                         )}
                                     </div>
                                 </div>
@@ -415,18 +424,18 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <dt>{t('lobby.max_prize_label')}</dt>
                                         <dd className={maxPrizeVal > 0 ? 'prize' : ''}>
                                             {maxPrizeVal > 0 ? maxPrizeVal.toFixed(4) : '—'}
-                                            {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}</span>}
+                                            {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}{hasSponsor ? ' ✨' : ''}</span>}
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt>{t('lobby.my_tickets')}</dt>
+                                        <dt>{t('lobby.buy_tickets')}</dt>
                                         <dd style={{ color: hasMyTickets ? 'var(--cb-brand)' : undefined }}>
                                             {hasMyTickets ? myCount : '—'}
                                         </dd>
                                     </div>
                                     {ticketsSold != null && ticketsSold > 0 && (
                                         <div>
-                                            <dt>{t('replay.col_tickets_sold')}</dt>
+                                            <dt>🎫 {t('replay.col_tickets_sold')}</dt>
                                             <dd>{ticketsSold}</dd>
                                         </div>
                                     )}
@@ -435,7 +444,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 {/* ── Countdown / status info ── */}
                                 {isFunding && remaining > 0 && (
                                     <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`} data-testid={`lobby-ticker-${room.room_id}`}>
-                                        {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
+                                        ⏱ {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
                                     </span>
                                 )}
                                 {isFunding && remaining <= 0 && (
@@ -445,7 +454,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 )}
                                 {isIdle && (
                                     <span className="lobby-card-scheduled">
-                                        {t('lobby.next_game_soon')}
+                                        ⏳ {t('lobby.next_game_soon')}
                                     </span>
                                 )}
 
@@ -453,54 +462,57 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 <div className="lobby-card-actions">
                                     <div className="lobby-card-actions-row">
                                         {canBuy && (
-                                            <button
-                                                className="cb-btn cb-btn-primary flex-1"
+                                            <Button
+                                                variant="default"
+                                                className="flex-1"
                                                 data-testid={`lobby-buy-${room.room_id}`}
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.buy_aria', { id: room.room_id })}
                                             >
                                                 {t('lobby.buy_tickets')}
-                                            </button>
+                                            </Button>
                                         )}
                                         {canWatch && (
-                                            <button
-                                                className="cb-btn cb-btn-outline flex-1"
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
                                                 data-testid={`lobby-watch-${room.room_id}`}
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.watch_aria', { id: room.room_id })}
                                             >
-                                                {t('lobby.watch_live')}
-                                            </button>
+                                                👁 {t('lobby.watch_live')}
+                                            </Button>
                                         )}
                                         {!canBuy && !canWatch && navGameId && (
-                                            <button
-                                                className="cb-btn cb-btn-outline flex-1"
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
                                                 onClick={() => onEnterRoom!(room.room_id, navGameId)}
                                                 aria-label={t('lobby.enter_room_aria', { id: room.room_id })}
                                             >
-                                                {t('lobby.view_results')}
-                                            </button>
+                                                📊 {t('lobby.view_results')}
+                                            </Button>
                                         )}
                                         {!canBuy && !canWatch && !navGameId && !isIdle && (
                                             <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
-                                                {t('lobby.no_game_yet')}
+                                                ⏳ {t('lobby.no_game_yet')}
                                             </span>
                                         )}
                                     </div>
 
-                                    <button
-                                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="justify-start gap-1.5 text-xs"
                                         data-testid={`lobby-history-${room.room_id}`}
-                                        style={{ justifyContent: 'flex-start', gap: '0.4rem', fontSize: '0.75rem' }}
                                         onClick={e => { e.stopPropagation(); navigate(`/room/${room.room_id}/history`); }}
                                         aria-label={t('lobby.replay_aria', { id: room.room_id })}
                                     >
-                                        {playerRoomIds.has(String(room.room_id)) ? (
-                                          <span>{t('lobby.history')}<span className="lobby-card-played-dot" /></span>
-                                        ) : (
-                                          t('lobby.history')
+                                        📋 {t('lobby.history')}
+                                        {playerRoomIds.has(String(room.room_id)) && (
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
                                         )}
-                                    </button>
+                                    </Button>
                                 </div>
                             </article>
                         );
@@ -525,9 +537,9 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <span className="lobby-card-id">#{game.game_id}</span>
                                         <p className="lobby-card-name">{t('lobby.room_label')}</p>
                                     </div>
-                                    <span className={`cb-badge ${isFunding ? 'cb-badge-success' : 'cb-badge-neutral'}`}>
+                                    <Badge variant="secondary" className={isFunding ? 'text-success-400' : ''}>
                                         <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }} />{t(`lobby.${game.status}` as any, game.status)}
-                                    </span>
+                                    </Badge>
                                 </div>
 
                                 <dl className="lobby-card-stats">
@@ -546,12 +558,13 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                                 {isFunding && (
                                     <div className="lobby-card-actions">
-                                        <button
-                                            className="cb-btn cb-btn-primary w-full"
+                                        <Button
+                                            variant="default"
+                                            className="w-full"
                                             onClick={() => setSelectedGame(game)}
                                         >
                                             {t('lobby.buy_tickets')}
-                                        </button>
+                                        </Button>
                                     </div>
                                 )}
                             </article>
@@ -573,34 +586,29 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
             )}
 
             {/* ── Modal de histórico da sala ── */}
-            {historyRoomId && (
-                <div
-                    className="cb-overlay"
-                    onClick={() => setHistoryRoomId(null)}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={`Histórico da sala #${historyRoomId}`}
-                >
-                    <div
-                        className="cb-modal"
-                        style={{ maxWidth: '44rem', maxHeight: '85dvh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="cb-modal-header">
-                            <span className="cb-modal-title">{t('replay.room_history_title')} #{historyRoomId}</span>
-                            <button className="cb-modal-close" onClick={() => setHistoryRoomId(null)} aria-label={t('common.close')}><X className="size-4 shrink-0" /></button>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+            <Dialog open={historyRoomId !== null} onOpenChange={(open) => !open && setHistoryRoomId(null)}>
+                <DialogContent className="max-w-[44rem] max-h-[85dvh] overflow-hidden flex flex-col" showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {t('replay.room_history_title')} #{historyRoomId}
+                        </DialogTitle>
+                        <DialogClose render={<Button variant="ghost" size="icon" className="absolute top-3 right-3" />} onClick={() => setHistoryRoomId(null)}>
+                            <X className="size-4 shrink-0" />
+                            <span className="sr-only">{t('common.close')}</span>
+                        </DialogClose>
+                    </DialogHeader>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+                        {historyRoomId && (
                             <RoomHistoryPanel
                                 roomId={historyRoomId}
                                 session={session}
                                 onViewReplay={gameId => { setHistoryRoomId(null); onReplayGame?.(gameId); }}
                                 onBack={() => setHistoryRoomId(null)}
                             />
-                        </div>
+                        )}
                     </div>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
         </section>
     );
 }
