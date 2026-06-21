@@ -11,7 +11,7 @@ import { Session }           from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import { UInt64 }            from '@wharfkit/antelope';
-import type { BlockchainPattern, BlockchainGametype, StageRule } from '@cryptobingo/shared-types';
+import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
 

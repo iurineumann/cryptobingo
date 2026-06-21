@@ -288,8 +288,8 @@ export const getAchievements = async (req: Request, res: Response): Promise<void
 
 export const listUsers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const page  = Math.max(1, parseInt(req.query.page as string) || 1);
-        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+        const page  = Math.max(1, Number.parseInt(req.query.page as string) || 1);
+        const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
         const skip  = (page - 1) * limit;
 
         const [users, total] = await Promise.all([

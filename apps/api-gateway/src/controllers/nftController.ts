@@ -209,7 +209,7 @@ export async function getMyNfts(req: Request, res: Response): Promise<void> {
                 asset_id:        String(a.asset_id),
                 schema_name:     String(a.schema_name),
                 name:            String(meta.name ?? a.template_id),
-                backed_tokens:   (a.backed_tokens ?? []).map((t: any) => String(t)).join(', '),
+                backed_tokens:   (a.backed_tokens ?? []).map(String).join(', '),
                 template_id:     Number(a.template_id),
                 collection_name: String(a.collection_name),
                 img_url:         imgUrl,

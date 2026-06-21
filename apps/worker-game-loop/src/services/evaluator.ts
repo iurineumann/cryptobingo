@@ -12,7 +12,7 @@ import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@crypto
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
-import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
+import { getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
@@ -58,7 +58,7 @@ export function computePayoutAmount(
     goldenMultiplier: number,
 ): { amount: number; currency: string } {
     const priceParts = ticketQuantity.split(' ');
-    const priceNum = parseFloat(priceParts[0]);
+    const priceNum = Number.parseFloat(priceParts[0]);
     const currency = priceParts.slice(1).join(' ') || 'WAX';
 
     let payout = priceNum * baseMultiplier * weight / 100;
@@ -212,7 +212,7 @@ export async function findAllWinners(
 
         hasMore = response.more === true && tickets.length === PAGE_SIZE;
         if (hasMore && tickets.length > 0) {
-            const lastId = tickets[tickets.length - 1].ticket_id;
+            const lastId = tickets.at(-1)!.ticket_id;
             lowerBound   = (BigInt(lastId) + 1n).toString();
         }
     }

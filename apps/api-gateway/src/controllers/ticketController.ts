@@ -2,7 +2,7 @@
 // Ref: ADR-001 (Assinatura Contextual Anti-Replay), SPEC.md §3.1 (RNG), §2.1 (buytickets)
 
 import { Request, Response } from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { Name, PrivateKey, Checksum256 } from '@wharfkit/antelope';
 import { fetchGame } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';

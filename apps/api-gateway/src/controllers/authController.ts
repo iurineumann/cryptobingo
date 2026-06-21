@@ -15,7 +15,7 @@
 
 import { Request, Response }                         from 'express';
 import jwt                                           from 'jsonwebtoken';
-import crypto                                        from 'crypto';
+import crypto                                        from 'node:crypto';
 import { v4 as uuidv4 }                             from 'uuid';
 import { Signature, Checksum256, Transaction }       from '@wharfkit/antelope';
 import { pgPool }                                    from '../database';
