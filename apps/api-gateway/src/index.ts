@@ -1,7 +1,7 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
-import { createServer }                              from 'http';
+import { createServer }                              from 'node:http';
 import { Server as SocketIoServer }                  from 'socket.io';
 import express                                       from 'express';
 import cors, { CorsOptions }                         from 'cors';
@@ -57,6 +57,8 @@ import {
 }                                                    from './controllers/dropController';
 import { listSwapPools, getSwapQuote }               from './controllers/swapController';
 import { getChatHistory, saveChatMessage } from './controllers/chatController';
+import { createSystemChatMessage, requireInternalAuth } from './controllers/internalChatController';
+import { startMetricsServer, metricsMiddleware } from './services/metrics';
 import { setupChatSocket }                            from './socket/chatSocket';
 import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
@@ -95,6 +97,7 @@ const corsOptions: CorsOptions = {
 // ==========================================
 
 async function bootstrap(): Promise<void> {
+    startMetricsServer();
     await connectMongo();
     await connectPostgres();
     await connectRedis();
@@ -134,17 +137,20 @@ async function bootstrap(): Promise<void> {
 // ==========================================
 
 function registerMiddleware(): void {
+    // Métricas Prometheus — antes de todos os handlers para capturar 100% das requisições
+    app.use(metricsMiddleware);
+
     // Helmet — headers de segurança HTTP
     // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
-    app.use(helmet({
+    app.use(helmet({ // NOSONAR: S5728 — CSP gerenciado pelo frontend (Vite) via meta tags
         crossOriginResourcePolicy:   { policy: 'cross-origin' },
-        contentSecurityPolicy:       false, // Gerenciado pelo frontend (Vite)
+        contentSecurityPolicy:       false,
         crossOriginEmbedderPolicy:   false, // Necessário para SharedArrayBuffer do Wharfkit
     }));
 
     // CORS restrito
     app.use(cors(corsOptions));
-    app.options('*', cors(corsOptions)); // Preflight
+    app.options('/*splat', cors(corsOptions)); // Preflight
 
     // Body parser
     app.use(express.json({ limit: '1mb' })); // Limite explícito — previne body too large attacks
@@ -320,6 +326,7 @@ function registerRoutes(): void {
     // ── Chat ────────────────────────────────────────────────────────────────────
     app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
     app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
+    app.post('/api/v1/internal/chat/system', requireInternalAuth, createSystemChatMessage);
 
     // ── News / Promoções (ADR-024) ────────────────────────────────────────────
     app.get   ('/api/v1/news',        playerLimiter, listNews);
@@ -348,7 +355,7 @@ function registerRoutes(): void {
 // ENTRYPOINT
 // ==========================================
 
-bootstrap().catch((error) => {
+void bootstrap().catch((error: unknown) => { // NOSONAR: S7785 — top-level await indisponível em CJS (NodeNext sem "type":"module")
     console.error('❌ [Bootstrap] Falha crítica na inicialização:', error);
     process.exit(1);
 });

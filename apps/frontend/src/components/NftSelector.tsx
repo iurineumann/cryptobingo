@@ -27,8 +27,7 @@ export default function NftSelector({ selectedId, onSelect, disabled }: NftSelec
 
     return (
         <div className="rounded-lg border border-[--cb-border-default] bg-[--cb-bg-sunken] p-3 mb-4">
-            <p className="text-xs font-semibold text-[--cb-text-secondary] mb-2 flex items-center gap-1.5">
-                <span aria-hidden="true">🎫</span>
+            <p className="text-xs font-semibold text-[--cb-text-secondary] mb-2">
                 NFT de Desconto
             </p>
 

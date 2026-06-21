@@ -106,14 +106,14 @@ async function autoTranslate(
 // ==========================================
 
 export async function updateNews(req: Request, res: Response): Promise<void> {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const { title, content, image_url, locale_overrides, active, pinned } = req.body;
 
     try {
         const updated = await NewsFeed.findByIdAndUpdate(
             id,
             { $set: { title, content, image_url, locale_overrides, active, pinned } },
-            { new: true, runValidators: true },
+            { returnDocument: 'after', runValidators: true },
         ).lean();
 
         if (!updated) {
@@ -134,13 +134,13 @@ export async function updateNews(req: Request, res: Response): Promise<void> {
 // ==========================================
 
 export async function deleteNews(req: Request, res: Response): Promise<void> {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
 
     try {
         const updated = await NewsFeed.findByIdAndUpdate(
             id,
             { $set: { active: false } },
-            { new: true },
+            { returnDocument: 'after' },
         ).lean();
 
         if (!updated) {

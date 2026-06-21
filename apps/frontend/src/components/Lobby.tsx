@@ -12,6 +12,7 @@ import { Name, Session }                 from '@wharfkit/session';
 import { UInt64 }                        from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchRooms, type EnrichedRoom } from '../services/api';
+import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
 import RoomHistoryPanel                  from './RoomHistoryPanel';
 
@@ -28,9 +29,14 @@ const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS       = 8_000;   // salas idle
 const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
 
-const STATUS_EMOJI: Record<string, string> = {
-    created: '🕐', funding: '🟢', locked: '🔒',
-    drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌',
+const STATUS_DOT: Record<string, string> = {
+    created: 'var(--cb-text-tertiary)',
+    funding: 'var(--cb-success)',
+    locked:  'var(--cb-accent)',
+    drawing: 'var(--color-danger-500)',
+    drawn:   'var(--cb-success)',
+    archived:'var(--cb-text-tertiary)',
+    aborted: 'var(--cb-danger)',
 };
 
 function fmtCountdown(ms: number): string {
@@ -224,7 +230,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
             {/* ── Header ── */}
             <div className="lobby-header">
                 <div className="lobby-header-left">
-                    <h2 className="lobby-header-title">🎮 {t('lobby.title')}</h2>
+                    <h2 className="lobby-header-title">{t('lobby.title')}</h2>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                     {/* Saldo */}
@@ -265,11 +271,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         </>
                     ) : (
                         <>
-                            <span className="lobby-empty-icon" aria-hidden="true">🎱</span>
                             <span className="lobby-empty-title">{t('lobby.no_active_rooms')}</span>
                             <span className="lobby-empty-sub">{t('lobby.check_back')}</span>
                             <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={loadData} style={{ marginTop: '0.5rem' }}>
-                                ↻ {t('lobby.refresh')}
+                                {t('lobby.refresh')}
                             </button>
                         </>
                     )}
@@ -329,8 +334,8 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                         // Status label
                         const statusLabel = currentGame
-                            ? `${STATUS_EMOJI[displayStatus] ?? ''}${t(`lobby.${displayStatus}` as any, displayStatus)}`
-                            : `🕐 ${t('lobby.room_waiting')}`;
+                            ? t(`lobby.${displayStatus}` as any, displayStatus)
+                            : t('lobby.room_waiting');
 
                         // Prêmio máximo por cartela (fixed-odds, ADR-005)
                         // payout = ticket_price × base_multiplier × max_win_weight / 100
@@ -378,22 +383,23 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                             <span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>
                                         ) : (
                                             <span className={`cb-badge ${isFunding ? 'cb-badge-success' : isIdle ? 'cb-badge-neutral' : 'cb-badge-neutral'}`} data-testid={`lobby-status-${room.room_id}`}>
+                                                {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }} />}
                                                 {statusLabel}
                                             </span>
                                         )}
                                         {hasMyTickets && (
                                             <span className="lobby-card-mine">
-                                                🎫 {t('lobby.my_tickets', { count: myCount })}
+                                                {t('lobby.my_tickets', { count: myCount })}
                                             </span>
                                         )}
                                         {hasNftDrop && (
-                                            <span className="cb-badge text-xs" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
-                                                🎁 {t('lobby.drop_nft')}
+                                            <span className="cb-badge-nft">
+                                                {t('lobby.drop_nft')}
                                             </span>
                                         )}
                                         {hasTokenDrop && (
-                                            <span className="cb-badge text-xs" style={{ background: 'rgb(234 179 8 / 0.12)', color: 'rgb(253 224 71)', border: '1px solid rgb(234 179 8 / 0.3)' }}>
-                                                💰 {t('lobby.drop_token')}
+                                            <span className="cb-badge-token">
+                                                {t('lobby.drop_token')}
                                             </span>
                                         )}
                                     </div>
@@ -409,18 +415,18 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <dt>{t('lobby.max_prize_label')}</dt>
                                         <dd className={maxPrizeVal > 0 ? 'prize' : ''}>
                                             {maxPrizeVal > 0 ? maxPrizeVal.toFixed(4) : '—'}
-                                            {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}{hasSponsor ? ' ✨' : ''}</span>}
+                                            {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}</span>}
                                         </dd>
                                     </div>
                                     <div>
-                                        <dt>{t('lobby.buy_tickets')}</dt>
+                                        <dt>{t('lobby.my_tickets')}</dt>
                                         <dd style={{ color: hasMyTickets ? 'var(--cb-brand)' : undefined }}>
                                             {hasMyTickets ? myCount : '—'}
                                         </dd>
                                     </div>
                                     {ticketsSold != null && ticketsSold > 0 && (
                                         <div>
-                                            <dt>🎫 {t('replay.col_tickets_sold')}</dt>
+                                            <dt>{t('replay.col_tickets_sold')}</dt>
                                             <dd>{ticketsSold}</dd>
                                         </div>
                                     )}
@@ -429,17 +435,17 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 {/* ── Countdown / status info ── */}
                                 {isFunding && remaining > 0 && (
                                     <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`} data-testid={`lobby-ticker-${room.room_id}`}>
-                                        ⏱ {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
+                                        {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
                                     </span>
                                 )}
                                 {isFunding && remaining <= 0 && (
                                     <span className="lobby-card-ticker is-urgent" data-testid={`lobby-ticker-${room.room_id}`}>
-                                        🔒 {t('lobby.starts_soon')}
+                                        {t('lobby.starts_soon')}
                                     </span>
                                 )}
                                 {isIdle && (
                                     <span className="lobby-card-scheduled">
-                                        ⏳ {t('lobby.next_game_soon')}
+                                        {t('lobby.next_game_soon')}
                                     </span>
                                 )}
 
@@ -453,7 +459,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.buy_aria', { id: room.room_id })}
                                             >
-                                                🎲 {t('lobby.buy_tickets')}
+                                                {t('lobby.buy_tickets')}
                                             </button>
                                         )}
                                         {canWatch && (
@@ -463,7 +469,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.watch_aria', { id: room.room_id })}
                                             >
-                                                👁 {t('lobby.watch_live')}
+                                                {t('lobby.watch_live')}
                                             </button>
                                         )}
                                         {!canBuy && !canWatch && navGameId && (
@@ -472,12 +478,12 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                                 onClick={() => onEnterRoom!(room.room_id, navGameId)}
                                                 aria-label={t('lobby.enter_room_aria', { id: room.room_id })}
                                             >
-                                                📊 {t('lobby.view_results')}
+                                                {t('lobby.view_results')}
                                             </button>
                                         )}
                                         {!canBuy && !canWatch && !navGameId && !isIdle && (
                                             <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
-                                                ⏳ {t('lobby.no_game_yet')}
+                                                {t('lobby.no_game_yet')}
                                             </span>
                                         )}
                                     </div>
@@ -489,9 +495,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         onClick={e => { e.stopPropagation(); navigate(`/room/${room.room_id}/history`); }}
                                         aria-label={t('lobby.replay_aria', { id: room.room_id })}
                                     >
-                                        📋 {t('lobby.history')}
-                                        {playerRoomIds.has(String(room.room_id)) && (
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
+                                        {playerRoomIds.has(String(room.room_id)) ? (
+                                          <span>{t('lobby.history')}<span className="lobby-card-played-dot" /></span>
+                                        ) : (
+                                          t('lobby.history')
                                         )}
                                     </button>
                                 </div>
@@ -519,7 +526,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <p className="lobby-card-name">{t('lobby.room_label')}</p>
                                     </div>
                                     <span className={`cb-badge ${isFunding ? 'cb-badge-success' : 'cb-badge-neutral'}`}>
-                                        {STATUS_EMOJI[game.status]}{t(`lobby.${game.status}` as any, game.status)}
+                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }} />{t(`lobby.${game.status}` as any, game.status)}
                                     </span>
                                 </div>
 
@@ -543,7 +550,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                             className="cb-btn cb-btn-primary w-full"
                                             onClick={() => setSelectedGame(game)}
                                         >
-                                            🎲 {t('lobby.buy_tickets')}
+                                            {t('lobby.buy_tickets')}
                                         </button>
                                     </div>
                                 )}
@@ -580,8 +587,8 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="cb-modal-header">
-                            <span className="cb-modal-title">📽 {t('replay.room_history_title')} #{historyRoomId}</span>
-                            <button className="cb-modal-close" onClick={() => setHistoryRoomId(null)} aria-label={t('common.close')}>✕</button>
+                            <span className="cb-modal-title">{t('replay.room_history_title')} #{historyRoomId}</span>
+                            <button className="cb-modal-close" onClick={() => setHistoryRoomId(null)} aria-label={t('common.close')}><X className="size-4 shrink-0" /></button>
                         </div>
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
                             <RoomHistoryPanel

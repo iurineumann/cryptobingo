@@ -30,6 +30,7 @@ spec:
         - cryptobingo.io
         - www.cryptobingo.io
         - api.cryptobingo.io
+        - swap.cryptobingo.io
       secretName: cryptobingo-tls
   rules:
     - host: api.cryptobingo.io
@@ -67,5 +68,15 @@ spec:
             backend:
               service:
                 name: frontend-svc
+                port:
+                  name: http
+    - host: swap.cryptobingo.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: swap-ui-svc
                 port:
                   name: http

@@ -11,7 +11,7 @@ import { Session }           from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient }         from '@cryptobingo/blockchain-core';
 import { UInt64 }            from '@wharfkit/antelope';
-import type { BlockchainPattern, BlockchainGametype, StageRule } from '@cryptobingo/shared-types';
+import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
 
@@ -127,7 +127,7 @@ export async function upsertPattern(req: Request, res: Response): Promise<void> 
  * Remove um padrão de vitória on-chain.
  */
 export async function deletePattern(req: Request, res: Response): Promise<void> {
-    const { patternId } = req.params;
+    const { patternId } = req.params as Record<string, string>;
 
     try {
         const session = getAdminSession();
@@ -253,7 +253,7 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
  * Remove um gametype on-chain.
  */
 export async function deleteGametype(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
 
     try {
         const session = getAdminSession();
@@ -286,7 +286,7 @@ export async function deleteGametype(req: Request, res: Response): Promise<void>
  * Body: { name, base_multiplier, rules, draw_mode, max_balls, golden_ball_after, master_weight_ovrd }
  */
 export async function updateGametype(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
     const {
         name, base_multiplier, rules,
         draw_mode, max_balls, golden_ball_after, master_weight_ovrd,
@@ -353,7 +353,7 @@ export async function updateGametype(req: Request, res: Response): Promise<void>
  * Body: { stages: StageRule[] }
  */
 export async function saveStages(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
     const { stages } = req.body;
 
     if (!Array.isArray(stages)) {
@@ -414,7 +414,7 @@ export async function saveStages(req: Request, res: Response): Promise<void> {
  * Retorna metadados off-chain de um gametype.
  */
 export async function getGametypeMetadata(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
 
     try {
         const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId }).lean();
@@ -434,7 +434,7 @@ export async function getGametypeMetadata(req: Request, res: Response): Promise<
  * Retorna apenas as combinações e regras estendidas de um gametype — sem auth.
  */
 export async function getGametypeMetadataPublic(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
     try {
         const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId })
             .select('gametype_id rules combinations')
@@ -468,7 +468,7 @@ export async function getGametypeMetadataPublic(req: Request, res: Response): Pr
  * }
  */
 export async function getGametypePatternsPublic(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+    const { gametypeId } = req.params as Record<string, string>;
 
     try {
         // 1. Tenta Redis cache
@@ -543,8 +543,8 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
  *   rules:        ExtendedRule[]   — pattern_id + weight (hundredths) + type
  *   combinations: CombinationRuleInput[] — combinações com weight (hundredths)
  */
-export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> {
-    const { gametypeId } = req.params;
+export async function upsertGametypeMetadata(req: Request, res: Response): Promise<void> { // NOSONAR — upsert atômico de gametype com validação de pesos, combinações e estágios on-chain; complexidade inerente ao ADR-016
+    const { gametypeId } = req.params as Record<string, string>;
     const { description, cover_image_url, rules_summary, sort_order, rules, combinations } = req.body;
 
     if (rules !== undefined && !Array.isArray(rules)) {
@@ -577,7 +577,7 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
         const metadata = await GametypeMetadataModel.findOneAndUpdate(
             { gametype_id: gametypeId },
             { $set },
-            { upsert: true, new: true },
+            { upsert: true, returnDocument: 'after' },
         ).lean();
 
         console.log(`✅ [PatternCtrl] Metadados do gametype ${gametypeId} upsertados.`);

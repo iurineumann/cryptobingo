@@ -3,7 +3,7 @@ import { Session } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
-import type { BlockchainRoom, RoomMetadata } from '@cryptobingo/shared-types';
+import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import RoomMetadataModel from '../models/RoomMetadata';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
@@ -57,7 +57,7 @@ export async function listRooms(_req: Request, res: Response): Promise<void> {
 // GET /api/v1/rooms/:roomId — Detalhe da sala
 // ==========================================
 export async function getRoom(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,
@@ -92,7 +92,7 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
         ticket_price_min_quantity, ticket_price_min_contract,
         ticket_price_max_quantity, ticket_price_max_contract,
         ticket_price_default_quantity, ticket_price_default_contract,
-        weight, max_tickets_per_player, nft_template_allowlist,
+        max_tickets_per_player,
         name, description, cover_image_url, rules_summary,
         chat_enabled, auto_start_delay_sec, drops,
     } = req.body;
@@ -167,7 +167,7 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
 // Auth: JWT admin ou sponsor
 // ==========================================
 export async function upsertRoomMetadata(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     const {
         name, description, cover_image_url, rules_summary,
         chat_enabled, auto_start_delay_sec, drops,
@@ -187,7 +187,7 @@ export async function upsertRoomMetadata(req: Request, res: Response): Promise<v
                     ...(drops !== undefined               && { drops }),
                 },
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         ).lean();
 
         res.status(200).json(updated);
@@ -202,7 +202,7 @@ export async function upsertRoomMetadata(req: Request, res: Response): Promise<v
 // POST /api/v1/admin/rooms/:roomId/activate
 // ==========================================
 export async function activateRoom(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     try {
         const session = getAdminSession();
         const result = await session.transact({
@@ -227,7 +227,7 @@ export async function activateRoom(req: Request, res: Response): Promise<void> {
 // POST /api/v1/admin/rooms/:roomId/pause
 // ==========================================
 export async function pauseRoom(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     try {
         const session = getAdminSession();
         const result = await session.transact({
@@ -252,7 +252,7 @@ export async function pauseRoom(req: Request, res: Response): Promise<void> {
 // POST /api/v1/admin/rooms/:roomId/close
 // ==========================================
 export async function closeRoom(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     try {
         const session = getAdminSession();
         const result = await session.transact({
@@ -277,7 +277,7 @@ export async function closeRoom(req: Request, res: Response): Promise<void> {
 // PUT /api/v1/admin/rooms/:roomId/settings — Atualiza configs on-chain
 // ==========================================
 export async function updateRoomSettings(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     const {
         room_drop_chance_bps, max_tickets_per_player,
     } = req.body;
@@ -354,7 +354,7 @@ export async function listSponsorRooms(req: Request, res: Response): Promise<voi
 // Auth: JWT admin
 // ==========================================
 export async function setRoomNft(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     const { nft_template_allowlist = [], campaign_id = 0, house_fee_bps = 0, estimated_monthly_tickets = 0 } = req.body;
 
     if (!Array.isArray(nft_template_allowlist)) {
@@ -399,7 +399,7 @@ export async function setRoomNft(req: Request, res: Response): Promise<void> {
 // Público para leitura (exibição no lobby e dashboard sponsor).
 // ==========================================
 export async function getRoomTreasury(req: Request, res: Response): Promise<void> {
-    const { roomId } = req.params;
+    const { roomId } = req.params as Record<string, string>;
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:        CONTRACT_ACCOUNT,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import { getAuthToken } from '../../services/api';
 
 interface UserRow {
@@ -44,8 +45,8 @@ export default function UsersAdmin() {
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 

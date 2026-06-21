@@ -15,7 +15,7 @@
 
 import { Request, Response }                         from 'express';
 import jwt                                           from 'jsonwebtoken';
-import crypto                                        from 'crypto';
+import crypto                                        from 'node:crypto';
 import { v4 as uuidv4 }                             from 'uuid';
 import { Signature, Checksum256, Transaction }       from '@wharfkit/antelope';
 import { pgPool }                                    from '../database';
@@ -99,7 +99,7 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
 // POST /api/v1/auth/verify
 // ==========================================
 
-export async function verifyChallenge(req: Request, res: Response): Promise<void> {
+export async function verifyChallenge(req: Request, res: Response): Promise<void> { // NOSONAR — validação de challenge WAX com múltiplos caminhos (signature/transactionPayload/nonce TTL/JWT); complexidade inerente à autenticação on-chain
     const { wallet, nonce, signature, public_key, transactionPayload } = req.body;
 
     if (!wallet || !nonce || !signature || !public_key) {
@@ -169,7 +169,7 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
             try {
                 const accountInfo = await rpcClient.v1.chain.get_account(wallet);
                 const activeKeys  = accountInfo.permissions
-                    .find((p: any) => p.perm_name === 'active')
+                    .find((p: any) => String(p.perm_name) === 'active')
                     ?.required_auth.keys ?? [];
 
                 const isAuthorized = activeKeys.some(

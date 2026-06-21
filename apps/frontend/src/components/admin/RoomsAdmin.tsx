@@ -402,7 +402,7 @@ export default function RoomsAdmin() {
                                 <span>Default: {room.ticket_price_default.quantity}</span>
                                 <span>Max/jogador: {room.max_tickets_per_player || '∞'}</span>
                                 <span>Delay: {room.metadata?.auto_start_delay_sec ?? 30}s</span>
-                                <span>Chat: {room.metadata?.chat_enabled !== false ? '✅' : '❌'}</span>
+                                <span>Chat: {room.metadata?.chat_enabled !== false ? t('common.yes') : t('common.no')}</span>
                                 <span>Drops: {room.metadata?.drops?.length ?? 0}</span>
                             </div>
                         </div>

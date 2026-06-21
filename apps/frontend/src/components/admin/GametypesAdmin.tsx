@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check, Sparkles, Link2, Star } from 'lucide-react';
 import { fetchAdminGametypes, createAdminGametype, updateAdminGametype, deleteAdminGametype, fetchAdminPatterns, fetchGametypeMetadata, upsertGametypeMetadata, setAdminGametypeStages, suggestCombosApi, type DrawMode, type StageRule, type BlockchainGametype, type BlockchainPattern, type ExtendedRule, type CombinationRuleInput, type CombinationClauseInput } from '../../services/api';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -26,7 +27,7 @@ export default function GametypesAdmin() {
     const [combinations, setCombinations] = useState<CombinationRuleInput[]>([]);
     const [saving, setSaving] = useState(false);
     const [suggesting, setSuggesting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<ReactNode | null>(null);
 
     // ADR-012: campos de modo de sorteio
     const [drawMode, setDrawMode] = useState<DrawMode>('standard');
@@ -406,10 +407,10 @@ export default function GametypesAdmin() {
             });
 
             // Mostra RTP estimado da simulação
-            const rtpMsg = `RTP estimado: ${result.validation.rtp_pct}` +
-                (result.validation.is_viable
-                    ? ' ✅ (faixa viável)'
-                    : ' ⚠️ (fora da faixa viável — ajuste os pesos)');
+            const rtpMsg = <><span>RTP estimado: {result.validation.rtp_pct}</span> {result.validation.is_viable
+                    ? <><Check className="size-4 shrink-0" style={{ color: 'var(--cb-success)' }} /> (faixa viável)</>
+                    : <><TriangleAlert className="size-4 shrink-0" /> (fora da faixa viável — ajuste os pesos)</>
+                }</>;
             setError(rtpMsg);
 
             if (result.alerts.length > 0) {
@@ -435,8 +436,8 @@ export default function GametypesAdmin() {
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 
@@ -444,7 +445,7 @@ export default function GametypesAdmin() {
                 {editingGtId && (
                     <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[--cb-brand]/10 border border-[--cb-brand]">
                         <span className="text-sm text-[--cb-text-primary] font-medium">
-                            🔗 {t('admin.gametypes_editing_combos', { id: editingGtId })}
+                            <Link2 className="size-4 shrink-0" /> {t('admin.gametypes_editing_combos', { id: editingGtId })}
                         </span>
                         <button type="button" className="text-xs text-[--cb-text-tertiary] hover:underline" onClick={cancelEdit}>
                             {t('admin.gametypes_cancel_edit')}
@@ -548,7 +549,7 @@ export default function GametypesAdmin() {
                                         value={(s.weight / 100).toFixed(2)}
                                         onChange={e => updateStageField(idx, 'weight', Math.round(parseFloat(e.target.value) * 100) || 100)} />
                                 </div>
-                                <button type="button" className="ml-auto text-[--cb-text-tertiary] hover:text-red-500 transition-colors" onClick={() => removeStage(idx)}>✕</button>
+                                <button type="button" className="ml-auto text-[--cb-text-tertiary] hover:text-red-500 transition-colors" onClick={() => removeStage(idx)}><X className="size-4 shrink-0" /></button>
                             </div>
                         ))}
                     </div>
@@ -654,7 +655,7 @@ export default function GametypesAdmin() {
                                         ))}
                                     </span>
                                     <span className="font-mono font-bold text-[--cb-accent]">{(c.weight / 100).toFixed(2)}x</span>
-                                    <button type="button" className="text-[--cb-danger] hover:underline ml-1" onClick={e => { e.stopPropagation(); removeCombination(i); }}>✕</button>
+                                    <button type="button" className="text-[--cb-danger] hover:underline ml-1" onClick={e => { e.stopPropagation(); removeCombination(i); }}><X className="size-4 shrink-0" /></button>
                                 </div>
                             ))}
                         </div>
@@ -777,7 +778,7 @@ export default function GametypesAdmin() {
                 <button type="button" className="cb-btn cb-btn-outline self-start" data-testid="gt-suggest" onClick={handleSuggest} disabled={suggesting}>
                     {suggesting
                         ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('common.loading')}</>
-                        : `✨ ${t('admin.gametypes_suggest')}`
+                        : <><Sparkles className="size-4 shrink-0" /> {t('admin.gametypes_suggest')}</>
                     }
                 </button>
 

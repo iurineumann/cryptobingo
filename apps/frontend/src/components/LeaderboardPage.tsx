@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchLeaderboard, fetchLeaderboardXp, fetchRoomLeaderboard } from '../services/api';
 import type { LeaderboardEntry, LeaderboardXpEntry } from '@cryptobingo/shared-types';
+import { Medal } from 'lucide-react';
 
 interface Props {
     roomId?: string;
@@ -195,17 +196,17 @@ export default function LeaderboardPage({ roomId }: Props) {
     );
 }
 
-function rankIcon(rank: number): string {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
+function rankIcon(rank: number): React.ReactNode {
+    if (rank === 1) return <Medal className="size-4 shrink-0" style={{ color: 'var(--cb-accent)' }} />;
+    if (rank === 2) return <Medal className="size-4 shrink-0" style={{ color: 'var(--cb-text-secondary)' }} />;
+    if (rank === 3) return <Medal className="size-4 shrink-0" style={{ color: 'var(--cb-text-tertiary)' }} />;
     return String(rank);
 }
 
 function rankColor(rank: number): string {
-    if (rank === 1) return '#FFD700';
-    if (rank === 2) return '#C0C0C0';
-    if (rank === 3) return '#CD7F32';
+    if (rank === 1) return 'var(--cb-accent)';
+    if (rank === 2) return 'var(--cb-text-secondary)';
+    if (rank === 3) return 'var(--cb-text-tertiary)';
     return 'var(--cb-text-primary)';
 }
 

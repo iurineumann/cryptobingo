@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
-import { Checksum256, PrivateKey } from '@wharfkit/antelope';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import { PrivateKey, Checksum256 } from '@wharfkit/antelope';
 import {
     fetchMyNfts, fetchAchievements, syncBurns,
     updateProfile, type NftAsset, type AchievementDef,
@@ -10,26 +10,26 @@ import {
 import XpProgressBar from './XpProgressBar';
 
 /**
- * Assina o payload de atualização de perfil.
- * Dev:  PrivateKey.from(devKey).signDigest(SHA256(payload)) — sem RPC.
- * Prod: session.transact(eosio.null:nonce, broadcast:false) — padrão WAX.
+ * Assina payload de atualização de perfil.
+ * Dev (VITE_DEV_PRIVATE_KEY definida): assina SHA256(payload) direto com a chave.
+ * Prod: assina via session.transact (eosio.null:nonce, broadcast:false).
+ * Backend valida ambos os modos (digest / transactionPayload).
  */
 async function signProfileUpdate(
     session: Session,
     payload: string,
     ts: number,
 ): Promise<{ signature: string; transactionPayload?: object }> {
-    const payloadHex = Buffer.from(payload, 'utf-8').toString('hex');
+    const devKey = import.meta.env.VITE_DEV_PRIVATE_KEY;
 
-    if (import.meta.env.DEV) {
-        const devKey = import.meta.env.VITE_DEV_PRIVATE_KEY;
-        if (!devKey) throw new Error('VITE_DEV_PRIVATE_KEY não definida');
-        const digest    = Checksum256.hash(Buffer.from(payload, 'utf-8'));
-        const sig       = PrivateKey.from(devKey).signDigest(digest);
+    if (devKey) {
+        const pk = PrivateKey.from(devKey);
+        const digest = Checksum256.hash(Buffer.from(payload, 'utf-8'));
+        const sig = pk.signDigest(digest);
         return { signature: sig.toString() };
     }
 
-    // Produção: assina transação eosio.null:nonce com payload hex no data
+    const payloadHex = Buffer.from(payload, 'utf-8').toString('hex');
     const result = await session.transact(
         {
             action: {
@@ -90,9 +90,11 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
         finally { setAchLoading(false); }
     }, []);
 
+    const avatarNft = nfts.find(n => n.asset_id === avatarId);
+
     useEffect(() => {
-        if (tab === 'nfts')    loadNfts();
-        if (tab === 'xp')      loadAchievements();
+        if (tab === 'profile' || tab === 'nfts') loadNfts();
+        if (tab === 'xp')                        loadAchievements();
     }, [tab, loadNfts, loadAchievements]);
 
     const handleSave = async () => {
@@ -100,7 +102,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
         setSaveMsg(null);
         try {
             const sensitiveFields: Record<string, unknown> = {};
-            if (nickname !== profile.nickname)               sensitiveFields.nickname              = nickname;
+            if (nickname !== (profile.nickname ?? ''))       sensitiveFields.nickname              = nickname;
             if (avatarId !== profile.avatar_nft_asset_id)   sensitiveFields.avatar_nft_asset_id  = avatarId;
             const hasSensitive = Object.keys(sensitiveFields).length > 0;
 
@@ -173,6 +175,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                                 : 'border-transparent text-[--cb-text-secondary] hover:text-[--cb-text-primary]'
                         }`}
                         data-testid={`profile-tab-${tb.id}`}
+                        aria-current={tab === tb.id ? 'page' : undefined}
                     >
                         {tb.label}
                     </button>
@@ -211,9 +214,24 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                         <label className="block text-sm text-[--cb-text-secondary] mb-1">
                             {t('profile_page.avatar_label')}
                         </label>
-                        <p className="text-xs text-[--cb-text-tertiary]">
-                            {avatarId ?? t('profile_page.avatar_none')}
-                        </p>
+                        {avatarId && avatarNft?.img_url ? (
+                            <div className="flex items-center gap-3">
+                                <img
+                                    src={avatarNft.img_url}
+                                    alt={avatarNft.name}
+                                    className="w-16 h-16 rounded-lg object-cover border border-[--cb-border]"
+                                    data-testid="profile-avatar"
+                                />
+                                <div>
+                                    <p className="text-xs font-medium text-[--cb-text-primary]">{avatarNft.name}</p>
+                                    <p className="text-xs text-[--cb-text-tertiary]">#{avatarNft.asset_id}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-[--cb-text-tertiary]">
+                                {avatarId ?? t('profile_page.avatar_none')}
+                            </p>
+                        )}
                     </div>
 
                     <button
@@ -275,10 +293,14 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
                                     data-testid={`profile-nft-${nft.asset_id}`}
                                 >
                                     {nft.img_url ? (
-                                        <img src={nft.img_url} alt={nft.name} className="w-full aspect-square object-cover rounded mb-2" />
+                                        <img
+                                            src={nft.img_url}
+                                            alt={nft.name}
+                                            className="w-full aspect-square rounded object-cover mb-2"
+                                            loading="lazy"
+                                        />
                                     ) : (
-                                        <div className="w-full aspect-square rounded bg-[--cb-surface-2] mb-2 flex items-center justify-center text-2xl">
-                                            ★
+                                        <div className="w-full aspect-square rounded bg-[--cb-surface-2] mb-2 flex items-center justify-center">
                                         </div>
                                     )}
                                     <p className="text-xs font-medium text-[--cb-text-primary] truncate">{nft.name}</p>

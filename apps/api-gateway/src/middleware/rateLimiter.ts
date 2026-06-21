@@ -64,11 +64,11 @@ export const monteCarloLimiter: RateLimitRequestHandler = ((req: Request, res: R
 
 function createLimiter(options: {
     windowMs:  number;
-    max:       number;
+    limit:     number;
     keyPrefix: string;
     message:   string;
 }): RateLimitRequestHandler {
-    const { windowMs, max, keyPrefix, message } = options;
+    const { windowMs, limit, keyPrefix, message } = options;
 
     // Neste ponto o Redis já está conectado — RedisStore pode ser instanciado com segurança
     const store = new RedisStore({
@@ -78,7 +78,7 @@ function createLimiter(options: {
 
     return rateLimit({
         windowMs,
-        max,
+        limit,
         standardHeaders: true,
         legacyHeaders:   false,
         store,
@@ -110,11 +110,11 @@ function createLimiter(options: {
  */
 export function initRateLimiters(): void {
     try {
-        _authLimiter       = createLimiter({ windowMs: 60_000, max: 20,  keyPrefix: 'auth',       message: 'Muitas tentativas de autenticação. Aguarde 1 minuto.'          });
-        _playerLimiter     = createLimiter({ windowMs: 60_000, max: 100, keyPrefix: 'player',     message: 'Muitas requisições. Aguarde alguns segundos.'                   });
-        _ticketLimiter     = createLimiter({ windowMs: 60_000, max: 30,  keyPrefix: 'tickets',    message: 'Limite de geração de cartelas atingido. Aguarde 1 minuto.'      });
-        _adminLimiter      = createLimiter({ windowMs: 60_000, max: 100,  keyPrefix: 'admin',      message: 'Limite de operações administrativas atingido. Aguarde 1 minuto.' });
-        _monteCarloLimiter = createLimiter({ windowMs: 60_000, max: 100,   keyPrefix: 'montecarlo', message: 'Limite de simulações atingido. Aguarde 1 minuto.'               });
+        _authLimiter       = createLimiter({ windowMs: 60_000, limit: 20,  keyPrefix: 'auth',       message: 'Muitas tentativas de autenticação. Aguarde 1 minuto.'          });
+        _playerLimiter     = createLimiter({ windowMs: 60_000, limit: 100, keyPrefix: 'player',     message: 'Muitas requisições. Aguarde alguns segundos.'                   });
+        _ticketLimiter     = createLimiter({ windowMs: 60_000, limit: 30,  keyPrefix: 'tickets',    message: 'Limite de geração de cartelas atingido. Aguarde 1 minuto.'      });
+        _adminLimiter      = createLimiter({ windowMs: 60_000, limit: 100,  keyPrefix: 'admin',      message: 'Limite de operações administrativas atingido. Aguarde 1 minuto.' });
+        _monteCarloLimiter = createLimiter({ windowMs: 60_000, limit: 100,   keyPrefix: 'montecarlo', message: 'Limite de simulações atingido. Aguarde 1 minuto.'               });
 
         console.log('✅ [RateLimit] Limiters inicializados com RedisStore.');
     } catch (err) {

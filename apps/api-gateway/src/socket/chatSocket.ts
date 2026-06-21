@@ -3,6 +3,12 @@ import jwt from 'jsonwebtoken';
 import ChatMessageModel from '../models/ChatMessage';
 import RoomMetadataModel from '../models/RoomMetadata';
 import { isTokenRevoked } from '../middleware/auth';
+import {
+    socketConnectionsActive,
+    socketMessagesTotal,
+    socketAuthFailuresTotal,
+    socketRateLimitedTotal,
+} from '../services/metrics';
 
 // WAX names: max 12 chars [a-z1-5.] — lookahead rejeita nomes mais longos
 const MENTION_RE = /@([a-z1-5.]{1,12})(?![a-z1-5.])/gi;
@@ -86,28 +92,36 @@ export function setupChatSocket(io: Server): void {
 
             next();
         } catch {
+            socketAuthFailuresTotal.inc();
             next(new Error('Token inválido.'));
         }
     });
 
     chatNs.on('connection', socket => {
+        socketConnectionsActive.inc();
+        socket.on('disconnect', () => socketConnectionsActive.dec());
+
         socket.on('chat:join', async ({ roomId }: { roomId: string }) => {
+            socketMessagesTotal.inc({ event: 'chat:join' });
             if (!roomId) return;
             if (!await roomExists(roomId)) return;
             socket.join(roomId);
         });
 
         socket.on('chat:leave', ({ roomId }: { roomId: string }) => {
+            socketMessagesTotal.inc({ event: 'chat:leave' });
             if (roomId) socket.leave(roomId);
         });
 
         socket.on('chat:send', async ({ roomId, message }: { roomId?: string; message?: string }) => {
+            socketMessagesTotal.inc({ event: 'chat:send' });
             const trimmed = (message ?? '').trim().slice(0, 500);
             if (!trimmed || !roomId) return;
 
             const wallet = socket.data.wallet as string;
 
             if (isRateLimited(wallet)) {
+                socketRateLimitedTotal.inc();
                 socket.emit('chat:error', { code: 'RATE_LIMITED', message: 'Muitas mensagens. Aguarde.' });
                 return;
             }

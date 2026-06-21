@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import {
     fetchVaultDeposits, fetchVaultAllocations,
     allocateDropToRoom, deallocateFromRoom, reclaimVaultDeposit,
@@ -128,14 +129,14 @@ export default function SponsorVault() {
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4 flex items-center gap-2">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
             {success && (
                 <div data-testid="sponsor-vault-toast-success" className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
-                    <span>✓ {success}</span>
-                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
+                    <span><Check className="size-3 shrink-0" /> {success}</span>
+                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 

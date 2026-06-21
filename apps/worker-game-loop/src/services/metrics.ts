@@ -16,7 +16,7 @@
 //
 // Ref: ADR-007 (observabilidade), ENGINEERING_PROTOCOL.md
 
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import {
     Registry,
     Counter,
@@ -25,7 +25,7 @@ import {
     collectDefaultMetrics,
 } from 'prom-client';
 
-const METRICS_PORT = parseInt(process.env.METRICS_PORT ?? '9091', 10);
+const METRICS_PORT = Number.parseInt(process.env.METRICS_PORT ?? '9091', 10);
 
 // ==========================================
 // REGISTRY ISOLADO
@@ -114,6 +114,65 @@ export const slowRevealSessionsActive = new Gauge({
 });
 
 // ==========================================
+// MÉTRICAS DE RESOLUÇÃO DE JOGO (orchestrateGame)
+// Cobrem o ciclo completo: reveal → avaliação → pagamento
+// ==========================================
+
+/** Jogos resolvidos com sucesso, por draw_mode. */
+export const gameResolutionTotal = new Counter({
+    name:       'worker_game_resolution_total',
+    help:       'Total de jogos resolvidos com sucesso pelo orquestrador, por draw_mode.',
+    labelNames: ['draw_mode', 'result'] as const,
+    registers:  [registry],
+});
+
+/** Duração completa da resolução de jogo (reveal + pagamentos), por draw_mode. */
+export const gameResolutionDuration = new Histogram({
+    name:       'worker_game_resolution_duration_ms',
+    help:       'Duração total da resolução de jogo (reveal + avaliação + payouts) em ms.',
+    labelNames: ['draw_mode'] as const,
+    buckets:    [1000, 5000, 15000, 30000, 60000, 90000, 120000, 180000],
+    registers:  [registry],
+});
+
+/** Total de vencedores pagos por jogo, acumulado. */
+export const gameWinnersTotal = new Counter({
+    name:       'worker_game_winners_total',
+    help:       'Total de vencedores pagos pelo orquestrador.',
+    labelNames: ['draw_mode'] as const,
+    registers:  [registry],
+});
+
+// ==========================================
+// MÉTRICAS DE AUTOADVANCE (crons setInterval)
+// Processos que bypassam o consumer RabbitMQ
+// ==========================================
+
+/** Execuções dos crons de AutoAdvance, por action. */
+export const autoAdvanceRunsTotal = new Counter({
+    name:       'worker_autoadvance_runs_total',
+    help:       'Total de execuções dos crons de AutoAdvance.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
+/** Erros nos crons de AutoAdvance, por action. */
+export const autoAdvanceErrorsTotal = new Counter({
+    name:       'worker_autoadvance_errors_total',
+    help:       'Total de erros nos crons de AutoAdvance.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
+/** Jogos processados por cada cron de AutoAdvance. */
+export const autoAdvanceGamesTotal = new Counter({
+    name:       'worker_autoadvance_games_total',
+    help:       'Total de jogos processados pelos crons de AutoAdvance.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
+// ==========================================
 // MÉTRICAS DE XP / PROGRESSION (ADR-028)
 // ==========================================
 
@@ -173,6 +232,7 @@ export function startMetricsServer(): void {
                 res.setHeader('Content-Type', registry.contentType);
                 res.end(await registry.metrics());
             } catch (err) {
+                console.error('[Metrics] Erro ao coletar métricas:', err);
                 res.writeHead(500);
                 res.end('Erro ao coletar métricas.');
             }

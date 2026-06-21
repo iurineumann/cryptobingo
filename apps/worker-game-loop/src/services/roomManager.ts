@@ -2,7 +2,6 @@ import { rpcClient, fetchGame } from '@cryptobingo/blockchain-core';
 import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { adminSession, microserviceSession } from './blockchain';
-import { connectRedis } from './redis';
 import { processRoomDrops } from './dropWorker';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
@@ -76,7 +75,7 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
 
         // Verifica se a sala ainda está ativa e sem jogo (previne duplicatas)
         const freshRoom = await fetchRoomOnChain(room.room_id);
-        if (!freshRoom || freshRoom.status !== 'active') {
+        if (freshRoom?.status !== 'active') {
             console.log(`[RoomManager] Sala ${room.room_id} não está mais ativa (status: ${freshRoom?.status}). Pulando.`);
             return null;
         }
@@ -187,7 +186,7 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
             // abortgame (estado legado se transição ocorreu antes do fix). Para aborted,
             // skip — o autoLock irá resolver via abortgame que zera current_game_id.
             const existingGame = await fetchGame(gameId).catch(() => null);
-            if (existingGame && existingGame.status === 'archived') {
+            if (existingGame?.status === 'archived') {
                 console.log(`[RoomManager] Sala ${room.room_id}: recovery — jogo ${gameId} é archived mas current_game_id não foi zerado. Liberando slot via closegame...`);
                 try {
                     await microserviceSession.transact({
@@ -204,7 +203,7 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
                     return; // sem closegame bem-sucedido não criamos novo jogo
                 }
                 await createNextGameForRoom(room);
-            } else if (existingGame && existingGame.status === 'aborted') {
+            } else if (existingGame?.status === 'aborted') {
                 // abortgame já deveria ter zerado current_game_id; estado transitório.
                 // Aguarda o próximo ciclo de polling — não chama closegame (ação inválida).
                 console.log(`[RoomManager] Sala ${room.room_id}: jogo ${gameId} aborted — aguardando zeramento via abortgame no próximo ciclo.`);

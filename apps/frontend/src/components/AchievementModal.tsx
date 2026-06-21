@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchAchievements } from '../services/api';
 import type { AchievementDef } from '../services/api';
+import { X } from 'lucide-react';
 
 interface AchievementModalProps {
     onClose: () => void;
@@ -33,8 +34,7 @@ export default function AchievementModal({ onClose }: AchievementModalProps) {
         >
             <div className="cb-modal" data-testid="achievement-modal" style={{ maxWidth: '32rem' }}>
                 <div className="cb-modal-header">
-                    <h2 id="achievement-modal-title" className="cb-modal-title flex items-center gap-2">
-                        <span aria-hidden="true">🏅</span>
+                    <h2 id="achievement-modal-title" className="cb-modal-title">
                         {t('achievements.title')}
                     </h2>
                     <button
@@ -43,7 +43,7 @@ export default function AchievementModal({ onClose }: AchievementModalProps) {
                         onClick={onClose}
                         aria-label={t('common.close')}
                     >
-                        ✕
+                        <X className="size-4 shrink-0" />
                     </button>
                 </div>
 
@@ -67,7 +67,7 @@ export default function AchievementModal({ onClose }: AchievementModalProps) {
                                     data-testid={`achievement-${a.id}`}
                                 >
                                     <span className="cb-achievement-icon" aria-hidden="true">
-                                        {a.unlocked ? a.icon : '🔒'}
+                                        {a.unlocked ? a.icon : ''}
                                     </span>
                                     <div className="cb-achievement-info">
                                         <span className="cb-achievement-label">{a.label}</span>
