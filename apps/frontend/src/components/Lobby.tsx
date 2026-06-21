@@ -12,8 +12,12 @@ import { Name, Session }                 from '@wharfkit/session';
 import { UInt64 }                        from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchRooms, type EnrichedRoom } from '../services/api';
+import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
 import RoomHistoryPanel                  from './RoomHistoryPanel';
+import { Badge }                         from '@/components/ui/badge';
+import { Button }                        from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 
 interface LobbyProps {
     session:       Session;
@@ -28,9 +32,14 @@ const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS       = 8_000;   // salas idle
 const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
 
-const STATUS_EMOJI: Record<string, string> = {
-    created: '🕐', funding: '🟢', locked: '🔒',
-    drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌',
+const STATUS_DOT: Record<string, string> = {
+    created: 'var(--cb-text-tertiary)',
+    funding: 'var(--cb-success)',
+    locked:  'var(--cb-accent)',
+    drawing: 'var(--color-danger-500)',
+    drawn:   'var(--cb-success)',
+    archived:'var(--cb-text-tertiary)',
+    aborted: 'var(--cb-danger)',
 };
 
 function fmtCountdown(ms: number): string {
@@ -239,9 +248,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         </div>
                     )}
                     {/* Refresh */}
-                    <button
-                        className="cb-btn cb-btn-ghost cb-btn-sm"
-                        style={{ width: '2.25rem', height: '2.25rem', padding: 0, borderRadius: '0.5rem' }}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-9 h-9 p-0 rounded-lg"
                         onClick={loadData}
                         disabled={loading}
                         aria-label={t('lobby.refresh_aria')}
@@ -251,7 +261,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                             ? <span className="cb-spinner" style={{ width: '1rem', height: '1rem' }} />
                             : <span aria-hidden="true">↻</span>
                         }
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -268,9 +278,9 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                             <span className="lobby-empty-icon" aria-hidden="true">🎱</span>
                             <span className="lobby-empty-title">{t('lobby.no_active_rooms')}</span>
                             <span className="lobby-empty-sub">{t('lobby.check_back')}</span>
-                            <button className="cb-btn cb-btn-outline cb-btn-sm" onClick={loadData} style={{ marginTop: '0.5rem' }}>
+                            <Button variant="outline" size="sm" onClick={loadData} className="mt-2">
                                 ↻ {t('lobby.refresh')}
-                            </button>
+                            </Button>
                         </>
                     )}
                 </div>
@@ -329,8 +339,8 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                         // Status label
                         const statusLabel = currentGame
-                            ? `${STATUS_EMOJI[displayStatus] ?? ''}${t(`lobby.${displayStatus}` as any, displayStatus)}`
-                            : `🕐 ${t('lobby.room_waiting')}`;
+                            ? t(`lobby.${displayStatus}` as any, displayStatus)
+                            : t('lobby.room_waiting');
 
                         // Prêmio máximo por cartela (fixed-odds, ADR-005)
                         // payout = ticket_price × base_multiplier × max_win_weight / 100
@@ -377,24 +387,29 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         {isDrawing ? (
                                             <span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>
                                         ) : (
-                                            <span className={`cb-badge ${isFunding ? 'cb-badge-success' : isIdle ? 'cb-badge-neutral' : 'cb-badge-neutral'}`} data-testid={`lobby-status-${room.room_id}`}>
+                                            <Badge
+                                                variant="secondary"
+                                                className={isFunding ? 'text-success-400' : ''}
+                                                data-testid={`lobby-status-${room.room_id}`}
+                                            >
+                                                {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }} />}
                                                 {statusLabel}
-                                            </span>
+                                            </Badge>
                                         )}
                                         {hasMyTickets && (
                                             <span className="lobby-card-mine">
-                                                🎫 {t('lobby.my_tickets', { count: myCount })}
+                                                {t('lobby.my_tickets', { count: myCount })}
                                             </span>
                                         )}
                                         {hasNftDrop && (
-                                            <span className="cb-badge text-xs" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
+                                            <Badge variant="outline" className="text-violet-400 border-violet-400/30 bg-violet-400/10">
                                                 🎁 {t('lobby.drop_nft')}
-                                            </span>
+                                            </Badge>
                                         )}
                                         {hasTokenDrop && (
-                                            <span className="cb-badge text-xs" style={{ background: 'rgb(234 179 8 / 0.12)', color: 'rgb(253 224 71)', border: '1px solid rgb(234 179 8 / 0.3)' }}>
+                                            <Badge variant="outline" className="text-yellow-300 border-yellow-400/30 bg-yellow-400/10">
                                                 💰 {t('lobby.drop_token')}
-                                            </span>
+                                            </Badge>
                                         )}
                                     </div>
                                 </div>
@@ -434,7 +449,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 )}
                                 {isFunding && remaining <= 0 && (
                                     <span className="lobby-card-ticker is-urgent" data-testid={`lobby-ticker-${room.room_id}`}>
-                                        🔒 {t('lobby.starts_soon')}
+                                        {t('lobby.starts_soon')}
                                     </span>
                                 )}
                                 {isIdle && (
@@ -447,33 +462,36 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 <div className="lobby-card-actions">
                                     <div className="lobby-card-actions-row">
                                         {canBuy && (
-                                            <button
-                                                className="cb-btn cb-btn-primary flex-1"
+                                            <Button
+                                                variant="default"
+                                                className="flex-1"
                                                 data-testid={`lobby-buy-${room.room_id}`}
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.buy_aria', { id: room.room_id })}
                                             >
-                                                🎲 {t('lobby.buy_tickets')}
-                                            </button>
+                                                {t('lobby.buy_tickets')}
+                                            </Button>
                                         )}
                                         {canWatch && (
-                                            <button
-                                                className="cb-btn cb-btn-outline flex-1"
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
                                                 data-testid={`lobby-watch-${room.room_id}`}
                                                 onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
                                                 aria-label={t('lobby.watch_aria', { id: room.room_id })}
                                             >
                                                 👁 {t('lobby.watch_live')}
-                                            </button>
+                                            </Button>
                                         )}
                                         {!canBuy && !canWatch && navGameId && (
-                                            <button
-                                                className="cb-btn cb-btn-outline flex-1"
+                                            <Button
+                                                variant="outline"
+                                                className="flex-1"
                                                 onClick={() => onEnterRoom!(room.room_id, navGameId)}
                                                 aria-label={t('lobby.enter_room_aria', { id: room.room_id })}
                                             >
                                                 📊 {t('lobby.view_results')}
-                                            </button>
+                                            </Button>
                                         )}
                                         {!canBuy && !canWatch && !navGameId && !isIdle && (
                                             <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
@@ -482,10 +500,11 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         )}
                                     </div>
 
-                                    <button
-                                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="justify-start gap-1.5 text-xs"
                                         data-testid={`lobby-history-${room.room_id}`}
-                                        style={{ justifyContent: 'flex-start', gap: '0.4rem', fontSize: '0.75rem' }}
                                         onClick={e => { e.stopPropagation(); navigate(`/room/${room.room_id}/history`); }}
                                         aria-label={t('lobby.replay_aria', { id: room.room_id })}
                                     >
@@ -493,7 +512,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         {playerRoomIds.has(String(room.room_id)) && (
                                             <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
                                         )}
-                                    </button>
+                                    </Button>
                                 </div>
                             </article>
                         );
@@ -518,9 +537,9 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <span className="lobby-card-id">#{game.game_id}</span>
                                         <p className="lobby-card-name">{t('lobby.room_label')}</p>
                                     </div>
-                                    <span className={`cb-badge ${isFunding ? 'cb-badge-success' : 'cb-badge-neutral'}`}>
-                                        {STATUS_EMOJI[game.status]}{t(`lobby.${game.status}` as any, game.status)}
-                                    </span>
+                                    <Badge variant="secondary" className={isFunding ? 'text-success-400' : ''}>
+                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }} />{t(`lobby.${game.status}` as any, game.status)}
+                                    </Badge>
                                 </div>
 
                                 <dl className="lobby-card-stats">
@@ -539,12 +558,13 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                                 {isFunding && (
                                     <div className="lobby-card-actions">
-                                        <button
-                                            className="cb-btn cb-btn-primary w-full"
+                                        <Button
+                                            variant="default"
+                                            className="w-full"
                                             onClick={() => setSelectedGame(game)}
                                         >
-                                            🎲 {t('lobby.buy_tickets')}
-                                        </button>
+                                            {t('lobby.buy_tickets')}
+                                        </Button>
                                     </div>
                                 )}
                             </article>
@@ -566,34 +586,29 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
             )}
 
             {/* ── Modal de histórico da sala ── */}
-            {historyRoomId && (
-                <div
-                    className="cb-overlay"
-                    onClick={() => setHistoryRoomId(null)}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={`Histórico da sala #${historyRoomId}`}
-                >
-                    <div
-                        className="cb-modal"
-                        style={{ maxWidth: '44rem', maxHeight: '85dvh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="cb-modal-header">
-                            <span className="cb-modal-title">📽 {t('replay.room_history_title')} #{historyRoomId}</span>
-                            <button className="cb-modal-close" onClick={() => setHistoryRoomId(null)} aria-label={t('common.close')}>✕</button>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+            <Dialog open={historyRoomId !== null} onOpenChange={(open) => !open && setHistoryRoomId(null)}>
+                <DialogContent className="max-w-[44rem] max-h-[85dvh] overflow-hidden flex flex-col" showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {t('replay.room_history_title')} #{historyRoomId}
+                        </DialogTitle>
+                        <DialogClose render={<Button variant="ghost" size="icon" className="absolute top-3 right-3" />} onClick={() => setHistoryRoomId(null)}>
+                            <X className="size-4 shrink-0" />
+                            <span className="sr-only">{t('common.close')}</span>
+                        </DialogClose>
+                    </DialogHeader>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+                        {historyRoomId && (
                             <RoomHistoryPanel
                                 roomId={historyRoomId}
                                 session={session}
                                 onViewReplay={gameId => { setHistoryRoomId(null); onReplayGame?.(gameId); }}
                                 onBack={() => setHistoryRoomId(null)}
                             />
-                        </div>
+                        )}
                     </div>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
         </section>
     );
 }

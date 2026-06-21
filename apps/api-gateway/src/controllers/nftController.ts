@@ -16,7 +16,110 @@ const CONTRACT_ACCOUNT   = process.env.CONTRACT_ACCOUNT   ?? 'bingogamectr';
 const MICROSERVICE_ACTOR = process.env.MICROSERVICE_ACTOR ?? 'bingogamesvc';
 const CHAIN_ID           = process.env.CHAIN_ID;
 const RPC_URL            = process.env.RPC_URL            ?? 'http://127.0.0.1:8888';
+const IPFS_GATEWAY       = process.env.IPFS_GATEWAY       ?? 'https://ipfs.io/ipfs/';
 if (!CHAIN_ID) throw new Error('[nftController] CHAIN_ID não definido');
+
+// ── Deserializador AtomicAssets ────────────────────────────────────────────────
+// A AtomicAssets serializa metadados em bytes (immutable_serialized_data) usando
+// o formato definido no schema da collection. Identifier = 4 + index no format.
+// Ref: github.com/pinknetworkx/atomicassets-contract/wiki/Serialization
+
+function readVarint(buf: Uint8Array, pos: number): { value: number; bytes: number } {
+    let v = 0, shift = 0, bytes = 0;
+    while (pos < buf.length) {
+        const b = buf[pos++]; bytes++;
+        v |= (b & 0x7f) << shift;
+        shift += 7;
+        if (!(b & 0x80)) return { value: v, bytes };
+    }
+    return { value: v, bytes };
+}
+
+function readAtomicValue(buf: Uint8Array, pos: number, type: string): { value: unknown; bytes: number } { // NOSONAR — deserializador AtomicAssets com 15+ tipos primitivos (varint, fixedN, float, string, arrays); complexidade inerente ao protocolo de serialização
+    const isArr = type.endsWith('[]');
+    const base  = isArr ? type.slice(0, -2) : type;
+    const start = pos;
+
+    if (isArr) {
+        const { value: cnt, bytes: cb } = readVarint(buf, pos);
+        pos += cb;
+        const items: unknown[] = [];
+        for (let i = 0; i < cnt; i++) {
+            const { value, bytes } = readAtomicValue(buf, pos, base);
+            pos += bytes;
+            items.push(value);
+        }
+        return { value: items, bytes: pos - start };
+    }
+
+    const dv = (n: number) => new DataView(buf.buffer, buf.byteOffset + pos, n);
+
+    // AtomicAssets: ALL integers (uint*/int*/bool/byte) usam varint encoding.
+    // Apenas fixed*/float/double usam largura fixa LE.
+    // Ref: github.com/pinknetworkx/atomicassets-contract/wiki/Serialization
+    switch (base) {
+        case 'uint8': case 'uint16': case 'uint32': case 'uint64':
+        case 'byte': {
+            const { value: v, bytes: b } = readVarint(buf, pos);
+            return { value: v, bytes: b };
+        }
+        case 'int8': case 'int16': case 'int32': case 'int64': {
+            // signed: varint decodifica como unsigned, reinterpreta bits
+            const { value: v, bytes: b } = readVarint(buf, pos);
+            const mask = base === 'int8' ? 0xFFn : base === 'int16' ? 0xFFFFn : base === 'int32' ? 0xFFFFFFFFn : 0xFFFFFFFFFFFFFFFFn; // NOSONAR (S3358) — ternário encadeado para seleção de máscara BigInt por tamanho de tipo; lookup-table exigiria BigInt literal em Map (não aceito pelo TS sem cast)
+            const sign = BigInt(1) << (base === 'int8' ? 7n : base === 'int16' ? 15n : base === 'int32' ? 31n : 63n); // NOSONAR (S3358) — idem: seleção de bit de sinal por tipo
+            const uv = BigInt(v) & mask;
+            const sv = uv >= sign ? uv - (sign << 1n) : uv;
+            return { value: base === 'int64' ? sv : Number(sv), bytes: b };
+        }
+        case 'fixed8':
+            return { value: buf[pos], bytes: 1 };
+        case 'fixed16':
+            return { value: dv(2).getUint16(0, true), bytes: 2 };
+        case 'fixed32':
+            return { value: dv(4).getUint32(0, true), bytes: 4 };
+        case 'fixed64':
+            return { value: dv(8).getBigUint64(0, true), bytes: 8 };
+        case 'float':
+            return { value: dv(4).getFloat32(0, true), bytes: 4 };
+        case 'double':
+            return { value: dv(8).getFloat64(0, true), bytes: 8 };
+        case 'bool': {
+            const { value: v, bytes: b } = readVarint(buf, pos);
+            return { value: v !== 0, bytes: b };
+        }
+        case 'string': case 'image': case 'ipfs': {
+            const { value: len, bytes: lb } = readVarint(buf, pos);
+            const str = new TextDecoder().decode(buf.slice(pos + lb, pos + lb + len));
+            return { value: str, bytes: lb + len };
+        }
+        case 'bytes': {
+            const { value: len, bytes: lb } = readVarint(buf, pos);
+            return { value: buf.slice(pos + lb, pos + lb + len), bytes: lb + len };
+        }
+        default:
+            throw new Error(`Tipo AtomicAssets desconhecido: ${type}`);
+    }
+}
+
+function deserializeAtomic(hex: string, fmt: Array<{ name: string; type: string }>): Record<string, unknown> {
+    if (!hex) return {};
+    const buf = new Uint8Array(Buffer.from(hex, 'hex'));
+    let pos = 0;
+    const out: Record<string, unknown> = {};
+    const idMap = new Map<number, { name: string; type: string }>();
+    for (let i = 0; i < fmt.length; i++) idMap.set(4 + i, fmt[i]);
+    while (pos < buf.length) {
+        const { value: id, bytes: ib } = readVarint(buf, pos);
+        pos += ib;
+        const f = idMap.get(id);
+        if (!f) break;
+        const { value, bytes } = readAtomicValue(buf, pos, f.type);
+        pos += bytes;
+        out[f.name] = value;
+    }
+    return out;
+}
 
 function getMicroserviceSession(): Session {
     const key = process.env.MICROSERVICE_PRIVATE_KEY;
@@ -72,12 +175,46 @@ export async function getMyNfts(req: Request, res: Response): Promise<void> {
             a => a.collection_name === BINGO_COLLECTION
         );
 
-        const assets = bingoAssets.map(a => ({
-            asset_id:      String(a.asset_id),
-            schema_name:   String(a.schema_name),
-            name:          String(a.template_id),
-            backed_tokens: (a.backed_tokens ?? []).map((t: any) => String(t)).join(', '),
-        }));
+        // Busca esquemas e deserializa metadados dos templates
+        const schemaRes = await rpcClient.v1.chain.get_table_rows({
+            code: ATOMIC_CONTRACT, scope: BINGO_COLLECTION,
+            table: 'schemas', limit: 10, json: true,
+        });
+        const schemaFormat = new Map<string, Array<{ name: string; type: string }>>();
+        for (const row of schemaRes.rows as any[]) {
+            schemaFormat.set(String(row.schema_name), (row as any).format ?? []);
+        }
+
+        const templateIds = [...new Set(bingoAssets.map(a => Number(a.template_id)))];
+        const templateMeta = new Map<number, Record<string, any>>();
+        if (templateIds.length > 0) {
+            const tmplRes = await rpcClient.v1.chain.get_table_rows({
+                code: ATOMIC_CONTRACT, scope: BINGO_COLLECTION,
+                table: 'templates', limit: 200, json: true,
+            });
+            for (const row of tmplRes.rows as any[]) {
+                const tid = Number(row.template_id);
+                if (templateIds.includes(tid)) {
+                    const fmt = schemaFormat.get(String(row.schema_name)) ?? [];
+                    templateMeta.set(tid, deserializeAtomic(row.immutable_serialized_data as string, fmt));
+                }
+            }
+        }
+
+        const assets = bingoAssets.map(a => {
+            const meta   = templateMeta.get(Number(a.template_id)) || {};
+            const imgCid = String(meta.img ?? '').replace(/^ipfs:\/\//, '');
+            const imgUrl = imgCid ? `${IPFS_GATEWAY}${imgCid}` : undefined;
+            return {
+                asset_id:        String(a.asset_id),
+                schema_name:     String(a.schema_name),
+                name:            String(meta.name ?? a.template_id),
+                backed_tokens:   (a.backed_tokens ?? []).map(String).join(', '),
+                template_id:     Number(a.template_id),
+                collection_name: String(a.collection_name),
+                img_url:         imgUrl,
+            };
+        });
 
         // 3. Atualiza o cache no MongoDB
         await (UserProfile as any).updateOne(
@@ -115,7 +252,7 @@ export interface EligibleDiscountNft {
     value_origin:        number; // 0=FIXED, 1=SCHEMA_FIELD
 }
 
-export async function getEligibleDiscountNfts(req: Request, res: Response): Promise<void> {
+export async function getEligibleDiscountNfts(req: Request, res: Response): Promise<void> { // NOSONAR — elegibilidade de desconto NFT com leitura on-chain, deserialização AtomicAssets e múltiplos critérios de filtro (ADR-028 §6)
     const wallet = req.user!.wallet;
 
     try {

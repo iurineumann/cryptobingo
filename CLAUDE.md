@@ -139,6 +139,9 @@ Use a skill `e2e-ui-cypress` (procedimentos + gotchas) e o revisor `e2e-reviewer
 **PR para `develop`:**
 - Corpo estruturado com **`Closes #N`** (fecha a issue automaticamente no merge → board move para Done)
 - Pré-PR: typecheck + testes dos pacotes tocados verdes
+- **Pré-PR: SonarQube** — rode `/sonar-analyze` em cada arquivo TS/TSX modificado; corrija todos os
+  issues BLOCKER/CRITICAL/MAJOR antes de abrir PR; MINOR aceitável com justificativa no PR body;
+  NOSONAR só com comentário explicando o motivo (ex: CJS sem top-level await).
 - Toda mudança estrutural → ADR em `docs/adr/` antes do PR
 
 **`master`** recebe apenas PRs de `develop` quando estável. Branch principal: `master`.

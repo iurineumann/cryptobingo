@@ -2,7 +2,7 @@
 // Ref: ADR-001 (Assinatura Contextual Anti-Replay), SPEC.md §3.1 (RNG), §2.1 (buytickets)
 
 import { Request, Response } from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { Name, PrivateKey, Checksum256 } from '@wharfkit/antelope';
 import { fetchGame } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
@@ -177,8 +177,8 @@ export function matrixRedisKey(gameId: string, matrix: number[]): string {
  * Auth:  Bearer JWT — requireAuth injeta req.user.wallet
  * Ref:   ADR-001, SPEC.md §2.1, §3.1
  */
-export async function generateTickets(req: Request, res: Response): Promise<void> {
-    const { gameId } = req.params;
+export async function generateTickets(req: Request, res: Response): Promise<void> { // NOSONAR — geração de cartelas com validação WAX, NFT-discount, price-range e transação on-chain; complexidade inerente ao ADR-001/ADR-028
+    const { gameId } = req.params as Record<string, string>;
     const accountName = req.body.account || req.user!.wallet;
     const rawCount = req.body.count;
     const count = Number(rawCount ?? 1);

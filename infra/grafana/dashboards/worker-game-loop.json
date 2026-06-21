@@ -218,6 +218,95 @@
         }
       }
     }
+    ,{
+      "id": 10,
+      "title": "Resolução de Jogo — Duração p50/p95 por Draw Mode (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 28, "w": 16, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))", "legendFormat": "p50 {{draw_mode}}", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))", "legendFormat": "p95 {{draw_mode}}", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "ms" }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Jogos Resolvidos por Draw Mode",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 28, "w": 4, "h": 4 },
+      "targets": [
+        { "expr": "sum by (draw_mode) (worker_game_resolution_total{result=\"success\"})", "legendFormat": "{{draw_mode}}", "refId": "A" }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "id": 12,
+      "title": "Falhas de Resolução",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 28, "w": 4, "h": 4 },
+      "targets": [
+        { "expr": "sum(worker_game_resolution_total{result=\"failure\"})", "legendFormat": "falhas", "refId": "A" }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }] }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Vencedores Pagos (acumulado por Draw Mode)",
+      "type": "bargauge",
+      "gridPos": { "x": 16, "y": 32, "w": 8, "h": 4 },
+      "targets": [
+        { "expr": "sum by (draw_mode) (worker_game_winners_total)", "legendFormat": "{{draw_mode}}", "refId": "A" }
+      ],
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "displayMode": "gradient" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+    {
+      "id": 14,
+      "title": "AutoAdvance — Execuções de Cron/min",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(worker_autoadvance_runs_total[1m]) * 60", "legendFormat": "{{action}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 15,
+      "title": "AutoAdvance — Jogos Processados/min",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 36, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "rate(worker_autoadvance_games_total[1m]) * 60", "legendFormat": "{{action}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 16,
+      "title": "AutoAdvance — Erros de Cron",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 36, "w": 4, "h": 8 },
+      "targets": [
+        { "expr": "sum by (action) (worker_autoadvance_errors_total)", "legendFormat": "{{action}}", "refId": "A" }
+      ],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        }
+      }
+    }
   ],
   "time": { "from": "now-1h", "to": "now" }
 }

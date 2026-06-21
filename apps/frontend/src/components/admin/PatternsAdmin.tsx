@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check, Sparkles } from 'lucide-react';
 import { fetchAdminPatterns, createAdminPattern, deleteAdminPattern, fetchAdminGametypes, type BlockchainPattern, type BlockchainGametype } from '../../services/api';
 
 // Layout coluna-maior do grid 5×5
@@ -245,8 +246,8 @@ export default function PatternsAdmin() {
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4" role="alert">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 
@@ -312,7 +313,7 @@ export default function PatternsAdmin() {
                 >
                     {suggesting
                         ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('admin.patterns_suggest_creating')}</>
-                        : `✨ ${t('admin.patterns_suggest')}`
+                        : <><Sparkles className="size-4 shrink-0" /> {t('admin.patterns_suggest')}</>
                     }
                 </button>
             </div>
@@ -335,7 +336,7 @@ export default function PatternsAdmin() {
                                         className="text-xs text-[--cb-text-tertiary] cursor-help select-none"
                                         title={t('admin.patterns_delete_blocked')}
                                     >
-                                        🔒 {t('admin.patterns_in_use')}
+                                        {t('admin.patterns_in_use')}
                                     </span>
                                 ) : (
                                     <button

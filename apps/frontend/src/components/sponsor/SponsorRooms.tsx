@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
     fetchSponsorRooms,
@@ -17,10 +18,6 @@ function fmtQty(qty: string | undefined): string {
     const parts = qty.split(' ');
     return parts.length === 2 ? `${parseFloat(parts[0]).toFixed(4)} ${parts[1]}` : qty;
 }
-
-const STATUS_EMOJI: Record<string, string> = {
-    inactive: '⚫', active: '🟢', paused: '🟡', closed: '🔴',
-};
 
 interface EditForm {
     name:                string;
@@ -99,14 +96,14 @@ export default function SponsorRooms() {
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4 flex items-center gap-2">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span>{error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
             {success && (
                 <div className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
-                    <span>✓ {success}</span>
-                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
+                    <span><Check className="size-3 shrink-0" /> {success}</span>
+                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 
@@ -116,10 +113,9 @@ export default function SponsorRooms() {
                     <span>{t('common.loading')}</span>
                 </div>
             ) : rooms.length === 0 ? (
-                <div className="cb-card p-8 text-center text-[--cb-text-tertiary]">
-                    <div className="text-4xl mb-3">🏠</div>
-                    <p>{t('sponsor.rooms_empty')}</p>
-                </div>
+                    <div className="cb-card p-8 text-center text-[--cb-text-tertiary]">
+                                    <p>{t('sponsor.rooms_empty')}</p>
+                                </div>
             ) : (
                 <div className="grid gap-5">
                     {rooms.map(room => {
@@ -137,15 +133,15 @@ export default function SponsorRooms() {
                                                 {room.metadata?.name ?? `Sala #${roomId}`}
                                             </span>
                                             <span className="text-xs font-mono text-[--cb-text-tertiary]">#{roomId}</span>
-                                            <span className="text-sm" data-testid={`sponsor-room-badge-${roomId}`}>{STATUS_EMOJI[room.status] ?? '⚫'} {room.status}</span>
+                                            <span className="text-sm" data-testid={`sponsor-room-badge-${roomId}`}>{room.status}</span>
                                             {hasNftDrop(room) && (
-                                                <span className="cb-badge text-xs" style={{ background: 'rgb(147 51 234 / 0.12)', color: 'rgb(167 139 250)', border: '1px solid rgb(147 51 234 / 0.3)' }}>
-                                                    🎁 NFT Drop
+                                                <span className="cb-badge-nft">
+                                                    NFT Drop
                                                 </span>
                                             )}
                                             {hasTokenDrop(room) && (
-                                                <span className="cb-badge text-xs" style={{ background: 'rgb(234 179 8 / 0.12)', color: 'rgb(253 224 71)', border: '1px solid rgb(234 179 8 / 0.3)' }}>
-                                                    💰 Token Drop
+                                                <span className="cb-badge-token">
+                                                    Token Drop
                                                 </span>
                                             )}
                                         </div>
@@ -160,7 +156,7 @@ export default function SponsorRooms() {
                                             className="cb-btn cb-btn-outline cb-btn-sm"
                                             onClick={() => navigate(`/room/${roomId}/history`)}
                                         >
-                                            📋 {t('replay.room_history_title')}
+                                            {t('replay.room_history_title')}
                                         </button>
                                         <button
                                             className={`cb-btn cb-btn-sm ${isEditing ? 'cb-btn-ghost' : 'cb-btn-primary'}`}
@@ -183,7 +179,7 @@ export default function SponsorRooms() {
                                         </div>
                                         <div className="bg-[--cb-bg-surface] p-3 rounded-lg">
                                             <dt className="text-[--cb-text-tertiary] text-xs mb-0.5">{t('sponsor.col_chat')}</dt>
-                                            <dd>{room.metadata?.chat_enabled ? '✅' : '—'}</dd>
+                                            <dd>{room.metadata?.chat_enabled ? <Check className="size-3 shrink-0" /> : '—'}</dd>
                                         </div>
                                         <div className="bg-[--cb-bg-surface] p-3 rounded-lg">
                                             <dt className="text-[--cb-text-tertiary] text-xs mb-0.5">{t('sponsor.col_delay')}</dt>

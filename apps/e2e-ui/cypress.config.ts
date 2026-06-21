@@ -14,8 +14,6 @@ import { defineConfig } from 'cypress';
 export default defineConfig({
     e2e: {
 
-        experimentalStudio: true, // Cypress Studio para gravação de testes interativos (debug rápido).
-
         // O `vite dev` serve o frontend na 5173 com import.meta.env.DEV=true,
         // condição necessária para a UI de dev-login (5 perfis) existir.
         // IMPORTANTE: usar `localhost` e não `127.0.0.1` — o api-gateway tem CORS
@@ -51,8 +49,7 @@ export default defineConfig({
             // funcionem sem re-login a cada teste.
             if (tier === 3) {
                 config.retries = { runMode: 0, openMode: 0 };
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (config as any).testIsolation = false;
+                config.testIsolation = false;
             }
 
             // Flags Chrome para WSL2 headless: evita crash do renderer por falta de GPU.

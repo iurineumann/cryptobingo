@@ -63,7 +63,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
         }
 
         // Enriquecimento de progressão (ADR-028 2D)
-        const { xp = 0, tier, level, sub_level, games_played = 0 } = profile.progression || {};
+        const { xp = 0, games_played = 0 } = profile.progression || {};
         const currentXp = xp || 0;
         const derived = deriveLevel(currentXp);
         const nextLevel = Math.min(derived.level + 1, MAX_LEVEL);
@@ -131,7 +131,7 @@ async function verifyProfileSignature(
 
         const accountInfo: any = await rpcClient.v1.chain.get_account(wallet as any);
         const activeKeys: string[] = accountInfo.permissions
-            ?.find((p: any) => p.perm_name === 'active')
+            ?.find((p: any) => String(p.perm_name) === 'active')
             ?.required_auth?.keys?.map((k: any) => String(k.key)) ?? [];
 
         return activeKeys.includes(recovered);
@@ -150,7 +150,7 @@ async function verifyProfileSignature(
  * Body: { nickname?, locale?, avatar_nft_asset_id?, signature?, ts? }
  * signature + ts obrigatórios se nickname ou avatar_nft_asset_id presentes.
  */
-export const updatePreferences = async (req: Request, res: Response): Promise<void> => {
+export const updatePreferences = async (req: Request, res: Response): Promise<void> => { // NOSONAR — validação de nickname/avatar com assinatura WAX e múltiplos campos opcionais; complexidade inerente à ADR-028 §2D
     const wallet_address = req.user!.wallet;
     const { nickname, locale, avatar_nft_asset_id, signature, ts, transactionPayload } = req.body;
 
@@ -204,7 +204,7 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
         const updatedProfile = await UserProfile.findOneAndUpdate(
             { wallet_address },
             { $set: updateFields },
-            { new: true, runValidators: true },
+            { returnDocument: 'after', runValidators: true },
         );
 
         if (!updatedProfile) {
@@ -288,8 +288,8 @@ export const getAchievements = async (req: Request, res: Response): Promise<void
 
 export const listUsers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const page  = Math.max(1, parseInt(req.query.page as string) || 1);
-        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+        const page  = Math.max(1, Number.parseInt(req.query.page as string) || 1);
+        const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
         const skip  = (page - 1) * limit;
 
         const [users, total] = await Promise.all([

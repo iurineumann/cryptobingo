@@ -49,15 +49,15 @@ async function resolveSchemaFieldBoost(
         const attrs = await getTemplateSchema(collection, templateId);
         const raw = attrs[fieldName];
         if (raw === undefined || raw === null) return 0;
-        const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw);
-        return isNaN(n) || n <= 0 ? 0 : n;
+        const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw);
+        return Number.isNaN(n) || n <= 0 ? 0 : n;
     } catch {
         return 0;
     }
 }
 
 /** Lê nftconfigs on-chain e indexa templates com PRIZE_BOOST (FIXED ou SCHEMA_FIELD) owns. Cache 60s. */
-async function getBoostTemplates(): Promise<BoostMap> {
+async function getBoostTemplates(): Promise<BoostMap> { // NOSONAR — leitura e indexação de múltiplas tabelas on-chain (nftconfigs, schema_fields); complexidade necessária para o modelo de PRIZE_BOOST (ADR-028)
     if (_boostCache && Date.now() - _boostCache.at < BOOST_TTL_MS) return _boostCache.map;
 
     const map: BoostMap = new Map();

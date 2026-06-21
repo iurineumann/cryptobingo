@@ -273,10 +273,13 @@ export interface RoomDropConfig {
 export interface MongoNftCache {
     wallet_address: string;
     assets: Array<{
-        asset_id:     string;
-        schema_name:  string;
-        name:         string;
-        backed_tokens: string; // "10000.0000 BINGO"
+        asset_id:       string;
+        schema_name:    string;
+        name:           string;
+        backed_tokens:  string; // "10000.0000 BINGO"
+        template_id:    number;
+        collection_name: string;
+        img_url?:       string; // IPFS gateway URL p/ imagem da NFT
     }>;
     last_synced: Date;
 }

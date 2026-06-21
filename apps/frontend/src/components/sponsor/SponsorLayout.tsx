@@ -8,6 +8,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
+import { Building2, ShieldCheck } from 'lucide-react';
 import Logo from '../Logo';
 
 interface SponsorLayoutProps {
@@ -19,8 +20,8 @@ interface SponsorLayoutProps {
 }
 
 const SPONSOR_NAV = [
-  { path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: '🏠' },
-  { path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: '◈' },
+  { path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
+  { path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
 ];
 
 export default function SponsorLayout({
@@ -43,14 +44,12 @@ export default function SponsorLayout({
         <div className="site-nav-left">
           <Logo variant="horizontal" height={64} onClick={() => navigate('/lobby')} />
           <span className="site-mode-pill">
-            <span aria-hidden="true">▲</span>
             {t('sponsor.panel_title')}
           </span>
         </div>
 
         <div className="site-nav-right">
           <span className="cb-wallet-chip">
-            <span style={{ color: 'var(--cb-brand)' }} aria-hidden="true">◆</span>
             <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '0.75rem' }}>
               {profile.wallet_address}
             </span>
@@ -73,7 +72,7 @@ export default function SponsorLayout({
             onClick={onToggleTheme}
             aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
           >
-            {theme === 'dark' ? '☾' : '☀'}
+
           </button>
 
           <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => navigate('/lobby')}>

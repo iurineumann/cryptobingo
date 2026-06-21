@@ -14,12 +14,10 @@ import {
     executeFundGame,
     executeLockGame,
     executeStartDraw,
-    executeClaimWin,
     executeAbortGame,
     executeRefundTicket,
     executeClearGame,
 }                          from './blockchain';
-import { findAllWinners }                          from './evaluator';
 import { buildInvertedIndex }                       from './invertedIndex';
 import { awardTicketPurchaseXP }                    from './xpEngine';
 import { onGameResolved }                           from './roomManager';
@@ -27,11 +25,12 @@ import { orchestrateGame }                          from './gameOrchestrator';
 import {
     notifyGameLocked,
     notifyGameAborted,
-    notifyWinners,
-    type WinnerPayload,
 }                          from './broadcaster';
-import { fetchGame }       from '@cryptobingo/blockchain-core';
-import { rpcClient }       from '@cryptobingo/blockchain-core';
+import {
+    sendGameLockedMessage,
+    sendDrawStartedMessage,
+}                          from './chatSystemHelper';
+import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord, BlockchainRoom } from '@cryptobingo/shared-types';
 import {
@@ -40,6 +39,9 @@ import {
     eventsDeadLetteredTotal,
     eventProcessingDuration,
     oraclePollAttempts,
+    autoAdvanceRunsTotal,
+    autoAdvanceErrorsTotal,
+    autoAdvanceGamesTotal,
 }                          from './metrics';
 import dotenv from 'dotenv';
 
@@ -52,7 +54,7 @@ const CONNECT_TIMEOUT_MS   = 10_000; // amqp.connect() não tem timeout nativo �
 const QUEUE_NAME         = 'game_loop_events';
 const DLX_NAME           = 'game_loop_dlx';
 const DLQ_NAME           = 'game_loop_dead';
-const MAX_RETRIES        = parseInt(process.env.RABBITMQ_MAX_RETRIES ?? '3', 10);
+const MAX_RETRIES        = Number.parseInt(process.env.RABBITMQ_MAX_RETRIES ?? '3', 10);
 
 // Polling do oráculo: 75 tentativas × 2s = 150s máximo
 const ORACLE_POLL_MAX_ATTEMPTS = 75;
@@ -96,7 +98,7 @@ async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
         await sleep(ORACLE_POLL_INTERVAL_MS);
         try {
             const game = await fetchGame(gameId);
-            if (game && game.drawn_balls.length === 75) {
+            if (game?.drawn_balls.length === 75) {
                 oraclePollAttempts.observe(attempt);
                 console.log(`✅ [RabbitMQ] Oráculo respondeu (jogo ${gameId}, tentativa ${attempt})`);
                 return game.drawn_balls;
@@ -244,6 +246,7 @@ function consumeMessages(): void {
                     awardTicketPurchaseXP(gameId).catch(err =>
                         console.error(`[RabbitMQ] Erro ao conceder XP de compra para jogo ${gameId}:`, err)
                     );
+                    sendGameLockedMessage(gameId).catch(() => {});
                     break;
                 }
 
@@ -270,6 +273,13 @@ function consumeMessages(): void {
                     timer();
                     channel.ack(msg);
 
+                    // Envia mensagem de sistema após oracle confirmar (room_id do jogo)
+                    fetchGame(gameId).then(game => {
+                        if (game?.room_id && game.room_id !== '0') {
+                            sendDrawStartedMessage(game.room_id).catch(() => {});
+                        }
+                    }).catch(() => {});
+
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
                     orchestrateGame(gameId).catch(err =>
                         console.error(`❌ [RabbitMQ] orchestrateGame error (jogo ${gameId}):`, err)
@@ -293,7 +303,7 @@ function consumeMessages(): void {
                 case 'abortgame': {
                     const reason = (payload as any).reason ?? 'ADMIN_HALT';
                     await executeAbortGame(gameId, reason);
-                    notifyGameAborted(gameId, reason as any);
+                    notifyGameAborted(gameId, reason);
                     // ADR-014: onGameResolved no abort (cria próxima partida da sala)
                     onGameResolved(gameId).catch(err =>
                         console.error(`[RabbitMQ] onGameResolved error (abort, jogo ${gameId}):`, err)
@@ -395,7 +405,7 @@ async function processRefundAll(gameId: string): Promise<void> {
 
         hasMore = response.more === true && tickets.length === GC_BATCH_SIZE;
         if (hasMore) {
-            lowerBound = (BigInt(tickets[tickets.length - 1].ticket_id) + 1n).toString();
+            lowerBound = (BigInt(tickets.at(-1)!.ticket_id) + 1n).toString();
         }
     }
 
@@ -448,7 +458,7 @@ async function processClearGame(gameId: string): Promise<void> {
  * (room_id=0). Com reverse:true e limit:20, os jogos de sala nunca aparecem no
  * topo. Corrigido com varredura adicional por sala ativa.
  */
-const AUTO_LOCK_DELAY_SEC = parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
+const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
 const processedGames = new Set<string>();
 
 async function fetchActiveRoomGameIds(): Promise<string[]> {
@@ -465,52 +475,58 @@ async function fetchActiveRoomGameIds(): Promise<string[]> {
         .map(r => String(r.current_game_id));
 }
 
+async function pollDirectFundingGames(cutoff: number, seen: Set<string>): Promise<void> {
+    const response = await rpcClient.v1.chain.get_table_rows({
+        code:    CONTRACT_ACCOUNT,
+        scope:   CONTRACT_ACCOUNT,
+        table:   'games',
+        limit:   100,
+        reverse: false,
+        json:    true,
+    });
+    for (const game of response.rows as BlockchainGameState[]) {
+        const gameId = String(game.game_id);
+        if (game.status !== 'funding') continue;
+        seen.add(gameId);
+        if (processedGames.has(gameId)) continue;
+        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        await processFundingGame(game, gameId);
+    }
+}
+
+async function pollRoomFundingGames(cutoff: number, seen: Set<string>): Promise<void> {
+    const roomGameIds = await fetchActiveRoomGameIds();
+    for (const gameId of roomGameIds) {
+        if (seen.has(gameId) || processedGames.has(gameId)) continue;
+        let game: BlockchainGameState | null = null;
+        try {
+            game = await fetchGame(gameId);
+        } catch { continue; }
+        if (game?.status !== 'funding') continue;
+        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        await processFundingGame(game, gameId);
+    }
+}
+
 export async function autoLockFundingGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'lock_funding' });
     const cutoff = Date.now() - AUTO_LOCK_DELAY_SEC * 1000;
     const seen = new Set<string>();
-
     try {
-        // ── 1. Jogos diretos (room_id=0) pela tabela games ────────────────
-        const response = await rpcClient.v1.chain.get_table_rows({
-            code:    CONTRACT_ACCOUNT,
-            scope:   CONTRACT_ACCOUNT,
-            table:   'games',
-            limit:   100,
-            reverse: false,
-            json:    true,
-        });
-
-        for (const game of response.rows as BlockchainGameState[]) {
-            const gameId = String(game.game_id);
-            if (game.status !== 'funding') continue;
-            seen.add(gameId);
-            if (processedGames.has(gameId)) continue;
-            if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
-            await processFundingGame(game, gameId);
-        }
-
-        // ── 2. Jogos de salas ativas (room.current_game_id) ────────────────
-        const roomGameIds = await fetchActiveRoomGameIds();
-        for (const gameId of roomGameIds) {
-            if (seen.has(gameId) || processedGames.has(gameId)) continue;
-            let game: BlockchainGameState | null = null;
-            try {
-                game = await fetchGame(gameId);
-            } catch { continue; }
-            if (!game || game.status !== 'funding') continue;
-            if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
-            await processFundingGame(game, gameId);
-        }
+        await pollDirectFundingGames(cutoff, seen);
+        await pollRoomFundingGames(cutoff, seen);
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'lock_funding' });
         console.error('[AutoAdvance] Erro no polling funding:', err);
     }
 }
 
 async function processFundingGame(game: BlockchainGameState, gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'lock_funding' });
     processedGames.add(gameId);
 
     const wagered = (game as any).total_wagered;
-    const amount  = parseFloat(wagered?.quantity ?? '0') || 0;
+    const amount  = Number.parseFloat(wagered?.quantity ?? '0') || 0;
     const hasTickets = amount > 0;
 
     if (!hasTickets) {
@@ -534,6 +550,7 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
     try {
         await executeLockGame(gameId);
         notifyGameLocked(gameId);
+        sendGameLockedMessage(gameId).catch(() => {});
 
         buildInvertedIndex(gameId).catch(err =>
             console.error(`[AutoAdvance] Erro índice invertido (jogo ${gameId}):`, err)
@@ -550,6 +567,7 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
 }
 
 export async function autoClaimDrawnGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'claim_drawn' });
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
@@ -576,15 +594,17 @@ export async function autoClaimDrawnGames(): Promise<void> {
             try {
                 game = await fetchGame(gameId);
             } catch { continue; }
-            if (!game || game.status !== 'drawn') continue;
+            if (game?.status !== 'drawn') continue;
             await processDrawnGame(gameId);
         }
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'claim_drawn' });
         console.error('[AutoAdvance] Erro no polling drawn:', err);
     }
 }
 
 async function processDrawnGame(gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'claim_drawn' });
     processedGames.add(gameId);
     console.log(`[AutoAdvance] 🏁 Jogo ${gameId} em DRAWN. Orquestrando conclusão...`);
     orchestrateGame(gameId).catch(err => {
@@ -594,6 +614,7 @@ async function processDrawnGame(gameId: string): Promise<void> {
 }
 
 export async function autoStartLockedGames(): Promise<void> {
+    autoAdvanceRunsTotal.inc({ action: 'start_locked' });
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
@@ -620,15 +641,17 @@ export async function autoStartLockedGames(): Promise<void> {
             try {
                 game = await fetchGame(gameId);
             } catch { continue; }
-            if (!game || game.status !== 'locked') continue;
+            if (game?.status !== 'locked') continue;
             await processLockedGame(gameId);
         }
     } catch (err) {
+        autoAdvanceErrorsTotal.inc({ action: 'start_locked' });
         console.error('[AutoAdvance] Erro no polling locked:', err);
     }
 }
 
 async function processLockedGame(gameId: string): Promise<void> {
+    autoAdvanceGamesTotal.inc({ action: 'start_locked' });
     processedGames.add(gameId);
     autoStartDraw(gameId).catch(err => {
         console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err);
@@ -651,6 +674,12 @@ async function autoStartDraw(gameId: string): Promise<void> {
     }
 
     console.log(`[AutoAdvance] ✅ Oráculo respondeu (jogo ${gameId}). Orquestrando...`);
+    fetchGame(gameId).then(game => {
+        if (game?.room_id && game.room_id !== '0') {
+            sendDrawStartedMessage(game.room_id).catch(() => {});
+        }
+    }).catch(() => {});
+
     await orchestrateGame(gameId);
 }
 

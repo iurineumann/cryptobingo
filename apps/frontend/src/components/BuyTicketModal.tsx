@@ -21,6 +21,9 @@ import {
 } from '../services/swapService';
 import type { SwapPoolSummary, SwapQuote } from '@cryptobingo/shared-types';
 import { fetchEligibleDiscountNfts, type EligibleDiscountNft } from '../services/api';
+import { X, PartyPopper, Check, Link2, Dices, Timer, TriangleAlert } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface ExtendedAssetInput {
     quantity: string;
@@ -359,25 +362,21 @@ export default function BuyTicketModal({
     // ── Tela de sucesso ────────────────────────────────────────────────────
     if (lastPurchase) {
         return (
-            <div
-                className="cb-overlay"
-                onClick={e => e.target === e.currentTarget && onClose()}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="modal-success-title"
-            >
-                <div className="cb-modal" style={{ maxWidth: '44rem' }}>
-
-                    <div className="cb-modal-header">
-                        <h2 id="modal-success-title" className="cb-modal-title flex items-center gap-2">
-                            <span aria-hidden="true">🎉</span>
+            <Dialog open onOpenChange={(open) => !open && onClose()}>
+                <DialogContent className="max-w-[44rem]" showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <PartyPopper className="size-4 shrink-0" />
                             {t('buy_ticket.success_title')}
-                        </h2>
-                        <button className="cb-modal-close" onClick={onClose} aria-label={t('common.close')}>✕</button>
-                    </div>
+                        </DialogTitle>
+                        <DialogClose render={<Button variant="ghost" size="icon" className="absolute top-3 right-3" />} onClick={onClose}>
+                            <X className="size-4 shrink-0" />
+                            <span className="sr-only">{t('common.close')}</span>
+                        </DialogClose>
+                    </DialogHeader>
 
                     <div className="cb-alert cb-alert-success mb-4">
-                        <span aria-hidden="true">✅</span>
+                        <Check className="size-4 shrink-0" />
                         <span>
                             <strong>{lastPurchase.ticketCount}</strong> {t('buy_ticket.success_msg', { count: lastPurchase.ticketCount, gameId })}
                         </span>
@@ -390,7 +389,7 @@ export default function BuyTicketModal({
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-[--cb-brand] hover:underline font-mono break-all mb-4"
                         >
-                            <span aria-hidden="true">🔗</span>
+                            <Link2 className="size-4 shrink-0" />
                             TX: {lastPurchase.transactionId.slice(0, 24)}…
                         </a>
                     )}
@@ -407,41 +406,43 @@ export default function BuyTicketModal({
                         ))}
                     </div>
 
-                    <button className="cb-btn cb-btn-primary cb-btn-pill w-full mt-5" onClick={onClose}>
+                    <Button variant="default" className="rounded-full w-full mt-5" onClick={onClose}>
                         {t('buy_ticket.close')}
-                    </button>
-                </div>
-            </div>
+                    </Button>
+                </DialogContent>
+            </Dialog>
         );
     }
 
     // ── Tela principal ─────────────────────────────────────────────────────
     return (
-        <div
-            className="cb-overlay"
-            onClick={e => e.target === e.currentTarget && onClose()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-buy-title"
-        >
-            <div className="cb-modal" data-testid="buy-modal" style={{ maxWidth: step === 'preview' ? '44rem' : '26rem' }}>
-
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent
+                data-testid="buy-modal"
+                className={step === 'preview' ? 'max-w-[44rem]' : 'max-w-[26rem]'}
+                showCloseButton={false}
+            >
                 {/* ── Header ─────────────────────────────────────────────── */}
-                <div className="cb-modal-header">
-                    <h2 id="modal-buy-title" className="cb-modal-title flex items-center gap-2">
-                        <span aria-hidden="true">🎲</span>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Dices className="size-4 shrink-0" />
                         {step === 'preview' ? t('buy_ticket.preview_title') : t('buy_ticket.title')}
-                    </h2>
-                    <button
-                        className="cb-modal-close"
-                        data-testid="buy-modal-close"
-                        onClick={onClose}
-                        disabled={isPurchasing || generating}
-                        aria-label={t('common.close')}
+                    </DialogTitle>
+                    <DialogClose
+                        render={
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-3 right-3"
+                                data-testid="buy-modal-close"
+                                disabled={isPurchasing || generating}
+                                aria-label={t('common.close')}
+                            />
+                        }
                     >
-                        ✕
-                    </button>
-                </div>
+                        <X className="size-4 shrink-0" />
+                    </DialogClose>
+                </DialogHeader>
 
                 <div className="flex items-center gap-2 flex-wrap mb-5">
                     <span className="text-sm text-[--cb-text-secondary]">
@@ -474,27 +475,25 @@ export default function BuyTicketModal({
                                     {t('buy_ticket.nft_discount_label')}
                                 </legend>
                                 <div className="flex gap-2 flex-wrap" role="group">
-                                    <button
+                                    <Button
                                         type="button"
-                                        className={[
-                                            'cb-btn cb-btn-sm cb-btn-pill',
-                                            !selectedNftId ? 'cb-btn-primary' : 'cb-btn-ghost',
-                                        ].join(' ')}
+                                        size="sm"
+                                        variant={!selectedNftId ? 'default' : 'ghost'}
+                                        className="rounded-full"
                                         onClick={() => setSelectedNftId(null)}
                                         disabled={batches.length > 0}
                                         aria-pressed={!selectedNftId}
                                         data-testid="nft-discount-none"
                                     >
                                         {t('buy_ticket.nft_discount_none')}
-                                    </button>
+                                    </Button>
                                     {eligibleNfts.map(nft => (
-                                        <button
+                                        <Button
                                             key={nft.asset_id}
                                             type="button"
-                                            className={[
-                                                'cb-btn cb-btn-sm cb-btn-pill',
-                                                selectedNftId === nft.asset_id ? 'cb-btn-primary' : 'cb-btn-ghost',
-                                            ].join(' ')}
+                                            size="sm"
+                                            variant={selectedNftId === nft.asset_id ? 'default' : 'ghost'}
+                                            className="rounded-full"
                                             onClick={() => setSelectedNftId(nft.asset_id)}
                                             disabled={batches.length > 0}
                                             aria-pressed={selectedNftId === nft.asset_id}
@@ -504,7 +503,7 @@ export default function BuyTicketModal({
                                             {nft.value_origin === 0
                                                 ? t('buy_ticket.nft_discount_pct', { pct: nft.discount_pct.toFixed(nft.discount_pct % 1 === 0 ? 0 : 2) })
                                                 : t('buy_ticket.nft_discount_variable')}
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                                 {batches.length > 0 && (
@@ -523,32 +522,28 @@ export default function BuyTicketModal({
                                 </legend>
                                 <div className="flex gap-2 flex-wrap">
                                     {/* opção padrão: moeda da sala */}
-                                    <button
+                                    <Button
                                         type="button"
-                                        className={[
-                                            'cb-btn cb-btn-sm rounded-full',
-                                            !selectedAlt ? 'cb-btn-primary' : 'cb-btn-ghost',
-                                        ].join(' ')}
+                                        size="sm"
+                                        variant={!selectedAlt ? 'default' : 'ghost'}
+                                        className="rounded-full"
                                         onClick={() => setSelectedAlt(null)}
                                         data-testid="swap-currency-room"
                                     >
                                         {roomSymbol}
-                                    </button>
+                                    </Button>
                                     {altTokens.map(alt => (
-                                        <button
+                                        <Button
                                             key={`${alt.contract}:${alt.symbol}`}
                                             type="button"
-                                            className={[
-                                                'cb-btn cb-btn-sm rounded-full',
-                                                selectedAlt?.symbol === alt.symbol && selectedAlt?.contract === alt.contract
-                                                    ? 'cb-btn-primary'
-                                                    : 'cb-btn-ghost',
-                                            ].join(' ')}
+                                            size="sm"
+                                            variant={selectedAlt?.symbol === alt.symbol && selectedAlt?.contract === alt.contract ? 'default' : 'ghost'}
+                                            className="rounded-full"
                                             onClick={() => setSelectedAlt(alt)}
                                             data-testid={`swap-currency-${alt.symbol}`}
                                         >
                                             {alt.symbol}
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
 
@@ -603,32 +598,36 @@ export default function BuyTicketModal({
                                     : t('buy_ticket.quantity_label')}
                             </legend>
                             <div className="flex items-center justify-center gap-4">
-                                <button
-                                    className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
+                                <Button
+                                    variant="outline"
+                                    className="w-11 h-11 p-0 text-xl rounded-full"
                                     onClick={() => setCount(c => Math.max(1, c - 1))}
                                     disabled={generating || count <= 1}
                                     aria-label={t('buy_ticket.decrease_aria')}
-                                >−</button>
+                                >−</Button>
                                 <span
                                     className="text-3xl font-black text-[--cb-text-primary] min-w-[3rem] text-center tabular-nums"
                                     aria-live="polite"
                                     data-testid="buy-count"
                                 >{count}</span>
-                                <button
-                                    className="cb-btn cb-btn-outline w-11 h-11 p-0 text-xl rounded-full"
+                                <Button
+                                    variant="outline"
+                                    className="w-11 h-11 p-0 text-xl rounded-full"
                                     onClick={() => setCount(c => Math.min(maxLocal, c + 1))}
                                     disabled={generating || count >= maxLocal}
                                     aria-label={t('buy_ticket.increase_aria')}
-                                >+</button>
+                                >+</Button>
                             </div>
                             <div className="flex justify-center gap-2 mt-3 flex-wrap">
                                 {[1, 3, 5, Math.min(10, maxLocal)].map(n => (
-                                    <button
+                                    <Button
                                         key={n}
-                                        className="cb-btn cb-btn-sm rounded-full tabular-nums cb-btn-ghost"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="rounded-full tabular-nums"
                                         onClick={() => setCount(c => Math.min(maxLocal, c + n))}
                                         disabled={generating || count >= maxLocal}
-                                    >+{n}</button>
+                                    >+{n}</Button>
                                 ))}
                             </div>
                         </fieldset>
@@ -675,19 +674,18 @@ export default function BuyTicketModal({
 
                         <div className="flex gap-3">
                             {batches.length > 0 && (
-                                <button
-                                    className="cb-btn cb-btn-ghost flex-1"
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1"
                                     onClick={() => setStep('preview')}
                                     disabled={generating}
                                 >
                                     {t('buy_ticket.back_to_preview')}
-                                </button>
+                                </Button>
                             )}
-                            <button
-                                className={[
-                                    'cb-btn cb-btn-primary',
-                                    batches.length > 0 ? 'flex-1' : 'w-full',
-                                ].join(' ')}
+                            <Button
+                                variant="default"
+                                className={batches.length > 0 ? 'flex-1' : 'w-full'}
                                 onClick={handleGenerate}
                                 disabled={generating || count < 1 || !!priceError}
                                 aria-busy={generating}
@@ -698,7 +696,7 @@ export default function BuyTicketModal({
                                     : batches.length > 0
                                         ? t('buy_ticket.add_more_btn')
                                         : t('buy_ticket.generate_btn')}
-                            </button>
+                            </Button>
                         </div>
                     </>
                 )}
@@ -781,24 +779,23 @@ export default function BuyTicketModal({
 
                         {(purchaseError || localGenError) && (
                             <div className="cb-alert cb-alert-error mb-4" role="alert" data-testid="buy-error">
-                                <span aria-hidden="true">⚠️</span>
+                                <TriangleAlert className="size-4 shrink-0" />
                                 <span>{purchaseError || localGenError}</span>
                             </div>
                         )}
 
                         <div className="flex gap-3">
-                            <button
-                                className="cb-btn cb-btn-ghost flex-1"
+                            <Button
+                                variant="ghost"
+                                className="flex-1"
                                 onClick={handleBackToForm}
                                 disabled={isPurchasing || generating}
                             >
                                 {t('buy_ticket.generate_more')}
-                            </button>
-                            <button
-                                className={[
-                                    'cb-btn cb-btn-primary flex-[2]',
-                                    isPurchasing ? 'cb-btn-loading' : '',
-                                ].join(' ')}
+                            </Button>
+                            <Button
+                                variant="default"
+                                className="flex-[2]"
                                 onClick={handleBuy}
                                 disabled={isPurchasing || generating || totalCount === 0}
                                 aria-busy={isPurchasing}
@@ -807,7 +804,7 @@ export default function BuyTicketModal({
                                 {isPurchasing
                                     ? t('buy_ticket.processing')
                                     : t('buy_ticket.confirm_buy_count', { count: totalCount })}
-                            </button>
+                            </Button>
                         </div>
                     </>
                 )}
@@ -816,7 +813,7 @@ export default function BuyTicketModal({
                     {t('buy_ticket.debited_from')}{' '}
                     <span className="font-mono">bingogamectr</span>
                 </p>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

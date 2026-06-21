@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X, TriangleAlert, Check } from 'lucide-react';
 import { Name } from '@wharfkit/session';
 import type { Session } from '@wharfkit/session';
 
@@ -244,18 +245,18 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
             </div>
 
             {!session && (
-                <div className="cb-alert cb-alert-error mb-4">⚠️ {t('admin.token_no_session')}</div>
+                <div className="cb-alert cb-alert-error mb-4"><TriangleAlert className="size-4 shrink-0" /> {t('admin.token_no_session')}</div>
             )}
             {error && (
                 <div className="cb-alert cb-alert-error mb-4 flex items-center gap-2">
-                    <span>⚠️ {error}</span>
-                    <button onClick={() => setError(null)} className="ml-auto text-sm">✕</button>
+                    <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    <button onClick={() => setError(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
             {success && (
                 <div className="cb-alert cb-alert-success mb-4 flex items-center gap-2">
                     <span>{success}</span>
-                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm">✕</button>
+                    <button onClick={() => setSuccess(null)} className="ml-auto text-sm"><X className="size-4 shrink-0" /></button>
                 </div>
             )}
 
@@ -318,7 +319,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
                             </div>
 
                             <button className="cb-btn cb-btn-ghost cb-btn-sm text-xs" onClick={loadStat}>
-                                ↺ {t('common.refresh')}
+                                {t('common.refresh')}
                             </button>
                         </>
                     ) : (
@@ -380,7 +381,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
                     </div>
 
                     <button className="cb-btn cb-btn-ghost cb-btn-sm text-xs" onClick={loadBalances}>
-                        ↺ {t('common.refresh')}
+                        {t('common.refresh')}
                     </button>
                 </div>
             )}
@@ -435,7 +436,7 @@ export default function TokenAdmin({ session }: TokenAdminProps) {
                         {/* Aviso retire */}
                         {opMode === 'retire' && (
                             <div className="cb-alert cb-alert-warning text-xs">
-                                ⚠️ {t('admin.token_retire_warning')}
+                                <TriangleAlert className="size-4 shrink-0" /> {t('admin.token_retire_warning')}
                             </div>
                         )}
 

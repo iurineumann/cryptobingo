@@ -6,6 +6,7 @@ import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api'
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
 import Logo from './Logo';
+import { Button } from '@/components/ui/button';
 
 interface DevAccount {
   actor: string;
@@ -91,9 +92,6 @@ function HeroBall() {
   );
 }
 
-const STATUS_EMOJI: Record<string, string> = {
-  funding: '🟢', locked: '🔒', drawing: '🎲', drawn: '✅', archived: '📁', aborted: '❌', created: '🕐',
-};
 const STATUS_LABEL: Record<string, string> = {
   inactive: 'Inativa', active: 'Ativa', paused: 'Pausada', closed: 'Fechada',
 };
@@ -248,21 +246,21 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
           <div className="flex items-center gap-3">
             <div className="flex gap-1" data-testid="lang-select">
               {(['pt-BR', 'en-US', 'zh-CN'] as const).map(lang => (
-                <button key={lang} onClick={() => i18n.changeLanguage(lang)}
+                <Button key={lang} variant="ghost" size="sm" onClick={() => i18n.changeLanguage(lang)}
                   data-testid={`lang-opt-${lang === 'pt-BR' ? 'pt' : lang === 'en-US' ? 'en' : 'zh'}`}
-                  className={`cb-btn cb-btn-ghost cb-btn-sm ${i18n.language === lang ? 'font-bold text-[--cb-brand]' : 'text-[--cb-text-tertiary]'}`}
+                  className={i18n.language === lang ? 'font-bold text-[--cb-brand]' : 'text-[--cb-text-tertiary]'}
                   aria-pressed={i18n.language === lang} aria-label={`${t('common.language')} ${lang}`}>
                   {lang === 'pt-BR' ? 'PT' : lang === 'en-US' ? 'EN' : '中'}
-                </button>
+                </Button>
               ))}
             </div>
             <button className="cb-theme-toggle" onClick={onToggleTheme}
               aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}>
               {theme === 'dark' ? '☾' : '☀'}
             </button>
-            <button className="cb-btn cb-btn-primary cb-btn-sm cb-btn-pill" onClick={onConnect}>
+            <Button variant="default" size="sm" className="rounded-full" onClick={onConnect}>
               ◆ {t('auth.connect_wallet')}
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -286,10 +284,10 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
               </h1>
               <p className="text-lg text-[--cb-text-secondary] leading-relaxed mb-10">{t('landing.hero_desc')}</p>
               <div className="flex gap-4 flex-wrap">
-                <button className="cb-btn cb-btn-primary cb-btn-xl cb-btn-pill" onClick={onConnect} data-testid="landing-connect">
+                <Button variant="default" size="lg" className="rounded-full" onClick={onConnect} data-testid="landing-connect">
                   ◆ {t('landing.hero_cta')}
-                </button>
-                <a href="#como" className="cb-btn cb-btn-ghost cb-btn-lg no-underline">
+                </Button>
+                <a href="#como" className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-md text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground no-underline">
                   {t('landing.hero_how_it_works')}
                 </a>
               </div>
@@ -317,9 +315,9 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                 </p>
               )}
             </div>
-            <button className="cb-btn cb-btn-primary cb-btn-sm cb-btn-pill" onClick={onConnect}>
+            <Button variant="default" size="sm" className="rounded-full" onClick={onConnect}>
               ◆ {t('auth.connect_wallet')}
-            </button>
+            </Button>
           </div>
 
           {loadingRooms ? (
@@ -356,7 +354,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                         {/* Status da partida atual (slow-reveal aware) */}
                         {gameStatus && (
                           <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary]">
-                            {STATUS_EMOJI[gameStatus] ?? ''} {gameStatus}
+                            {gameStatus}
                           </span>
                         )}
                         {/* Badge LIVE animado */}
@@ -365,7 +363,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                         )}
                         {/* Countdown de fechamento */}
                         {isFunding && countdown && (
-                          <span className="text-xs font-mono font-bold text-[--cb-accent]">🔒 {countdown}</span>
+                          <span className="text-xs font-mono font-bold text-[--cb-accent]">{countdown}</span>
                         )}
                         {/* Status da sala se não há partida ativa */}
                         {!gameStatus && (
@@ -415,18 +413,19 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
 
                     {/* CTAs: Entrar (abre auth) + Histórico (público) */}
                     <div className="flex gap-2 mt-2">
-                      <button className="cb-btn cb-btn-outline flex-1 text-sm" onClick={onConnect}>
+                      <Button variant="outline" className="flex-1 text-sm" onClick={onConnect}>
                         ◆ {t('room.enter')}
-                      </button>
-                      <button
-                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         title={t('replay.room_history_title')}
                         aria-label={`Histórico da sala ${meta?.name ?? roomId}`}
                         onClick={() => navigate(`/room/${roomId}/history`)}
-                        style={{ padding: '0 0.75rem' }}
+                        className="px-3"
                       >
                         📋
-                      </button>
+                      </Button>
                     </div>
                   </article>
                 );
@@ -476,7 +475,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
           <span className="cb-badge-brand inline-block mb-4">{t('landing.b2b_badge')}</span>
           <h2 className="font-display text-2xl md:text-3xl font-bold mb-4 tracking-tight">{t('landing.b2b_title')}</h2>
           <p className="text-[--cb-text-secondary] max-w-[32rem] mx-auto mb-8 leading-relaxed">{t('landing.b2b_desc')}</p>
-          <button className="cb-btn cb-btn-outline cb-btn-lg" onClick={onConnect}>{t('landing.b2b_cta')}</button>
+          <Button variant="outline" size="lg" onClick={onConnect}>{t('landing.b2b_cta')}</Button>
         </div>
       </section>
 
@@ -489,21 +488,21 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
             <span className="font-mono text-[0.65rem]">{t('landing.footer_tagline')}</span>
             {import.meta.env.DEV && devAccounts && onDevLogin && (
               <div ref={devRef} className="relative">
-                <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={() => setDevOpen(o => !o)}
+                <Button variant="ghost" size="sm" onClick={() => setDevOpen(o => !o)}
                   data-testid="dev-login-toggle"
-                  style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', color: 'var(--cb-text-tertiary)' }}>
+                  className="text-[0.65rem] text-[--cb-text-tertiary] px-2 py-1 h-auto">
                   🧪 {t('auth.dev_login')} ▾
-                </button>
+                </Button>
                 {devOpen && (
                   <div className="absolute bottom-full right-0 mb-1 bg-[--cb-bg-elevated] border border-[--cb-border-subtle] rounded-lg p-1 min-w-[11rem] shadow-lg z-50">
                     {devAccounts.map(acc => (
-                      <button key={acc.actor} className="cb-btn cb-btn-ghost block w-full text-left text-[0.7rem] px-2.5 py-1.5 whitespace-nowrap"
+                      <Button key={acc.actor} variant="ghost" className="block w-full text-left text-[0.7rem] h-auto px-2.5 py-1.5 whitespace-nowrap justify-start"
                         data-testid={`dev-login-${devRoleFromLabel(acc.label)}`}
                         onClick={() => { setDevOpen(false); onDevLogin(acc.actor, acc.key); }}>
                         <span className="font-mono text-[--cb-brand] mr-1.5">◆</span>
                         <strong>{acc.label}</strong>
                         <span className="text-[0.6rem] text-[--cb-text-tertiary] ml-1.5">{acc.actor}</span>
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}

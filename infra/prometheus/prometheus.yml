@@ -26,3 +26,28 @@ scrape_configs:
       - targets: ['worker-game-loop:9091']
     scrape_interval: 5s   # Mais frequente: eventos de jogo são críticos
     metrics_path: '/metrics'
+
+  # ── API Gateway (porta 9092 — servidor HTTP isolado, sem auth/CORS) ───────────
+  - job_name: 'api_gateway'
+    static_configs:
+      - targets: ['api-gateway:9092']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # ── PostgreSQL (postgres_exporter — porta 9187) ───────────────────────────────
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 15s
+
+  # ── Redis (redis_exporter — porta 9121) ──────────────────────────────────────
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 10s
+
+  # ── MongoDB (mongodb_exporter — porta 9216) ───────────────────────────────────
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+    scrape_interval: 15s

@@ -1,0 +1,8 @@
+{
+    "entries": [
+        { "rank": 1, "wallet": "player1", "nickname": "VencedorSupremo", "xp": 15200, "tier": "gold", "level": 15, "games_played": 120 },
+        { "rank": 2, "wallet": "player2", "nickname": null, "xp": 9800, "tier": "silver", "level": 9, "games_played": 75 },
+        { "rank": 3, "wallet": "player3", "nickname": "SorteGrande", "xp": 5400, "tier": "bronze", "level": 5, "games_played": 42 }
+    ],
+    "cached_at": "2025-06-01T12:00:00.000Z"
+}

@@ -1,0 +1,140 @@
+{
+  "id": null,
+  "uid": "cryptobingo-rabbitmq",
+  "title": "CryptoBingo — RabbitMQ",
+  "tags": ["cryptobingo", "rabbitmq", "infra"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Status",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rabbitmq_build_info", "legendFormat": "up", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Conexões Ativas",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(rabbitmq_connections)", "legendFormat": "conexões", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 200 }] }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Channels",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(rabbitmq_channels)", "legendFormat": "channels", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 4,
+      "title": "Mensagens Não Confirmadas",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sum(rabbitmq_channel_messages_unacked)", "legendFormat": "unacked", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 1000 }] }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Alarm: Memória",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rabbitmq_alarms_memory_used_watermark", "legendFormat": "mem alarm", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "ALARM", "color": "red" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Alarm: Disco",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "rabbitmq_alarms_free_disk_space_watermark", "legendFormat": "disk alarm", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "ALARM", "color": "red" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Mensagens Publicadas/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(rabbitmq_channel_messages_published_total[1m]))", "legendFormat": "publicadas/s", "refId": "A" },
+        { "expr": "sum(rate(rabbitmq_channel_messages_delivered_ack_total[1m]))", "legendFormat": "entregues+ack/s", "refId": "B" },
+        { "expr": "sum(rate(rabbitmq_channel_messages_redelivered_total[1m]))", "legendFormat": "reenviadas/s", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Mensagens Não Roteadas (dropped)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(rabbitmq_channel_messages_unroutable_dropped_total[1m]))", "legendFormat": "dropped/s", "refId": "A" },
+        { "expr": "sum(rate(rabbitmq_channel_messages_unroutable_returned_total[1m]))", "legendFormat": "returned/s", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "red", "mode": "fixed" }, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Consumers por Queue",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (queue) (rabbitmq_channel_consumers)", "legendFormat": "{{queue}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Auth Failures/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(rabbitmq_auth_attempts_failed_total[1m])", "legendFormat": "auth failures/s", "refId": "A" },
+        { "expr": "rate(rabbitmq_auth_attempts_succeeded_total[1m])", "legendFormat": "auth ok/s", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      }
+    }
+  ]
+}

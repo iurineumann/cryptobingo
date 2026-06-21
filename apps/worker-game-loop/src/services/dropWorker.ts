@@ -5,7 +5,7 @@ import {
     BlockchainDropState,
 } from '@cryptobingo/shared-types';
 import { UInt64 } from '@wharfkit/antelope';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { Pool } from 'pg';
 import { microserviceSession } from './blockchain';
 import { io as wsIo } from './broadcaster';
@@ -14,7 +14,7 @@ import { redisClient } from './redis';
 const chatNs = () => wsIo.of('/chat');
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
-const DROP_PROCESS_TTL_SEC = parseInt(process.env.DROP_PROCESS_TTL_SEC || '300', 10);
+const DROP_PROCESS_TTL_SEC = Number.parseInt(process.env.DROP_PROCESS_TTL_SEC || '300', 10);
 const LOCK_PREFIX = 'drop:lock:';
 
 let pgPool: Pool | null = null;
@@ -137,8 +137,8 @@ async function fetchDeposit(depositId: string): Promise<DropDepositRow | null> {
 }
 
 export function hasSufficientBalance(dep: DropDepositRow, alloc: DropAllocationRow): boolean {
-    const remaining = parseFloat(dep.quantity_remaining.quantity.split(' ')[0]) || 0;
-    const needed = parseFloat(alloc.quantity_per_drop.quantity.split(' ')[0]) || 0;
+    const remaining = Number.parseFloat(dep.quantity_remaining.quantity.split(' ')[0]) || 0;
+    const needed = Number.parseFloat(alloc.quantity_per_drop.quantity.split(' ')[0]) || 0;
     return remaining >= needed;
 }
 
@@ -195,7 +195,7 @@ async function executeDrop(
             winner:     winner.slice(0, 8) + '...' + winner.slice(-4),
             room_id:    roomId,
             game_id:    gameId,
-            alloc_id:   parseInt(alloc.alloc_id, 10),
+            alloc_id:   Number.parseInt(alloc.alloc_id, 10),
         };
 
         if (alloc.asset_type === 'token') {
@@ -212,7 +212,7 @@ async function executeDrop(
     }
 }
 
-export async function processRoomDrops(gameId: string, roomId: string): Promise<void> {
+export async function processRoomDrops(gameId: string, roomId: string): Promise<void> { // NOSONAR — orquestração de drops com seleção aleatória ponderada, NFT/token dispatch e lock distribuído; complexidade inerente ao ADR-007
     console.log(`\n🎁 [DropWorker] Processando drops — sala ${roomId}, jogo ${gameId}`);
 
     const acquired = await acquireDropLock(gameId);

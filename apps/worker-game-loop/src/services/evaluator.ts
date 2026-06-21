@@ -12,7 +12,7 @@ import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@crypto
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
-import { buildInvertedIndex, getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
+import { getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
@@ -58,7 +58,7 @@ export function computePayoutAmount(
     goldenMultiplier: number,
 ): { amount: number; currency: string } {
     const priceParts = ticketQuantity.split(' ');
-    const priceNum = parseFloat(priceParts[0]);
+    const priceNum = Number.parseFloat(priceParts[0]);
     const currency = priceParts.slice(1).join(' ') || 'WAX';
 
     let payout = priceNum * baseMultiplier * weight / 100;
@@ -101,7 +101,7 @@ function selectBestPayout(
     winningPatterns: PatternEntry[],
     comboCtx:        ComboContext | null,
 ): WinResult {
-    const best = winningPatterns.reduce((prev, curr) => curr.weight > prev.weight ? curr : prev);
+    const best = winningPatterns.reduce((prev, curr) => curr.weight > prev.weight ? curr : prev, winningPatterns[0]!);
     if (comboCtx) {
         const combo = bestSatisfiedCombo(winningPatterns.map(p => p.name), comboCtx);
         if (combo && combo.weight > best.weight) {
@@ -212,7 +212,7 @@ export async function findAllWinners(
 
         hasMore = response.more === true && tickets.length === PAGE_SIZE;
         if (hasMore && tickets.length > 0) {
-            const lastId = tickets[tickets.length - 1].ticket_id;
+            const lastId = tickets.at(-1)!.ticket_id;
             lowerBound   = (BigInt(lastId) + 1n).toString();
         }
     }
@@ -343,7 +343,7 @@ function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, pat
  * FIRST_FULL: encontra o número mínimo de bolas para que qualquer ticket complete o MASTER.
  * Varre todos os tickets RPC para determinar o cutoff ball.
  */
-export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]): Promise<number> {
+export async function findFirstFullCutoff(gameId: string, drawnBalls: number[]): Promise<number> { // NOSONAR — varredura sequencial de tickets on-chain exige múltiplos loops aninhados; extração de helpers requereria domain refactor fora do escopo desta PR
     let minBalls = drawnBalls.length;
     let lowerBound: string | undefined;
     let hasMore = true;
@@ -403,7 +403,7 @@ export interface StageCutoffResult {
  * Escaneia todos os tickets UMA vez; chamado pelo gameOrchestrator antes de startSlowReveal.
  * Exportado para uso pelo orquestrador.
  */
-export async function preComputeMultiMatchCutoffs(
+export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo de múltiplos estágios com busca binária de cutoff; complexidade inerente ao algoritmo MULTI_MATCH
     gameId:      string,
     drawnBalls:  number[],
     gametypeId:  string,
@@ -441,7 +441,7 @@ export async function preComputeMultiMatchCutoffs(
 
     const results: StageCutoffResult[] = [];
 
-    for (const stageDef of stages.sort((a, b) => a.patterns_required - b.patterns_required)) {
+    for (const stageDef of stages.toSorted((a, b) => a.patterns_required - b.patterns_required)) {
         let cutoffBall = drawnBalls.length + 1; // sentinela: sem vencedor
 
         for (let i = 1; i <= drawnBalls.length; i++) {
@@ -458,7 +458,7 @@ export async function preComputeMultiMatchCutoffs(
             for (const ticket of allTickets) {
                 const wins = checkWinPatterns(applyDrawnBalls(ticket, effective), dynamicPatterns);
                 if (wins.length >= stageDef.patterns_required) {
-                    const best = wins.reduce((a, b) => b.weight > a.weight ? b : a);
+                    const best = wins.reduce((a, b) => b.weight > a.weight ? b : a, wins[0]!);
                     winners.push({ ticket, patternMask: best.mask, ballCount: cutoffBall });
                 }
             }
@@ -518,7 +518,7 @@ async function processMultiMatchWinners(
  * ADR-012: suporta modos standard | fixed | firstfull | goldenball
  * ADR-005 Fase 2: passa o win_pattern_mask do padrão de maior weight.
  */
-export async function processAllGameWinners(gameId: string): Promise<void> {
+export async function processAllGameWinners(gameId: string): Promise<void> { // NOSONAR — motor de resolução FSM com 5 draw modes e liquidação on-chain; complexidade inerente ao domínio do contrato
     console.log(`\n🧠 [Avaliador] Iniciando resolução do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
@@ -627,30 +627,35 @@ export async function processAllGameWinners(gameId: string): Promise<void> {
             }
 
             const isCombo = comboId !== undefined;
+            const patternDesc = isCombo ? `combinação: ${patternName} (#${comboId})` : `padrão: ${patternName}`;
             console.log(
                 `${isCombo ? '🔗' : '🏆'} [Avaliador] Liquidando #${ticket.ticket_id} ` +
-                `(${ticket.owner}, ${isCombo ? `combinação: ${patternName} (#${comboId})` : `padrão: ${patternName}`}, weight: ${weight}` +
+                `(${ticket.owner}, ${patternDesc}, weight: ${weight}` +
                 (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
             );
             // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
             // ADR-028 §7: para claimwin, pré-computa NFTs de PRIZE_BOOST do vencedor.
             let boostNftIds: string[] = [];
-            const txHash = isCombo
-                ? await executeClaimCombo(
+            let txHash: string | undefined;
+            if (isCombo) {
+                txHash = await executeClaimCombo(
                     gameId,
                     ticket.ticket_id,
                     effectiveBalls.length,
                     comboId as number,
                     appliedMultiplier,
-                )
-                : await executeClaimWin(
+                );
+            } else {
+                boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
+                txHash = await executeClaimWin(
                     gameId,
                     ticket.ticket_id,
                     effectiveBalls.length,
                     patternMask,
                     appliedMultiplier,
-                    (boostNftIds = await getBoostNftIds(ticket.owner).catch(() => [])),
+                    boostNftIds,
                 );
+            }
 
             if (txHash) {
                 const actualPrice = ticket.price?.quantity ?? game.ticket_price.quantity;
@@ -714,7 +719,7 @@ export async function processGameWinners(gameId: string, playerWallet: string): 
         const finalState = applyDrawnBalls(ticket, game.drawn_balls);
         const wp = checkWinPatterns(finalState, patterns);
         if (wp.length > 0) {
-            const best = wp.reduce((a, b) => b.weight > a.weight ? b : a);
+            const best = wp.reduce((a, b) => b.weight > a.weight ? b : a, wp[0]!);
             winningTickets.push({ ticket, patternName: best.name, patternMask: best.mask, weight: best.weight });
         }
     }

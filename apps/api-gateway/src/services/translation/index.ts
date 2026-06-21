@@ -1,7 +1,7 @@
 // apps/api-gateway/src/services/translation/index.ts
 // TranslationService: router por par linguístico + cache Redis 24h. Ref: ADR-025.
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { redisClient } from '../../database/redis';
 import { LibreTranslateProvider } from './providers/libretranslate';
 import { DeepLProvider }          from './providers/deepl';
@@ -40,13 +40,12 @@ function buildProviders(): TranslationProvider[] {
 // Roteamento por par linguístico
 // Retorna providers ordenados do mais adequado para o par ao menos adequado.
 
-function routeProviders(
+function routeProviders( // NOSONAR — roteamento de providers com fallback encadeado por par linguístico e disponibilidade; complexidade inerente ao sistema de tradução híbrido (ADR-025)
     all:  TranslationProvider[],
     from: TranslatableLocale,
     to:   TranslatableLocale,
 ): TranslationProvider[] {
-    const isToZh   = to === 'zh-CN';
-    const isPtEn   = (from === 'pt' && to === 'en-US') || (from === 'en-US' && to === 'pt');
+    const isToZh = to === 'zh-CN';
 
     // Separa por nome para reordenar sem remover
     const byName = new Map(all.map(p => [p.name, p]));
@@ -60,12 +59,8 @@ function routeProviders(
         // zh-CN: Google > DeepL > MyMemory
         if (byName.has('google')) ordered.push(byName.get('google')!);
         if (byName.has('deepl'))  ordered.push(byName.get('deepl')!);
-    } else if (isPtEn) {
-        // pt↔en: DeepL > Google > MyMemory
-        if (byName.has('deepl'))  ordered.push(byName.get('deepl')!);
-        if (byName.has('google')) ordered.push(byName.get('google')!);
     } else {
-        // outros pares: DeepL > Google
+        // pt↔en e outros pares: DeepL > Google
         if (byName.has('deepl'))  ordered.push(byName.get('deepl')!);
         if (byName.has('google')) ordered.push(byName.get('google')!);
     }
