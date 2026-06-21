@@ -274,6 +274,30 @@ describe('orchestrateGame — multimatch', () => {
         await orchestrateGame('1');
         expect(mockPayStage).toHaveBeenCalledTimes(2);
     });
+
+    it('startSlowReveal chamado para bolas remanescentes após último cutoff', async () => {
+        // Stage 1 cutoff=5, Stage 2 cutoff=10, max_balls=35 → ainda há bolas 10-34 pendentes
+        await orchestrateGame('1');
+        const calls = mockStartReveal.mock.calls;
+        // Última chamada deve cobrir bolas após o cutoffBall do último stage com vencedores
+        const lastCall = calls[calls.length - 1];
+        expect(lastCall).toBeDefined();
+        // drawnBalls.slice(0, 35).slice(10) = bolas de índice 10 a 34 (25 bolas)
+        expect(lastCall[1]).toHaveLength(25);
+    });
+
+    it('startSlowReveal cobre TODAS as bolas quando nenhum stage tem vencedores (zero fallback bug)', async () => {
+        const drawnBalls35 = DRAWN_BALLS.slice(0, 35);
+        // Dois stages sem vencedores — cutoffBall é sentinela (drawnBalls.length + 1)
+        mockPreCompute.mockResolvedValue([
+            { stage: 1, cutoffBall: 36, cutoffIndex: 35, winners: [] },
+            { stage: 2, cutoffBall: 36, cutoffIndex: 35, winners: [] },
+        ]);
+        await orchestrateGame('1');
+        // Deve revelar todas as 35 bolas lentamente (não cair no fallbackBalls do frontend)
+        const allRevealedBalls = mockStartReveal.mock.calls.flatMap((c: any[]) => c[1] as number[]);
+        expect(allRevealedBalls).toEqual(drawnBalls35);
+    });
 });
 
 // ── buildWinnerPayloads (via orchestrateStandard) ────────────────────────────

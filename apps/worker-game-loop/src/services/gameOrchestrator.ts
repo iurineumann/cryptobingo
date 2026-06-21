@@ -193,6 +193,12 @@ async function orchestrateMultiMatch(
         }
     }
 
+    // Revela bolas remanescentes após o último cutoff (ou todas as bolas se nenhum estágio
+    // teve vencedores). Evita que o frontend caia no fallbackBalls e exiba tudo de uma vez.
+    if (prevCutoff < drawnBalls.length) {
+        await startSlowReveal(gameId, drawnBalls.slice(prevCutoff));
+    }
+
     endRevealSession(gameId);
     await executeCloseGame(gameId);
     return totalWinners;
