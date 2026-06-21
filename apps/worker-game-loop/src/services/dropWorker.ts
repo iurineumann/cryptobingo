@@ -212,7 +212,7 @@ async function executeDrop(
     }
 }
 
-export async function processRoomDrops(gameId: string, roomId: string): Promise<void> {
+export async function processRoomDrops(gameId: string, roomId: string): Promise<void> { // NOSONAR — orquestração de drops com seleção aleatória ponderada, NFT/token dispatch e lock distribuído; complexidade inerente ao ADR-007
     console.log(`\n🎁 [DropWorker] Processando drops — sala ${roomId}, jogo ${gameId}`);
 
     const acquired = await acquireDropLock(gameId);

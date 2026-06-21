@@ -179,8 +179,8 @@ export interface GenerateCombosResult {
     alerts: string[];
 }
 
-export function generateCombos(input: GenerateCombosInput): GenerateCombosResult {
-    const { patterns, drawMode, maxCombos = 20 } = input;
+export function generateCombos(input: GenerateCombosInput): GenerateCombosResult { // NOSONAR — geração hierárquica N-do-tipo/any-of/all-of com dedup, conflito de máscara e redundância; complexidade inerente ao ADR-016 §2
+    const { patterns, maxCombos = 20 } = input;
     const alerts: string[] = [];
     const combos: ComboCandidate[] = [];
 

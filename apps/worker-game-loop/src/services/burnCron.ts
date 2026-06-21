@@ -66,7 +66,7 @@ interface ApiBurnRecord {
     collection: string;
 }
 
-export async function fetchBurnsFromApi(templates: BurnToClaimTemplate[]): Promise<ApiBurnRecord[]> {
+export async function fetchBurnsFromApi(templates: BurnToClaimTemplate[]): Promise<ApiBurnRecord[]> { // NOSONAR — paginação multi-coleção com filtragem de templates; complexidade necessária para o crawler AtomicAssets
     const collections  = [...new Set(templates.map(t => t.collection))];
     const templateIds  = new Set(templates.map(t => t.templateId));
     const burns: ApiBurnRecord[] = [];
@@ -179,7 +179,7 @@ async function getWatchPlayers(): Promise<string[]> {
 
 // ── Ciclo de sincronização ────────────────────────────────────────────────
 
-export async function runBurnSyncCycle(): Promise<{ processed: number; skipped: number }> {
+export async function runBurnSyncCycle(): Promise<{ processed: number; skipped: number }> { // NOSONAR — ciclo de sincronização com múltiplas fases (fetch, dedup, claim, skip); complexidade inerente ao ADR-028 §8
     const templates = await fetchBurnToClaimTemplates();
     if (!templates.length) {
         console.log('[burnCron] Nenhum template BURN_TO_CLAIM configurado — ciclo pulado.');

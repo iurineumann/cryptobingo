@@ -177,7 +177,7 @@ export function matrixRedisKey(gameId: string, matrix: number[]): string {
  * Auth:  Bearer JWT — requireAuth injeta req.user.wallet
  * Ref:   ADR-001, SPEC.md §2.1, §3.1
  */
-export async function generateTickets(req: Request, res: Response): Promise<void> {
+export async function generateTickets(req: Request, res: Response): Promise<void> { // NOSONAR — geração de cartelas com validação WAX, NFT-discount, price-range e transação on-chain; complexidade inerente ao ADR-001/ADR-028
     const { gameId } = req.params as Record<string, string>;
     const accountName = req.body.account || req.user!.wallet;
     const rawCount = req.body.count;
