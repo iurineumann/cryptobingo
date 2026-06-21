@@ -14,9 +14,9 @@
   },
   "devDependencies": {
     "@cryptobingo/shared-types": "workspace:*",
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.20.0",
     "cypress": "^15.17.0",
     "mock-socket": "^9.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^6.0.3"
   }
 }
