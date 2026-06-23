@@ -193,10 +193,11 @@ async function orchestrateMultiMatch(
         }
     }
 
-    // Revela bolas remanescentes após o último cutoff (ou todas as bolas se nenhum estágio
-    // teve vencedores). Evita que o frontend caia no fallbackBalls e exiba tudo de uma vez.
-    if (prevCutoff < drawnBalls.length) {
-        await startSlowReveal(gameId, drawnBalls.slice(prevCutoff));
+    // Caso especial: nenhum estágio teve vencedores (cutoffs todos fora do range).
+    // Revela todas as bolas para evitar que o frontend caia no fallbackBalls e exiba tudo
+    // de uma vez ao detectar status archived com drawnBalls WS vazio.
+    if (prevCutoff === 0 && drawnBalls.length > 0) {
+        await startSlowReveal(gameId, drawnBalls);
     }
 
     endRevealSession(gameId);
@@ -265,7 +266,9 @@ export async function orchestrateGame(gameId: string): Promise<void> {
                 break;
 
             case 'multimatch':
-                totalWinners = await orchestrateMultiMatch(gameId, drawnBalls.slice(0, maxBalls), gametypeId);
+                // Sem limite de bolas pré-estipulado: sorteio continua até todos os estágios
+                // serem completados, como firstfull. max_balls não se aplica ao multimatch.
+                totalWinners = await orchestrateMultiMatch(gameId, drawnBalls, gametypeId);
                 break;
 
             default:
