@@ -366,4 +366,5 @@ volumes:
 
 networks:
   bingo_net:
-    driver: bridge
+    external: true
+    name: cryptobingo-infra_bingo_net

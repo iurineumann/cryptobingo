@@ -838,9 +838,9 @@ ORACLE_SCRIPT="$(pwd)/scripts/orng-oracle.ts"
 
 # Resolve um ts-node determinístico. `npx ts-node` falha no monorepo pnpm
 # (binário não-hoisted → exit 127) e o ts-node padrão type-checa o script
-# contra o tsconfig raiz (sem @types/node no escopo → 'Buffer/console not
-# found'). Preferimos o binário hoisted do pnpm e SEMPRE usamos
-# --transpile-only (ignora type-check; o daemon só precisa executar).
+# contra o tsconfig raiz (declaration:true sem rootDir → TS5011). Preferimos
+# o binário hoisted do pnpm com --transpile-only + --project scripts/tsconfig.json
+# (rootDir:. + declaration:false) para isolar o script do rootDir do monorepo.
 ORACLE_TSNODE="$(pwd)/node_modules/.pnpm/node_modules/.bin/ts-node"
 [ -x "$ORACLE_TSNODE" ] || ORACLE_TSNODE="$(command -v ts-node 2>/dev/null || true)"
 [ -x "$ORACLE_TSNODE" ] || ORACLE_TSNODE="npx ts-node"
@@ -851,7 +851,7 @@ if [ -f "$ORACLE_SCRIPT" ]; then
     ORNG_WAX_KEY="${ORNG_WAX_KEY:-}" \
     ORNG_RSA_PRIVATE_KEY_PATH="${ORNG_RSA_PRIVATE_KEY_PATH:-$(pwd)/contracts/orng/dev-rsa-private.pem}" \
     ORNG_POLL_INTERVAL_MS="2000" \
-    nohup $ORACLE_TSNODE --transpile-only "$ORACLE_SCRIPT" \
+    nohup $ORACLE_TSNODE --transpile-only --project "$(pwd)/scripts/tsconfig.json" "$ORACLE_SCRIPT" \
         < /dev/null >> "$ORACLE_LOG" 2>&1 &
     ORACLE_PID=$!
     echo "$ORACLE_PID" > .orng-oracle.pid
@@ -863,7 +863,7 @@ if [ -f "$ORACLE_SCRIPT" ]; then
     else
         echo "[!] Oracle daemon NÃO permaneceu vivo. Últimas linhas do log:"
         tail -n 8 "$ORACLE_LOG" 2>/dev/null | sed 's/^/      /'
-        echo "    Inicie manualmente: $ORACLE_TSNODE --transpile-only $ORACLE_SCRIPT"
+        echo "    Inicie manualmente: $ORACLE_TSNODE --transpile-only --project $(pwd)/scripts/tsconfig.json $ORACLE_SCRIPT"
         rm -f .orng-oracle.pid
     fi
 else
