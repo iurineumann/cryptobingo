@@ -1,0 +1,112 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ── API Gateway ────────────────────────────────────────────────────
+        {
+            "name": "Debug: API Gateway",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": ["--loader", "ts-node/esm", "--inspect"],
+            "args": ["apps/api-gateway/src/index.ts"],
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/apps/api-gateway/.env",
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/apps/api-gateway/dist/**/*.js"],
+            "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+        },
+        {
+            "name": "Debug: API Gateway (ts-node)",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--require",
+                "ts-node/register"
+            ],
+            "args": ["${workspaceFolder}/apps/api-gateway/src/index.ts"],
+            "cwd": "${workspaceFolder}/apps/api-gateway",
+            "envFile": "${workspaceFolder}/apps/api-gateway/.env",
+            "sourceMaps": true,
+            "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+        },
+
+        // ── Worker Game Loop ───────────────────────────────────────────────
+        {
+            "name": "Debug: Worker Game Loop",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": ["--require", "ts-node/register"],
+            "args": ["${workspaceFolder}/apps/worker-game-loop/src/index.ts"],
+            "cwd": "${workspaceFolder}/apps/worker-game-loop",
+            "envFile": "${workspaceFolder}/apps/worker-game-loop/.env",
+            "sourceMaps": true,
+            "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+        },
+
+        // ── Jest (arquivo atual) ───────────────────────────────────────────
+        {
+            "name": "Debug: Jest (arquivo atual)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/jest",
+            "args": [
+                "${relativeFile}",
+                "--no-coverage",
+                "--runInBand"
+            ],
+            "cwd": "${fileDirname}",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"],
+            "env": { "NODE_ENV": "test" }
+        },
+        {
+            "name": "Debug: Jest (test sob cursor)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/jest",
+            "args": [
+                "${relativeFile}",
+                "--no-coverage",
+                "--runInBand",
+                "-t",
+                "${selectedText}"
+            ],
+            "cwd": "${fileDirname}",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"],
+            "env": { "NODE_ENV": "test" }
+        },
+
+        // ── Vitest (frontend) ──────────────────────────────────────────────
+        {
+            "name": "Debug: Vitest (frontend)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/apps/frontend/node_modules/.bin/vitest",
+            "args": ["run", "--reporter=verbose", "${relativeFile}"],
+            "cwd": "${workspaceFolder}/apps/frontend",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"]
+        },
+
+        // ── Harness E2E ────────────────────────────────────────────────────
+        {
+            "name": "Debug: Harness E2E (arquivo atual)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/jest",
+            "args": [
+                "${relativeFile}",
+                "--no-coverage",
+                "--runInBand",
+                "--testTimeout=120000"
+            ],
+            "cwd": "${workspaceFolder}/apps/harness",
+            "console": "integratedTerminal",
+            "skipFiles": ["<node_internals>/**"],
+            "envFile": "${workspaceFolder}/.waxdev.env"
+        }
+    ]
+}
