@@ -1,0 +1,155 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // ── Build ──────────────────────────────────────────────────────────
+        {
+            "label": "build:all",
+            "type": "shell",
+            "command": "pnpm build",
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "shared" },
+            "problemMatcher": ["$tsc"]
+        },
+        {
+            "label": "build:frontend",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/frontend build",
+            "group": "build",
+            "problemMatcher": ["$tsc"]
+        },
+
+        // ── Dev servers ────────────────────────────────────────────────────
+        {
+            "label": "dev:all",
+            "type": "shell",
+            "command": "pnpm dev",
+            "isBackground": true,
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "dev:frontend",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/frontend dev",
+            "isBackground": true,
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+        {
+            "label": "dev:api",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/api-gateway dev",
+            "isBackground": true,
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+        {
+            "label": "dev:worker",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/worker-game-loop dev",
+            "isBackground": true,
+            "group": "none",
+            "presentation": { "reveal": "always", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+
+        // ── Testes ─────────────────────────────────────────────────────────
+        {
+            "label": "test:all",
+            "type": "shell",
+            "command": "pnpm test",
+            "group": { "kind": "test", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "shared" },
+            "problemMatcher": ["$jest"]
+        },
+        {
+            "label": "test:frontend",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/frontend test",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "test:api",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/api-gateway test",
+            "group": "test",
+            "problemMatcher": ["$jest"]
+        },
+        {
+            "label": "test:worker",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/worker-game-loop test",
+            "group": "test",
+            "problemMatcher": ["$jest"]
+        },
+        {
+            "label": "test:e2e-ui",
+            "type": "shell",
+            "command": "pnpm --filter @cryptobingo/e2e-ui e2e",
+            "group": "test",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+
+        // ── Typecheck ──────────────────────────────────────────────────────
+        {
+            "label": "typecheck:frontend",
+            "type": "shell",
+            "command": "cd apps/frontend && npx tsc --noEmit",
+            "group": "build",
+            "problemMatcher": ["$tsc"]
+        },
+        {
+            "label": "typecheck:api",
+            "type": "shell",
+            "command": "cd apps/api-gateway && npx tsc --project tsconfig.build.json --noEmit",
+            "group": "build",
+            "problemMatcher": ["$tsc"]
+        },
+        {
+            "label": "typecheck:worker",
+            "type": "shell",
+            "command": "cd apps/worker-game-loop && npx tsc --project tsconfig.build.json --noEmit",
+            "group": "build",
+            "problemMatcher": ["$tsc"]
+        },
+
+        // ── Infra / dev env ────────────────────────────────────────────────
+        {
+            "label": "infra:init-dev",
+            "type": "shell",
+            "command": "bash init_dev_env.sh",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "infra:reset-dev",
+            "type": "shell",
+            "command": "bash init_dev_env.sh --reset",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "oracle:start",
+            "type": "shell",
+            "command": "node_modules/.pnpm/node_modules/.bin/ts-node --transpile-only --project scripts/tsconfig.json scripts/orng-oracle.ts >> logs/orng-oracle.log 2>&1",
+            "isBackground": true,
+            "presentation": { "reveal": "silent", "panel": "dedicated" },
+            "problemMatcher": []
+        },
+
+        // ── Contrato C++ ───────────────────────────────────────────────────
+        {
+            "label": "contrato:compilar",
+            "type": "shell",
+            "command": "docker exec bingo_waxdev bash -c \"rm -rf /tmp/bingo && mkdir -p /tmp/bingo && cp -r /app/contracts/bingo/* /tmp/bingo/ && cdt-cpp -abigen -I /tmp/bingo/include /tmp/bingo/src/bingo.cpp /tmp/bingo/src/orng_mock.cpp -o /tmp/bingo/bingo.wasm --contract bingo -O2\" && docker cp bingo_waxdev:/tmp/bingo/bingo.wasm contracts/bingo/bingo.wasm && echo '✔ bingo.wasm copiado'",
+            "group": "build",
+            "presentation": { "reveal": "always", "panel": "shared" },
+            "problemMatcher": []
+        }
+    ]
+}

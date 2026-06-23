@@ -96,9 +96,9 @@
     --font-size-4xl:  clamp(1.9rem,   1.60rem + 2vw,    2.25rem);
     --font-size-5xl:  clamp(2.4rem,   2.00rem + 2.5vw,  3rem);
 
-    /* Custom shadows */
-    --shadow-glow-brand:   0 0 20px -4px rgb(124 58 237 / 0.6), 0 0 40px -8px rgb(124 58 237 / 0.3);
-    --shadow-glow-accent:  0 0 20px -4px rgb(245 158 11 / 0.7), 0 0 40px -8px rgb(245 158 11 / 0.3);
+    /* Custom shadows — defaults para Alta Roda (rose-magenta); sobrescritos por [data-palette] */
+    --shadow-glow-brand:   0 0 20px -4px oklch(0.620 0.220 352 / 0.6), 0 0 40px -8px oklch(0.620 0.220 352 / 0.3);
+    --shadow-glow-accent:  0 0 20px -4px oklch(0.870 0.180 75 / 0.7), 0 0 40px -8px oklch(0.870 0.180 75 / 0.3);
     --shadow-glow-success: 0 0 20px -4px rgb(16 185 129 / 0.6);
     --shadow-glow-danger:  0 0 20px -4px rgb(244 63 94 / 0.6);
     --shadow-card:         0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
@@ -113,12 +113,13 @@
 :root {
     color-scheme: dark;
 
-    --cb-bg-base:      var(--color-surface-900);
-    --cb-bg-elevated:  var(--color-surface-800);
-    --cb-bg-overlay:   var(--color-surface-750);
-    --cb-bg-sunken:    var(--color-surface-950);
-    --cb-bg-card:      var(--color-surface-800);
-    --cb-bg-input:     var(--color-surface-700);
+    /* Superfícies — Alta Roda: tinta pura (sem tinte). Feltro/Cobre sobrescrevem via [data-palette]:not([data-theme="light"]) */
+    --cb-bg-base:      oklch(0.090 0.000 0);
+    --cb-bg-elevated:  oklch(0.130 0.000 0);
+    --cb-bg-overlay:   oklch(0.165 0.000 0);
+    --cb-bg-sunken:    oklch(0.060 0.000 0);
+    --cb-bg-card:      oklch(0.130 0.000 0);
+    --cb-bg-input:     oklch(0.195 0.000 0);
 
     --cb-text-primary:   #f1f5f9;
     --cb-text-secondary: #94a3b8;
@@ -129,17 +130,25 @@
     --cb-border-subtle:  rgb(255 255 255 / 0.06);
     --cb-border-default: rgb(255 255 255 / 0.10);
     --cb-border-strong:  rgb(255 255 255 / 0.16);
-    --cb-border-focus:   var(--color-brand-500);
+    --cb-border-focus:   var(--cb-brand);
 
-    --cb-brand:         var(--color-brand-500);
-    --cb-brand-hover:   var(--color-brand-400);
-    --cb-brand-active:  var(--color-brand-600);
-    --cb-brand-subtle:  rgb(139 92 246 / 0.15);
-    --cb-brand-muted:   rgb(139 92 246 / 0.08);
+    /* Marca — Alta Roda (rose-magenta). Paletas alternativas sobrescrevem abaixo */
+    --cb-brand:         oklch(0.620 0.220 352);
+    --cb-brand-hover:   oklch(0.680 0.210 352);
+    --cb-brand-active:  oklch(0.560 0.225 352);
+    --cb-brand-subtle:  oklch(0.620 0.220 352 / 0.15);
+    --cb-brand-muted:   oklch(0.620 0.220 352 / 0.08);
+    --cb-brand-border:  oklch(0.620 0.220 352 / 0.28);
 
-    --cb-accent:        var(--color-accent-400);
-    --cb-accent-hover:  var(--color-accent-300);
-    --cb-accent-subtle: rgb(251 191 36 / 0.15);
+    /* Acento — âmbar intenso (vitórias, XP, prêmios) */
+    --cb-accent:        oklch(0.870 0.180 75);
+    --cb-accent-hover:  oklch(0.910 0.165 75);
+    --cb-accent-subtle: oklch(0.870 0.180 75 / 0.15);
+    --cb-accent-border: oklch(0.870 0.180 75 / 0.28);
+
+    /* Atmosfera do palco — hue sobrescrito por [data-palette] */
+    --cb-stage-glow-1:  oklch(0.620 0.220 352 / 0.18);
+    --cb-stage-glow-2:  oklch(0.620 0.220 352 / 0.06);
 
     --cb-success:        var(--color-success-400);
     --cb-success-subtle: rgb(52 211 153 / 0.12);
@@ -171,8 +180,8 @@
     --input:        var(--cb-border-default);
     --ring:         var(--cb-brand);
     --radius:       0.625rem;
-    --chart-1:      var(--color-brand-500);
-    --chart-2:      var(--color-accent-500);
+    --chart-1:      var(--cb-brand);
+    --chart-2:      var(--cb-accent);
     --chart-3:      var(--color-surface-500);
     --chart-4:      var(--color-success-500);
     --chart-5:      var(--color-danger-500);
@@ -227,6 +236,102 @@
     --cb-info-subtle:    rgb(59 130 246 / 0.08);
 
     --cb-overlay-backdrop: rgb(15 23 42 / 0.60);
+}
+
+/* ============================================================
+   PALETAS — [data-palette] sobrescreve :root (especificidade 0,1,0 > 0,0,0)
+   Aplicadas em <html data-palette="X">. Controladas por usePalette.ts.
+   Superfícies: blocos :not([data-theme="light"]) evitam conflito com modo claro.
+   ============================================================ */
+
+/* ── Alta Roda (padrão — rose-magenta + tinta pura) ── */
+
+[data-palette="alta-roda"] {
+    --cb-brand:         oklch(0.620 0.220 352);
+    --cb-brand-hover:   oklch(0.680 0.210 352);
+    --cb-brand-active:  oklch(0.560 0.225 352);
+    --cb-brand-subtle:  oklch(0.620 0.220 352 / 0.15);
+    --cb-brand-muted:   oklch(0.620 0.220 352 / 0.08);
+    --cb-brand-border:  oklch(0.620 0.220 352 / 0.28);
+    --cb-accent:        oklch(0.870 0.180 75);
+    --cb-accent-hover:  oklch(0.910 0.165 75);
+    --cb-accent-subtle: oklch(0.870 0.180 75 / 0.15);
+    --cb-accent-border: oklch(0.870 0.180 75 / 0.28);
+    --cb-stage-glow-1:  oklch(0.620 0.220 352 / 0.18);
+    --cb-stage-glow-2:  oklch(0.620 0.220 352 / 0.06);
+    --shadow-glow-brand:  0 0 20px -4px oklch(0.620 0.220 352 / 0.6), 0 0 40px -8px oklch(0.620 0.220 352 / 0.3);
+    --shadow-glow-accent: 0 0 20px -4px oklch(0.870 0.180 75 / 0.7), 0 0 40px -8px oklch(0.870 0.180 75 / 0.3);
+}
+
+[data-palette="alta-roda"]:not([data-theme="light"]) {
+    --cb-bg-base:    oklch(0.090 0.000 0);
+    --cb-bg-elevated:oklch(0.130 0.000 0);
+    --cb-bg-overlay: oklch(0.165 0.000 0);
+    --cb-bg-sunken:  oklch(0.060 0.000 0);
+    --cb-bg-card:    oklch(0.130 0.000 0);
+    --cb-bg-input:   oklch(0.195 0.000 0);
+    --background: var(--cb-bg-base);
+    --card: var(--cb-bg-card);
+}
+
+/* ── Feltro Verde (vermilhão + verde-cassino) ── */
+
+[data-palette="feltro-verde"] {
+    --cb-brand:         oklch(0.640 0.210 15);
+    --cb-brand-hover:   oklch(0.695 0.200 15);
+    --cb-brand-active:  oklch(0.585 0.215 15);
+    --cb-brand-subtle:  oklch(0.640 0.210 15 / 0.15);
+    --cb-brand-muted:   oklch(0.640 0.210 15 / 0.08);
+    --cb-brand-border:  oklch(0.640 0.210 15 / 0.28);
+    --cb-accent:        oklch(0.900 0.130 86);
+    --cb-accent-hover:  oklch(0.935 0.115 86);
+    --cb-accent-subtle: oklch(0.900 0.130 86 / 0.15);
+    --cb-accent-border: oklch(0.900 0.130 86 / 0.28);
+    --cb-stage-glow-1:  oklch(0.640 0.210 15 / 0.16);
+    --cb-stage-glow-2:  oklch(0.640 0.210 15 / 0.05);
+    --shadow-glow-brand:  0 0 20px -4px oklch(0.640 0.210 15 / 0.6), 0 0 40px -8px oklch(0.640 0.210 15 / 0.3);
+    --shadow-glow-accent: 0 0 20px -4px oklch(0.900 0.130 86 / 0.6), 0 0 40px -8px oklch(0.900 0.130 86 / 0.25);
+}
+
+[data-palette="feltro-verde"]:not([data-theme="light"]) {
+    --cb-bg-base:    oklch(0.095 0.018 145);
+    --cb-bg-elevated:oklch(0.130 0.016 145);
+    --cb-bg-overlay: oklch(0.165 0.014 145);
+    --cb-bg-sunken:  oklch(0.065 0.020 145);
+    --cb-bg-card:    oklch(0.130 0.016 145);
+    --cb-bg-input:   oklch(0.195 0.012 145);
+    --background: var(--cb-bg-base);
+    --card: var(--cb-bg-card);
+}
+
+/* ── Cobre & Cosmos (bronze + verde-chartreuse elétrico) ── */
+
+[data-palette="cobre-cosmos"] {
+    --cb-brand:         oklch(0.620 0.165 50);
+    --cb-brand-hover:   oklch(0.678 0.155 50);
+    --cb-brand-active:  oklch(0.562 0.170 50);
+    --cb-brand-subtle:  oklch(0.620 0.165 50 / 0.15);
+    --cb-brand-muted:   oklch(0.620 0.165 50 / 0.08);
+    --cb-brand-border:  oklch(0.620 0.165 50 / 0.28);
+    --cb-accent:        oklch(0.880 0.200 135);
+    --cb-accent-hover:  oklch(0.920 0.185 135);
+    --cb-accent-subtle: oklch(0.880 0.200 135 / 0.15);
+    --cb-accent-border: oklch(0.880 0.200 135 / 0.28);
+    --cb-stage-glow-1:  oklch(0.620 0.165 50 / 0.18);
+    --cb-stage-glow-2:  oklch(0.620 0.165 50 / 0.06);
+    --shadow-glow-brand:  0 0 20px -4px oklch(0.620 0.165 50 / 0.6), 0 0 40px -8px oklch(0.620 0.165 50 / 0.3);
+    --shadow-glow-accent: 0 0 20px -4px oklch(0.880 0.200 135 / 0.65), 0 0 40px -8px oklch(0.880 0.200 135 / 0.3);
+}
+
+[data-palette="cobre-cosmos"]:not([data-theme="light"]) {
+    --cb-bg-base:    oklch(0.095 0.012 55);
+    --cb-bg-elevated:oklch(0.132 0.010 55);
+    --cb-bg-overlay: oklch(0.168 0.008 55);
+    --cb-bg-sunken:  oklch(0.065 0.014 55);
+    --cb-bg-card:    oklch(0.132 0.010 55);
+    --cb-bg-input:   oklch(0.198 0.007 55);
+    --background: var(--cb-bg-base);
+    --card: var(--cb-bg-card);
 }
 
 /* ============================================================
@@ -481,7 +586,7 @@ body {
         line-height: 1.4;
         background-color: var(--cb-brand-subtle);
         color: var(--cb-brand);
-        border: 1px solid rgb(139 92 246 / 0.25);
+        border: 1px solid var(--cb-brand-border);
     }
 
     .cb-badge-accent {
@@ -495,7 +600,7 @@ body {
         line-height: 1.4;
         background-color: var(--cb-accent-subtle);
         color: var(--cb-accent);
-        border: 1px solid rgb(251 191 36 / 0.25);
+        border: 1px solid var(--cb-accent-border);
     }
 
     .cb-badge-success {
@@ -607,7 +712,7 @@ body {
         border-radius: 9999px; line-height: 1.4;
         background-color: var(--cb-brand-subtle);
         color: var(--cb-brand);
-        border: 1px solid rgb(139 92 246 / 0.25);
+        border: 1px solid var(--cb-brand-border);
     }
 
     .cb-status-drawn {
@@ -616,7 +721,7 @@ body {
         border-radius: 9999px; line-height: 1.4;
         background-color: var(--cb-brand-subtle);
         color: var(--cb-brand);
-        border: 1px solid rgb(139 92 246 / 0.25);
+        border: 1px solid var(--cb-brand-border);
     }
 
     .cb-status-archived {
@@ -984,6 +1089,48 @@ body {
         border-color: var(--cb-brand);
         color: var(--cb-brand);
         background-color: var(--cb-brand-muted);
+    }
+
+    /* ── Palette Selector ── */
+
+    .cb-palette-picker {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .cb-palette-swatch {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        padding: 0;
+        cursor: pointer;
+        background: transparent;
+        outline: none;
+        transition: border-color 150ms cubic-bezier(0.4,0,0.2,1),
+                    transform 150ms cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 150ms cubic-bezier(0.4,0,0.2,1);
+    }
+    .cb-palette-swatch[data-active="true"] {
+        border-color: var(--cb-text-primary);
+        box-shadow: 0 0 0 1px var(--cb-bg-base);
+        transform: scale(1.15);
+    }
+    .cb-palette-swatch:hover:not([data-active="true"]) {
+        border-color: var(--cb-border-strong);
+        transform: scale(1.08);
+    }
+    .cb-palette-swatch:focus-visible {
+        border-color: var(--cb-brand);
+        box-shadow: 0 0 0 3px var(--cb-brand-subtle);
+    }
+
+    .cb-palette-swatch-dot {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
     }
 }
 

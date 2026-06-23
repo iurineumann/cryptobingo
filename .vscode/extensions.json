@@ -1,0 +1,23 @@
+{
+    "recommendations": [
+        // já instaladas (essenciais)
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "eamodio.gitlens",
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "docker.docker",
+        "redhat.vscode-yaml",
+        "gruntfuggly.todo-tree",
+        "naumovs.color-highlight",
+        // recomendadas (instalar)
+        "usernamehw.errorlens",
+        "vitest.explorer",
+        "orta.vscode-jest",
+        "christian-kohler.path-intellisense",
+        "mikestead.dotenv",
+        "antfu.unocss",
+        "PKief.material-icon-theme"
+    ]
+}

@@ -5,6 +5,7 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWallet } from '../hooks/useWallet';
+import { PaletteSelector } from './PaletteSelector';
 
 const GAME_URL = import.meta.env.VITE_GAME_URL || 'http://localhost:5173';
 
@@ -67,6 +68,8 @@ export default function Navbar() {
                     >
                         {t('common.play_bingo')}
                     </a>
+
+                    <PaletteSelector />
 
                     {/* Seletor de idioma */}
                     <div className="flex items-center gap-0.5">
