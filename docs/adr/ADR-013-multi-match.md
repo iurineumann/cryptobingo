@@ -86,9 +86,11 @@ momento do cutoff. Serve como evidência auditável on-chain; não altera o payo
 
 ### 5. Configuração do `draw_mode` para MULTI_MATCH
 
-O `draw_mode = "multimatch"_n` é obrigatório no gametype. O campo `max_balls` continua
-disponível para limitar o sorteio (default 35). Estágios que não acontecerem antes de
-`max_balls` não são pagos — o avaliador para no limite de bolas configurado.
+O `draw_mode = "multimatch"_n` é obrigatório no gametype. **Não há limite de bolas
+pré-estipulado** — o orquestrador usa todos os balls do oracle (até 75), como o modo
+`firstfull`. O sorteio avança sequencialmente até que cada estágio seja completado;
+estágios não alcançáveis dentro dos 75 balls do oracle não são pagos. O campo `max_balls`
+do gametype é ignorado pelo modo multimatch.
 
 ---
 

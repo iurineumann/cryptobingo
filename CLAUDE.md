@@ -95,8 +95,9 @@ quebram com `unpack_exception` (não há action para limpar a tabela). Ex.: ADR-
 - Subir/reset: `./init_dev_env.sh` (ou `--reset` para recriar o container/chain do zero).
   Isso recria contas, deploya `bingogamectr` (do wasm/abi do host) + `orng.wax`, e inicia o oracle daemon.
 - **Oracle daemon** (necessário para `startdraw` → `drawn`): roda `scripts/orng-oracle.ts`.
-  `npx ts-node` FALHA no monorepo pnpm. Use o binário hoisted + transpile-only:
-  `node_modules/.pnpm/node_modules/.bin/ts-node --transpile-only scripts/orng-oracle.ts`.
+  `npx ts-node` FALHA no monorepo pnpm. Use o binário hoisted + transpile-only + project isolado:
+  `node_modules/.pnpm/node_modules/.bin/ts-node --transpile-only --project scripts/tsconfig.json scripts/orng-oracle.ts`.
+  (sem `--project scripts/tsconfig.json` → TS5011: rootDir conflict com declaration:true do tsconfig raiz)
   Verifique vida: `pgrep -f orng-oracle.ts` · log: `logs/orng-oracle.log` · reqs pendentes na
   tabela `orng.wax/reqs` devem drenar a 0.
 - Reset zera os **gametypes on-chain** do app (recrie pela UI admin — o upsert sincroniza on-chain).
@@ -108,7 +109,7 @@ Roda contra o **nodeos real** (`127.0.0.1:8888`) + oracle daemon. Env keys em `.
 `apps/worker-game-loop/.env`. Para rodar 1 suite com oracle vivo durante o jest (processos de
 background morrem entre invocações), suba o oracle e o jest **no mesmo comando**:
 ```bash
-<ts-node --transpile-only scripts/orng-oracle.ts >> logs/...> & OPID=$!; sleep 4
+<ts-node --transpile-only --project scripts/tsconfig.json scripts/orng-oracle.ts >> logs/...> & OPID=$!; sleep 4
 cd apps/harness && npx jest tests/fsm.test.ts -t '<Suite>'; kill $OPID
 ```
 Bounds de `get_table_rows` por chave i64: use `UInt64.from(id)`, não string.

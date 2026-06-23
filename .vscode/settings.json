@@ -1,3 +1,126 @@
 {
-    "cmake.sourceDirectory": "/home/iuri/Projetos/cryptobingo/contracts/bingo"
+    "cmake.sourceDirectory": "/home/iuri/Projetos/cryptobingo/contracts/bingo",
+
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "typescript.preferences.importModuleSpecifier": "shortest",
+    "typescript.preferences.quoteStyle": "single",
+    "typescript.suggest.autoImports": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact"
+    ],
+    "eslint.workingDirectories": [
+        { "directory": "apps/frontend", "changeProcessCWD": true },
+        { "directory": "apps/api-gateway", "changeProcessCWD": true },
+        { "directory": "apps/worker-game-loop", "changeProcessCWD": true },
+        { "directory": "apps/harness", "changeProcessCWD": true },
+        { "directory": "apps/e2e-ui", "changeProcessCWD": true },
+        { "directory": "packages/shared-types", "changeProcessCWD": true },
+        { "directory": "packages/blockchain-core", "changeProcessCWD": true }
+    ],
+    "eslint.lintTask.enable": true,
+
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": false,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "never"
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools"
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+
+    "tailwindCSS.experimental.classRegex": [
+        ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+        ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+        ["cn\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+    ],
+    "tailwindCSS.includeLanguages": {
+        "typescript": "javascript",
+        "typescriptreact": "javascript"
+    },
+
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.rulers": [100],
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.inlayHints.enabled": "on",
+    "editor.suggest.insertMode": "replace",
+    "editor.acceptSuggestionOnCommitCharacter": false,
+
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/.turbo": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.cache": true,
+        "**/*.js.map": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/.turbo": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/pnpm-lock.yaml": true,
+        "**/*.wasm": true
+    },
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/.turbo/**": true,
+        "**/dist/**": true
+    },
+    "files.associations": {
+        "*.abi": "json",
+        "*.env.*": "dotenv",
+        ".env*": "dotenv"
+    },
+
+    "git.defaultBranchName": "develop",
+    "git.confirmSync": false,
+    "gitlens.hovers.currentLine.over": "line",
+
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "terminal.integrated.env.linux": {
+        "PNPM_HOME": "/home/iuri/.local/share/pnpm"
+    },
+
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        "*.tsx": "${capture}.test.tsx, ${capture}.stories.tsx, ${capture}.css",
+        "*.ts": "${capture}.test.ts, ${capture}.d.ts",
+        "vite.config.*": "vitest.config.*",
+        "package.json": "pnpm-lock.yaml, .npmrc, turbo.json",
+        "tsconfig.json": "tsconfig.*.json",
+        "*.abi": "${capture}.wasm, ${capture}_generated.abi",
+        ".env": ".env.*"
+    },
+
+    "todo-tree.general.tags": ["TODO", "FIXME", "HACK", "ADR", "INVARIANT"],
+    "todo-tree.highlights.defaultHighlight": {
+        "icon": "alert",
+        "type": "tag",
+        "foreground": "#fff",
+        "background": "#ff8c00",
+        "opacity": 50
+    },
+    "todo-tree.highlights.customHighlight": {
+        "ADR": { "icon": "law", "background": "#0066cc" },
+        "INVARIANT": { "icon": "shield", "background": "#660099" }
+    },
+
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+    }
 }

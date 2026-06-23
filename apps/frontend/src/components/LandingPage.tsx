@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { fetchRooms, fetchRtpReport, fetchGamesHistory } from '../services/api';
+import { PaletteSelector } from './ui/PaletteSelector';
 import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
@@ -254,6 +255,7 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
                 </Button>
               ))}
             </div>
+            <PaletteSelector />
             <button className="cb-theme-toggle" onClick={onToggleTheme}
               aria-label={theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}>
               {theme === 'dark' ? '☾' : '☀'}

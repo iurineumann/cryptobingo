@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
+import { PaletteSelector } from '../ui/PaletteSelector';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import {
   LayoutDashboard, Building2, Grid3x3, Puzzle, Megaphone, ShieldCheck,
@@ -137,6 +138,8 @@ export default function AdminLayout({
             <option value="en-US">EN</option>
             <option value="zh-CN">中</option>
           </select>
+
+          <PaletteSelector />
 
           <button
             className="cb-theme-toggle"

@@ -274,6 +274,33 @@ describe('orchestrateGame — multimatch', () => {
         await orchestrateGame('1');
         expect(mockPayStage).toHaveBeenCalledTimes(2);
     });
+
+    it('revela exatamente até o cutoff de cada stage — não continua além do último', async () => {
+        // Stage 1 cutoff=5, Stage 2 cutoff=10, drawnBalls=75 (sem slice de max_balls)
+        // Após stage 2, o jogo encerra no ball 10; balls 11-75 NÃO devem ser reveladas.
+        await orchestrateGame('1');
+        const allRevealedBalls = mockStartReveal.mock.calls.flatMap((c: any[]) => c[1] as number[]);
+        // Deve ter revelado exatamente 10 bolas (0..4 + 5..9)
+        expect(allRevealedBalls).toHaveLength(10);
+    });
+
+    it('dispatch passa TODOS os drawnBalls ao multimatch — sem slice de max_balls', async () => {
+        await orchestrateGame('1');
+        // preComputeMultiMatchCutoffs deve receber todos os 75 balls do oracle
+        expect(mockPreCompute).toHaveBeenCalledWith('1', DRAWN_BALLS, '4');
+    });
+
+    it('startSlowReveal cobre TODAS as bolas quando nenhum stage tem vencedores (zero fallback bug)', async () => {
+        // Dois stages sem vencedores — cutoffBall é sentinela (drawnBalls.length + 1 = 76)
+        mockPreCompute.mockResolvedValue([
+            { stage: 1, cutoffBall: 76, cutoffIndex: 75, winners: [] },
+            { stage: 2, cutoffBall: 76, cutoffIndex: 75, winners: [] },
+        ]);
+        await orchestrateGame('1');
+        // Deve revelar todos os 75 balls lentamente para evitar o fallbackBalls do frontend
+        const allRevealedBalls = mockStartReveal.mock.calls.flatMap((c: any[]) => c[1] as number[]);
+        expect(allRevealedBalls).toEqual(DRAWN_BALLS);
+    });
 });
 
 // ── buildWinnerPayloads (via orchestrateStandard) ────────────────────────────
