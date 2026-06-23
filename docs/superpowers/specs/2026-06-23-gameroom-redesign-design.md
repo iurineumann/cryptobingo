@@ -16,7 +16,7 @@ jogador. Queremos uma sala **mais realista, dinâmica e interativa** em quatro f
 1. **Sorteio** — cinematográfico, com tensão e ritmo (não bolas aparecendo instantaneamente).
 2. **Cartelas** — vivas, com feedback de marcação e alerta de quase-vitória (near-miss).
 3. **Social** — presença ao vivo, reações, feed de eventos, chat mais integrado.
-4. **Prêmios e dados** — pote/jackpot, breakdown animado, stats da partida/sala, celebração.
+4. **Prêmios e dados** — premiações do jogador, premiações da sala para a partida envolvendo todos os jogadore, breakdown animado, stats da partida/sala, celebração.
 
 Restrições duráveis: paridade real desktop/mobile (futuro de embeds Telegram/Discord/WhatsApp),
 fluxo ADR + GitHub Project + git flow, RTP 85% / GGR 15% intocados, PT-BR.
@@ -38,14 +38,14 @@ fluxo ADR + GitHub Project + git flow, RTP 85% / GGR 15% intocados, PT-BR.
 `GameRoom.tsx` vira **orquestrador fino**. Lógica de estado migra p/ hook; UI quebra em unidades
 com responsabilidade única, interface clara e testáveis isoladamente:
 
-| Componente | Responsabilidade | Depende de |
-|---|---|---|
-| `useGameRoomState` (hook) | Estado consolidado: RPC do jogo + `useSlowReveal` + derivados | api, useSlowReveal |
-| `<DrawStage>` | Palco do sorteio: bola hero animada, trilha de histórico, countdown | useGameRoomState |
-| `<PatternsPanel>` | Padrões/combos/stages + proximidade | ticketUtils |
-| `<TicketsGrid>` | Cartelas do jogador agrupadas | TicketCard, ticketUtils |
-| `<PrizePanels>` | Pote/jackpot, breakdown, stats, celebração | useGameRoomState |
-| `<RoomSocial>` | Presença, reações, feed de eventos, chat integrado | socket `/chat` |
+| Componente                | Responsabilidade                                                    | Depende de              |
+| ------------------------- | ------------------------------------------------------------------- | ----------------------- |
+| `useGameRoomState` (hook) | Estado consolidado: RPC do jogo + `useSlowReveal` + derivados       | api, useSlowReveal      |
+| `<DrawStage>`             | Palco do sorteio: bola hero animada, trilha de histórico, countdown | useGameRoomState        |
+| `<PatternsPanel>`         | Padrões/combos/stages + proximidade                                 | ticketUtils             |
+| `<TicketsGrid>`           | Cartelas do jogador agrupadas                                       | TicketCard, ticketUtils |
+| `<PrizePanels>`           | Pote/jackpot, breakdown, stats, celebração                          | useGameRoomState        |
+| `<RoomSocial>`            | Presença, reações, feed de eventos, chat integrado                  | socket `/chat`          |
 
 Princípios: cada unidade entendível sem ler internals; props/interfaces explícitas; arquivos
 focados (sinal de excesso = arquivo grande). Componentes isolados habilitam **modo compacto**
@@ -61,6 +61,7 @@ testes verdes + revisor da camada**. `master` só recebe `develop` estável.
 > antes da Fase 0.
 
 ### Fase 0 — Refactor base (sem mudança de comportamento)
+
 - Quebrar `GameRoom.tsx` nos componentes da §3. Comportamento **idêntico**; testes baseline verdes.
 - **ADR-030:** arquitetura de componentes da GameRoom.
 - Revisor: `frontend-reviewer`. Skills: `frontend-feature`.
@@ -68,6 +69,7 @@ testes verdes + revisor da camada**. `master` só recebe `develop` estável.
   removido sem equivalente.
 
 ### Fase 1 — Sorteio cinematográfico
+
 - Bola hero animada (roleta/queda), pulso de cor B-I-N-G-O por coluna, trilha de histórico
   animada, countdown tenso entre bolas, som opcional (toggle persistido, default off).
 - Respeita o ritmo do Slow Reveal (ADR-007) — animação dirigida por Sequence ID, sem inventar bolas.
@@ -77,12 +79,14 @@ testes verdes + revisor da camada**. `master` só recebe `develop` estável.
   sem regressão de performance (60fps alvo desktop).
 
 ### Fase 2 — Cartelas vivas + near-miss
+
 - Marcação pop/glow ao bater bola; destaque de célula prestes-a-fechar; alerta "falta 1!";
   barra de progresso por padrão/combo na própria cartela. Reusa proximity de `ticketUtils`.
 - Revisor: `frontend-reviewer`. Skills: `impeccable` + `frontend-feature`.
 - **Aceite:** near-miss correto vs proximity existente; sem falso "falta 1" (testes unit ticketUtils).
 
 ### Fase 3 — Prêmios + dados + celebração
+
 - Pote/jackpot da sala em destaque; breakdown de prêmios animado ao ganhar; stats da partida
   (bolas tiradas, jogadores, RTP/GGR da sala); modal + confete de vitória.
 - Dados de prêmio derivam de `pricePaid × base_multiplier × weight/100 × golden` (ADR-010) — **sem
@@ -91,6 +95,7 @@ testes verdes + revisor da camada**. `master` só recebe `develop` estável.
 - **Aceite:** valores exibidos batem com payout on-chain; celebração só em vitória confirmada.
 
 ### Fase 4 — Social ao vivo
+
 - **Backend (api-gateway):** eventos socket **efêmeros** no namespace `/chat` — presença
   (online count por room derivado de membership), reações flutuantes (emoji), feed de eventos
   ("Fulano fez linha!"). **Sem nova coleção Mongo** (estado efêmero/in-memory). Leaderboard da
@@ -102,6 +107,7 @@ testes verdes + revisor da camada**. `master` só recebe `develop` estável.
   reconexão; sem vazamento de PII no feed; testes de segurança do socket verdes.
 
 ### Fase 5 — Cutover
+
 - Flag `GameRoomV2` (já dogfooded nas fases) vira default; remove legado; limpa a flag.
 - Revisor: `frontend-reviewer`.
 - **Aceite:** flag removida; legado deletado; Cypress Tier 1 + Tier 2 verdes.
