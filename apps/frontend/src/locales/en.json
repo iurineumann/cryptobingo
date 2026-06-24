@@ -161,7 +161,10 @@
     "sound_off": "Sound off",
     "sound_toggle_aria": "Toggle draw sound",
     "near_miss": "1 to go!",
-    "near_miss_aria": "Ticket {{id}}: one ball away from a win"
+    "near_miss_aria": "Ticket {{id}}: one ball away from a win",
+    "pot_label": "Match pot",
+    "pot_bonus": "Sponsored bonus",
+    "stats_balls": "Balls"
   },
   "lobby": {
     "title": "Game Lobby",

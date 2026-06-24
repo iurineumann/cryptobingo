@@ -161,7 +161,10 @@
     "sound_off": "声音关闭",
     "sound_toggle_aria": "切换开奖声音",
     "near_miss": "差1个!",
-    "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖"
+    "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖",
+    "pot_label": "本局奖池",
+    "pot_bonus": "赞助奖金",
+    "stats_balls": "号码球"
   },
   "lobby": {
     "title": "游戏大厅",
