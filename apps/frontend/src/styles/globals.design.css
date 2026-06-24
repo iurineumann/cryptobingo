@@ -525,6 +525,9 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-ended-breakdown-prize { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-accent); }
 .gr-ended-breakdown-total { border-top: 1px solid rgba(255,255,255,.1); padding-top: .25rem; margin-top: .1rem; font-weight: 700; color: var(--cb-text-primary); }
 .gr-ended-breakdown-total span:last-child { color: var(--color-accent-300); }
+.gr-room-prizes { margin-top: .4rem; padding-top: .4rem; border-top: 1px dashed var(--cb-border-subtle); font-size: .72rem; color: var(--cb-text-secondary); display: flex; align-items: center; gap: .35rem; }
+.gr-room-prizes .amt { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-text-primary); }
+.gr-ended-breakdown-title { font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--cb-text-tertiary); margin-bottom: .15rem; }
 /* Confetti overlay */
 .gr-confetti-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
 

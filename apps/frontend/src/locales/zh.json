@@ -164,7 +164,10 @@
     "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖",
     "pot_label": "本局奖池",
     "pot_bonus": "赞助奖金",
-    "stats_balls": "号码球"
+    "stats_balls": "号码球",
+    "player_prizes_title": "你的奖励",
+    "room_prizes_title": "房间奖励",
+    "room_prizes_summary": "房间向 {{count}} 位中奖者支付了 {{total}}"
   },
   "lobby": {
     "title": "游戏大厅",

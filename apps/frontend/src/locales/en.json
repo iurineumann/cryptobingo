@@ -164,7 +164,10 @@
     "near_miss_aria": "Ticket {{id}}: one ball away from a win",
     "pot_label": "Match pot",
     "pot_bonus": "Sponsored bonus",
-    "stats_balls": "Balls"
+    "stats_balls": "Balls",
+    "player_prizes_title": "Your prizes",
+    "room_prizes_title": "Room prizes",
+    "room_prizes_summary": "Room paid {{total}} to {{count}} winner(s)"
   },
   "lobby": {
     "title": "Game Lobby",
