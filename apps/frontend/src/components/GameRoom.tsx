@@ -17,13 +17,7 @@ import DrawStage from './gameroom/DrawStage';
 import { TicketCard } from './TicketCard';
 import { useGameRoomState } from './gameroom/useGameRoomState';
 import PatternsPanel from './gameroom/PatternsPanel';
-
-function fmtCountdown(ms: number): string {
-  if (ms <= 0) return '0s';
-  const s = Math.ceil(ms / 1000);
-  if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
-}
+import PrizePanels from './gameroom/PrizePanels';
 
 // ==========================================
 // TIPOS
@@ -141,133 +135,14 @@ export default function GameRoom({
 
         </div>{/* fim gr-top-row */}
 
-        {/* ── Banners: só renderiza o wrapper quando há pelo menos um ativo ─── */}
-        {hasBanners && (
-          <div className="gr-banners-row">
-
-            {/* ADR-014: Golden Ball */}
-            {goldenBall && (
-              <div className="gr-golden-banner" role="status" aria-live="assertive">
-                <span className="gr-golden-icon">🌟</span>
-                <div className="gr-golden-text">
-                  <strong>{t('game_room.golden_ball_title')}</strong>
-                  <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
-                </div>
-                <span className="gr-golden-mult">×{goldenBall.multiplier}</span>
-              </div>
-            )}
-
-            {/* ADR-013: Multi-Match stages */}
-            {clearedStages.length > 0 && (
-              <div className="gr-stages-panel" role="status">
-                <span className="gr-stages-title">{t('game_room.stages_title')}</span>
-                <div className="gr-stages-list">
-                  {clearedStages.map(s => (
-                    <div key={s.stage} className="gr-stage-item">
-                      <span className="gr-stage-badge">
-                        {t('game_room.stage_label', { stage: s.stage })}
-                      </span>
-                      <span className="gr-stage-count">
-                        {t('game_room.stage_winners', { count: s.winners.length })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ADR-014: Game Ended */}
-            {isEffectiveGameEnded && (
-              <div
-                data-testid="gr-ended-overlay"
-                className={`gr-ended-banner${playerWinEntries.length > 0 ? ' gr-ended-banner--winner' : ''}`}
-                role="status"
-                aria-live="polite"
-              >
-                <span className="gr-ended-icon">
-                  {playerWinEntries.length > 0 ? '🏆' : '🏁'}
-                </span>
-                <div className="gr-ended-text">
-                  <strong>{t('game_room.game_ended_title')}</strong>
-                  <span>
-                    {playerWinEntries.length > 0
-                      ? t('game_room.game_ended_you_won')
-                      : localWinners.length > 0
-                        ? t('game_room.game_ended_winners', { count: localWinners.length })
-                        : isStaticFinalState && playerTickets.length === 0
-                          ? t('game_room.game_ended_archived')
-                          : t('game_room.game_ended_no_winners')}
-                  </span>
-
-                  {playerWinEntries.length > 0 && (
-                    <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
-                      {playerWinEntries.map(({ name, total, currency, isCombination }) => (
-                        <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
-                          <span className="gr-ended-breakdown-pattern">
-                            {isCombination && '🔗 '}{name}
-                          </span>
-                          <span className="gr-ended-breakdown-prize">
-                            {total.toFixed(4)} {currency}
-                          </span>
-                        </div>
-                      ))}
-                      {playerWinEntries.length > 1 && (
-                        <div className="gr-ended-breakdown-row gr-ended-breakdown-total">
-                          <span>{t('game_room.game_ended_total')}</span>
-                          <span>
-                            {playerWinEntries.reduce((s, e) => s + e.total, 0).toFixed(4)}{' '}
-                            {playerWinEntries[0]?.currency}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {nextGame && nextGame.status === 'funding' ? (
-                    <span className="gr-ended-next">
-                      {t('game_room.next_game_funding', { time: nextGameTimer })}
-                    </span>
-                  ) : (() => {
-                    const endMs   = (game?.end_time ?? 0) * 1000;
-                    const delayMs = ((room?.metadata as any)?.auto_start_delay_sec ?? 30) * 1000;
-                    const estMs   = endMs > 0 ? endMs + delayMs - now : 0;
-                    if (estMs > 0) {
-                      return (
-                        <span className="gr-ended-next">
-                          {t('game_room.next_game_soon', { time: fmtCountdown(estMs) })}
-                        </span>
-                      );
-                    }
-                    return (
-                      <span className="gr-ended-next">{t('game_room.game_ended_next')}</span>
-                    );
-                  })()}
-                </div>
-                {nextGame && nextGame.status === 'funding' && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    data-testid="gr-next-game-btn"
-                    onClick={onLeave}
-                  >
-                    {t('game_room.go_to_next')}
-                  </Button>
-                )}
-                {onGoToHistory && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    data-testid="gr-view-history"
-                    onClick={onGoToHistory}
-                  >
-                    {t('nav.my_history') ?? 'Histórico'}
-                  </Button>
-                )}
-              </div>
-            )}
-
-          </div>
-        )}
+        {/* ── Banners (golden ball, stages, fim) + confete — extraídos em PrizePanels ── */}
+        <PrizePanels
+          hasBanners={hasBanners} goldenBall={goldenBall} clearedStages={clearedStages}
+          isEffectiveGameEnded={isEffectiveGameEnded} isStaticFinalState={isStaticFinalState}
+          playerWinEntries={playerWinEntries} localWinners={localWinners} playerTickets={playerTickets}
+          nextGame={nextGame} nextGameTimer={nextGameTimer} game={game} room={room} now={now}
+          onLeave={onLeave} onGoToHistory={onGoToHistory}
+        />
 
         {/* ── Cartelas ──────────────────────────────────────────────────────── */}
         <div className="gr-tickets-section" data-testid="gr-my-tickets">
@@ -333,24 +208,6 @@ export default function GameRoom({
         </div>
 
       </div>
-
-      {/* ── Confetti de vitória ────────────────────────────────────────────── */}
-      {isEffectiveGameEnded && playerWinEntries.length > 0 && (
-        <div className="gr-confetti-overlay" aria-hidden="true">
-          {Array.from({ length: 24 }, (_, i) => (
-            <span
-              key={i}
-              className="gr-confetti"
-              style={{
-                left:             `${(i * 4.17) % 100}%`,
-                '--dx':           `${Math.round(Math.sin(i * 2.399) * 70)}px`,
-                animationDelay:   `${((i * 0.37) % 2.8).toFixed(2)}s`,
-                background:       ['#f59e0b','#8b5cf6','#06b6d4','#10b981','#ef4444','#ec4899'][i % 6],
-              } as React.CSSProperties}
-            />
-          ))}
-        </div>
-      )}
 
       {/* ── Chat Floating ──────────────────────────────────────────────────── */}
       {room && (
