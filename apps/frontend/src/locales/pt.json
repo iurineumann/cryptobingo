@@ -159,7 +159,9 @@
     "closing": "Fechando",
     "sound_on": "Som ligado",
     "sound_off": "Som desligado",
-    "sound_toggle_aria": "Alternar som do sorteio"
+    "sound_toggle_aria": "Alternar som do sorteio",
+    "near_miss": "Falta 1!",
+    "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar"
   },
   "lobby": {
     "title": "Lobby de Jogos",

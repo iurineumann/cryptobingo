@@ -159,7 +159,9 @@
     "closing": "Closing",
     "sound_on": "Sound on",
     "sound_off": "Sound off",
-    "sound_toggle_aria": "Toggle draw sound"
+    "sound_toggle_aria": "Toggle draw sound",
+    "near_miss": "1 to go!",
+    "near_miss_aria": "Ticket {{id}}: one ball away from a win"
   },
   "lobby": {
     "title": "Game Lobby",
