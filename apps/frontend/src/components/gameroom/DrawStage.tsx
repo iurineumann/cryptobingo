@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { DrawnBall } from '../../hooks/useSlowReveal';
 import { getCol, BINGO_COLORS } from '../ticketUtils';
 import { WS_STATUS_CLASS } from './useGameRoomState';
+import { useDrawSound } from './useDrawSound';
 
 export interface DrawStageProps {
   wsStatus: string;
@@ -30,13 +31,14 @@ export default function DrawStage({
   col, color, maxBalls, isDrawing, stageRef,
 }: DrawStageProps) {
   const { t } = useTranslation();
+  const sound = useDrawSound();
 
   // Refs internos ao palco — controlam a animação de drop da bola hero e o pulso de coluna
   const heroRef  = useRef<HTMLDivElement>(null);
   const spotRef  = useRef<HTMLDivElement>(null);
   const prevBall = useRef<number | null>(null);
 
-  // Efeito unificado: dispara gr-drop no hero E gr-col-pulse no spot a cada nova bola.
+  // Efeito unificado: dispara gr-drop no hero, gr-col-pulse no spot e som a cada nova bola.
   // Um único update de prevBall.current evita que um segundo efeito veja o guard já atualizado.
   // O padrão remove→void offsetWidth→add força o browser a reiniciar o keyframe (re-trigger).
   useEffect(() => {
@@ -46,7 +48,9 @@ export default function DrawStage({
     if (hero) { hero.classList.remove('gr-drop'); void hero.offsetWidth; hero.classList.add('gr-drop'); }
     const spot = spotRef.current;
     if (spot) { spot.classList.remove('gr-col-pulse'); void spot.offsetWidth; spot.classList.add('gr-col-pulse'); }
-  }, [lastDrawn]);
+    // Toca o som de chamada da bola apenas quando há uma bola nova (não no reset para null)
+    if (lastDrawn != null) sound.playBallCall(col);
+  }, [lastDrawn, sound, col]);
 
   return (
     <section
@@ -63,6 +67,18 @@ export default function DrawStage({
           <span style={{ fontWeight: 600, color: 'var(--cb-text-secondary)' }}>
             {t('game_room.ball_count', { count: drawnNumbers.length })}
           </span>
+          <button
+            type="button"
+            className="gr-sound-toggle"
+            data-testid="gr-sound-toggle"
+            data-on={sound.enabled}
+            onClick={sound.toggle}
+            aria-pressed={sound.enabled}
+            aria-label={t('game_room.sound_toggle_aria')}
+            title={sound.enabled ? t('game_room.sound_on') : t('game_room.sound_off')}
+          >
+            {sound.enabled ? '🔊' : '🔇'}
+          </button>
         </span>
       </div>
 

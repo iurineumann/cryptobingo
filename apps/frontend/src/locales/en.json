@@ -156,7 +156,10 @@
     "ticket_footer_pattern": "{{count}} patterns",
     "ticket_footer_marked": "{{marked}}/{{total}} marked",
     "next_game_soon": "Next game in ~{{time}}",
-    "closing": "Closing"
+    "closing": "Closing",
+    "sound_on": "Sound on",
+    "sound_off": "Sound off",
+    "sound_toggle_aria": "Toggle draw sound"
   },
   "lobby": {
     "title": "Game Lobby",

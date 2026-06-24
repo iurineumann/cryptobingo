@@ -156,7 +156,10 @@
     "ticket_footer_pattern": "{{count}} 个模式",
     "ticket_footer_marked": "已标记 {{marked}}/{{total}}",
     "next_game_soon": "下一局约 {{time}} 后",
-    "closing": "关闭中"
+    "closing": "关闭中",
+    "sound_on": "声音开启",
+    "sound_off": "声音关闭",
+    "sound_toggle_aria": "切换开奖声音"
   },
   "lobby": {
     "title": "游戏大厅",

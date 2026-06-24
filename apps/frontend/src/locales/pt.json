@@ -156,7 +156,10 @@
     "ticket_footer_pattern": "{{count}} padrões",
     "ticket_footer_marked": "{{marked}}/{{total}} marcados",
     "next_game_soon": "Próxima partida em ~{{time}}",
-    "closing": "Fechando"
+    "closing": "Fechando",
+    "sound_on": "Som ligado",
+    "sound_off": "Som desligado",
+    "sound_toggle_aria": "Alternar som do sorteio"
   },
   "lobby": {
     "title": "Lobby de Jogos",
