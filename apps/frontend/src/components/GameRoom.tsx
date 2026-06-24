@@ -117,6 +117,7 @@ export default function GameRoom({
             col={col}
             color={color}
             maxBalls={maxBalls}
+            isDrawing={isDrawing}
             stageRef={stageRef}
           />
 
