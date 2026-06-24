@@ -142,6 +142,9 @@ export function setupChatSocket(io: Server): void {
             socketMessagesTotal.inc({ event: 'chat:join' });
             if (!roomId) return;
             if (!await roomExists(roomId)) return;
+            // Idempotência: re-join do mesmo socket na mesma sala (reconnect/remount do useChat)
+            // não infla a presença. Rejoin legítimo após chat:leave funciona (joinedRooms.delete).
+            if (joinedRooms.has(roomId)) return;
             socket.join(roomId);
             joinedRooms.add(roomId);
             presence.add(roomId, socket.data.wallet as string);

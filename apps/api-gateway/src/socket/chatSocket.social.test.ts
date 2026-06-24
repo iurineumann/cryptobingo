@@ -138,6 +138,28 @@ describe('Presença — presence:update', () => {
         expect(last[1]).toMatchObject({ roomId: 'sala1', online: 1 });
     });
 
+    it('[SOC] re-join idempotente: mesmo socket emite chat:join 2x → online continua 1', async () => {
+        const { io, ns, emitCalls } = makeMockIo();
+        setupChatSocket(io);
+
+        const socket   = makeSocket(`rejoin-${Date.now()}.wam`);
+        const handlers = await connect(ns, socket);
+
+        await handlers.get('chat:join')!({ roomId: 'sala1' });
+        await handlers.get('chat:join')!({ roomId: 'sala1' }); // re-join (reconnect/remount)
+
+        // 1º join emite presence:update; 2º join é descartado (guard de idempotência)
+        const updates = filterEmits(emitCalls(), 'presence:update');
+        expect(updates.length).toBe(1);
+        expect(updates[0][1]).toMatchObject({ roomId: 'sala1', online: 1 });
+
+        // Rejoin legítimo após leave volta a contar
+        await handlers.get('chat:leave')!({ roomId: 'sala1' });
+        await handlers.get('chat:join')!({ roomId: 'sala1' });
+        const after = filterEmits(emitCalls(), 'presence:update');
+        expect(after[after.length - 1][1]).toMatchObject({ roomId: 'sala1', online: 1 });
+    });
+
     it('[SOC] disconnect decrementa presença e emite presence:update', async () => {
         const { io, ns, emitCalls } = makeMockIo();
         setupChatSocket(io);
