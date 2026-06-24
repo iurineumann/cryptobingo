@@ -166,7 +166,6 @@
     "pot_bonus": "Bônus patrocinado",
     "stats_balls": "Bolas",
     "player_prizes_title": "Seus prêmios",
-    "room_prizes_title": "Prêmios da sala",
     "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)"
   },
   "lobby": {

@@ -166,7 +166,6 @@
     "pot_bonus": "赞助奖金",
     "stats_balls": "号码球",
     "player_prizes_title": "你的奖励",
-    "room_prizes_title": "房间奖励",
     "room_prizes_summary": "房间向 {{count}} 位中奖者支付了 {{total}}"
   },
   "lobby": {
