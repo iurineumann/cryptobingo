@@ -492,7 +492,7 @@ export function useGameRoomState(
     try {
       // Busca todos os tickets paginando (limit 50 por página) até não restar mais
       async function fetchAllTickets() {
-        const rows: Array<{ ticket_id: string; matrix: number[] | string; price?: { quantity: string; contract: string } }> = [];
+        const rows: Array<{ ticket_id: string; owner: string; matrix: number[] | string; price?: { quantity: string; contract: string } }> = [];
         let lowerBound: string | undefined;
         while (true) {
           const res = await session.client.v1.chain.get_table_rows({
@@ -507,6 +507,7 @@ export function useGameRoomState(
       }
 
       const actorScope = Name.from(session.actor).value.toString();
+      const actorName  = Name.from(session.actor).toString();
       const [gameRes, allTickets, balRes] = await Promise.all([
         session.client.v1.chain.get_table_rows({
           code: CONTRACT, scope: CONTRACT, table: 'games',
@@ -581,12 +582,17 @@ export function useGameRoomState(
         } catch { /* silencioso */ }
       }
 
+      // A tabela `tickets` tem scope=game_id (todas as cartelas da partida, de todos
+      // os jogadores). Filtramos por owner para exibir SOMENTE as cartelas do jogador
+      // logado — sem isto, contas diferentes veem as cartelas umas das outras.
       setPlayerTickets(
-        allTickets.map(r => ({
-          id:        r.ticket_id,
-          matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
-          pricePaid: r.price?.quantity ?? loadedGame?.ticket_price?.quantity,
-        }))
+        allTickets
+          .filter(r => r.owner === actorName)
+          .map(r => ({
+            id:        r.ticket_id,
+            matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexMatrix(r.matrix as string),
+            pricePaid: r.price?.quantity ?? loadedGame?.ticket_price?.quantity,
+          }))
       );
     } catch (err) {
       console.error('[GameRoom] Erro ao carregar jogo:', err);

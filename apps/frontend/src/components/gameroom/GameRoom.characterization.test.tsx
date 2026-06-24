@@ -88,7 +88,7 @@ function makeSession(status = 'funding', opts: { withTicket?: boolean; drawnBall
     gametype_id: '0', end_time: 0,
   };
   const tickets = opts.withTicket
-    ? [{ ticket_id: '1', matrix: TEST_MATRIX, price: { quantity: '5.0000 WAX', contract: 'eosio.token' } }]
+    ? [{ ticket_id: '1', owner: 'player1', matrix: TEST_MATRIX, price: { quantity: '5.0000 WAX', contract: 'eosio.token' } }]
     : [];
   const get_table_rows = vi.fn(async ({ table }: { table: string }) => {
     if (table === 'games') return { rows: [game], more: false };
