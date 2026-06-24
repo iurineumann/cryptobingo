@@ -17,6 +17,7 @@ import { useGameRoomState } from './gameroom/useGameRoomState';
 import PatternsPanel from './gameroom/PatternsPanel';
 import PrizePanels from './gameroom/PrizePanels';
 import TicketsGrid from './gameroom/TicketsGrid';
+import MatchStats from './gameroom/MatchStats';
 
 // ==========================================
 // TIPOS
@@ -104,6 +105,14 @@ export default function GameRoom({
 
       {/* ── Grid principal ──────────────────────────────────────────────────── */}
       <div className={`gr-main gr-${density}`}>
+
+        {/* ── Faixa de dados: pote, bônus patrocinado e bolas (Task 2) ─────── */}
+        <MatchStats
+          totalWagered={game?.total_wagered?.quantity ?? ''}
+          sponsorPool={game?.sponsor_pool ?? []}
+          drawnCount={drawnNumbers.length}
+          maxBalls={maxBalls}
+        />
 
         {/* ── Linha superior: stage + patterns lado a lado ───────────────────── */}
         <div className="gr-top-row">

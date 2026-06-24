@@ -497,6 +497,15 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-stage-badge { font-family: var(--font-family-mono); font-size: .7rem; font-weight: 700; color: var(--cb-brand); }
 .gr-stage-count { font-size: .67rem; color: var(--cb-text-secondary); }
 
+/* Faixa de dados da partida: pote, bônus e bolas (Task 2) */
+.gr-match-stats { display: flex; flex-wrap: wrap; gap: .75rem; padding: .6rem .9rem; background: var(--cb-bg-card); border: 1px solid var(--cb-border-default); border-radius: .75rem; box-shadow: var(--shadow-card); }
+.gr-match-stat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.gr-match-stat .label { font-size: .58rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cb-text-tertiary); }
+.gr-match-stat .value { font-family: var(--font-family-mono); font-size: .95rem; font-weight: 800; color: var(--cb-text-primary); }
+.gr-match-stat.is-pot .value { color: var(--cb-accent); }
+.gr-match-stat.is-bonus .value { color: var(--cb-brand); }
+.gr-match-stats-sep { width: 1px; align-self: stretch; background: var(--cb-border-subtle); }
+
 /* Game Ended (ADR-014) */
 .gr-ended-banner { display: flex; align-items: flex-start; gap: 1rem; padding: .875rem 1.25rem; background: linear-gradient(135deg, rgba(139,92,246,.12), rgba(30,30,53,.88)); border: 1px solid rgba(139,92,246,.3); border-radius: .875rem; animation: cb-fade-in .4s ease forwards; }
 .gr-ended-banner--winner { background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(30,30,53,.9)); border-color: rgba(245,158,11,.4); }
@@ -516,6 +525,8 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-ended-breakdown-prize { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-accent); }
 .gr-ended-breakdown-total { border-top: 1px solid rgba(255,255,255,.1); padding-top: .25rem; margin-top: .1rem; font-weight: 700; color: var(--cb-text-primary); }
 .gr-ended-breakdown-total span:last-child { color: var(--color-accent-300); }
+.gr-room-prizes { margin-top: .4rem; padding-top: .4rem; border-top: 1px dashed var(--cb-border-subtle); font-size: .72rem; color: var(--cb-text-secondary); display: flex; align-items: center; gap: .35rem; }
+.gr-ended-breakdown-title { font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--cb-text-tertiary); margin-bottom: .15rem; }
 /* Confetti overlay */
 .gr-confetti-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
 

@@ -161,7 +161,12 @@
     "sound_off": "Som desligado",
     "sound_toggle_aria": "Alternar som do sorteio",
     "near_miss": "Falta 1!",
-    "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar"
+    "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar",
+    "pot_label": "Pote da partida",
+    "pot_bonus": "Bônus patrocinado",
+    "stats_balls": "Bolas",
+    "player_prizes_title": "Seus prêmios",
+    "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)"
   },
   "lobby": {
     "title": "Lobby de Jogos",

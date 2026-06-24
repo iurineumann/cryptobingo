@@ -13,6 +13,7 @@ import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import type { EnrichedRoom } from '../../services/api';
 import type { GoldenBallInfo, ClearedStage } from '../../hooks/useSlowReveal';
 import { Button } from '@/components/ui/button';
+import { sumPayoutsByCurrency, countWinners } from './prizeFormat';
 
 // Helper puro — formata ms para contagem regressiva legível (ex: "2m 30s")
 function fmtCountdown(ms: number): string {
@@ -50,6 +51,15 @@ export default function PrizePanels({
   const { t } = useTranslation();
 
   const hasConfetti = isEffectiveGameEnded && playerWinEntries.length > 0;
+
+  // Soma dos prêmios pagos pela sala (todos os vencedores), derivado de localWinners
+  const roomPrize = (() => {
+    const all = localWinners.flatMap(w => w.payouts);
+    const sums = sumPayoutsByCurrency(all);
+    if (sums.length === 0) return null;
+    const total = sums.map(s => `${s.total.toFixed(4)} ${s.symbol}`).join(' + ');
+    return { total, count: countWinners(localWinners) };
+  })();
 
   // Nada a renderizar: sem banners nem confete
   if (!hasBanners && !hasConfetti) return null;
@@ -116,6 +126,7 @@ export default function PrizePanels({
 
                 {playerWinEntries.length > 0 && (
                   <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
+                    <div className="gr-ended-breakdown-title">{t('game_room.player_prizes_title')}</div>
                     {playerWinEntries.map(({ name, total, currency, isCombination }) => (
                       <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                         <span className="gr-ended-breakdown-pattern">
@@ -135,6 +146,12 @@ export default function PrizePanels({
                         </span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {roomPrize && (
+                  <div className="gr-room-prizes" data-testid="gr-room-prizes">
+                    <span>{t('game_room.room_prizes_summary', { total: roomPrize.total, count: roomPrize.count })}</span>
                   </div>
                 )}
 
