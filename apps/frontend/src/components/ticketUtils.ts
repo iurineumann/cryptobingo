@@ -276,6 +276,48 @@ export function groupTicketsByCategory(
   return groups;
 }
 
+export interface TicketNearMiss {
+  /** Células (índice 0–24) que, se sorteadas, fecham ao menos um padrão. */
+  nearMissCells: Set<number>;
+  /** Quantos padrões estão a exatamente 1 célula de fechar. */
+  patternsOneAway: number;
+  /** Maior completude (0–1) entre padrões ainda NÃO completos. */
+  closestPct: number;
+}
+
+/**
+ * Detecta, numa cartela, padrões a UMA célula de fechar (near-miss).
+ * Cosmético — não altera payout. FREE SPACE (flat[i] === null) conta como marcado.
+ */
+export function computeTicketNearMiss(
+  matrix: number[],
+  drawnSet: Set<number>,
+  patterns: Pattern[],
+): TicketNearMiss {
+  const flat = ticketFlat(matrix);
+  const nearMissCells = new Set<number>();
+  let patternsOneAway = 0;
+  let closestPct = 0;
+
+  for (const p of patterns) {
+    const reqIdx: number[] = [];
+    for (let i = 0; i < p.cells.length; i++) if (p.cells[i]) reqIdx.push(i);
+    if (reqIdx.length === 0) continue;
+
+    const missing = reqIdx.filter(i => !(flat[i] === null || drawnSet.has(flat[i] as number)));
+    if (missing.length === 0) continue; // já completo — ignora
+
+    const pct = (reqIdx.length - missing.length) / reqIdx.length;
+    if (pct > closestPct) closestPct = pct;
+
+    if (missing.length === 1) {
+      patternsOneAway++;
+      nearMissCells.add(missing[0]);
+    }
+  }
+  return { nearMissCells, patternsOneAway, closestPct };
+}
+
 export function computePatternUserProximity(
   tickets: TicketEntry[],
   drawnSet: Set<number>,

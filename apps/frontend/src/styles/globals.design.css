@@ -112,6 +112,8 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-ticket-foot .prize { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-accent); }
 .gr-ticket-foot .prize.is-paid { font-weight: 800; font-size: 0.8rem; }
 .ticket-price-paid { font-family: var(--font-family-mono); font-size: 0.65rem; opacity: 0.5; letter-spacing: 0.02em; }
+.gr-ticket-progress { height: 4px; border-radius: 9999px; background: var(--cb-border-subtle); overflow: hidden; margin: 0 .75rem .5rem; }
+.gr-ticket-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--color-accent-500), var(--color-accent-300)); transition: width 400ms cubic-bezier(0.4,0,0.2,1); }
 
 .gr-bingo-grid { display: flex; flex-direction: column; }
 .gr-bingo-grid-head { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.2rem; padding: 0.4rem 0.55rem; background: var(--cb-bg-sunken); border-bottom: 1px solid var(--cb-border-default); }
@@ -122,6 +124,18 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-bingo-cell.is-marked { background: var(--cell-color); color: white; border-color: color-mix(in srgb, var(--cell-color) 70%, transparent); box-shadow: inset 0 -4px 8px rgba(0,0,0,0.18), inset 0 2px 6px rgba(255,255,255,0.22); }
 .gr-bingo-cell.is-marked::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 35% 25%, rgba(255,255,255,0.28) 0%, transparent 55%); pointer-events: none; }
 .gr-bingo-cell.is-just-hit { animation: cb-cell-pop 380ms cubic-bezier(0.4,0,0.2,1); }
+/* FASE 2 — cartelas vivas / near-miss (reduced-motion: bloco global cobre) */
+.gr-bingo-cell.is-near-miss-cell { outline: 2px dashed var(--cb-accent); outline-offset: -2px; z-index: 1; animation: cb-near-miss-pulse 1.2s ease-in-out infinite; }
+@keyframes cb-near-miss-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 rgba(251,191,36,0); }
+  50%      { box-shadow: inset 0 0 10px rgba(251,191,36,.6); }
+}
+.gr-ticket.is-near-miss { border-color: color-mix(in srgb, var(--cb-accent) 55%, transparent); }
+.gr-ticket-near-miss { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 9999px; font-size: .62rem; font-weight: 800; letter-spacing: .04em; color: #1a1a2e; background: linear-gradient(135deg, var(--color-accent-500), var(--color-accent-300)); animation: cb-near-miss-badge 1s ease-in-out infinite; }
+@keyframes cb-near-miss-badge {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
 .gr-bingo-cell.is-free { background: linear-gradient(135deg, var(--color-accent-600), var(--color-accent-400)); color: #1a1a2e; border-color: var(--color-accent-500); font-size: 1.15rem; box-shadow: inset 0 -4px 10px rgba(0,0,0,0.20), inset 0 2px 6px rgba(255,255,255,0.30); }
 .gr-bingo-cell.in-winning-pattern { outline: 2px solid var(--cb-accent); outline-offset: -2px; z-index: 1; animation: cb-winning-blink 1.8s ease-in-out infinite; }
 

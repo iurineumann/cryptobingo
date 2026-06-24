@@ -159,7 +159,9 @@
     "closing": "关闭中",
     "sound_on": "声音开启",
     "sound_off": "声音关闭",
-    "sound_toggle_aria": "切换开奖声音"
+    "sound_toggle_aria": "切换开奖声音",
+    "near_miss": "差1个!",
+    "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖"
   },
   "lobby": {
     "title": "游戏大厅",
