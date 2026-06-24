@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
-import ChatFloating from './chat/ChatFloating';
+import RoomSocial from './gameroom/RoomSocial';
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
 import { useGameRoomState } from './gameroom/useGameRoomState';
@@ -154,14 +154,8 @@ export default function GameRoom({
 
       </div>
 
-      {/* ── Chat Floating ──────────────────────────────────────────────────── */}
-      {room && (
-        <ChatFloating
-          roomId={room.room_id}
-          roomName={room.metadata?.name ?? `Sala #${room.room_id}`}
-          walletAddress={profile.wallet_address}
-        />
-      )}
+      {/* ── Social (chat floating; cresce para presença/reações na Fase 4) ── */}
+      <RoomSocial room={room} walletAddress={profile.wallet_address} />
 
       {/* ── Modal de compra ────────────────────────────────────────────────── */}
       {showBuyModal && ticketPrice && (
