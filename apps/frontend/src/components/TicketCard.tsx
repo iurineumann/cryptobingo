@@ -175,6 +175,12 @@ export function TicketCard({
         );
       })()}
 
+      {!isWinner && nearMiss.closestPct > 0 && (
+        <div className="gr-ticket-progress" data-testid="tc-progress" aria-hidden="true">
+          <i style={{ width: `${Math.round(nearMiss.closestPct * 100)}%` }} />
+        </div>
+      )}
+
       <div className="gr-ticket-foot">
         <span className="best">
           {isWinner
