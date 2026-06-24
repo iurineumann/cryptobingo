@@ -9,14 +9,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import BuyTicketModal from './BuyTicketModal';
 import ChatFloating from './chat/ChatFloating';
-import Logo from './Logo';
+import GameRoomHeader from './gameroom/GameRoomHeader';
 import { TicketCard } from './TicketCard';
 import { BINGO_COLORS, getCol } from './ticketUtils';
-import { useGameRoomState, STATUS_DOT, WS_STATUS_CLASS } from './gameroom/useGameRoomState';
+import { useGameRoomState, WS_STATUS_CLASS } from './gameroom/useGameRoomState';
 
 function fmtCountdown(ms: number): string {
   if (ms <= 0) return '0s';
@@ -54,7 +53,7 @@ export default function GameRoom({
   onGoToHistory, onGoToWallet, onGoToAdmin, isAdmin,
   onLogout, theme, onToggleTheme, onLanguageChange,
 }: GameRoomProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   // ── Estado/efeitos/derivações vivem no hook (Fase 0 do refactor) ──────────
   const state = useGameRoomState({ gameId, roomId, session });
@@ -111,112 +110,16 @@ export default function GameRoom({
     <div className="gr-shell">
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <header className="gr-navbar" data-testid="gr-room-header">
-
-        {/* ── Esquerda: logo + crumb ── */}
-        <div className="gr-nav-left">
-          <Logo variant="icon" height={28} onClick={onLeave} alt="Voltar ao Lobby" />
-          <div className="gr-nav-crumb">
-            <span className="sep">/</span>
-            <span style={{ color: 'var(--cb-text-tertiary)', fontSize: '0.75rem' }}>
-              {room?.metadata?.name ?? (room ? `Sala ${room.room_id}` : `#${gameId}`)}
-            </span>
-            {game && (
-              <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary] inline-flex items-center gap-1">
-                {effectiveDisplayStatus && <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveDisplayStatus] }} />}
-                {gameStatusText}
-              </span>
-            )}
-            {timeRemaining && (
-              <span className="text-xs font-mono font-bold text-[--cb-accent] bg-[--cb-bg-elevated] px-2 py-0.5 rounded-md border border-[--cb-border-default]">
-                {timeRemaining}
-              </span>
-            )}
-            {isDrawing && <span className="gr-live">{t('game_room.badge_live')}</span>}
-            {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
-          </div>
-        </div>
-
-        {/* ── Direita: saldo + chat + status WS + idioma + menu ── */}
-        <div className="gr-nav-right">
-
-          {/* Saldo in-game */}
-          {ingameBalances.length > 0 && (
-            <span
-              className="lobby-wallet-chip"
-              title={t('lobby.balance_aria')}
-              style={{ fontSize: '0.72rem' }}
-            >
-              <span className="symbol" aria-hidden="true">◆</span>
-              {ingameBalances.map((b, i) => (
-                <span key={i} style={i > 0 ? { borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.4rem', marginLeft: '0.2rem' } : {}}>
-                  {b.balance.quantity}
-                </span>
-              ))}
-            </span>
-          )}
-
-          {/* Seletor de idioma */}
-          <select
-            value={i18n.language}
-            onChange={e => { i18n.changeLanguage(e.target.value); onLanguageChange?.(e.target.value); }}
-            className="h-8 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            aria-label={t('common.language') ?? 'Idioma'}
-          >
-            <option value="pt-BR">PT</option>
-            <option value="en-US">EN</option>
-            <option value="zh-CN">中</option>
-          </select>
-
-          {/* Status WS */}
-          <span
-            className={`cb-status-dot ${wsStatusClass[wsStatus] ?? 'cb-status-dot-offline'}`}
-            title={t('game_room.ws_title', { status: wsStatus })}
-            aria-label={t('game_room.ws_aria', { status: wsStatus })}
-          />
-
-          {/* Menu dropdown ⋮ */}
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Menu" />}>
-              ⋮
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem data-testid="gr-nav-lobby" onClick={onLeave}>
-                🏠 {t('game_room.back_to_lobby')}
-              </DropdownMenuItem>
-              {onGoToHistory && (
-                <DropdownMenuItem data-testid="gr-nav-history" onClick={onGoToHistory}>
-                  📋 {t('nav.my_history') ?? 'Histórico'}
-                </DropdownMenuItem>
-              )}
-              {onGoToWallet && (
-                <DropdownMenuItem data-testid="gr-nav-wallet" onClick={onGoToWallet}>
-                  💳 {t('nav.wallet') ?? 'Carteira'}
-                </DropdownMenuItem>
-              )}
-              {isAdmin && onGoToAdmin && (
-                <DropdownMenuItem data-testid="gr-nav-admin" onClick={onGoToAdmin}>
-                  ⚙ Admin
-                </DropdownMenuItem>
-              )}
-              {onToggleTheme && (
-                <DropdownMenuItem onClick={onToggleTheme}>
-                  {theme === 'dark' ? '☾' : '☀'} {theme === 'dark' ? t('nav.theme_light') : t('nav.theme_dark')}
-                </DropdownMenuItem>
-              )}
-              {onLogout && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={onLogout}>
-                    ⏻ {t('nav.logout') ?? 'Desconectar'}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-        </div>
-      </header>
+      <GameRoomHeader
+        gameId={gameId} room={room} game={game}
+        effectiveDisplayStatus={effectiveDisplayStatus} gameStatusText={gameStatusText}
+        timeRemaining={timeRemaining} isDrawing={isDrawing} isAborted={isAborted}
+        ingameBalances={ingameBalances} wsStatus={wsStatus}
+        isAdmin={isAdmin} theme={theme}
+        onLeave={onLeave} onGoToHistory={onGoToHistory} onGoToWallet={onGoToWallet}
+        onGoToAdmin={onGoToAdmin} onToggleTheme={onToggleTheme} onLogout={onLogout}
+        onLanguageChange={onLanguageChange}
+      />
 
       {/* ── Grid principal ──────────────────────────────────────────────────── */}
       <div className={`gr-main gr-${density}`}>
