@@ -156,7 +156,17 @@
     "ticket_footer_pattern": "{{count}} 个模式",
     "ticket_footer_marked": "已标记 {{marked}}/{{total}}",
     "next_game_soon": "下一局约 {{time}} 后",
-    "closing": "关闭中"
+    "closing": "关闭中",
+    "sound_on": "声音开启",
+    "sound_off": "声音关闭",
+    "sound_toggle_aria": "切换开奖声音",
+    "near_miss": "差1个!",
+    "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖",
+    "pot_label": "本局奖池",
+    "pot_bonus": "赞助奖金",
+    "stats_balls": "号码球",
+    "player_prizes_title": "你的奖励",
+    "room_prizes_summary": "房间向 {{count}} 位中奖者支付了 {{total}}"
   },
   "lobby": {
     "title": "游戏大厅",

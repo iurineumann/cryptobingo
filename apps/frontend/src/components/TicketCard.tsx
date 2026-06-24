@@ -5,7 +5,7 @@
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BINGO_COLORS, COLS, type Pattern } from './ticketUtils';
+import { BINGO_COLORS, COLS, type Pattern, computeTicketNearMiss } from './ticketUtils';
 import { Star, Link2 } from 'lucide-react';
 
 interface CompletedComboInfo {
@@ -60,16 +60,23 @@ export function TicketCard({
     return { completedPatterns: completed, winningCells: winning };
   }, [grid, drawnSet, patterns]);
 
-  const isWinner = winPattern !== null || completedPatterns.length > 0;
-  const isClose  = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
+  const nearMiss = useMemo(
+    () => computeTicketNearMiss(matrix, drawnSet, patterns),
+    [matrix, drawnSet, patterns],
+  );
+
+  const isWinner    = winPattern !== null || completedPatterns.length > 0;
+  const isClose     = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
+  const showNearMiss = !isWinner && nearMiss.patternsOneAway > 0;
 
   return (
     <article
       data-testid={`gr-ticket-${ticketId}`}
       className={[
         'gr-ticket',
-        isWinner ? 'is-winner' : '',
-        isClose  ? 'is-close'  : '',
+        isWinner    ? 'is-winner'   : '',
+        isClose     ? 'is-close'    : '',
+        showNearMiss ? 'is-near-miss' : '',
         !isWinner && !isClose && markedCount < 3 ? 'is-dimmed' : '',
       ].filter(Boolean).join(' ')}
       aria-label={isWinner ? t('game_room.ticket_winner_aria', { id: ticketId }) : t('game_room.ticket_aria', { id: ticketId })}
@@ -81,6 +88,15 @@ export function TicketCard({
         <span className={`gr-ticket-marks${isWinner ? ' is-winner' : isClose ? ' is-close' : ''}`}>
           {isWinner ? t('game_room.winner_badge') : `${markedCount}/25`}
         </span>
+        {showNearMiss && (
+          <span
+            className="gr-ticket-near-miss"
+            data-testid="tc-near-miss"
+            aria-label={t('game_room.near_miss_aria', { id: ticketId })}
+          >
+            {t('game_room.near_miss')}
+          </span>
+        )}
       </div>
 
       <div className="gr-bingo-grid" role="grid" aria-label={t('game_room.ticket_aria', { id: ticketId })}>
@@ -121,6 +137,7 @@ export function TicketCard({
                       isMarked && !isFree ? 'is-marked'          : '',
                       isJustHit           ? 'is-just-hit'        : '',
                       inWin               ? 'in-winning-pattern' : '',
+                      showNearMiss && nearMiss.nearMissCells.has(gridIdx) && !isMarked ? 'is-near-miss-cell' : '',
                     ].filter(Boolean).join(' ')}
                     style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
                   >
@@ -157,6 +174,12 @@ export function TicketCard({
           </div>
         );
       })()}
+
+      {!isWinner && nearMiss.closestPct > 0 && (
+        <div className="gr-ticket-progress" data-testid="tc-progress" aria-hidden="true">
+          <i style={{ width: `${Math.round(nearMiss.closestPct * 100)}%` }} />
+        </div>
+      )}
 
       <div className="gr-ticket-foot">
         <span className="best">

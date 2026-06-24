@@ -112,6 +112,8 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-ticket-foot .prize { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-accent); }
 .gr-ticket-foot .prize.is-paid { font-weight: 800; font-size: 0.8rem; }
 .ticket-price-paid { font-family: var(--font-family-mono); font-size: 0.65rem; opacity: 0.5; letter-spacing: 0.02em; }
+.gr-ticket-progress { height: 4px; border-radius: 9999px; background: var(--cb-border-subtle); overflow: hidden; margin: 0 .75rem .5rem; }
+.gr-ticket-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--color-accent-500), var(--color-accent-300)); transition: width 400ms cubic-bezier(0.4,0,0.2,1); }
 
 .gr-bingo-grid { display: flex; flex-direction: column; }
 .gr-bingo-grid-head { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.2rem; padding: 0.4rem 0.55rem; background: var(--cb-bg-sunken); border-bottom: 1px solid var(--cb-border-default); }
@@ -122,6 +124,18 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-bingo-cell.is-marked { background: var(--cell-color); color: white; border-color: color-mix(in srgb, var(--cell-color) 70%, transparent); box-shadow: inset 0 -4px 8px rgba(0,0,0,0.18), inset 0 2px 6px rgba(255,255,255,0.22); }
 .gr-bingo-cell.is-marked::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 35% 25%, rgba(255,255,255,0.28) 0%, transparent 55%); pointer-events: none; }
 .gr-bingo-cell.is-just-hit { animation: cb-cell-pop 380ms cubic-bezier(0.4,0,0.2,1); }
+/* FASE 2 — cartelas vivas / near-miss (reduced-motion: bloco global cobre) */
+.gr-bingo-cell.is-near-miss-cell { outline: 2px dashed var(--cb-accent); outline-offset: -2px; z-index: 1; animation: cb-near-miss-pulse 1.2s ease-in-out infinite; }
+@keyframes cb-near-miss-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 rgba(251,191,36,0); }
+  50%      { box-shadow: inset 0 0 10px rgba(251,191,36,.6); }
+}
+.gr-ticket.is-near-miss { border-color: color-mix(in srgb, var(--cb-accent) 55%, transparent); }
+.gr-ticket-near-miss { display: inline-flex; align-items: center; gap: .25rem; padding: .1rem .45rem; border-radius: 9999px; font-size: .62rem; font-weight: 800; letter-spacing: .04em; color: #1a1a2e; background: linear-gradient(135deg, var(--color-accent-500), var(--color-accent-300)); animation: cb-near-miss-badge 1s ease-in-out infinite; }
+@keyframes cb-near-miss-badge {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
 .gr-bingo-cell.is-free { background: linear-gradient(135deg, var(--color-accent-600), var(--color-accent-400)); color: #1a1a2e; border-color: var(--color-accent-500); font-size: 1.15rem; box-shadow: inset 0 -4px 10px rgba(0,0,0,0.20), inset 0 2px 6px rgba(255,255,255,0.30); }
 .gr-bingo-cell.in-winning-pattern { outline: 2px solid var(--cb-accent); outline-offset: -2px; z-index: 1; animation: cb-winning-blink 1.8s ease-in-out infinite; }
 
@@ -205,6 +219,50 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 
 .gr-drop { animation: cb-ball-drop 620ms cubic-bezier(0.4, 0, 0.2, 1); }
 .gr-stage[data-stage-style="minimal"] .gr-drop { animation: cb-ball-spotlight 320ms ease-out; }
+
+/* ============================================================
+   FASE 1 — SORTEIO CINEMATOGRÁFICO
+   (reduced-motion já é neutralizado pelo bloco global em globals.css)
+   ============================================================ */
+
+/* Revelação com mais presença: giro + queda + acomodação. Substitui o drop
+   simples no estilo spotlight, mantendo gr-drop nos outros estilos. */
+.gr-stage[data-stage-style="spotlight"] .gr-drop { animation: cb-ball-reveal 720ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes cb-ball-reveal {
+  0%   { transform: translateY(-40%) scale(0.6) rotate(-18deg); opacity: 0; }
+  55%  { transform: translateY(4%)  scale(1.06) rotate(4deg);  opacity: 1; }
+  75%  { transform: translateY(0)   scale(0.98) rotate(-2deg); }
+  100% { transform: translateY(0)   scale(1)    rotate(0); }
+}
+
+/* Pulso de cor B-I-N-G-O: o halo/spot "respira" na cor da coluna ao revelar. */
+.gr-col-pulse .gr-ball-halo { animation: cb-col-pulse 720ms ease-out; }
+@keyframes cb-col-pulse {
+  0%   { opacity: .35; transform: translate(-50%, -50%) scale(0.85); }
+  40%  { opacity: .95; transform: translate(-50%, -50%) scale(1.18); }
+  100% { opacity: .5;  transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Entrada da mini-bola mais recente na trilha. */
+.gr-mini-ball.latest { animation: cb-mini-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes cb-mini-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.28); opacity: 1; }
+  100% { transform: scale(1.18); }
+}
+
+/* Suspense entre bolas: enquanto está sorteando, o palco "respira".
+   Sem ETA do Slow Reveal → antecipação, não contagem numérica. */
+.gr-stage.is-suspense .gr-ball-halo { animation: cb-stage-suspense 1.1s ease-in-out infinite; }
+@keyframes cb-stage-suspense {
+  0%, 100% { opacity: .4; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: .7; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* Botão de som no header do palco. */
+.gr-sound-toggle { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 1px solid var(--cb-border-default); background: var(--cb-bg-elevated); color: var(--cb-text-secondary); cursor: pointer; font-size: 0.8rem; line-height: 1; transition: color 160ms, border-color 160ms; }
+.gr-sound-toggle:hover { color: var(--cb-text-primary); border-color: var(--cb-border-focus); }
+.gr-sound-toggle[data-on="true"] { color: var(--cb-brand); border-color: color-mix(in srgb, var(--cb-brand) 50%, transparent); }
 
 .gr-summary-stage { display: flex; flex-direction: column; }
 .gr-summary-body { flex: 1; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); gap: 1.25rem; padding: 1.25rem 1.5rem; position: relative; z-index: 1; min-height: 0; }
@@ -439,6 +497,15 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-stage-badge { font-family: var(--font-family-mono); font-size: .7rem; font-weight: 700; color: var(--cb-brand); }
 .gr-stage-count { font-size: .67rem; color: var(--cb-text-secondary); }
 
+/* Faixa de dados da partida: pote, bônus e bolas (Task 2) */
+.gr-match-stats { display: flex; flex-wrap: wrap; gap: .75rem; padding: .6rem .9rem; background: var(--cb-bg-card); border: 1px solid var(--cb-border-default); border-radius: .75rem; box-shadow: var(--shadow-card); }
+.gr-match-stat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.gr-match-stat .label { font-size: .58rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cb-text-tertiary); }
+.gr-match-stat .value { font-family: var(--font-family-mono); font-size: .95rem; font-weight: 800; color: var(--cb-text-primary); }
+.gr-match-stat.is-pot .value { color: var(--cb-accent); }
+.gr-match-stat.is-bonus .value { color: var(--cb-brand); }
+.gr-match-stats-sep { width: 1px; align-self: stretch; background: var(--cb-border-subtle); }
+
 /* Game Ended (ADR-014) */
 .gr-ended-banner { display: flex; align-items: flex-start; gap: 1rem; padding: .875rem 1.25rem; background: linear-gradient(135deg, rgba(139,92,246,.12), rgba(30,30,53,.88)); border: 1px solid rgba(139,92,246,.3); border-radius: .875rem; animation: cb-fade-in .4s ease forwards; }
 .gr-ended-banner--winner { background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(30,30,53,.9)); border-color: rgba(245,158,11,.4); }
@@ -458,6 +525,8 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-ended-breakdown-prize { font-family: var(--font-family-mono); font-weight: 700; color: var(--cb-accent); }
 .gr-ended-breakdown-total { border-top: 1px solid rgba(255,255,255,.1); padding-top: .25rem; margin-top: .1rem; font-weight: 700; color: var(--cb-text-primary); }
 .gr-ended-breakdown-total span:last-child { color: var(--color-accent-300); }
+.gr-room-prizes { margin-top: .4rem; padding-top: .4rem; border-top: 1px dashed var(--cb-border-subtle); font-size: .72rem; color: var(--cb-text-secondary); display: flex; align-items: center; gap: .35rem; }
+.gr-ended-breakdown-title { font-size: .6rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--cb-text-tertiary); margin-bottom: .15rem; }
 /* Confetti overlay */
 .gr-confetti-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
 

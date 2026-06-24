@@ -156,7 +156,17 @@
     "ticket_footer_pattern": "{{count}} patterns",
     "ticket_footer_marked": "{{marked}}/{{total}} marked",
     "next_game_soon": "Next game in ~{{time}}",
-    "closing": "Closing"
+    "closing": "Closing",
+    "sound_on": "Sound on",
+    "sound_off": "Sound off",
+    "sound_toggle_aria": "Toggle draw sound",
+    "near_miss": "1 to go!",
+    "near_miss_aria": "Ticket {{id}}: one ball away from a win",
+    "pot_label": "Match pot",
+    "pot_bonus": "Sponsored bonus",
+    "stats_balls": "Balls",
+    "player_prizes_title": "Your prizes",
+    "room_prizes_summary": "Room paid {{total}} to {{count}} winner(s)"
   },
   "lobby": {
     "title": "Game Lobby",

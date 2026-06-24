@@ -159,6 +159,77 @@ describe('TicketCard — prize e pricePaid', () => {
   });
 });
 
+describe('TicketCard — near-miss (Falta 1!)', () => {
+  it('mostra alerta Falta 1! quando um padrão está a 1 célula', () => {
+    // Linha 0: índices 0-4 = valores [1, 16, 31, 46, 61]; sorteamos 4, falta O[0]=61 (índice 4)
+    const LINHA0: Pattern = {
+      name: 'Linha 0',
+      prize: '2',
+      cells: [true, true, true, true, true,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false],
+    };
+    renderCard({
+      patterns: [LINHA0],
+      drawnSet: new Set([1, 16, 31, 46]), // falta O[0]=61 (índice 4)
+    });
+    expect(screen.getByTestId('tc-near-miss')).toBeTruthy();
+    expect(screen.getByTestId('tc-cell-4').className).toContain('is-near-miss-cell');
+  });
+
+  it('NÃO mostra alerta quando a cartela é vencedora', () => {
+    const LINHA0: Pattern = {
+      name: 'Linha 0',
+      prize: '2',
+      cells: [true, true, true, true, true,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false],
+    };
+    renderCard({
+      patterns: [LINHA0],
+      drawnSet: new Set([1, 16, 31, 46, 61]), // linha completa → winner
+    });
+    expect(screen.queryByTestId('tc-near-miss')).toBeNull();
+  });
+});
+
+describe('TicketCard — barra de progresso', () => {
+  it('renderiza barra de progresso do padrão mais próximo', () => {
+    // Linha 0: índices 0-4 = valores [1, 16, 31, 46, 61]; sorteamos 2/5 = 40%
+    const LINHA0: Pattern = {
+      name: 'Linha 0',
+      prize: '2',
+      cells: [true, true, true, true, true,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false],
+    };
+    renderCard({ patterns: [LINHA0], drawnSet: new Set([1, 16]) }); // 2/5 = 40%
+    const bar = screen.getByTestId('tc-progress');
+    const fill = bar.querySelector('i') as HTMLElement;
+    expect(fill.style.width).toBe('40%');
+  });
+
+  it('não renderiza barra quando vencedora', () => {
+    const LINHA0: Pattern = {
+      name: 'Linha 0',
+      prize: '2',
+      cells: [true, true, true, true, true,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false,
+              false, false, false, false, false],
+    };
+    renderCard({ patterns: [LINHA0], drawnSet: new Set([1, 16, 31, 46, 61]) });
+    expect(screen.queryByTestId('tc-progress')).toBeNull();
+  });
+});
+
 describe('TicketCard — padrões completados', () => {
   it('padrão completado exibe badge com nome do padrão', () => {
     const row0: Pattern = {

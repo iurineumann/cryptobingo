@@ -156,7 +156,17 @@
     "ticket_footer_pattern": "{{count}} padrões",
     "ticket_footer_marked": "{{marked}}/{{total}} marcados",
     "next_game_soon": "Próxima partida em ~{{time}}",
-    "closing": "Fechando"
+    "closing": "Fechando",
+    "sound_on": "Som ligado",
+    "sound_off": "Som desligado",
+    "sound_toggle_aria": "Alternar som do sorteio",
+    "near_miss": "Falta 1!",
+    "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar",
+    "pot_label": "Pote da partida",
+    "pot_bonus": "Bônus patrocinado",
+    "stats_balls": "Bolas",
+    "player_prizes_title": "Seus prêmios",
+    "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)"
   },
   "lobby": {
     "title": "Lobby de Jogos",
