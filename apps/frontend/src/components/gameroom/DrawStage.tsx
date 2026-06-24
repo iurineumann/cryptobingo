@@ -50,7 +50,10 @@ export default function DrawStage({
     if (spot) { spot.classList.remove('gr-col-pulse'); void spot.offsetWidth; spot.classList.add('gr-col-pulse'); }
     // Toca o som de chamada da bola apenas quando há uma bola nova (não no reset para null)
     if (lastDrawn != null) sound.playBallCall(col);
-  }, [lastDrawn, sound, col]);
+    // Depender de sound.playBallCall (estável via useCallback), não do objeto sound (novo a cada
+    // render): assim o efeito só roda em mudança de bola; o guard de prevBall barra re-animação
+    // quando o usuário liga/desliga o som.
+  }, [lastDrawn, col, sound.playBallCall]);
 
   return (
     <section
@@ -77,7 +80,7 @@ export default function DrawStage({
             aria-label={t('game_room.sound_toggle_aria')}
             title={sound.enabled ? t('game_room.sound_on') : t('game_room.sound_off')}
           >
-            {sound.enabled ? '🔊' : '🔇'}
+            <span aria-hidden="true">{sound.enabled ? '🔊' : '🔇'}</span>
           </button>
         </span>
       </div>
