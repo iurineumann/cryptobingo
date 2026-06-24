@@ -13,9 +13,9 @@ import { Button } from '@/components/ui/button';
 import BuyTicketModal from './BuyTicketModal';
 import ChatFloating from './chat/ChatFloating';
 import GameRoomHeader from './gameroom/GameRoomHeader';
+import DrawStage from './gameroom/DrawStage';
 import { TicketCard } from './TicketCard';
-import { BINGO_COLORS, getCol } from './ticketUtils';
-import { useGameRoomState, WS_STATUS_CLASS } from './gameroom/useGameRoomState';
+import { useGameRoomState } from './gameroom/useGameRoomState';
 
 function fmtCountdown(ms: number): string {
   if (ms <= 0) return '0s';
@@ -69,21 +69,17 @@ export default function GameRoom({
     ticketPrice, col, color, hasBanners, now, loadGame, isStaticFinalState,
   } = state;
   const roomPatterns = gamePatterns;
-  const wsStatusClass = WS_STATUS_CLASS;
 
   // UI puramente local do orquestrador (showPatterns migra para painel na Task 4)
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
   const density = 'comfortable' as const;
 
-  // ── Refs para animação ────────────────────────────────────────────────────
-  const heroRef     = useRef<HTMLDivElement>(null);
-  const seqRef      = useRef<HTMLDivElement>(null);
+  // ── Refs de layout ────────────────────────────────────────────────────────
   const stageRef    = useRef<HTMLElement>(null);
   const patternsRef = useRef<HTMLElement>(null);
-  const prevBall    = useRef<number | null>(null);
 
-  // Sincroniza altura do patterns com a do stage
+  // Sincroniza altura do patterns com a do stage (ResizeObserver cruza os dois refs)
   useEffect(() => {
     const stage = stageRef.current;
     const patterns = patternsRef.current;
@@ -96,15 +92,6 @@ export default function GameRoom({
     ro.observe(stage);
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (!heroRef.current || lastDrawn === prevBall.current) return;
-    prevBall.current = lastDrawn;
-    const el = heroRef.current;
-    el.classList.remove('gr-drop');
-    void el.offsetWidth;
-    el.classList.add('gr-drop');
-  }, [lastDrawn]);
 
   return (
     <div className="gr-shell">
@@ -128,81 +115,16 @@ export default function GameRoom({
         <div className="gr-top-row">
 
           {/* ── Stage ────────────────────────────────────────────────────────── */}
-          <section
-            ref={stageRef}
-            className="gr-stage"
-            data-stage-style="spotlight"
-            aria-label="Sorteio em tempo real"
-          >
-            <div className="gr-stage-header">
-              <span className="gr-stage-label">{t('game_room.last_ball_heading')}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--cb-text-tertiary)' }}>
-                <span className={`cb-status-dot ${wsStatusClass[wsStatus] ?? 'cb-status-dot-offline'}`} aria-hidden="true" />
-                <span style={{ fontWeight: 600, color: 'var(--cb-text-secondary)' }}>
-                  {t('game_room.ball_count', { count: drawnNumbers.length })}
-                </span>
-              </span>
-            </div>
-
-            <div className="gr-stage-body">
-              <div className="gr-stage-spot" style={{ '--ball-color': color } as React.CSSProperties}>
-                <div className="gr-ball-halo" aria-hidden="true" />
-
-                <div
-                  ref={heroRef}
-                  data-testid="gr-ball-hero"
-                  className="gr-ball-hero"
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  aria-label={lastDrawn != null ? t('game_room.hero_ball_aria', { number: lastDrawn, count: drawnNumbers.length }) : t('game_room.hero_ball_waiting')}
-                >
-                  <div className="ball-surface" aria-hidden="true" />
-                  <span className="ball-letter">{col}</span>
-                  <span className="ball-number" data-testid="gr-ball-hero-number">{lastDrawn ?? '⭐'}</span>
-                  {lastDrawn != null && (
-                    <span className="ball-order">{t('game_room.ball_order', { ordem: drawnNumbers.length })}</span>
-                  )}
-                </div>
-
-                {lastDrawn != null && (
-                  <div className="gr-call" aria-hidden="true">
-                    <span className="col-tag">{col}</span>
-                    <span>{lastDrawn}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer: histórico + progress */}
-              <div className="gr-stage-footer">
-                <div ref={seqRef} data-testid="gr-ball-history" className="gr-sequence" aria-label={t('game_room.history_aria')}>
-                  {[...effectiveBalls].reverse().map((ball, idx) => {
-                    const c   = getCol(ball.number);
-                    const clr = BINGO_COLORS[c];
-                    return (
-                      <div
-                        key={ball.order}
-                        className={`gr-mini-ball${idx === 0 ? ' latest' : ''}`}
-                        style={{ '--ball-color': clr } as React.CSSProperties}
-                        title={`${c}${ball.number}`}
-                      >
-                        {ball.number}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="gr-progress">
-                  <div className="gr-progress-row">
-                    <span>{t('game_room.progress_label')}</span>
-                    <span className="count">{drawnNumbers.length}/{maxBalls}</span>
-                  </div>
-                  <div className="cb-progress-track">
-                    <div className="cb-progress-fill" style={{ width: `${Math.min((drawnNumbers.length / maxBalls) * 100, 100)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          <DrawStage
+            wsStatus={wsStatus}
+            drawnNumbers={drawnNumbers}
+            effectiveBalls={effectiveBalls}
+            lastDrawn={lastDrawn}
+            col={col}
+            color={color}
+            maxBalls={maxBalls}
+            stageRef={stageRef}
+          />
 
           {/* ── Painel de Padrões ──────────────────────────────────────────────── */}
           {showPatterns && (
