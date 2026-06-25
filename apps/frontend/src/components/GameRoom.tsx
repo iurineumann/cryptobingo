@@ -164,8 +164,13 @@ export default function GameRoom({
 
       </div>
 
-      {/* ── Social (chat floating; cresce para presença/reações na Fase 4) ── */}
-      <RoomSocial room={room} walletAddress={profile.wallet_address} />
+      {/* ── Social: presença, reações flutuantes, feed e chat (Fase 4) ── */}
+      <RoomSocial
+        room={room}
+        walletAddress={profile.wallet_address}
+        localWinners={localWinners}
+        clearedStages={clearedStages}
+      />
 
       {/* ── Modal de compra ────────────────────────────────────────────────── */}
       {showBuyModal && ticketPrice && (
