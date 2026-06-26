@@ -31,6 +31,7 @@
     "you_get": "您收到",
     "fee_lp": "LP 费率",
     "fee_service": "服务费",
+    "fee_effective": "有效费率(NFT)",
     "price_impact": "价格影响",
     "min_received": "最低收到",
     "quote_expires": "报价有效期",

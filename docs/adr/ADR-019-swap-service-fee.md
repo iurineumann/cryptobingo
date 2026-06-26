@@ -69,38 +69,66 @@ service fees lá mantém a contabilidade unificada.
 
 ---
 
-## Phase 2 — Descontos por NFT (planejado, não implementado)
+## Phase 2 — Descontos por NFT (implementado)
 
-Usuários holders de NFTs específicos poderão obter descontos na `service_fee_bps`.
+Usuários holders de NFTs específicos da coleção `cryptobingo` recebem descontos na
+`service_fee_bps` durante o swap. O desconto é verificado on-chain a cada transação.
 
-**Design previsto:**
+### Tabela `nftdiscounts`
+
+Mapeamento `template_id → discount_bps` (1000 = 10% de desconto na service fee).
+Scope: `get_self()`. Admin configura via `setnftdisc` / `delnftdisc`.
 
 ```cpp
-// Tabela nftfeerules (scope: get_self())
-struct nft_fee_rule {
-    uint64_t id;
-    uint64_t pool_id;       // 0 = todos os pools
-    name     nft_contract;  // ex: "atomicassets"
-    uint32_t template_id;   // AtomicAssets template ID
-    uint16_t fee_bps;       // service_fee_bps com desconto
-};
-
-// Tabela feediscounts (scope: account), TTL 24h
-struct fee_discount {
-    uint64_t id;
-    uint64_t pool_id;
-    uint16_t fee_bps_override;
-    uint64_t nft_asset_id;
-    uint32_t expires_at;
+struct nft_discount {
+    int32_t  template_id;      // AtomicAssets template_id
+    uint16_t discount_bps;     // 1000 = 10% off na service_fee
 };
 ```
 
-`claimdiscount(provider, pool_id, nft_asset_id)` verificará propriedade do NFT via
-leitura da tabela `atomicassets::assets` (scoped por account) e armazenará o desconto
-com TTL de 24h. O swap consultará `feediscounts` antes de aplicar a `service_fee_bps`.
+### Actions
 
-**Motivo do adiamento:** requer integração com AtomicAssets, testando serialização de
-struct complexo. Aguarda sprint de NFT integrations.
+| Action | Auth | Descrição |
+| --- | --- | --- |
+| `setnftdisc(template_id, discount_bps)` | `get_self()` | Configura desconto por template (upsert) |
+| `delnftdisc(template_id)` | `get_self()` | Remove desconto de um template |
+
+### Algoritmo de desconto no swap
+
+No `on_transfer` (swap), após calcular `pool.service_fee_bps`:
+
+1. Itera `nftdiscounts`, para cada entrada:
+   - Consulta tabela `atomicassets::assets` (scope: `from`, índice `template`)
+   - Se `from` possui asset com aquele `template_id`, captura `discount_bps` (máximo)
+2. `effective_fee_bps = service_fee_bps * (10000 - max_discount_bps) / 10000`
+3. `service_fee_amount = amount_in * effective_fee_bps / 10000`
+
+**Por que on-chain, não claim-based:** Ao contrário do design original (que previa
+uma ação `claimdiscount` + TTL 24h), optou-se por verificar AtomicAssets a cada swap.
+Isso elimina estado expirável, simplifica o modelo de dados e garante que o desconto
+só é aplicado se o NFT ainda está na carteira no momento do swap.
+
+**Custo de CPU:** a iteração sobre `nftdiscounts` (tipicamente < 10 entradas) com
+lookup secundário em AtomicAssets adiciona ~5-20 μs por transação — aceitável para WAX.
+
+### API Gateway
+
+- `GET /api/v1/swap/nft-discounts` — lista descontos ativos (leitura on-chain + cache 60s)
+- `GET /api/v1/swap/quote` — parâmetro opcional `wallet`; se informado, calcula
+  `effective_service_fee_bps` e `nft_discount_bps` no retorno
+
+### Frontend (swap-ui)
+
+- Badge `🎟 -{discount_bps}%` ao lado da service fee na caixa de cotação
+- Linha "Taxa efetiva (NFT)" exibida quando `effective_service_fee_bps < service_fee_bps`
+
+### Tipos compartilhados
+
+```typescript
+BlockchainNftDiscount { template_id: number; discount_bps: number }
+SwapQuote.effective_service_fee_bps  // após desconto
+SwapQuote.nft_discount_bps           // 0 se sem desconto
+```
 
 ---
 

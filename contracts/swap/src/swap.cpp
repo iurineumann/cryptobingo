@@ -189,6 +189,56 @@ namespace swap_contract_ns {
     }
 
     // ──────────────────────────────────────────────
+    // NFT DISCOUNTS — setnftdisc / delnftdisc
+    // ──────────────────────────────────────────────
+
+    void swap_contract::setnftdisc(int32_t template_id, uint16_t discount_bps) {
+        require_auth(get_self());
+        check(discount_bps <= 10000, "discount_bps máximo 10000 (100%)");
+        check(template_id > 0, "template_id deve ser positivo");
+
+        nft_discounts_table discounts(get_self(), get_self().value);
+        auto it = discounts.find((uint64_t)(int64_t)template_id);
+        if (it == discounts.end()) {
+            discounts.emplace(get_self(), [&](auto& r) {
+                r.template_id  = template_id;
+                r.discount_bps = discount_bps;
+            });
+        } else {
+            discounts.modify(it, same_payer, [&](auto& r) {
+                r.discount_bps = discount_bps;
+            });
+        }
+    }
+
+    void swap_contract::delnftdisc(int32_t template_id) {
+        require_auth(get_self());
+
+        nft_discounts_table discounts(get_self(), get_self().value);
+        auto it = discounts.find((uint64_t)(int64_t)template_id);
+        check(it != discounts.end(), "template_id não encontrado nos descontos");
+        discounts.erase(it);
+    }
+
+    // Retorna o maior discount_bps que o usuário tem direito via NFTs.
+    // Itera todos os nftdiscounts; para cada um, checa se from possui um asset
+    // da coleção cryptobingo com aquele template_id na AtomicAssets.
+    // Retorna 0 se não encontrar nenhum.
+    static uint16_t _max_nft_discount(name from, const nft_discounts_table& discounts) {
+        uint16_t max_disc = 0;
+        for (auto& d : discounts) {
+            if (d.discount_bps <= max_disc) continue; // já temos um maior
+            atomic_assets_table assets("atomicassets"_n, from.value);
+            auto by_tmpl = assets.template get_index<"template"_n>();
+            auto it = by_tmpl.lower_bound((uint64_t)(int64_t)d.template_id);
+            if (it != by_tmpl.end() && it->by_template() == (uint64_t)(int64_t)d.template_id) {
+                max_disc = d.discount_bps;
+            }
+        }
+        return max_disc;
+    }
+
+    // ──────────────────────────────────────────────
     // ON_TRANSFER — depósito pendente ou swap direto
     // ──────────────────────────────────────────────
 
@@ -258,9 +308,18 @@ namespace swap_contract_ns {
 
             // Deduz a service fee do amount_in ANTES da fórmula AMM.
             // A fee vai para a treasury; o pool só vê o net_in → k não é inflacionado.
+            // ADR-019 Phase 2: NFT discount reduz a service_fee efetiva se o
+            // usuário possui template com desconto na AtomicAssets.
             int64_t service_fee_amount = 0;
             if (pool.service_fee_bps > 0) {
-                service_fee_amount = (int64_t)((int128_t)quantity.amount * pool.service_fee_bps / 10000);
+                nft_discounts_table discounts(get_self(), get_self().value);
+                uint16_t nft_disc = _max_nft_discount(from, discounts);
+                uint16_t effective_fee_bps = pool.service_fee_bps;
+                if (nft_disc > 0) {
+                    effective_fee_bps = (uint16_t)((uint32_t)pool.service_fee_bps
+                        * (10000 - (uint32_t)nft_disc) / 10000);
+                }
+                service_fee_amount = (int64_t)((int128_t)quantity.amount * effective_fee_bps / 10000);
             }
             int64_t net_amount_in = quantity.amount - service_fee_amount;
             check(net_amount_in > 0, "amount_in insuficiente após dedução da service fee");

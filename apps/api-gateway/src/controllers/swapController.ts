@@ -12,6 +12,7 @@ import { redisClient } from '../database/redis';
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
 
 const SWAP_CONTRACT   = process.env.SWAP_CONTRACT  || 'bingogameswp';
+const RPC_ENDPOINT    = process.env.RPC_URL  || 'http://127.0.0.1:8888';
 const POOLS_CACHE_TTL = 10; // segundos — pools mudam raramente
 const QUOTE_TTL_MAX   = 30; // segundos — cotação máxima antes de expirar
 
@@ -116,6 +117,51 @@ async function fetchPools(): Promise<RawPool[]> {
     return pools;
 }
 
+// ── leitura de NFT discounts ───────────────────────────────────────────────────
+
+interface RawNftDiscount {
+    template_id:  number;
+    discount_bps: number;
+}
+
+async function fetchNftDiscounts(): Promise<RawNftDiscount[]> {
+    const cacheKey = `swap:nftdiscounts`;
+    try {
+        const cached = await redisClient.get(cacheKey);
+        if (cached) return JSON.parse(cached) as RawNftDiscount[];
+    } catch { /* ok */ }
+
+    const res = await rpcClient.v1.chain.get_table_rows({
+        code:  SWAP_CONTRACT,
+        scope: SWAP_CONTRACT,
+        table: 'nftdiscounts',
+        json:  true,
+        limit: 100,
+    });
+
+    const discounts = (res.rows ?? []) as RawNftDiscount[];
+
+    try {
+        await redisClient.set(cacheKey, JSON.stringify(discounts), { EX: 60 });
+    } catch { /* ok */ }
+
+    return discounts;
+}
+
+/**
+ * GET /api/v1/swap/nft-discounts
+ * Lista descontos na service_fee por template_id de NFT. Cache 60s.
+ */
+export async function listNftDiscounts(req: Request, res: Response): Promise<void> {
+    try {
+        const discounts = await fetchNftDiscounts();
+        res.json({ discounts });
+    } catch (err) {
+        console.error('[swapController] listNftDiscounts:', err);
+        res.status(502).json({ error: 'Falha ao ler nftdiscounts do bingogameswp' });
+    }
+}
+
 // ── endpoints ─────────────────────────────────────────────────────────────────
 
 /**
@@ -161,9 +207,10 @@ export async function listSwapPools(req: Request, res: Response): Promise<void> 
  *   to_symbol      — ex: "8,WAX"
  *   amount_out     — unidades mínimas do token de destino (custo total da cartela)
  *   game_end_time? — Unix timestamp (seconds); usado para limitar TTL da cotação
+ *   wallet?        — conta WAX do usuário; se informada, verifica NFT discount (ADR-019 Phase 2)
  */
 export async function getSwapQuote(req: Request, res: Response): Promise<void> {
-    const { from_contract, from_symbol, to_contract, to_symbol, amount_out, game_end_time } = req.query;
+    const { from_contract, from_symbol, to_contract, to_symbol, amount_out, game_end_time, wallet } = req.query;
 
     if (!from_contract || !from_symbol || !to_contract || !to_symbol || !amount_out) {
         res.status(400).json({ error: 'Parâmetros obrigatórios: from_contract, from_symbol, to_contract, to_symbol, amount_out' });
@@ -211,7 +258,42 @@ export async function getSwapQuote(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        const amountIn = computeAmountIn(reserveIn, reserveOut, amountOutUnits, pool.fee_bps, pool.service_fee_bps);
+        // ADR-019 Phase 2: se wallet informada, verifica NFT discount
+        let effectiveServiceFeeBps = pool.service_fee_bps;
+        let nftDiscountBps = 0;
+        if (wallet && pool.service_fee_bps > 0) {
+            const discounts = await fetchNftDiscounts();
+            // Busca maior discount_bps que o usuário possui via AtomicAssets
+            for (const d of discounts) {
+                try {
+                    const key = String((d.template_id << 0) >>> 0);
+                    const rpcRes = await fetch(`${RPC_ENDPOINT}/v1/chain/get_table_rows`, {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body:    JSON.stringify({
+                            code:           'atomicassets',
+                            scope:          (wallet as string).trim(),
+                            table:          'assets',
+                            lower_bound:    key,
+                            upper_bound:    key,
+                            index_position: 5,
+                            key_type:       'i64',
+                            limit:          1,
+                            json:           true,
+                        }),
+                    });
+                    const aaRes = await rpcRes.json() as { rows: unknown[] };
+                    if ((aaRes.rows ?? []).length > 0 && d.discount_bps > nftDiscountBps) {
+                        nftDiscountBps = d.discount_bps;
+                    }
+                } catch { /* silencia — wallet pode não ter assets */ }
+            }
+            if (nftDiscountBps > 0) {
+                effectiveServiceFeeBps = Math.floor(pool.service_fee_bps * (10000 - nftDiscountBps) / 10000);
+            }
+        }
+
+        const amountIn = computeAmountIn(reserveIn, reserveOut, amountOutUnits, pool.fee_bps, effectiveServiceFeeBps);
 
         if (amountIn < 0n) {
             res.status(422).json({ error: 'Liquidez insuficiente para este volume' });
@@ -251,9 +333,11 @@ export async function getSwapQuote(req: Request, res: Response): Promise<void> {
             amount_out:         amountOutUnits.toString(),
             amount_out_display: formatAmount(amountOutUnits, toPrec, toSymCode),
             min_out:            minOut.toString(),
-            fee_bps:            pool.fee_bps,
-            service_fee_bps:    pool.service_fee_bps,
-            price_impact_pct:   impact,
+            fee_bps:                    pool.fee_bps,
+            service_fee_bps:            pool.service_fee_bps,
+            effective_service_fee_bps:  effectiveServiceFeeBps,
+            nft_discount_bps:           nftDiscountBps,
+            price_impact_pct:           impact,
             expires_at:         nowSec + ttlSec,
         };
 
