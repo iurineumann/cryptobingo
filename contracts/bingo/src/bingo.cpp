@@ -1398,6 +1398,25 @@ namespace bingo {
         campaigns.erase(camp_itr);
     }
 
+    void bingo_contract::setcampaign(uint64_t campaign_id, extended_asset payout_per_game, name leftover_policy) {
+        campaigns_table campaigns(get_self(), get_self().value);
+        auto camp_itr = campaigns.require_find(campaign_id, "campaign_id nao encontrado.");
+        bool by_admin   = has_auth(get_self());
+        bool by_sponsor = has_auth(camp_itr->sponsor);
+        if (!by_admin && !by_sponsor) require_auth(permission_level{get_self(), "admin"_n});
+
+        check(payout_per_game.quantity.amount > 0, "payout_per_game deve ser > 0.");
+        check(
+            leftover_policy == "refund"_n || leftover_policy == "house"_n,
+            "leftover_policy deve ser refund ou house."
+        );
+
+        campaigns.modify(camp_itr, same_payer, [&](auto& c) {
+            c.payout_per_game = payout_per_game;
+            c.leftover_policy = leftover_policy;
+        });
+    }
+
     // ==========================================
     // ROOMS — ADR-010
     // ==========================================

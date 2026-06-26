@@ -12,7 +12,7 @@ if (!process.env.EOSIO_KEY || !process.env.JOGADOR1_KEY) {
 
 const jest = path.resolve(__dirname, 'node_modules/.bin/jest');
 try {
-    execFileSync(jest, ['tests/fsm.test.ts', 'tests/xp-progression.test.ts'], { stdio: 'inherit' });
+    execFileSync(jest, ['tests/fsm.test.ts', 'tests/xp-progression.test.ts', 'tests/campaigns.test.ts'], { stdio: 'inherit' });
 } catch (e) {
     process.exit(e.status ?? 1);
 }
