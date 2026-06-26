@@ -256,10 +256,26 @@ function AppRoot() {
     // ── Restore de sessão ao recarregar (suporta deep links) ─────────────────
     useEffect(() => {
         sessionKit.restore().then(async (restored) => {
-            if (restored && getAuthToken()) {
+            if (!restored) return;
+
+            if (getAuthToken()) {
                 setSession(restored);
-                await loadProfile();
-                // Não navega — o usuário permanece na URL que acessou (deep link funciona)
+                try {
+                    await loadProfile();
+                } catch {
+                    clearAuthToken();
+                    const ok = await authenticateSession(restored);
+                    if (ok) {
+                        setSession(restored);
+                        await loadProfile();
+                    }
+                }
+            } else {
+                const ok = await authenticateSession(restored);
+                if (ok) {
+                    setSession(restored);
+                    await loadProfile();
+                }
             }
         }).catch(() => {}).finally(() => setRestoringSession(false));
     }, []);
