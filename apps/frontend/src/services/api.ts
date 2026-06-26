@@ -2,16 +2,16 @@ import type { MongoUserProfile, PatternType } from '@cryptobingo/shared-types';
 
 const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
 
-let _token: string | null = sessionStorage.getItem('cb_jwt');
+let _token: string | null = localStorage.getItem('cb_jwt');
 
 export function setAuthToken(token: string): void {
     _token = token;
-    sessionStorage.setItem('cb_jwt', token);
+    localStorage.setItem('cb_jwt', token);
 }
 
 export function clearAuthToken(): void {
     _token = null;
-    sessionStorage.removeItem('cb_jwt');
+    localStorage.removeItem('cb_jwt');
 }
 
 export function getAuthToken(): string | null {
