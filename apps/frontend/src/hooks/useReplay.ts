@@ -16,9 +16,22 @@ function parseHexBytes(hex: string): number[] {
   return bytes;
 }
 
+interface TicketData {
+  id: string; matrix: number[]; pricePaid?: string; owner?: string;
+}
+
+export interface AggregateStats {
+  totalPlayers: number;
+  totalTicketsCount: number;
+  globalWinners: Array<{ ticket_id: string; patterns: Pattern[] }>;
+  globalPatternWinCount: Map<string, number>;
+  globalCombinationWinCount: Map<string, number>;
+}
+
 export interface ReplayState {
   game: BlockchainGameState | null;
-  tickets: Array<{ id: string; matrix: number[] }>;
+  tickets: Array<{ id: string; matrix: number[]; pricePaid?: string }>;
+  aggregate: AggregateStats;
   fullDrawnBalls: number[];
   revealedBalls: number[];
   revealedCount: number;
@@ -63,9 +76,19 @@ function computeCompletedPatterns(
   );
 }
 
+function parseTicket(r: BlockchainTicketRecord & { matrix: number[] | string }): TicketData {
+  return {
+    id:        r.ticket_id,
+    matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexBytes(r.matrix as string),
+    pricePaid: r.price?.quantity,
+    owner:     typeof r.owner === 'string' ? r.owner : String(r.owner),
+  };
+}
+
 export function useReplay(gameId: string, session: Session): ReplayState {
   const [game, setGame] = useState<BlockchainGameState | null>(null);
   const [tickets, setTickets] = useState<Array<{ id: string; matrix: number[]; pricePaid?: string }>>([]);
+  const [allTicketRecords, setAllTicketRecords] = useState<TicketData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [revealedCount, setRevealedCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -80,7 +103,7 @@ export function useReplay(gameId: string, session: Session): ReplayState {
     async function load() {
       setIsLoading(true);
       try {
-        const [gameRes, ticketsRes] = await Promise.all([
+        const [gameRes, ticketsRes, allTicketsRes] = await Promise.all([
           session.client.v1.chain.get_table_rows({
             code: CONTRACT, scope: CONTRACT, table: 'games',
             lower_bound: UInt64.from(gameId), upper_bound: UInt64.from(gameId), limit: 1, json: true,
@@ -89,6 +112,10 @@ export function useReplay(gameId: string, session: Session): ReplayState {
             code: CONTRACT, scope: UInt64.from(gameId), table: 'tickets',
             lower_bound: session.actor.value, upper_bound: session.actor.value,
             index_position: 'secondary', key_type: 'i64', limit: 50, json: true,
+          }),
+          session.client.v1.chain.get_table_rows({
+            code: CONTRACT, scope: UInt64.from(gameId), table: 'tickets',
+            limit: 500, json: true,
           }),
         ]);
         if (cancelled) return;
@@ -126,13 +153,12 @@ export function useReplay(gameId: string, session: Session): ReplayState {
         }
         if (!cancelled) setGame({ ...g, _maxBalls: maxBalls } as any);
 
-        setTickets(
-          (ticketsRes.rows as Array<BlockchainTicketRecord & { matrix: number[] | string }>).map(r => ({
-            id:        r.ticket_id,
-            matrix:    Array.isArray(r.matrix) ? r.matrix : parseHexBytes(r.matrix as string),
-            pricePaid: r.price?.quantity,
-          }))
-        );
+        const parsedPlayer = (ticketsRes.rows as Array<BlockchainTicketRecord & { matrix: number[] | string }>).map(parseTicket);
+        const parsedAll    = (allTicketsRes.rows as Array<BlockchainTicketRecord & { matrix: number[] | string }>).map(parseTicket);
+        if (!cancelled) {
+          setTickets(parsedPlayer);
+          setAllTicketRecords(parsedAll);
+        }
       } catch (err) {
         console.error('[useReplay] Erro ao carregar:', err);
       } finally {
@@ -253,8 +279,70 @@ export function useReplay(gameId: string, session: Session): ReplayState {
     ? ['drawn', 'paying', 'archived', 'aborted'].includes(game.status)
     : false;
 
+  // ── Dados agregados (todos os tickets, não só do jogador) ─────────────
+  const globalWinners = useMemo(() => {
+    if (!allTicketRecords.length || !patterns.length) return [];
+    return allTicketRecords.map(t => ({
+      ticket_id: t.id,
+      patterns: computeCompletedPatterns(t.matrix, fullDrawnSet, patterns),
+    })).filter(w => w.patterns.length > 0);
+  }, [allTicketRecords, patterns, fullDrawnSet]);
+
+  const globalPatternWinCount = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const w of globalWinners) {
+      for (const p of w.patterns) {
+        count.set(p.name, (count.get(p.name) || 0) + 1);
+      }
+    }
+    return count;
+  }, [globalWinners]);
+
+  const globalCombinationWinCount = useMemo(() => {
+    if (!combinations.length || !allTicketRecords.length) return new Map<string, number>();
+    const count = new Map<string, number>();
+    for (const t of allTicketRecords) {
+      const grid = buildGrid(t.matrix);
+      const flat: (number | null)[] = [];
+      for (let r = 0; r < 5; r++) flat.push(grid[r][0], grid[r][1], grid[r][2], grid[r][3], grid[r][4]);
+      const completedSet = new Set<string>();
+      for (const p of patterns) {
+        const done = p.cells.every((req, i) => {
+          if (!req) return true;
+          const val = flat[i];
+          return val === null || fullDrawnSet.has(val as number);
+        });
+        if (done) {
+          completedSet.add(p.name);
+          for (const [id, name] of patternNameById) {
+            if (name === p.name) completedSet.add(id);
+          }
+        }
+      }
+      for (const combo of combinations) {
+        if (isCombinationSatisfied(combo, completedSet, patternTypeByName)) {
+          count.set(combo.name, (count.get(combo.name) || 0) + 1);
+        }
+      }
+    }
+    return count;
+  }, [combinations, allTicketRecords, patterns, fullDrawnSet, patternNameById, patternTypeByName]);
+
+  const totalPlayers = useMemo(() => {
+    const owners = new Set(allTicketRecords.map(t => t.owner).filter(Boolean));
+    return owners.size;
+  }, [allTicketRecords]);
+
+  const aggregate: AggregateStats = {
+    totalPlayers,
+    totalTicketsCount: allTicketRecords.length,
+    globalWinners,
+    globalPatternWinCount,
+    globalCombinationWinCount,
+  };
+
   return {
-    game, tickets,
+    game, tickets, aggregate,
     fullDrawnBalls, revealedBalls, revealedCount, totalBalls,
     isPlaying, isComplete, isLoading,
     speed, setSpeed, togglePlay, skipToEnd, restart,
