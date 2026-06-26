@@ -148,6 +148,24 @@
       ]
     },
     {
+      "name": "setcampaign",
+      "base": "",
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "payout_per_game",
+          "type": "extended_asset"
+        },
+        {
+          "name": "leftover_policy",
+          "type": "name"
+        }
+      ]
+    },
+    {
       "name": "ticket_record",
       "base": "",
       "fields": [
@@ -1500,6 +1518,11 @@
     {
       "name": "sweepggr",
       "type": "sweepggr",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setcampaign",
+      "type": "setcampaign",
       "ricardian_contract": ""
     }
   ],

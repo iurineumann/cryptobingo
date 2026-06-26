@@ -506,6 +506,7 @@ namespace bingo {
         // ── Patrocínio B2B ────────────────────────────────────────────────────
         [[eosio::action]] void linkcampaign(uint64_t game_id, uint64_t campaign_id);
         [[eosio::action]] void closecmpgn(uint64_t campaign_id);
+        [[eosio::action]] void setcampaign(uint64_t campaign_id, extended_asset payout_per_game, name leftover_policy);
 
         // ── Rooms (ADR-010) ───────────────────────────────────────────────────
         [[eosio::action]] void createroom(uint64_t room_id, name sponsor, uint64_t gametype_id, extended_asset ticket_price_min, extended_asset ticket_price_max, extended_asset ticket_price_default, uint32_t max_tickets_per_player, bool sponsor_room);
