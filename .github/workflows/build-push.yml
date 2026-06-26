@@ -1,0 +1,99 @@
+name: Build & Push Docker Images
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NS: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  resolve-env:
+    runs-on: ubuntu-latest
+    outputs:
+      rpc_url: ${{ steps.out.outputs.rpc_url }}
+      api_url: ${{ steps.out.outputs.api_url }}
+      ws_url: ${{ steps.out.outputs.ws_url }}
+      chain_id: ${{ steps.out.outputs.chain_id }}
+      contract_account: ${{ steps.out.outputs.contract_account }}
+      swap_contract: ${{ steps.out.outputs.swap_contract }}
+    steps:
+      - id: out
+        run: |
+          if [ "${{ github.ref_name }}" = "develop" ]; then
+            echo "rpc_url=${{ vars.TESTNET_RPC_URL }}" >> "$GITHUB_OUTPUT"
+            echo "api_url=${{ vars.TESTNET_API_URL }}" >> "$GITHUB_OUTPUT"
+            echo "ws_url=${{ vars.TESTNET_WS_URL }}" >> "$GITHUB_OUTPUT"
+            echo "chain_id=${{ vars.TESTNET_CHAIN_ID }}" >> "$GITHUB_OUTPUT"
+            echo "contract_account=${{ vars.TESTNET_CONTRACT_ACCOUNT }}" >> "$GITHUB_OUTPUT"
+            echo "swap_contract=${{ vars.TESTNET_SWAP_CONTRACT }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_name }}" = "master" ]; then
+            echo "rpc_url=${{ secrets.PROD_RPC_URL }}" >> "$GITHUB_OUTPUT"
+            echo "api_url=${{ secrets.PROD_API_URL }}" >> "$GITHUB_OUTPUT"
+            echo "ws_url=${{ secrets.PROD_WS_URL }}" >> "$GITHUB_OUTPUT"
+            echo "chain_id=${{ secrets.PROD_CHAIN_ID }}" >> "$GITHUB_OUTPUT"
+            echo "contract_account=${{ secrets.PROD_CONTRACT_ACCOUNT }}" >> "$GITHUB_OUTPUT"
+            echo "swap_contract=${{ secrets.PROD_SWAP_CONTRACT }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: resolve-env
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - api-gateway
+          - worker-game-loop
+          - frontend
+          - swap-ui
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Login (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute Docker Tags
+        id: tags
+        run: |
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          BASE="${{ env.IMAGE_NS }}/cryptobingo-${{ matrix.app }}"
+          REF="${{ github.ref_name }}"
+          if [ "$REF" = "develop" ]; then
+            echo "tags=${BASE}:testnet-${SHA},${BASE}:testnet" >> "$GITHUB_OUTPUT"
+          elif [ "$REF" = "master" ]; then
+            echo "tags=${BASE}:stable-${SHA},${BASE}:stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${BASE}:pr-${SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_RPC_URL=${{ needs.resolve-env.outputs.rpc_url }}
+            VITE_API_GATEWAY_URL=${{ needs.resolve-env.outputs.api_url }}
+            VITE_WS_URL=${{ needs.resolve-env.outputs.ws_url }}
+            VITE_CHAIN_ID=${{ needs.resolve-env.outputs.chain_id }}
+            VITE_CONTRACT_ACCOUNT=${{ needs.resolve-env.outputs.contract_account }}
+            VITE_WAX_RPC_URL=${{ needs.resolve-env.outputs.rpc_url }}
+            VITE_GAME_URL=${{ needs.resolve-env.outputs.ws_url }}
+            VITE_SWAP_CONTRACT=${{ needs.resolve-env.outputs.swap_contract }}
