@@ -35,7 +35,7 @@ export default function ReplaySummary({
     <>
       {/* ── Banners (sempre renderizam, independente de show/isComplete) ── */}
       {hasBanners && (
-        <div className="gr-banners-row" style={{ gridColumn: '1 / -1' }}>
+        <div className="gr-banners-row">
           {goldenBall && (
             <div className="gr-golden-banner" data-testid="replay-golden-banner" role="status" aria-live="assertive">
               <span className="gr-golden-icon" />
@@ -65,30 +65,28 @@ export default function ReplaySummary({
       {/* ── Summary panel (só aparece quando show e isComplete) ── */}
       {show && isComplete && (
       <div className="gr-replay-summary" data-testid="replay-summary">
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
-          <div className="gr-replay-summary-head">
-            <span className={`gr-replay-summary-icon${myWinning ? ' gr-replay-summary-icon--win' : ' gr-replay-summary-icon--end'}`} />
-            <div>
-              <div className="gr-replay-summary-title">
-                {myWinning ? t('replay.replay_summary_won') : t('replay.replay_summary_title')}
-              </div>
-              <div className="gr-replay-summary-sub">
-                {t('replay.replay_summary_balls', { count: totalBalls })}
-                {' · '}
-                {winners.length > 0
-                  ? t('replay.replay_summary_winners', { count: winners.length, plural: winners.length !== 1 ? 's' : '' })
-                  : t('replay.replay_summary_no_winners')}
-              </div>
+        <div className="gr-replay-summary-head">
+          <span className={`gr-replay-summary-icon${myWinning ? ' gr-replay-summary-icon--win' : ' gr-replay-summary-icon--end'}`} />
+          <div>
+            <div className="gr-replay-summary-title">
+              {myWinning ? t('replay.replay_summary_won') : t('replay.replay_summary_title')}
+            </div>
+            <div className="gr-replay-summary-sub">
+              {t('replay.replay_summary_balls', { count: totalBalls })}
+              {' · '}
+              {winners.length > 0
+                ? t('replay.replay_summary_winners', { count: winners.length, plural: winners.length !== 1 ? 's' : '' })
+                : t('replay.replay_summary_no_winners')}
             </div>
           </div>
-          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onClose} aria-label="Fechar resumo">
+          <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onClose} aria-label="Fechar resumo" style={{ marginLeft: 'auto', flexShrink: 0 }}>
             <X className="size-4 shrink-0" />
           </button>
         </div>
 
         {/* Stats agregadas da partida */}
         {aggregate.totalTicketsCount > 0 && (
-          <div className="gr-replay-summary-stats" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--cb-border-subtle)' }}>
+          <div className="gr-replay-summary-stats gr-replay-summary-stats--aggregate">
             <div className="gr-replay-summary-stat">
               <span className="label">{t('replay.total_players', 'Jogadores')}</span>
               <span className="value">{aggregate.totalPlayers}</span>
@@ -108,7 +106,7 @@ export default function ReplaySummary({
 
         {/* Créditos do jogador */}
         {winnerMap.size > 0 && (
-          <div className="gr-replay-summary-stats" style={{ marginTop: '0.5rem' }}>
+          <div className="gr-replay-summary-stats gr-replay-summary-stats--player">
             {[...winnerMap.entries()].slice(0, 5).map(([ticketId, info]) => (
               <div key={ticketId} className="gr-replay-summary-stat">
                 <span className="label">{t('game_room.ticket_label', { id: ticketId })}</span>
@@ -125,7 +123,7 @@ export default function ReplaySummary({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+        <div className="gr-replay-summary-actions">
           <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onRestart}>
             {t('replay.btn_restart')}
           </button>

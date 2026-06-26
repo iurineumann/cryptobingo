@@ -69,8 +69,7 @@ export default function ReplayControls({
           {SPEEDS.map(s => (
             <button
               key={s}
-              className={`cb-btn ${speed === s ? 'cb-btn-primary' : 'cb-btn-ghost'} cb-btn-sm`}
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.45rem', minWidth: '2.2rem' }}
+              className={`cb-btn ${speed === s ? 'cb-btn-primary' : 'cb-btn-ghost'} cb-btn-sm gr-replay-speed-btn`}
               onClick={() => setSpeed(s)}
               aria-pressed={speed === s}
               data-testid={`replay-speed-${s}`}

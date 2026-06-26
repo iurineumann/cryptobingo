@@ -479,7 +479,7 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 /* ============================================================
    BANNERS ROW — gr-banners-row, ADR-013/014
    ============================================================ */
-.gr-banners-row { display: flex; flex-direction: column; gap: .5rem; }
+.gr-banners-row { display: flex; flex-direction: column; gap: .5rem; grid-column: 1 / -1; }
 
 /* Golden Ball (ADR-014) */
 .gr-golden-banner { display: flex; align-items: center; gap: 1rem; padding: .875rem 1.25rem; background: linear-gradient(135deg, rgba(251,191,36,.14), rgba(245,158,11,.06)); border: 1px solid rgba(251,191,36,.35); border-radius: .875rem; animation: cb-fade-in .3s ease forwards; }
@@ -533,31 +533,45 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 /* ============================================================
    REPLAY CONTROLS BAR — gr-replay-bar
    ============================================================ */
-.gr-replay-bar { display: flex; align-items: center; gap: .625rem; padding: .625rem 1rem; background: var(--cb-bg-elevated); border-radius: var(--radius-lg); border: 1px solid var(--cb-border-default); flex-wrap: wrap; grid-column: 1 / -1; }
+.gr-replay-bar { display: flex; align-items: center; gap: .625rem; padding: .625rem 1rem; background: var(--cb-bg-elevated); border-radius: var(--radius-lg); border: 1px solid var(--cb-border-default); flex-wrap: wrap; grid-column: 1 / -1; animation: cb-fade-in .35s ease both; }
 .gr-replay-btn-group { display: flex; align-items: center; gap: .25rem; }
 .gr-replay-speed { display: flex; align-items: center; gap: .375rem; margin-left: .25rem; }
 .gr-replay-speed-label { font-size: .7rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--cb-text-tertiary); white-space: nowrap; }
 .gr-replay-speed-btns { display: flex; gap: .2rem; }
+.gr-replay-speed-btn { font-size: .7rem; padding: .2rem .45rem; min-width: 2.2rem; transition: background 150ms, color 150ms, transform 120ms; }
+.gr-replay-speed-btn:active { transform: scale(.92); }
+.gr-replay-speed-btn.cb-btn-primary { animation: gr-replay-speed-pop .25s ease both; }
 .gr-replay-counter { font-family: var(--font-family-mono); font-size: .72rem; color: var(--cb-text-tertiary); margin-left: auto; display: flex; align-items: center; gap: .5rem; }
-.gr-replay-counter .done { color: var(--cb-success); font-weight: 600; }
+.gr-replay-counter .done { color: var(--cb-success); font-weight: 600; animation: cb-fade-in .3s ease both; }
 .gr-replay-seek { width: 100%; flex-basis: 100%; display: flex; align-items: center; gap: .5rem; }
-.gr-replay-seek-track { flex: 1; height: .375rem; background: var(--cb-bg-overlay); border-radius: 9999px; cursor: pointer; position: relative; overflow: hidden; }
+.gr-replay-seek-track { flex: 1; height: .375rem; background: var(--cb-bg-overlay); border-radius: 9999px; cursor: pointer; position: relative; overflow: hidden; transition: height 200ms; }
 .gr-replay-seek-track:hover { height: .5rem; }
-.gr-replay-seek-fill { height: 100%; background: var(--cb-brand); border-radius: 9999px; pointer-events: none; transition: width 300ms linear; }
+.gr-replay-seek-fill { height: 100%; background: var(--cb-brand); border-radius: 9999px; pointer-events: none; transition: width 300ms linear; position: relative; }
+.gr-replay-seek-fill::after { content: ''; position: absolute; right: 0; top: 0; height: 100%; width: .25rem; background: rgba(255,255,255,.4); border-radius: 9999px; animation: gr-replay-seek-glow 1.2s ease-in-out infinite; }
 .gr-replay-seek-label { font-family: var(--font-family-mono); font-size: .68rem; color: var(--cb-text-tertiary); white-space: nowrap; min-width: 2.5rem; text-align: right; }
 
 /* Replay — Winner Summary Panel */
 .gr-replay-summary { display: flex; flex-direction: column; gap: .75rem; padding: 1.125rem 1.25rem; background: linear-gradient(135deg, rgba(139,92,246,.13), rgba(30,30,53,.85)); border: 1px solid rgba(139,92,246,.3); border-radius: 1rem; animation: cb-fade-in .4s ease forwards; grid-column: 1 / -1; }
-.gr-replay-summary-head { display: flex; align-items: center; gap: .75rem; }
-.gr-replay-summary-icon { font-size: 1.75rem; flex-shrink: 0; }
+.gr-replay-summary-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+
+.gr-replay-summary-icon { font-size: 1.75rem; flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 9999px; }
+.gr-replay-summary-icon::before { font-size: 1.2rem; line-height: 1; }
+.gr-replay-summary-icon--win { background: rgba(34,197,94,.15); }
+.gr-replay-summary-icon--win::before { content: '🏆'; }
+.gr-replay-summary-icon--end { background: rgba(100,116,139,.15); }
+.gr-replay-summary-icon--end::before { content: '🏁'; }
 .gr-replay-summary-title { font-family: var(--font-family-display); font-size: 1rem; font-weight: 700; color: var(--cb-text-primary); }
 .gr-replay-summary-sub { font-size: .78rem; color: var(--cb-text-secondary); }
 .gr-replay-summary-stats { display: flex; gap: .875rem; flex-wrap: wrap; }
+.gr-replay-summary-stats { animation: gr-replay-stagger .5s ease forwards; }
+.gr-replay-summary-stats--player { margin-top: .5rem; }
+.gr-replay-summary-stats--aggregate { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--cb-border-subtle); }
 .gr-replay-summary-stat { display: flex; flex-direction: column; gap: .15rem; }
 .gr-replay-summary-stat .label { font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--cb-text-tertiary); }
 .gr-replay-summary-stat .value { font-family: var(--font-family-mono); font-size: .9rem; font-weight: 700; color: var(--cb-text-primary); }
 .gr-replay-summary-stat .value.won { color: var(--cb-success); }
 .gr-replay-summary-stat .value.spent { color: var(--cb-text-secondary); }
+.gr-replay-summary-actions { display: flex; gap: .5rem; margin-top: .25rem; }
 
 /* ============================================================
    HISTORY PAGES — hist-*
@@ -622,6 +636,19 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 @keyframes cb-winning-blink {
   0%,  100% { outline-color: var(--cb-accent); box-shadow: inset 0 0 8px rgba(251,191,36,.25); }
   50%        { outline-color: rgba(251,191,36,.3); box-shadow: none; }
+}
+@keyframes gr-replay-speed-pop {
+  0%   { transform: scale(.85); }
+  60%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes gr-replay-seek-glow {
+  0%,  100% { opacity: .3; }
+  50%        { opacity: .8; }
+}
+@keyframes gr-replay-stagger {
+  0%   { opacity: 0; transform: translateY(.5rem); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 /* ============================================================
