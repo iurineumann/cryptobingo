@@ -14,7 +14,9 @@ product
 
 ## Product Purpose
 
-On-chain BINGO platform (GameFi) on WAX/Antelope. RTP 85% / GGR 15%. Combines traditional bingo with blockchain transparency, NFT mechanics, and progression systems. Success looks like: players engaged daily via XP/levels, sponsors running active campaigns, verifiable on-chain payouts.
+On-chain BINGO platform (GameFi) on WAX/Antelope. RTP 85% / GGR 15%. Combines traditional bingo with blockchain transparency, NFT mechanics (discounts, boosts, burns), progression systems (XP/levels/tiers), and social features (presence, reactions, chat). Success looks like: players engaged daily via XP/levels, sponsors running active campaigns with verifiable on-chain payouts, games running autonomously via worker orchestration.
+
+Latest: GameRoom UX phased rollout (cinematic reveal, near-miss, match stats, social), ReplayRoom refactored, deep link auth fixed, B2B campaign lifecycle complete with E2E coverage.
 
 ## Brand Personality
 
@@ -39,5 +41,6 @@ Dark, confident, playfully premium. Violet-gold palette. "Neon-lit casino meets 
 ## Accessibility & Inclusion
 
 - WCAG AA minimum (4.5:1 body text contrast against dark surfaces)
-- Reduced motion support for game animations
+- Reduced motion support for game animations (ADR-031)
 - i18n in 3 locales (pt-BR default, en-US, zh-CN)
+- Sound effects optional (default off) — never required for gameplay
