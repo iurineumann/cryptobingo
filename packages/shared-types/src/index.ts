@@ -380,6 +380,12 @@ export interface BlockchainLpBalance {
     amount:  string; // int64 como string
 }
 
+/** Espelha a tabela `nftdiscounts` do swap.hpp (ADR-019 Phase 2). */
+export interface BlockchainNftDiscount {
+    template_id:  number; // int32 — AtomicAssets template_id
+    discount_bps: number; // uint16 — 1000 = 10% de desconto na service_fee
+}
+
 // ── bingogameswp — Cotação de Checkout Multi-Moeda (ADR-021) ────────────────────
 
 /**
@@ -388,21 +394,23 @@ export interface BlockchainLpBalance {
  * e construir a transação Wharfkit de 3 ações (swap + deposit + buytickets).
  */
 export interface SwapQuote {
-    quote_id:          string;   // UUID — rastreabilidade em logs
-    pool_id:           string;   // uint64 como string
-    from_contract:     string;   // ex: "bingogametkn"
-    from_symbol:       string;   // ex: "4,BINGO"
-    to_contract:       string;   // ex: "eosio.token"
-    to_symbol:         string;   // ex: "8,WAX"
-    amount_in:         string;   // quantidade exata a enviar (unidades mínimas como string)
-    amount_in_display: string;   // ex: "123.4567 BINGO"
-    amount_out:        string;   // quantidade recebida (unidades mínimas como string)
-    amount_out_display: string;  // ex: "10.00000000 WAX"
-    min_out:           string;   // amount_out com margem de slippage 0.5%
-    fee_bps:           number;   // taxa LP em bps
-    service_fee_bps:   number;   // taxa de serviço em bps (ADR-019)
-    price_impact_pct:  number;   // impacto no pool em %
-    expires_at:        number;   // Unix timestamp (seconds)
+    quote_id:                   string;   // UUID — rastreabilidade em logs
+    pool_id:                    string;   // uint64 como string
+    from_contract:              string;   // ex: "bingogametkn"
+    from_symbol:                string;   // ex: "4,BINGO"
+    to_contract:                string;   // ex: "eosio.token"
+    to_symbol:                  string;   // ex: "8,WAX"
+    amount_in:                  string;   // quantidade exata a enviar (unidades mínimas como string)
+    amount_in_display:          string;   // ex: "123.4567 BINGO"
+    amount_out:                 string;   // quantidade recebida (unidades mínimas como string)
+    amount_out_display:         string;   // ex: "10.00000000 WAX"
+    min_out:                    string;   // amount_out com margem de slippage 0.5%
+    fee_bps:                    number;   // taxa LP em bps
+    service_fee_bps:            number;   // taxa de serviço em bps (ADR-019)
+    effective_service_fee_bps:  number;   // service_fee_bps após NFT discount (ADR-019 Phase 2)
+    nft_discount_bps:           number;   // 0 se sem desconto; 1000 = 10% off
+    price_impact_pct:           number;   // impacto no pool em %
+    expires_at:                 number;   // Unix timestamp (seconds)
 }
 
 /**

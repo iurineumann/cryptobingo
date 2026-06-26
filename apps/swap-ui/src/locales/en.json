@@ -31,6 +31,7 @@
     "you_get": "You receive",
     "fee_lp": "LP fee",
     "fee_service": "Service fee",
+    "fee_effective": "Effective fee (NFT)",
     "price_impact": "Price impact",
     "min_received": "Min. received",
     "quote_expires": "Quote expires in",

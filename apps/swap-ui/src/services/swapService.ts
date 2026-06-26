@@ -36,6 +36,7 @@ export interface QuoteParams {
     toContract:   string;
     toSymbol:     string;
     amountOut:    string;
+    wallet?:      string;  // wallet opcional — verifica NFT discount (ADR-019 Phase 2)
 }
 
 /** Cotação reversa: quanto pagar em fromToken para receber amountOut exato de toToken. */
@@ -47,6 +48,7 @@ export async function fetchSwapQuote(params: QuoteParams): Promise<SwapQuote> {
         to_symbol:     params.toSymbol,
         amount_out:    params.amountOut,
     });
+    if (params.wallet) qs.set('wallet', params.wallet);
     const res = await fetch(`${API_BASE}/swap/quote?${qs}`);
     return handleResponse<SwapQuote>(res);
 }

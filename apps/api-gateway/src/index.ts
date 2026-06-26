@@ -55,7 +55,7 @@ import {
     listAllocations,
     allocateDrop, deallocateDrop, reclaimAsset,
 }                                                    from './controllers/dropController';
-import { listSwapPools, getSwapQuote }               from './controllers/swapController';
+import { listSwapPools, getSwapQuote, listNftDiscounts } from './controllers/swapController';
 import { getChatHistory, saveChatMessage } from './controllers/chatController';
 import { createSystemChatMessage, requireInternalAuth } from './controllers/internalChatController';
 import { startMetricsServer, metricsMiddleware } from './services/metrics';
@@ -307,8 +307,9 @@ function registerRoutes(): void {
     app.post('/api/v1/player/winnings/batch', playerLimiter, requireAuth, getPlayerWinningsBatch);
 
     // ── Swap Quote (ADR-021) — público, somente leitura ──────────────────
-    app.get('/api/v1/swap/pools',  playerLimiter, listSwapPools);
-    app.get('/api/v1/swap/quote',  playerLimiter, getSwapQuote);
+    app.get('/api/v1/swap/pools',         playerLimiter, listSwapPools);
+    app.get('/api/v1/swap/quote',         playerLimiter, getSwapQuote);
+    app.get('/api/v1/swap/nft-discounts', playerLimiter, listNftDiscounts);
 
     // ── Drop Vault (ADR-011) ──────────────────────────────────────────────
     app.get('/api/v1/vault/deposits',         playerLimiter, requireAuth, listDeposits);
