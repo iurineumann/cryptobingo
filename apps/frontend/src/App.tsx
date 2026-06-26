@@ -191,11 +191,13 @@ function GameRoomPage({ session, profile, isAdmin, theme, onToggleTheme, onLangu
 function ReplayPage({ session }: { session: Session }) {
     const { gameId } = useParams<{ gameId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/lobby';
     return (
         <ReplayRoom
             gameId={gameId!}
             session={session}
-            onLeave={() => navigate('/lobby')}
+            onLeave={() => navigate(returnTo)}
         />
     );
 }
@@ -212,7 +214,7 @@ function RoomHistoryPage({ session }: { session?: Session | null }) {
                     <RoomHistoryPanel
                         roomId={roomId!}
                         session={session}
-                        onViewReplay={(gid) => navigate(`/replay/${gid}`)}
+                        onViewReplay={(gid) => navigate(`/replay/${gid}`, { state: { returnTo: `/room/${roomId}/history` } })}
                         onBack={() => navigate(destination)}
                     />
                 </main>
@@ -532,13 +534,13 @@ function AppRoot() {
                         <Lobby
                             session={session!}
                             onEnterRoom={(roomId, gameId) => navigate(`/room/${roomId}/${gameId}`)}
-                            onReplayGame={(gameId) => navigate(`/replay/${gameId}`)}
+                            onReplayGame={(gameId) => navigate(`/replay/${gameId}`, { state: { returnTo: '/lobby' } })}
                         />
                     } />
                     <Route path="/history" element={
                         <MyHistoryPage
                             session={session!}
-                            onViewReplay={(gameId) => navigate(`/replay/${gameId}`)}
+                            onViewReplay={(gameId) => navigate(`/replay/${gameId}`, { state: { returnTo: '/history' } })}
                         />
                     } />
                     <Route path="/wallet"  element={<WalletPage session={session!} />} />
