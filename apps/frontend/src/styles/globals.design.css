@@ -812,3 +812,24 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
   font-weight: 700;
   cursor: default;
 }
+
+/* ── Social: presença, reações e feed (Task 4 Fase 4) ─────────── */
+.gr-online { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 700; color: var(--cb-success); }
+.gr-online .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--cb-success); box-shadow: 0 0 6px var(--cb-success); }
+.gr-reaction-bar { display: inline-flex; gap: .25rem; }
+.gr-reaction-bar button { width: 1.9rem; height: 1.9rem; border-radius: 50%; border: 1px solid var(--cb-border-default); background: var(--cb-bg-elevated); cursor: pointer; font-size: .9rem; line-height: 1; transition: transform 120ms; }
+.gr-reaction-bar button:hover { transform: scale(1.15); }
+.gr-reactions-overlay { position: fixed; bottom: 90px; right: 24px; width: 60px; height: 320px; pointer-events: none; z-index: 9998; overflow: hidden; }
+.gr-reaction-float { position: absolute; bottom: 0; font-size: 1.6rem; animation: cb-reaction-float 4s ease-out forwards; }
+@keyframes cb-reaction-float {
+  0%   { transform: translateY(0) scale(.6); opacity: 0; }
+  15%  { transform: translateY(-30px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(-300px) scale(1); opacity: 0; }
+}
+.gr-event-feed { display: flex; flex-direction: column; gap: .2rem; }
+.gr-event-feed .ev { font-size: .68rem; color: var(--cb-text-secondary); animation: cb-fade-in .3s ease forwards; }
+/* Reduced-motion: desativa animações de reação e fade do feed */
+@media (prefers-reduced-motion: reduce) {
+  .gr-reaction-float { animation: none; opacity: 0; }
+  .gr-event-feed .ev { animation: none; }
+}

@@ -78,7 +78,29 @@ channels:
     publish:
       description: Mensagens enviadas pelo cliente para a sala (Cliente → Servidor).
       message:
-        $ref: '#/components/messages/SendChatMessage'
+        oneOf:
+          - $ref: '#/components/messages/SendChatMessage'
+          - $ref: '#/components/messages/SendReaction'
+
+  # ─────────────────────────────────────────────────────────────────
+  # CANAL SOCIAL — presença e reações (ADR-032)
+  # ─────────────────────────────────────────────────────────────────
+  social.{room_id}:
+    description: |
+      Canal social efêmero por sala. Presença online e reações flutuantes.
+      NÃO persistido em Mongo — estado in-memory apenas.
+    parameters:
+      room_id:
+        description: Identificador único da sala on-chain.
+        schema:
+          type: string
+          pattern: '^\d+$'
+    subscribe:
+      description: Eventos sociais emitidos pelo Servidor (Servidor → Cliente).
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PresenceUpdate'
+          - $ref: '#/components/messages/ReactionNew'
 
 components:
   securitySchemes:
@@ -428,6 +450,70 @@ components:
           message:
             type: string
             maxLength: 500
+
+    # ──────────────────────────────────────────────────────────────
+    # SOCIAL: SERVIDOR → CLIENTE (ADR-032)
+    # ──────────────────────────────────────────────────────────────
+
+    PresenceUpdate:
+      name: presence:update
+      title: Atualização de Presença Online
+      summary: |
+        Emitido quando um jogador entra ou sai da sala.
+        A contagem é por WALLET (dedup multi-socket — duas abas da mesma conta = 1).
+        Sem persistência (in-memory).
+      payload:
+        type: object
+        required: [roomId, online]
+        properties:
+          roomId:
+            type: string
+            description: ID da sala.
+          online:
+            type: integer
+            description: Número de wallets distintas conectadas à sala.
+
+    ReactionNew:
+      name: reaction:new
+      title: Reação Flutuante
+      summary: |
+        Emitido quando um jogador envia uma reação na sala.
+        A reação expira no frontend após ~4s (não persiste no servidor).
+      payload:
+        type: object
+        required: [wallet, emoji, ts]
+        properties:
+          wallet:
+            type: string
+            description: Endereço WAX do remetente (do JWT, nunca do cliente).
+          emoji:
+            type: string
+            enum: ['👏', '🔥', '😮', '😢', '🍀', '🎉']
+            description: Emoji da allowlist. Fora da lista é descartado pelo backend.
+          ts:
+            type: integer
+            description: Timestamp Unix da reação.
+
+    # ──────────────────────────────────────────────────────────────
+    # SOCIAL: CLIENTE → SERVIDOR (ADR-032)
+    # ──────────────────────────────────────────────────────────────
+
+    SendReaction:
+      name: reaction:send
+      title: Enviar Reação
+      summary: |
+        O cliente envia uma reação (emoji) para a sala.
+        O backend valida contra allowlist e rate-limit (10/5s por wallet).
+        Wallet é extraída do JWT — o cliente NÃO informa wallet.
+      payload:
+        type: object
+        required: [roomId, emoji]
+        properties:
+          roomId:
+            type: string
+          emoji:
+            type: string
+            enum: ['👏', '🔥', '😮', '😢', '🍀', '🎉']
 
   schemas:
     WinnerObject:
