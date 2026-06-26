@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
   - ../../base
 
+components:
+  - ../../components/secrets
+
 patches:
   # Prod: réplicas aumentadas
   - patch: |-
@@ -57,8 +60,14 @@ patches:
 
 images:
   - name: cryptobingo/api-gateway
+    newName: ghcr.io/iurineumann/cryptobingo-api-gateway
     newTag: stable
   - name: cryptobingo/worker-game-loop
+    newName: ghcr.io/iurineumann/cryptobingo-worker-game-loop
     newTag: stable
   - name: cryptobingo/frontend
+    newName: ghcr.io/iurineumann/cryptobingo-frontend
+    newTag: stable
+  - name: cryptobingo/swap-ui
+    newName: ghcr.io/iurineumann/cryptobingo-swap-ui
     newTag: stable

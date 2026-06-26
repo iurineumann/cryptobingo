@@ -54,3 +54,10 @@ spec:
                 name: frontend-svc
                 port:
                   name: http
+          - path: /swap
+            pathType: Prefix
+            backend:
+              service:
+                name: swap-ui-svc
+                port:
+                  name: http

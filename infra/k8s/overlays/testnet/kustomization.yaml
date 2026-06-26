@@ -28,6 +28,13 @@ patches:
     target:
       kind: Deployment
       name: frontend
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: swap-ui
   # Testnet: WAX testnet, verificação on-chain habilitada
   - patch: |-
       - op: replace
@@ -57,4 +64,7 @@ images:
     newTag: testnet
   - name: cryptobingo/frontend
     newName: ghcr.io/iurineumann/cryptobingo-frontend
+    newTag: testnet
+  - name: cryptobingo/swap-ui
+    newName: ghcr.io/iurineumann/cryptobingo-swap-ui
     newTag: testnet
