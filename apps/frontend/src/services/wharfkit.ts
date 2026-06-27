@@ -10,7 +10,7 @@ import { WebRenderer } from '@wharfkit/web-renderer';
 import { WalletPluginAnchor } from '@wharfkit/wallet-plugin-anchor';
 import { WalletPluginCloudWallet } from '@wharfkit/wallet-plugin-cloudwallet';
 
-const rpcUrl = import.meta.env.DEV  || import.meta.env.VITE_DEV_SESSION
+const rpcUrl = import.meta.env.DEV
     ? window.location.origin 
     : import.meta.env.VITE_RPC_URL;
 
