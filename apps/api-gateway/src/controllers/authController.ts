@@ -134,13 +134,17 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
         let recoveredPubKey: string;
 
         if (transactionPayload !== undefined && transactionPayload !== null) {
-            // ── MODO PRODUÇÃO: verifica via transaction.id ───────────────────
+            // ── MODO PRODUÇÃO: verifica via transaction.id (bingogamectr:userlogin) ─
             try {
                 const transaction = Transaction.from(transactionPayload);
                 const actionDataHex = transaction.actions[0]?.data?.toString() ?? '';
-                const actionDataStr = Buffer.from(actionDataHex, 'hex').toString('utf-8');
+                // userlogin bytes(nonce_data): ABI-encoded = varuint32(len) + raw_bytes
+                // nonces < 127 bytes → varuint32 = 1 byte (próprio len)
+                const actionBuf = Buffer.from(actionDataHex, 'hex');
+                const nonceLen  = actionBuf[0];
+                const rawNonce  = actionBuf.subarray(1, 1 + nonceLen).toString('utf-8');
 
-                if (actionDataStr !== nonce) {
+                if (rawNonce !== nonce) {
                     res.status(401).json({ error: 'Nonce na transação não corresponde ao challenge.' });
                     return;
                 }

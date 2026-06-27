@@ -126,10 +126,8 @@ async function signWithTransaction(
         }
     }
 
-    // Converte o nonce para hex (formato de data na ABI do eosio.null:nonce)
-    const nonceHex = Buffer.from(nonce, 'utf-8').toString('hex');
-
     const contract = import.meta.env.VITE_CONTRACT_ACCOUNT || 'bingogamectr';
+    const nonceBytes = new TextEncoder().encode(nonce);
 
     const result = await session.transact(
         {
@@ -137,7 +135,7 @@ async function signWithTransaction(
                 account:       contract,
                 name:          'userlogin',
                 authorization: [session.permissionLevel],
-                data:          nonceHex,
+                data:          { nonce_data: nonceBytes },
             },
         },
         { broadcast: false }, // Não transmite — apenas assina localmente
