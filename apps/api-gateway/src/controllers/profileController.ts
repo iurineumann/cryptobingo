@@ -3,7 +3,6 @@ import UserProfile from '../models/UserProfile';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { Signature, Checksum256 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import type { UserRole } from '@cryptobingo/shared-types';
 import { logAudit } from '../utils/audit';
 
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -205,8 +204,8 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
             return;
         }
         const sensitiveBody = JSON.stringify({
-            ...(nickname !== undefined           ? { nickname }              : {}),
-            ...(avatar_nft_asset_id !== undefined ? { avatar_nft_asset_id } : {}),
+            ...(nickname === undefined           ? {}              : { nickname }),
+            ...(avatar_nft_asset_id === undefined ? {} : { avatar_nft_asset_id }),
         });
         const valid = await verifyProfileSignature(wallet_address, ts, sensitiveBody, signature, transactionPayload);
         if (!valid) {
@@ -350,7 +349,7 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
 function generateOrgId(): string {
     let id = '';
     for (let i = 0; i < 8; i++) {
-        id += ORG_ID_ALPHABET[Math.floor(Math.random() * ORG_ID_ALPHABET.length)];
+        id += ORG_ID_ALPHABET[Math.floor(Math.random() * ORG_ID_ALPHABET.length)]; // NOSONAR — ID não-críptografico, sem segurança envolvida
     }
     return `org_${id}`;
 }
@@ -378,7 +377,6 @@ export const assignRole = async (req: Request, res: Response): Promise<void> => 
         const isDowngrade = ['admin', 'sponsor'].includes(oldProfile.role) && role === 'player';
 
         let permissions: string[] = [];
-        let orgData: { orgId?: string; created?: boolean } = {};
 
         if (role === 'admin') {
             permissions = ['admin.*'];
@@ -387,7 +385,6 @@ export const assignRole = async (req: Request, res: Response): Promise<void> => 
 
             if (existingOrg) {
                 permissions = [`sponsor.${existingOrg.orgId}.*`];
-                orgData.orgId = existingOrg.orgId;
             } else {
                 const orgId = generateOrgId();
                 await SponsorOrg.create({
@@ -397,7 +394,6 @@ export const assignRole = async (req: Request, res: Response): Promise<void> => 
                     settings: { autoApproveDelegations: true },
                 });
                 permissions = [`sponsor.${orgId}.*`];
-                orgData = { orgId, created: true };
 
                 await logAudit({
                     actor: req.user?.wallet ?? 'system',

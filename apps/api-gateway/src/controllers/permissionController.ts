@@ -2,8 +2,6 @@ import type { Request, Response } from 'express';
 import { UserProfile } from '../models/UserProfile';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
-import { logAudit } from '../utils/audit';
-
 export async function updateUserPermissions(req: Request, res: Response) {
   try {
     const { wallet } = req.params;
@@ -22,14 +20,15 @@ export async function updateUserPermissions(req: Request, res: Response) {
 
     res.json({ wallet_address: updated.wallet_address, permissions: (updated as any).permissions });
   } catch (err) {
+    console.error('[PermissionController] updateUserPermissions:', err);
     res.status(500).json({ error: 'Erro ao atualizar permissões' });
   }
 }
 
 export async function listSponsorOrgs(req: Request, res: Response) {
   try {
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const page = Math.max(1, Number.parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
 
     const [orgs, total] = await Promise.all([
