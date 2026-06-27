@@ -16,11 +16,14 @@ interface DevAccount {
 }
 
 interface LandingPageProps {
-  onConnect:    () => void;
-  devAccounts:  DevAccount[] | null;
-  onDevLogin:   ((actor: string, key: string) => void) | null;
-  theme:        string;
+  onConnect:     () => void;
+  devAccounts:   DevAccount[] | null;
+  onDevLogin:    ((actor: string, key: string) => void) | null;
+  theme:         string;
   onToggleTheme: () => void;
+  authError?:    string | null;
+  loading?:      boolean;
+  onRetryLogin?: () => void;
 }
 
 const CONTRACT       = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
@@ -111,7 +114,7 @@ function formatLargeNumber(n: number): string {
   return n.toLocaleString('pt-BR');
 }
 
-export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme, onToggleTheme }: LandingPageProps) {
+export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme, onToggleTheme, authError, loading, onRetryLogin }: LandingPageProps) {
   const { t, i18n } = useTranslation();
   const navigate    = useNavigate();
 
@@ -235,6 +238,17 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
   return (
     <div className="bg-[--cb-bg-base] text-[--cb-text-primary]" style={{ minHeight: '100dvh' }}>
 
+      {authError && (
+        <div className="cb-alert cb-alert-error" style={{ margin: '0 auto', maxWidth: '48rem', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <span>{authError}</span>
+          {onRetryLogin && (
+            <Button variant="outline" size="sm" onClick={onRetryLogin} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {t('auth.retry') ?? 'Tentar novamente'}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* ── Nav ── */}
       <header className="sticky top-0 z-50" style={{ background: 'color-mix(in srgb, var(--cb-bg-base) 90%, transparent)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--cb-border-subtle)' }}>
         <div className="cb-container flex items-center justify-between gap-4" style={{ height: '4rem' }}>
@@ -286,8 +300,8 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
               </h1>
               <p className="text-lg text-[--cb-text-secondary] leading-relaxed mb-10">{t('landing.hero_desc')}</p>
               <div className="flex gap-4 flex-wrap">
-                <Button variant="default" size="lg" className="rounded-full" onClick={onConnect} data-testid="landing-connect">
-                  ◆ {t('landing.hero_cta')}
+                <Button variant="default" size="lg" className="rounded-full" onClick={onConnect} data-testid="landing-connect" disabled={loading}>
+                  {loading ? <><span className="cb-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> {t('common.loading')}</> : <>◆ {t('landing.hero_cta')}</>}
                 </Button>
                 <a href="#como" className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-md text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground no-underline">
                   {t('landing.hero_how_it_works')}

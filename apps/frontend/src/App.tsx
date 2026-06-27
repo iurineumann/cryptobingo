@@ -521,6 +521,12 @@ function AppRoot() {
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onConnect={login}
+                            authError={error ?? authError}
+                            loading={isLoading}
+                            onRetryLogin={session ? () => {
+                                setError(null);
+                                loadProfile();
+                            } : undefined}
                             devAccounts={import.meta.env.DEV ? devAccounts : null}
                             onDevLogin={import.meta.env.DEV ? ((actor, key) => {
                                 if (createCustomSession) handleLogin(createCustomSession(actor, key));

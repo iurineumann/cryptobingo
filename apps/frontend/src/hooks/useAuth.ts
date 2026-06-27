@@ -146,12 +146,12 @@ async function signWithTransaction(
         return false;
     }
 
-    const signature          = result.signatures[0].toString();
-    const publicKey          = (session as any).publicKey?.toString();
-
     // result.transaction é ResolvedTransaction (decoded data, sem toJSON)
     // Reconstruímos o ABI-encoding original para transaction.id bater
     const rtx        = result.transaction!;
+    const sig        = result.signatures[0];
+    const signature  = sig.toString();
+    const publicKey  = sig.recoverDigest(result.resolved!.signingDigest).toString();
     const action0    = rtx.actions[0];
     const rawNonce   = (action0.data.nonce_data as any).array as Uint8Array;
     const prefixed   = new Uint8Array(1 + rawNonce.length);
@@ -175,11 +175,6 @@ async function signWithTransaction(
         transaction_extensions: [] as any[],
         signatures: result.signatures,
     };
-
-    if (!publicKey) {
-        setAuthError('Chave pública não disponível na sessão Wharfkit.');
-        return false;
-    }
 
     // Envia com transactionPayload — server usa modo transação
     await verifyAuthChallenge(wallet, nonce, signature, publicKey, txPayload);
