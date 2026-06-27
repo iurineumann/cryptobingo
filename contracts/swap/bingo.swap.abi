@@ -133,6 +133,29 @@
         { "name": "provider", "type": "name"   },
         { "name": "pool_id",  "type": "uint64" }
       ]
+    },
+    {
+      "name": "setnftdisc",
+      "base": "",
+      "fields": [
+        { "name": "template_id",  "type": "int32"  },
+        { "name": "discount_bps", "type": "uint16" }
+      ]
+    },
+    {
+      "name": "delnftdisc",
+      "base": "",
+      "fields": [
+        { "name": "template_id", "type": "int32" }
+      ]
+    },
+    {
+      "name": "nft_discount",
+      "base": "",
+      "fields": [
+        { "name": "template_id",  "type": "int32"  },
+        { "name": "discount_bps", "type": "uint16" }
+      ]
     }
   ],
   "actions": [
@@ -142,8 +165,10 @@
     { "name": "deltoken",    "type": "deltoken",    "ricardian_contract": "" },
     { "name": "createpool", "type": "createpool", "ricardian_contract": "" },
     { "name": "addliq",     "type": "addliq",     "ricardian_contract": "" },
-    { "name": "remliq",     "type": "remliq",     "ricardian_contract": "" },
-    { "name": "canceldep",  "type": "canceldep",  "ricardian_contract": "" }
+    { "name": "remliq",     "type": "remliq",     "ricardian_contract": ""     },
+    { "name": "canceldep",  "type": "canceldep",  "ricardian_contract": "" },
+    { "name": "setnftdisc", "type": "setnftdisc", "ricardian_contract": "" },
+    { "name": "delnftdisc", "type": "delnftdisc", "ricardian_contract": "" }
   ],
   "tables": [
     {
@@ -180,6 +205,13 @@
       "key_names":  ["pool_id"],
       "key_types":  ["uint64"],
       "type":        "lp_balance"
+    },
+    {
+      "name":       "nftdiscounts",
+      "index_type": "i64",
+      "key_names":  ["template_id"],
+      "key_types":  ["int32"],
+      "type":        "nft_discount"
     }
   ],
   "ricardian_clauses": [],

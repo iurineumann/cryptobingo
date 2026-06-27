@@ -115,12 +115,14 @@ export default function SwapPage() {
         const rawOut = Math.round(parsed * 10 ** to.precision).toString();
         setQuoteLoading(true); setQuoteError(null);
         try {
+            const walletAddr = session ? String(session.actor) : undefined;
             const q = await fetchSwapQuote({
                 fromContract: from.contract,
                 fromSymbol:   from.symbol,
                 toContract:   to.contract,
                 toSymbol:     to.symbol,
                 amountOut:    rawOut,
+                wallet:       walletAddr,
             });
             setQuote(q);
         } catch (e: unknown) {
@@ -276,8 +278,24 @@ export default function SwapPage() {
                         </div>
                         <div className="flex justify-between">
                             <span className="cb-muted">{t('swap.fee_service')}</span>
-                            <span>{quote.service_fee_bps} bps</span>
+                            <span>
+                                {quote.service_fee_bps} bps
+                                {quote.nft_discount_bps > 0 && (
+                                    <span className="text-[--cb-success] text-xs ml-1"
+                                          data-testid="swap-nft-discount">
+                                        🎟 -{quote.nft_discount_bps}%
+                                    </span>
+                                )}
+                            </span>
                         </div>
+                        {quote.effective_service_fee_bps < quote.service_fee_bps && (
+                            <div className="flex justify-between text-[--cb-success]">
+                                <span className="cb-muted text-[--cb-success]">
+                                    {t('swap.fee_effective')}
+                                </span>
+                                <span className="font-mono">{quote.effective_service_fee_bps} bps</span>
+                            </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="cb-muted">{t('swap.price_impact')}</span>
                             <span className={highImpact ? 'text-[--cb-warning] font-bold' : ''}>

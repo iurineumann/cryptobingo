@@ -20,7 +20,7 @@
 
 import { useState, useCallback } from 'react';
 import { Session }               from '@wharfkit/session';
-import { PrivateKey, Checksum256 } from '@wharfkit/antelope';
+import { PrivateKey, Checksum256, Bytes } from '@wharfkit/antelope';
 import {
     requestAuthChallenge,
     verifyAuthChallenge,
@@ -106,7 +106,7 @@ async function signWithPrivateKey(
 }
 
 // ==========================================
-// MODO PRODUÇÃO — transação eosio.null:nonce
+// MODO PRODUÇÃO — transação bingogamectr:userlogin
 // ==========================================
 
 async function signWithTransaction(
@@ -126,16 +126,16 @@ async function signWithTransaction(
         }
     }
 
-    // Converte o nonce para hex (formato de data na ABI do eosio.null:nonce)
-    const nonceHex = Buffer.from(nonce, 'utf-8').toString('hex');
+    const contract = import.meta.env.VITE_CONTRACT_ACCOUNT || 'bingogamectr';
+    const nonceBytes = new TextEncoder().encode(nonce);
 
     const result = await session.transact(
         {
             action: {
-                account:       'eosio.null',
-                name:          'nonce',
+                account:       contract,
+                name:          'userlogin',
                 authorization: [session.permissionLevel],
-                data:          nonceHex,
+                data:          { nonce_data: nonceBytes },
             },
         },
         { broadcast: false }, // Não transmite — apenas assina localmente
@@ -146,18 +146,39 @@ async function signWithTransaction(
         return false;
     }
 
-    const signature          = result.signatures[0].toString();
-    const publicKey          = (session as any).publicKey?.toString();
-    const transactionPayload = (result.transaction as any)?.toJSON();
-
-    if (!publicKey) {
-        setAuthError('Chave pública não disponível na sessão Wharfkit.');
-        return false;
-    }
+    // result.transaction é ResolvedTransaction (decoded data, sem toJSON)
+    // Reconstruímos o ABI-encoding original para transaction.id bater
+    const rtx        = result.transaction!;
+    const sig        = result.signatures[0];
+    const signature  = sig.toString();
+    const publicKey  = sig.recoverDigest(result.resolved!.signingDigest).toString();
+    const action0    = rtx.actions[0];
+    const rawNonce   = (action0.data.nonce_data as any).array as Uint8Array;
+    const prefixed   = new Uint8Array(1 + rawNonce.length);
+    prefixed[0] = rawNonce.length; // varuint32 para len < 128
+    prefixed.set(rawNonce, 1);
+    const dataHex    = Bytes.from(prefixed).toString();
+    const txPayload  = {
+        expiration:            rtx.expiration,
+        ref_block_num:         rtx.ref_block_num,
+        ref_block_prefix:      rtx.ref_block_prefix,
+        max_net_usage_words:   rtx.max_net_usage_words,
+        max_cpu_usage_ms:      rtx.max_cpu_usage_ms,
+        delay_sec:             rtx.delay_sec,
+        context_free_actions:  [] as any[],
+        actions: [{
+            account:       action0.account,
+            name:          action0.name,
+            authorization: action0.authorization,
+            data:          dataHex,
+        }],
+        transaction_extensions: [] as any[],
+        signatures: result.signatures,
+    };
 
     // Envia com transactionPayload — server usa modo transação
-    await verifyAuthChallenge(wallet, nonce, signature, publicKey, transactionPayload);
+    await verifyAuthChallenge(wallet, nonce, signature, publicKey, txPayload);
 
-    console.log(`✅ [Auth/Prod] JWT obtido para ${wallet} via eosio.null:nonce`);
+    console.log(`✅ [Auth/Prod] JWT obtido para ${wallet} via ${contract}:userlogin`);
     return true;
 }

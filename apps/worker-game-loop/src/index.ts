@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import mongoose from 'mongoose';
-import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames } from './services/rabbitmq';
+import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
@@ -53,6 +53,13 @@ async function bootstrap(): Promise<void> {
     setInterval(autoLockFundingGames,  15_000);
     setInterval(autoClaimDrawnGames,   15_000);
     setInterval(autoStartLockedGames,  30_000);
+
+    // ── 4b. Startup recovery scan ─────────────────────────────────────────────────
+    // Recupera jogos em DRAWING com balls completas (crash após oracle responder)
+    // e jogos LOCKED que precisam de sorteio (não cobertos pelo auto-advance inicial)
+    recoverStuckGames().catch(err =>
+        console.error('[Bootstrap] Erro no recovery scan:', err)
+    );
 
     // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
     startBurnSyncCron();

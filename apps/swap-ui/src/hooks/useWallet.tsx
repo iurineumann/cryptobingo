@@ -8,8 +8,8 @@ import { WebRenderer } from '@wharfkit/web-renderer';
 import { WalletPluginAnchor } from '@wharfkit/wallet-plugin-anchor';
 import { WalletPluginCloudWallet } from '@wharfkit/wallet-plugin-cloudwallet';
 
-const CHAIN_ID  = import.meta.env.VITE_CHAIN_ID  || '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
-const RPC_URL   = import.meta.env.VITE_WAX_RPC_URL || 'http://127.0.0.1:8888';
+const CHAIN_ID  = import.meta.env.VITE_CHAIN_ID  || 'f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12';
+const RPC_URL   = import.meta.env.VITE_WAX_RPC_URL || 'https://testnet.waxsweden.org';
 
 interface WalletContextValue {
     session:   Session | null;

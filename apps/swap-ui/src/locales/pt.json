@@ -31,6 +31,7 @@
     "you_get": "Você recebe",
     "fee_lp": "Taxa LP",
     "fee_service": "Taxa de serviço",
+    "fee_effective": "Taxa efetiva (NFT)",
     "price_impact": "Impacto no preço",
     "min_received": "Mínimo recebido",
     "quote_expires": "Cotação expira em",

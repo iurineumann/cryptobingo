@@ -24,6 +24,7 @@ import {
     Gauge,
     collectDefaultMetrics,
 } from 'prom-client';
+import { redisConnected, rabbitConnected } from './connectionState';
 
 const METRICS_PORT = Number.parseInt(process.env.METRICS_PORT ?? '9091', 10);
 
@@ -238,7 +239,25 @@ export function startMetricsServer(): void {
             }
         } else if (req.url === '/health' && req.method === 'GET') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+            res.end(JSON.stringify({
+                status:    'ok',
+                timestamp: new Date().toISOString(),
+                services:  {
+                    redis:   redisConnected  ? 'connected' : 'disconnected',
+                    rabbit:  rabbitConnected ? 'connected' : 'disconnected',
+                },
+            }));
+        } else if (req.url === '/readyz' && req.method === 'GET') {
+            const ready = redisConnected && rabbitConnected;
+            res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                ready,
+                timestamp: new Date().toISOString(),
+                services:  {
+                    redis:   redisConnected  ? 'connected' : 'disconnected',
+                    rabbit:  rabbitConnected ? 'connected' : 'disconnected',
+                },
+            }));
         } else {
             res.writeHead(404);
             res.end('Not Found');

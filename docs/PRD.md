@@ -40,9 +40,11 @@ Plataforma descentralizada de bingo de quota fixa na WAX. Opera em modelo Web2.5
 | US-P-03 | Receber prêmios automaticamente ao vencer | Alta |
 | US-P-04 | Depositar e sacar tokens da carteira interna | Alta |
 | US-P-05 | Visualizar histórico de jogos e resultados | Média |
-| US-P-06 | Usar NFT de utilidade para desconto na compra | Média |
+| US-P-06 | Usar NFT de utilidade para desconto/boost no prêmio (ADR-028) | Média | ✅ |
 | US-P-07 | Participar de salas com múltiplos modos de sorteio | Média |
 | US-P-08 | Receber drops de tokens/NFTs de patrocinadores | Média |
+| US-P-09 | Acompanhar presença e reações de outros jogadores na sala (ADR-032) | Baixa | ✅ |
+| US-P-10 | Rever replay de jogos anteriores com controles de seek/speed (ADR-033) | Média | ✅ |
 
 ### 3.2. Sponsor
 
@@ -121,33 +123,39 @@ Ref: `SPEC.md §2.2` (claimwin), `SPEC.md §2.3` (stages), `SPEC.md §1.7` (game
 
 Ref: `SPEC.md §1.5`, `SPEC.md §2.4`, ADR-010.
 
-### 4.5. Patrocínio B2B (Campaigns) 🚧
+### 4.5. Patrocínio B2B (Campaigns) ✅
 
-**✅ On-chain:** Tabela `campaigns` com budget, payout por jogo, leftover policy. Sponsor deposita tokens.
+**✅ On-chain:** Tabela `campaigns` com budget, payout por jogo, leftover policy. Sponsor deposita tokens via memo `campaign:{id}`.
+
+**✅ `setcampaign`:** Admin ou sponsor configura `payout_per_game` e `leftover_policy` (refund/house) em campanha existente.
 
 **✅ API:** `GET/POST /api/v1/sponsors/campaigns`, `POST .../link` (`linkcampaign`), `POST .../close` (`closecmpgn`).
 
-**🚧 Falta:** Suite harness validando ciclo completo (criar → vincular → distribuir por partida → encerrar com devolução). Fluxo existe mas não tem cobertura E2E integrada.
+**✅ Harness E2E:** 6 suites validando ciclo completo (deposit → setcampaign → linkcampaign → auth guards).
 
 Ref: `SPEC.md §1.4`, ADR-008.
 
-### 4.6. Drop Vault 🚧
+### 4.6. Drop Vault ✅
 
-**✅ On-chain:** Tabelas `dropdeposits`, `dropallocs`, singleton `dropstate`. Depósitos via `on_notify` de transfer.
+**✅ On-chain:** Tabelas `dropdeposits`, `dropallocs`, singleton `dropstate`. Depósitos via `on_notify` de transfer com memo `vault`.
 
-**🚧 Execução:** `dropWorker.ts` com 3 fases (pré-check → seleção → distribuição). Execução de `execdrop()`.
+**✅ Worker:** `dropWorker.ts` com 3 fases (pré-check → seleção → distribuição). Execução de `execdrop()`. Ciclo completo testado no harness.
 
 Ref: `SPEC.md §1.6`, ADR-011.
 
-### 4.7. NFTs e Utilidades 🚧
+### 4.7. NFTs e Utilidades ✅
 
-**✅ nftconfigs:** Tabela on-chain que mapeia template_id a benefícios (desconto %, VIP, validade). Aplicado em `buytickets()`.
+**✅ nftconfigs:** Tabela on-chain que mapeia template_id a benefícios (discount_pct, PRIZE_BOOST, SCHEMA_FIELD, BURN_TO_CLAIM, VIP, validade). Aplicado em `buytickets()`.
 
-**🚧 Backed Tokens:** NFTs da coleção `cryptobingo` com lastro BINGO (AtomicAssets), liberado ao burn.
+**✅ BURN_TO_CLAIM (ADR-028 §9):** Burn do NFT consumível ativa bônus de prêmio no jogo. Implementado no worker (`nftMechanics.ts`, `burnCron.ts`).
 
-**🔮 Single-use NFT:** Burn do NFT → ativa benefício único (XP boost, entrada gratuita, bônus de prêmio). Ainda não implementado.
+**✅ SCHEMA_FIELD (ADR-028 §8):** Benefício lido do schema do asset (imutável por template), sem necessidade de `nftconfigs`.
 
-Ref: `SPEC.md §5.2`, `CONTEXT.md §NFT & Utilidades`.
+**✅ Backed Tokens:** NFTs da coleção `cryptobingo` com lastro BINGO (AtomicAssets), liberado ao burn.
+
+**🔮 Desconto na service_fee do swap (ADR-019 Phase 2):** Desconto por template_id em `bingogameswp` — implementação pendente.
+
+Ref: `SPEC.md §5.2`, `CONTEXT.md §NFT & Utilidades`, ADR-028.
 
 ### 4.8. WebSocket Slow Reveal ✅
 
@@ -186,14 +194,44 @@ Ref: ADR-018, ADR-019, ADR-022.
 
 Ref: ADR-021.
 
+### 4.12. GameRoom — Componentes e UX de Sorteio ✅
+
+- Monolito GameRoom (1218 linhas) decomposto em 6 componentes reutilizáveis (ADR-030).
+- Sorteio cinematográfico com revelação de bola por coluna + pulso de suspense (ADR-031).
+- Near-miss detection: alerta "Falta 1!" + destaque da célula que fecha padrão (Fase 2).
+- MatchStats: pote da partida, bônus, bolas restantes (Fase 3).
+- Presença ao vivo, reações efêmeras e event feed via Socket.io (ADR-032, Fase 4).
+- Som opcional de chamada de bola (default off), suporte a reduced motion.
+- i18n pt/en/zh em toda a experiência de sala.
+
+Ref: ADR-030, ADR-031, ADR-032.
+
+### 4.13. ReplayRoom — Replay de Jogos Anteriores ✅
+
+- Monolito ReplayRoom (577 linhas) decomposto em 3 componentes (ADR-033).
+- Controles: play/pause, restart, speed, seek.
+- `ReplaySummary`: banners + aggregate stats por jogador.
+- Entry points context-aware: ReplayPage (avulso), PlayerHistory, RoomHistory.
+- 38 testes de cobertura.
+
+Ref: ADR-033.
+
+### 4.14. Autenticação — Deep Links e Persistência ✅
+
+- JWT migrado de `sessionStorage` para `localStorage` (persiste entre abas).
+- Re-auth silencioso via `authenticateSession` em nova aba ou JWT expirado.
+- Deep links funcionais sem re-login (ex: `/room/{id}` aberto diretamente).
+
+Ref: ADR-034.
+
 ---
 
 ## 5. Requisitos Não-Funcionais
 
 | Requisito | Descrição | Status |
 |---|---|---|
-| **Latência broadcaster** | < 200ms entre revelação e UI do jogador | 🚧 |
-| **Conexões simultâneas** | 50.000 WebSocket sem perda de pacotes | 🔮 |
+| **Latência broadcaster** | < 200ms entre revelação e UI do jogador | 🚧 (não aferido) |
+| **Conexões simultâneas** | 50.000 WebSocket sem perda de pacotes | 🔮 (load test pendente) |
 | **RTP** | 85% ± 2% calibrado por Monte Carlo | ✅ |
 | **Provably Fair** | Sorteio via oráculo on-chain `orng.wax` | ✅ |
 | **Assinatura de cartelas** | ECDSA K1, validada via `recover_key` | ✅ |

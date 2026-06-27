@@ -6,6 +6,7 @@
 #include <eosio/system.hpp>
 #include <vector>
 #include <string>
+#include <map>
 
 namespace swap_contract_ns {
     using namespace eosio;
@@ -98,6 +99,52 @@ namespace swap_contract_ns {
     typedef multi_index<"lpbalances"_n, lp_balance> lp_balances_table;
 
     // ==========================================
+    // NFT DISCOUNTS — ADR-019 Phase 2
+    // Desconto na service_fee_bps para holders de NFTs da coleção cryptobingo.
+    // Mapeia template_id → discount_bps (1000 = 10% de desconto na taxa).
+    // Índice primário: template_id (int32).
+    // ==========================================
+
+    struct [[eosio::table("nftdiscounts")]] nft_discount {
+        int32_t  template_id;
+        uint16_t discount_bps;   // 1000 = 10% off na service_fee
+
+        uint64_t primary_key() const { return (uint64_t)(int64_t)template_id; }
+    };
+    typedef multi_index<"nftdiscounts"_n, nft_discount> nft_discounts_table;
+
+    // ==========================================
+    // ATOMICASSETS — struct mínimo para leitura
+    // Acessamos a tabela `assets` do contrato atomicassets.
+    // scope = owner, índice secundário "template" por template_id.
+    // ==========================================
+
+    struct atomic_asset_entry {
+        uint64_t                  asset_id;
+        name                      collection_name;
+        name                      schema_name;
+        int32_t                   template_id;
+        name                      ram_payer;
+        std::vector<eosio::asset> backed_tokens;
+        std::vector<uint8_t>      immutable_serialized_data;
+        std::vector<uint8_t>      mutable_serialized_data;
+
+        uint64_t primary_key()    const { return asset_id; }
+        uint64_t by_owner()       const { return ram_payer.value; }
+        uint64_t by_collection()  const { return collection_name.value; }
+        uint64_t by_schema()      const { return schema_name.value; }
+        uint64_t by_template()    const { return (uint64_t)template_id; }
+    };
+    typedef multi_index<
+        "assets"_n,
+        atomic_asset_entry,
+        indexed_by<"owner"_n,      const_mem_fun<atomic_asset_entry, uint64_t, &atomic_asset_entry::by_owner>>,
+        indexed_by<"collection"_n, const_mem_fun<atomic_asset_entry, uint64_t, &atomic_asset_entry::by_collection>>,
+        indexed_by<"schema"_n,     const_mem_fun<atomic_asset_entry, uint64_t, &atomic_asset_entry::by_schema>>,
+        indexed_by<"template"_n,   const_mem_fun<atomic_asset_entry, uint64_t, &atomic_asset_entry::by_template>>
+    > atomic_assets_table;
+
+    // ==========================================
     // CONTRACT
     // ==========================================
 
@@ -150,6 +197,14 @@ namespace swap_contract_ns {
 
         // Cancela depósitos pendentes e devolve os tokens ao provider.
         [[eosio::action]] void canceldep(name provider, uint64_t pool_id);
+
+        // ── NFT Discounts (admin-only) ─────────────────────────────────────────
+        // Configura desconto na service_fee para holders de um template_id.
+        // discount_bps: 1000 = 10% de desconto; máximo 10000 (100%, isenta).
+        [[eosio::action]] void setnftdisc(int32_t template_id, uint16_t discount_bps);
+
+        // Remove desconto de um template_id.
+        [[eosio::action]] void delnftdisc(int32_t template_id);
 
         // Recebe tokens do sistema eosio::transfer.
         // Memo "deposit,<pool_id>"               → registra depósito pendente para addliq.

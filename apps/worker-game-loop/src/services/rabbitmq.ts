@@ -63,6 +63,8 @@ const ORACLE_POLL_INTERVAL_MS  = 2_000;
 // Batch size para refundall e cleargame (respeita budget de CPU WAX ~30ms/bloco)
 const GC_BATCH_SIZE = 50;
 
+import { setRabbitConnected } from './connectionState';
+
 let connection: ChannelModel;
 let channel:    Channel;
 
@@ -155,9 +157,11 @@ export async function connectRabbitMQ(): Promise<void> {
         ]);
 
         connection.on('error', (err) => {
+            setRabbitConnected(false);
             console.error('❌ [RabbitMQ] Erro na conexão:', err.message);
         });
         connection.on('close', () => {
+            setRabbitConnected(false);
             console.warn(`⚠️  [RabbitMQ] Conexão encerrada. Reconectando em ${RETRY_DELAY_MS / 1000}s...`);
             setTimeout(connectRabbitMQ, RETRY_DELAY_MS);
         });
@@ -166,6 +170,7 @@ export async function connectRabbitMQ(): Promise<void> {
         await setupQueues();
         await channel.prefetch(1);
 
+        setRabbitConnected(true);
         console.log(`✅ [RabbitMQ] Escutando "${QUEUE_NAME}" (max retries: ${MAX_RETRIES})`);
         consumeMessages();
 
@@ -657,6 +662,90 @@ async function processLockedGame(gameId: string): Promise<void> {
         console.error(`[AutoAdvance] Erro startdraw locked (jogo ${gameId}):`, err);
         processedGames.delete(gameId);
     });
+}
+
+/**
+ * Recovery de jogos em DRAWING após restart.
+ * Oracle request já foi enviado on-chain; worker só precisa:
+ *   - Se balls já sorteadas (75/75) → orquestrar payout
+ *   - Se balls incompletas e tempo excedeu 5min → abortar (oráculo silencioso)
+ *   - Caso contrário → deixar (oráculo pode ainda responder)
+ */
+const DRAWING_RECOVERY_TIMEOUT_MS = 5 * 60 * 1000;
+
+export async function recoverStuckGames(): Promise<void> {
+    console.log('🔍 [Recovery] Varredura de jogos presos no startup...');
+
+    // 1. Recovery de DRAWING (gap principal — não coberto por auto-advance)
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   100,
+            reverse: false,
+            json:    true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        const now = Date.now();
+
+        for (const game of games) {
+            const gameId = String(game.game_id);
+
+            if (game.status === 'drawing') {
+                const drawnCount = (game as any).drawn_balls?.length ?? 0;
+                const lastUpdated = (game as any).updated_at
+                    ? new Date((game as any).updated_at + 'Z').getTime()
+                    : now;
+
+                if (drawnCount === 75) {
+                    console.log(`🔍 [Recovery] Jogo ${gameId} com 75/75 bolas. Orquestrando payout...`);
+                    orchestrateGame(gameId).catch(err =>
+                        console.error(`[Recovery] Erro orchestrateGame (${gameId}):`, err)
+                    );
+                } else if (now - lastUpdated > DRAWING_RECOVERY_TIMEOUT_MS) {
+                    console.log(`🔍 [Recovery] Jogo ${gameId} em DRAWING há >5min (${drawnCount}/75 bolas). Abortando.`);
+                    try {
+                        await executeAbortGame(gameId, 'ORACLE_TIMEOUT_RECOVERY');
+                        notifyGameAborted(gameId, 'ORACLE_TIMEOUT_RECOVERY');
+                    } catch (err) {
+                        console.error(`[Recovery] Erro ao abortar jogo ${gameId}:`, err);
+                    }
+                } else {
+                    console.log(`🔍 [Recovery] Jogo ${gameId} em DRAWING (${drawnCount}/75 bolas, recente). Aguardando oráculo...`);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[Recovery] Erro na varredura DRAWING:', err);
+    }
+
+    // 2. Recovery de LOCKED → start draw (call autoStartLockedGames eager)
+    try {
+        const lockedResult = await rpcClient.v1.chain.get_table_rows({
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   100,
+            reverse: false,
+            json:    true,
+        });
+
+        for (const game of lockedResult.rows as BlockchainGameState[]) {
+            const gameId = String(game.game_id);
+            if (game.status === 'locked' && !processedGames.has(gameId)) {
+                console.log(`🔍 [Recovery] Jogo ${gameId} em LOCKED. Iniciando sorteio...`);
+                await autoStartDraw(gameId);
+            }
+        }
+    } catch (err) {
+        console.error('[Recovery] Erro na varredura LOCKED:', err);
+    }
+
+    // 3. Recovery de FUNDING (coberto pelo auto-advance, mas fazemos passada extra)
+    //    autoLockFundingGames já é chamado no bootstrap antes do RabbitMQ
+    console.log('🔍 [Recovery] Varredura concluída.');
 }
 
 async function autoStartDraw(gameId: string): Promise<void> {
