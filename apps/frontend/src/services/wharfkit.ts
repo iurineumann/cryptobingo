@@ -9,10 +9,11 @@ import { SessionKit } from '@wharfkit/session';
 import { WebRenderer } from '@wharfkit/web-renderer';
 import { WalletPluginAnchor } from '@wharfkit/wallet-plugin-anchor';
 import { WalletPluginCloudWallet } from '@wharfkit/wallet-plugin-cloudwallet';
+import { getEffectiveRpcUrl } from '../utils/rpcStore';
 
 const rpcUrl = import.meta.env.DEV
     ? window.location.origin 
-    : import.meta.env.VITE_RPC_URL;
+    : getEffectiveRpcUrl();
 
     console.log(`[Wharfkit] RPC URL configurada para: ${rpcUrl}`);
 

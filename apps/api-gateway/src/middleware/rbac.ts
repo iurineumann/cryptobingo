@@ -51,7 +51,8 @@ export function requireRole(...roles: UserRole[]) {
 
             const userRole = (profile as any).role as UserRole ?? 'player';
 
-            if (!roles.includes(userRole)) {
+            // contract_admin tem acesso a qualquer role (superset)
+            if (userRole !== 'contract_admin' && !roles.includes(userRole)) {
                 console.warn(
                     `[RBAC] Acesso negado: ${wallet} (role: ${userRole}) ` +
                     `tentou acessar rota que exige: ${roles.join(' | ')}`

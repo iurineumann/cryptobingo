@@ -5,6 +5,7 @@
 // A execução do swap acontece on-chain via Wharfkit — nenhuma chave é custodiada aqui.
 
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
+import { getEffectiveRpcUrl } from '../utils/rpcStore';
 
 const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
 
@@ -88,7 +89,7 @@ export async function fetchTokenBalance(
     tokenContract: string,
     symbolCode:    string,
 ): Promise<bigint> {
-    const rpcUrl = import.meta.env.VITE_WAX_RPC_URL ?? 'http://127.0.0.1:8888';
+    const rpcUrl = getEffectiveRpcUrl();
     try {
         const res = await fetch(`${rpcUrl}/v1/chain/get_table_rows`, {
             method:  'POST',

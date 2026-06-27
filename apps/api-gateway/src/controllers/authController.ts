@@ -17,7 +17,7 @@ import { Request, Response }                         from 'express';
 import jwt                                           from 'jsonwebtoken';
 import crypto                                        from 'node:crypto';
 import { v4 as uuidv4 }                             from 'uuid';
-import { Signature, Checksum256, Transaction }       from '@wharfkit/antelope';
+import { Signature, Checksum256, Transaction, Serializer } from '@wharfkit/antelope';
 import { pgPool }                                    from '../database';
 import { rpcClient }                                 from '@cryptobingo/blockchain-core';
 import { revokeToken }                               from '../middleware/auth';
@@ -87,7 +87,7 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
         res.status(200).json({
             nonce,
             expires_at: expiresAt.toISOString(),
-            message:    `Assine este nonce com a permissão "active" da carteira ${sanitizedWallet}.`,
+            message:    `Assine este nonce com a permissão "active" ou "owner" da carteira ${sanitizedWallet}.`,
         });
     } catch (error) {
         console.error('[Auth] Erro ao gerar challenge:', error);
@@ -149,7 +149,18 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
                     return;
                 }
 
-                recoveredPubKey = sig.recoverDigest(transaction.id).toString();
+                // signing_digest = SHA256(chain_id || packed_trx || cfd_hash)
+                // Wharfkit sempre usa cfd_hash = 32 zero bytes
+                const chainId = Checksum256.from(process.env.CHAIN_ID!);
+                const txBytes = Serializer.encode({ object: transaction });
+                const fullDigest = Checksum256.hash(
+                    Buffer.concat([
+                        Buffer.from(chainId.array),
+                        Buffer.from(txBytes.array),
+                        Buffer.alloc(32),
+                    ])
+                );
+                recoveredPubKey = sig.recoverDigest(fullDigest).toString();
             } catch (txErr) {
                 console.error('[Auth] Erro ao reconstruir transação:', txErr);
                 res.status(401).json({ error: 'transactionPayload inválido.' });
@@ -167,24 +178,29 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
         }
 
         // ── 3. Verificação on-chain da chave pública (feature flag) ───────────
-        // Confirma que a public_key está autorizada na permissão `active` do wallet.
-        // Habilitar em produção via VERIFY_KEY_ONCHAIN=true no .env.
+        // Confirma que a public_key está autorizada na permissão `active` ou `owner` do wallet.
+        // Habilita login com qualquer uma das duas permissões.
         if (VERIFY_KEY_ONCHAIN) {
             try {
-                const accountInfo = await rpcClient.v1.chain.get_account(wallet);
-                const activeKeys  = accountInfo.permissions
-                    .find((p: any) => String(p.perm_name) === 'active')
-                    ?.required_auth.keys ?? [];
-
-                const isAuthorized = activeKeys.some(
-                    (k: any) => k.key.toString() === public_key
+                const accountInfo  = await rpcClient.v1.chain.get_account(wallet);
+                const allPermKeys  = accountInfo.permissions.flatMap((p: any) =>
+                    (p.required_auth?.keys ?? []).map((k: any) => ({
+                        permission: String(p.perm_name),
+                        key:        k.key.toString(),
+                    }))
                 );
 
-                if (!isAuthorized) {
+                const matchedPerm = allPermKeys.find(
+                    (k: any) => k.key === public_key
+                );
+
+                if (!matchedPerm) {
                     console.warn(`[Auth] Chave não autorizada on-chain: ${wallet} / ${public_key}`);
                     res.status(401).json({ error: 'Chave pública não autorizada para esta conta.' });
                     return;
                 }
+
+                console.log(`[Auth] Chave verificada via permissão "${matchedPerm.permission}": ${wallet}`);
             } catch (rpcErr) {
                 // Falha no nó RPC — não bloqueia o login (fail-open com log)
                 // Em produção alta-segurança: mudar para fail-closed
