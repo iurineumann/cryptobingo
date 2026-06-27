@@ -1202,16 +1202,6 @@
       ]
     },
     {
-      "name": "userlogin",
-      "base": "",
-      "fields": [
-        {
-          "name": "nonce_data",
-          "type": "bytes"
-        }
-      ]
-    },
-    {
       "name": "closegame",
       "base": "",
       "fields": [
@@ -1493,11 +1483,6 @@
     {
       "name": "withdraw",
       "type": "withdraw",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "userlogin",
-      "type": "userlogin",
       "ricardian_contract": ""
     },
     {
