@@ -106,7 +106,7 @@ async function signWithPrivateKey(
 }
 
 // ==========================================
-// MODO PRODUÇÃO — transação eosio.null:nonce
+// MODO PRODUÇÃO — transação bingogamectr:userlogin
 // ==========================================
 
 async function signWithTransaction(
@@ -129,11 +129,13 @@ async function signWithTransaction(
     // Converte o nonce para hex (formato de data na ABI do eosio.null:nonce)
     const nonceHex = Buffer.from(nonce, 'utf-8').toString('hex');
 
+    const contract = import.meta.env.VITE_CONTRACT_ACCOUNT || 'bingogamectr';
+
     const result = await session.transact(
         {
             action: {
-                account:       'eosio.null',
-                name:          'nonce',
+                account:       contract,
+                name:          'userlogin',
                 authorization: [session.permissionLevel],
                 data:          nonceHex,
             },
@@ -158,6 +160,6 @@ async function signWithTransaction(
     // Envia com transactionPayload — server usa modo transação
     await verifyAuthChallenge(wallet, nonce, signature, publicKey, transactionPayload);
 
-    console.log(`✅ [Auth/Prod] JWT obtido para ${wallet} via eosio.null:nonce`);
+    console.log(`✅ [Auth/Prod] JWT obtido para ${wallet} via ${contract}:userlogin`);
     return true;
 }

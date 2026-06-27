@@ -9,7 +9,7 @@
 //
 // DOIS MODOS de assinatura em verifyChallenge:
 //   [DEV]  transactionPayload ausente → SHA256(nonce) assinado com PrivateKey
-//   [PROD] transactionPayload presente → transaction eosio.null:nonce
+//   [PROD] transactionPayload presente → transaction bingogamectr:userlogin
 //
 // Ref: ADR-006
 

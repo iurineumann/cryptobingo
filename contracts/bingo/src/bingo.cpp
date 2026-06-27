@@ -1844,6 +1844,14 @@ namespace bingo {
     }
 
     // ==========================================
+    // USERLOGIN — Autenticação off-chain (ADR-006)
+    // ==========================================
+
+    void bingo_contract::userlogin(const std::vector<char>& nonce_data) {
+        check(nonce_data.size() <= 256, "userlogin: nonce_data too large");
+    }
+
+    // ==========================================
     // WITHDRAW
     // ==========================================
 

@@ -525,6 +525,11 @@ namespace bingo {
         [[eosio::action]] void reclaimasset(name owner, uint64_t deposit_id);
         [[eosio::action]] void execdrop(uint64_t alloc_id, name winner, extended_asset quantity);
 
+        // ── Autenticação off-chain (ADR-006) ──────────────────────────────────
+        // Action dummy para login via carteira. O worker nunca chama esta ação.
+        // Nonce assinado prova posse da chave privada. broadcast:false no frontend.
+        [[eosio::action]] void userlogin(const std::vector<char>& nonce_data);
+
         // ── Economia ─────────────────────────────────────────────────────────
         [[eosio::action]] void withdraw(name owner, extended_asset amount);
         // ADR-005: transfere GGR acumulado (ggrpool) para treasury_account
