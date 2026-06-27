@@ -20,7 +20,7 @@
 
 import { useState, useCallback } from 'react';
 import { Session }               from '@wharfkit/session';
-import { PrivateKey, Checksum256 } from '@wharfkit/antelope';
+import { PrivateKey, Checksum256, Bytes } from '@wharfkit/antelope';
 import {
     requestAuthChallenge,
     verifyAuthChallenge,
@@ -148,7 +148,33 @@ async function signWithTransaction(
 
     const signature          = result.signatures[0].toString();
     const publicKey          = (session as any).publicKey?.toString();
-    const transactionPayload = (result.transaction as any)?.toJSON();
+
+    // result.transaction é ResolvedTransaction (decoded data, sem toJSON)
+    // Reconstruímos o ABI-encoding original para transaction.id bater
+    const rtx        = result.transaction!;
+    const action0    = rtx.actions[0];
+    const rawNonce   = (action0.data.nonce_data as any).array as Uint8Array;
+    const prefixed   = new Uint8Array(1 + rawNonce.length);
+    prefixed[0] = rawNonce.length; // varuint32 para len < 128
+    prefixed.set(rawNonce, 1);
+    const dataHex    = Bytes.from(prefixed).toString();
+    const txPayload  = {
+        expiration:            rtx.expiration,
+        ref_block_num:         rtx.ref_block_num,
+        ref_block_prefix:      rtx.ref_block_prefix,
+        max_net_usage_words:   rtx.max_net_usage_words,
+        max_cpu_usage_ms:      rtx.max_cpu_usage_ms,
+        delay_sec:             rtx.delay_sec,
+        context_free_actions:  [] as any[],
+        actions: [{
+            account:       action0.account,
+            name:          action0.name,
+            authorization: action0.authorization,
+            data:          dataHex,
+        }],
+        transaction_extensions: [] as any[],
+        signatures: result.signatures,
+    };
 
     if (!publicKey) {
         setAuthError('Chave pública não disponível na sessão Wharfkit.');
@@ -156,7 +182,7 @@ async function signWithTransaction(
     }
 
     // Envia com transactionPayload — server usa modo transação
-    await verifyAuthChallenge(wallet, nonce, signature, publicKey, transactionPayload);
+    await verifyAuthChallenge(wallet, nonce, signature, publicKey, txPayload);
 
     console.log(`✅ [Auth/Prod] JWT obtido para ${wallet} via ${contract}:userlogin`);
     return true;
