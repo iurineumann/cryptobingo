@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import UserProfile from '../models/UserProfile';
 import { Signature, Checksum256 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
+import type { UserRole } from '@cryptobingo/shared-types';
 
 // Curva φ-tier (espelhada do xpEngine.ts — ADR-028 §9)
 const PHI = 1.618034;
@@ -56,10 +57,19 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
     try {
         let profile = await UserProfile.findOne({ wallet_address });
 
-        // Primeiro login: cria o perfil com valores padrão do schema
         if (!profile) {
-            profile = await UserProfile.create({ wallet_address });
-            console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}`);
+            const isSystem = wallet_address === (process.env.CONTRACT_ACCOUNT || 'bingogamectr');
+            profile = await UserProfile.create({
+                wallet_address,
+                role: isSystem ? 'contract_admin' : 'player',
+            });
+            console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}` +
+                (isSystem ? ' (contract_admin)' : ''));
+        } else if (wallet_address === (process.env.CONTRACT_ACCOUNT || 'bingogamectr')
+                   && profile.role !== 'contract_admin') {
+            profile.role = 'contract_admin';
+            await profile.save();
+            console.log(`⬆️ [Profile] Perfil ${wallet_address} atualizado para contract_admin`);
         }
 
         // Enriquecimento de progressão (ADR-028 2D)
@@ -313,5 +323,43 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
     } catch (error) {
         console.error('[Profile] Erro ao listar usuários:', error);
         res.status(500).json({ error: 'Erro interno ao listar usuários.' });
+    }
+};
+
+/**
+ * POST /api/v1/admin/rbac/assign
+ *
+ * Atribui um papel (role) a uma conta.
+ * Apenas contract_admin pode usar. O target wallet precisa já ter perfil.
+ */
+export const assignRole = async (req: Request, res: Response): Promise<void> => {
+    const { wallet, role } = req.body;
+
+    if (!wallet || typeof wallet !== 'string') {
+        res.status(400).json({ error: 'Campo "wallet" obrigatório.' });
+        return;
+    }
+    if (!role || !['player', 'moderator', 'sponsor', 'admin'].includes(role)) {
+        res.status(400).json({ error: `Role inválida. Aceitas: player, moderator, sponsor, admin.` });
+        return;
+    }
+
+    try {
+        const profile = await UserProfile.findOneAndUpdate(
+            { wallet_address: wallet.trim().toLowerCase() },
+            { $set: { role } },
+            { returnDocument: 'after' },
+        );
+
+        if (!profile) {
+            res.status(404).json({ error: 'Perfil não encontrado. Usuário precisa fazer login primeiro.' });
+            return;
+        }
+
+        console.log(`[RBAC] ${req.user?.wallet} atribuiu role ${role} para ${wallet}`);
+        res.status(200).json({ wallet: profile.wallet_address, role: profile.role });
+    } catch (error) {
+        console.error('[RBAC] Erro ao atribuir role:', error);
+        res.status(500).json({ error: 'Erro interno ao atribuir role.' });
     }
 };

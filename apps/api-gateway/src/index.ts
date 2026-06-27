@@ -25,7 +25,7 @@ import {
     ensureNonceTable,
     logout,
 } from './controllers/authController';
-import { getProfile, updatePreferences, getAchievements, listUsers } from './controllers/profileController';
+import { getProfile, updatePreferences, getAchievements, listUsers, assignRole } from './controllers/profileController';
 import { generateTickets }                           from './controllers/ticketController';
 import {
     listPatterns, upsertPattern, deletePattern,
@@ -285,6 +285,7 @@ function registerRoutes(): void {
 
     // ── Admin: Users (JWT + admin) ────────────────────────────────────────────
     app.get('/api/v1/admin/users', adminLimiter, requireAuth, requireRole('admin'), listUsers);
+    app.post('/api/v1/admin/rbac/assign', adminLimiter, requireAuth, requireRole('admin'), assignRole);
 
     // ── Sponsors B2B (SPEC.md §1.4, brief.md §1) ─────────────────────────────
     app.get ('/api/v1/sponsors/campaigns',                         playerLimiter, listCampaigns);

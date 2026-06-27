@@ -47,6 +47,7 @@ import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import { useAuth }       from './hooks/useAuth';
 import { useTheme }      from './hooks/useTheme';
 import { PaletteSelector } from './components/ui/PaletteSelector';
+import { RPC_PRESETS, getSelectedRpcUrl, setSelectedRpcUrl } from './utils/rpcStore';
 import LandingPage       from './components/LandingPage';
 import Lobby             from './components/Lobby';
 import GameRoom          from './components/GameRoom';
@@ -339,6 +340,11 @@ function AppRoot() {
         }
     }, [i18n, session]);
 
+    const handleRpcChange = useCallback((url: string) => {
+        setSelectedRpcUrl(url);
+        window.location.reload();
+    }, []);
+
     // Props compartilhadas entre páginas autenticadas
     const pageProps: PageProps = {
         session:          session!,
@@ -458,6 +464,19 @@ function AppRoot() {
                         <option value="pt-BR">PT</option>
                         <option value="en-US">EN</option>
                         <option value="zh-CN">中</option>
+                    </select>
+
+                    <select
+                        value={getSelectedRpcUrl() || import.meta.env.VITE_RPC_URL}
+                        onChange={(e) => handleRpcChange(e.target.value)}
+                        className="cb-input cb-select"
+                        style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.75rem', height: '2.25rem', width: 'auto', maxWidth: '11rem' }}
+                        title="Nó RPC da WAX"
+                        aria-label="Nó RPC"
+                    >
+                        {RPC_PRESETS.map((p) => (
+                            <option key={p.url} value={p.url}>{p.label}</option>
+                        ))}
                     </select>
 
                     <PaletteSelector />
