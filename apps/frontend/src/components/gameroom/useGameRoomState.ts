@@ -482,7 +482,7 @@ export function useGameRoomState(
 
   // ── Cartelas ordenadas + agrupadas ─────────────────────────────────────
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap),
+    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, t),
     [playerTickets, drawnSet, gamePatterns, winnerMap],
   );
 

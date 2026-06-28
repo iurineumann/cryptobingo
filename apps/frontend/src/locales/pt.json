@@ -167,6 +167,11 @@
     "sound_toggle_aria": "Alternar som do sorteio",
     "near_miss": "Falta 1!",
     "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar",
+    "ticket_section": {
+      "winners_multi": "Multi-Vencedores",
+      "winners": "Vencedores",
+      "other": "Outras"
+    },
     "pot_label": "Pote da partida",
     "pot_bonus": "Bônus patrocinado",
     "stats_balls": "Bolas",

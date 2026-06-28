@@ -167,6 +167,11 @@
     "sound_toggle_aria": "Toggle draw sound",
     "near_miss": "1 to go!",
     "near_miss_aria": "Ticket {{id}}: one ball away from a win",
+    "ticket_section": {
+      "winners_multi": "Multi-Winners",
+      "winners": "Winners",
+      "other": "Other"
+    },
     "pot_label": "Match pot",
     "pot_bonus": "Sponsored bonus",
     "stats_balls": "Balls",

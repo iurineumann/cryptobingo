@@ -561,9 +561,10 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
         `Gametype: ${gametypeId}`
     );
 
-    // ── MULTI_MATCH: delega para handler especializado ───────────────────────
+    // ── MULTI_MATCH: orquestrador gerencia payout por estágio.
+    // Esta função só valida estado e limpa índice — sem liquidar.
     if (drawMode === 'multimatch') {
-        await processMultiMatchWinners(gameId, game.drawn_balls.slice(0, maxBalls), gametypeId);
+        console.log(`🎯 [MULTI_MATCH] Estado validado. Liquidado pelo orquestrador por estágio.`);
         if (hasIndex) await deleteIndex(gameId);
         return;
     }

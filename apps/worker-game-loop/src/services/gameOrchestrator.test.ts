@@ -3,6 +3,8 @@
 
 process.env.GOLDEN_BALL_PAUSE_MS = '0';
 process.env.STAGE_PAUSE_MS       = '0';
+process.env.MULTIPLIER_TIER_PAUSE_MS = '0';
+process.env.MULTIPLIER_FINAL_PAUSE_MS = '0';
 process.env.CONTRACT_ACCOUNT     = 'bingogamectr';
 process.env.RPC_URL              = 'http://localhost:8888';
 process.env.CHAIN_ID             = '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
@@ -26,6 +28,7 @@ jest.mock('./broadcaster', () => ({
     endRevealSession:   jest.fn(),
     notifyWinners:      jest.fn(),
     notifyGoldenBall:   jest.fn(),
+    notifyGoldenMultiplierProgress: jest.fn(),
     notifyStageCleared: jest.fn(),
     notifyGameEnded:    jest.fn(),
     notifyGameLocked:   jest.fn(),
@@ -57,7 +60,7 @@ import {
 } from './evaluator';
 import {
     startSlowReveal, endRevealSession, notifyWinners,
-    notifyGoldenBall, notifyStageCleared, notifyGameEnded,
+    notifyGoldenBall, notifyGoldenMultiplierProgress, notifyStageCleared, notifyGameEnded,
 } from './broadcaster';
 import { deleteIndex }    from './invertedIndex';
 import { onGameResolved } from './roomManager';
@@ -75,6 +78,7 @@ const mockStartReveal       = startSlowReveal                              as je
 const mockEndReveal         = endRevealSession                             as jest.Mock;
 const mockNotifyWinners     = notifyWinners                                as jest.Mock;
 const mockNotifyGoldenBall  = notifyGoldenBall                             as jest.Mock;
+const mockNotifyMultiProgress = notifyGoldenMultiplierProgress                as jest.Mock;
 const mockNotifyStaged      = notifyStageCleared                           as jest.Mock;
 const mockNotifyEnded       = notifyGameEnded                              as jest.Mock;
 const mockDeleteIndex       = deleteIndex                                  as jest.Mock;
@@ -231,6 +235,35 @@ describe('orchestrateGame — goldenball', () => {
         expect(mockNotifyGoldenBall).toHaveBeenCalledWith('1', expect.any(Number), 5);
     });
 
+    it('notifyGoldenMultiplierProgress anima tiers antes do final', async () => {
+        mockDeriveGolden.mockReturnValue(5); // tiers: 2 → final(5)
+        await orchestrateGame('1');
+        // Deve emitir ×2 (tier) e ×5 (final)
+        expect(mockNotifyMultiProgress).toHaveBeenCalledWith('1', 2, false);
+        expect(mockNotifyMultiProgress).toHaveBeenCalledWith('1', 5, true);
+    });
+
+    it('notifyGoldenMultiplierProgress pula tiers acima do multiplicador final', async () => {
+        mockDeriveGolden.mockReturnValue(3); // tiers: 2 → sem tier≥3 → final(3)
+        await orchestrateGame('1');
+        expect(mockNotifyMultiProgress).toHaveBeenCalledWith('1', 2, false);
+        expect(mockNotifyMultiProgress).toHaveBeenCalledWith('1', 3, true);
+    });
+
+    it('notifyGoldenMultiplierProgress quando multiplier=2 só emite final', async () => {
+        mockDeriveGolden.mockReturnValue(2); // sem tier<2 → só final
+        await orchestrateGame('1');
+        expect(mockNotifyMultiProgress).toHaveBeenCalledWith('1', 2, true);
+        expect(mockNotifyMultiProgress).toHaveBeenCalledTimes(1);
+    });
+
+    it('startSlowReveal recebe totalBalls = ga + 1', async () => {
+        await orchestrateGame('1');
+        // max_balls=5, golden_ball_after=4, ga=4, totalReveal=5
+        expect(mockStartReveal.mock.calls[0][2]).toBe(5); // primeira chamada
+        expect(mockStartReveal.mock.calls[1][2]).toBe(5); // golden ball
+    });
+
     it('startSlowReveal chamado 2x (bolas normais + golden)', async () => {
         await orchestrateGame('1');
         expect(mockStartReveal).toHaveBeenCalledTimes(2);
@@ -258,6 +291,26 @@ describe('orchestrateGame — multimatch', () => {
         });
         mockPreCompute.mockResolvedValue(stageResults);
         mockPayStage.mockResolvedValue(undefined);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+    });
+
+    it('processAllGameWinners chamado antes do reveal (state validation)', async () => {
+        await orchestrateGame('1');
+        expect(mockProcessAllWinners).toHaveBeenCalledWith('1');
+    });
+
+    it('preComputeMultiMatchCutoffs chamado depois de processAllGameWinners', async () => {
+        await orchestrateGame('1');
+        const procOrder  = mockProcessAllWinners.mock.invocationCallOrder[0];
+        const preCompOrder = mockPreCompute.mock.invocationCallOrder[0];
+        expect(procOrder).toBeLessThan(preCompOrder);
+    });
+
+    it('startSlowReveal recebe totalBalls do último cutoff', async () => {
+        await orchestrateGame('1');
+        // stageResults: cutoff 5 e 10 → totalBalls = 10
+        const totalBallsCall0 = mockStartReveal.mock.calls[0][2];
+        expect(totalBallsCall0).toBe(10);
     });
 
     it('preComputeMultiMatchCutoffs chamado antes do reveal', async () => {
