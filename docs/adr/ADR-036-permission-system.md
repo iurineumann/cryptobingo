@@ -1,6 +1,6 @@
 # ADR-036 — RBAC+Perms: Permissões Granulares + Delegação Sponsor
 
-**Status:** Proposto
+**Status:** Implementado (2026-06-27)
 **Data:** 2026-06-27
 
 ---

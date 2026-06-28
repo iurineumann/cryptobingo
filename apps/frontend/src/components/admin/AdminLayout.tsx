@@ -6,13 +6,14 @@
 
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { hasAnyPermission } from '../../utils/permissionMatcher';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import { PaletteSelector } from '../ui/PaletteSelector';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import {
   LayoutDashboard, Building2, Grid3x3, Puzzle, Megaphone, ShieldCheck,
-  Image, Coins, Settings, Users, UserCircle,
+  Image, Coins, Settings, Users, UserCircle, Handshake,
 } from 'lucide-react';
 import Logo from '../Logo';
 import AdminDashboard   from './AdminDashboard';
@@ -21,6 +22,7 @@ import GametypesAdmin   from './GametypesAdmin';
 import SponsorDashboard from './SponsorDashboard';
 import ComplianceAdmin  from './ComplianceAdmin';
 import UsersAdmin       from './UsersAdmin';
+import SponsorsAdmin    from './SponsorsAdmin';
 import PlayerDashboard  from './PlayerDashboard';
 import RoomsAdmin       from './RoomsAdmin';
 import VaultAdmin       from './VaultAdmin';
@@ -29,15 +31,16 @@ import TokenAdmin         from './TokenAdmin';
 import SystemTokensAdmin  from './SystemTokensAdmin';
 
 interface AdminLayoutProps {
-  profile:        MongoUserProfile;
-  session?:       Session;
-  theme:          string;
-  onToggleTheme:  () => void;
-  onLogout:       () => void;
+  readonly profile:        MongoUserProfile;
+  readonly session?:       Session;
+  readonly theme:          string;
+  readonly permissions?:   string[];
+  readonly onToggleTheme:  () => void;
+  readonly onLogout:       () => void;
 }
 
 export default function AdminLayout({
-  profile, session, theme, onToggleTheme, onLogout,
+  profile, session, permissions = [], theme, onToggleTheme, onLogout,
 }: AdminLayoutProps) {
   const { t, i18n } = useTranslation();
   const navigate     = useNavigate();
@@ -62,6 +65,7 @@ export default function AdminLayout({
     { id: 'config-tokens',  label: t('token_admin.title'),    group: 'assets',     icon: <Settings className="size-4 shrink-0" /> },
     { id: 'compliance', label: t('admin.compliance'), group: 'compliance', icon: <ShieldCheck className="size-4 shrink-0" /> },
     { id: 'users',      label: t('admin.users'),      group: 'compliance', icon: <Users className="size-4 shrink-0" /> },
+    { id: 'sponsors',   label: t('admin.sponsors'),   group: 'compliance', icon: <Handshake className="size-4 shrink-0" /> },
     { id: 'mypanel',    label: t('admin.my_panel'),   group: 'personal',   icon: <UserCircle className="size-4 shrink-0" /> },
   ];
 
@@ -77,18 +81,42 @@ export default function AdminLayout({
       case 'token':          return <TokenAdmin session={session} />;
       case 'config-tokens':  return <SystemTokensAdmin />;
       case 'compliance': return <ComplianceAdmin />;
-      case 'users':      return <UsersAdmin />;
+      case 'users':      return <UsersAdmin permissions={permissions} />;
+      case 'sponsors':   return <SponsorsAdmin permissions={permissions} />;
       case 'mypanel':    return session ? <PlayerDashboard session={session} /> : null;
       default:           return <AdminDashboard session={session} />;
     }
   }
 
-  const currentNav = ADMIN_NAV.find(n => n.id === section);
+  const SECTION_PERMS: Record<string, string[]> = {
+    dashboard:    ['admin.dashboard.view'],
+    rooms:        ['admin.rooms.manage'],
+    patterns:     ['admin.patterns.manage'],
+    gametypes:    ['admin.gametypes.manage'],
+    campaigns:    ['admin.campaigns.manage'],
+    vault:        ['admin.vault.manage'],
+    nfts:         ['admin.nfts.manage'],
+    token:        ['admin.tokens.manage'],
+    'config-tokens': ['admin.config.manage'],
+    compliance:   ['admin.compliance.view'],
+    users:        ['admin.users.view'],
+    sponsors:     ['admin.sponsors.view'],
+    mypanel:      [],
+  };
+
+  const visibleNav = ADMIN_NAV.filter(
+    (item) =>
+      !SECTION_PERMS[item.id] ||
+      SECTION_PERMS[item.id].length === 0 ||
+      hasAnyPermission(permissions, SECTION_PERMS[item.id])
+  );
+
+  const currentNav = visibleNav.find(n => n.id === section);
 
   const SidebarGroup = ({ group, title }: { group: string; title: string }) => (
     <div className="site-sidebar-section">
       <span className="site-sidebar-title">{title}</span>
-      {ADMIN_NAV.filter(n => n.group === group).map(item => (
+      {visibleNav.filter(n => n.group === group).map(item => (
         <a
           key={item.id}
           href={`/admin/${item.id}`}

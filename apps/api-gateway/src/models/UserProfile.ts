@@ -21,6 +21,14 @@ const UserProfileSchema = new Schema({
         index:   true,
     },
 
+    // Permissões granulares (ADR-036)
+    // Admin recebe ['admin.*'], sponsor master recebe ['sponsor.{orgId}.*']
+    permissions: {
+        type: [String],
+        default: [],
+        index: true,
+    },
+
     preferences: {
         locale: {
             type:    String,

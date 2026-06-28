@@ -11,6 +11,7 @@ import { connectMongo, connectPostgres }             from './database';
 import { connectRedis }                              from './database/redis';
 import { requireAuth }                               from './middleware/auth';
 import { requireRole }                               from './middleware/rbac';
+import { requirePerm }                               from './middleware/requirePerm';
 import {
     authLimiter,
     playerLimiter,
@@ -63,6 +64,19 @@ import { setupChatSocket }                            from './socket/chatSocket'
 import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
+import {
+    updateUserPermissions,
+    listSponsorOrgs,
+    getSponsorOrg,
+    createDelegation,
+    removeDelegation,
+} from './controllers/permissionController';
+import {
+    getMyOrg,
+    listMyDelegations,
+    createMyDelegation,
+    removeMyDelegation,
+} from './controllers/sponsorPermissionController';
 
 dotenv.config();
 
@@ -286,6 +300,53 @@ function registerRoutes(): void {
     // ── Admin: Users (JWT + admin) ────────────────────────────────────────────
     app.get('/api/v1/admin/users', adminLimiter, requireAuth, requireRole('admin'), listUsers);
     app.post('/api/v1/admin/rbac/assign', adminLimiter, requireAuth, requireRole('admin'), assignRole);
+
+    // ── Permissions / Sponsor Orgs (admin) ────────────────────────────────────
+    app.put('/api/v1/admin/users/:wallet/permissions',
+        adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.users.manage'),
+        updateUserPermissions
+    );
+
+    app.get('/api/v1/admin/sponsor-orgs',
+        adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.sponsors.view'),
+        listSponsorOrgs
+    );
+
+    app.get('/api/v1/admin/sponsor-orgs/:orgId',
+        adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.sponsors.view'),
+        getSponsorOrg
+    );
+
+    app.post('/api/v1/admin/sponsor-orgs/:orgId/delegations',
+        adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.sponsors.manage'),
+        createDelegation
+    );
+
+    app.delete('/api/v1/admin/sponsor-orgs/:orgId/delegations/:wallet',
+        adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.sponsors.manage'),
+        removeDelegation
+    );
+
+    // ── Sponsor Self-Service (Permission System) ──────────────────────────────
+    app.get('/api/v1/sponsor/org',
+        authLimiter, requireAuth,
+        getMyOrg
+    );
+
+    app.get('/api/v1/sponsor/delegations',
+        authLimiter, requireAuth,
+        listMyDelegations
+    );
+
+    app.post('/api/v1/sponsor/delegations',
+        authLimiter, requireAuth,
+        createMyDelegation
+    );
+
+    app.delete('/api/v1/sponsor/delegations/:wallet',
+        authLimiter, requireAuth,
+        removeMyDelegation
+    );
 
     // ── Sponsors B2B (SPEC.md §1.4, brief.md §1) ─────────────────────────────
     app.get ('/api/v1/sponsors/campaigns',                         playerLimiter, listCampaigns);

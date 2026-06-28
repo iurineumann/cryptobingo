@@ -21,6 +21,7 @@
 //   /sponsor              → redirect /sponsor/rooms
 //   /sponsor/rooms        → SponsorLayout > SponsorRooms (role sponsor)
 //   /sponsor/vault        → SponsorLayout > SponsorVault  (role sponsor)
+//   /sponsor/delegations  → SponsorLayout > SponsorDelegations (perm delegations.manage)
 //
 // Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms), ADR-015 (Routing)
 
@@ -45,6 +46,7 @@ import {
 import { sessionKit }    from './services/wharfkit';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import { useAuth }       from './hooks/useAuth';
+import { hasAnyPermission } from './utils/permissionMatcher';
 import { useTheme }      from './hooks/useTheme';
 import { PaletteSelector } from './components/ui/PaletteSelector';
 import { RPC_PRESETS, getSelectedRpcUrl, setSelectedRpcUrl } from './utils/rpcStore';
@@ -60,6 +62,7 @@ import AdminLayout         from './components/admin/AdminLayout';
 import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
+import SponsorDelegations from './components/sponsor/SponsorDelegations';
 import Logo             from './components/Logo';
 import XpProgressBar    from './components/XpProgressBar';
 import AchievementModal from './components/AchievementModal';
@@ -160,6 +163,7 @@ interface PageProps {
     session:  Session;
     profile:  MongoUserProfile;
     isAdmin:  boolean;
+    permissions: string[];
     theme:    'dark' | 'light';
     onToggleTheme:    () => void;
     onLanguageChange: (locale: string) => void;
@@ -242,15 +246,20 @@ function AppRoot() {
     const [restoringSession, setRestoringSession] = useState(true);
     const [showAchievements, setShowAchievements] = useState(false);
 
+    const userPermissions: string[] = (profile as any)?.permissions ?? [];
+
     const isAdmin = !!(
         profile && (
             profile.role === 'admin' ||
             profile.role === 'contract_admin' ||
-            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
+            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString())) ||
+            hasAnyPermission(userPermissions, ['admin.*', 'admin.dashboard.view'])
         )
     );
     const isSponsor = !!(
         profile?.role === 'sponsor' ||
+        profile?.role === 'contract_admin' ||
+        userPermissions.some(p => p.startsWith('sponsor.')) ||
         (import.meta.env.DEV && session && devSponsorActors.has(session.actor.toString()))
     );
 
@@ -350,6 +359,7 @@ function AppRoot() {
         session:          session!,
         profile:          profile!,
         isAdmin,
+        permissions:      userPermissions,
         theme,
         onToggleTheme:    toggleTheme,
         onLanguageChange: handleLanguageChange,
@@ -605,6 +615,7 @@ function AppRoot() {
                         <AdminLayout
                             profile={profile!}
                             session={session!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
@@ -618,6 +629,7 @@ function AppRoot() {
                         <SponsorLayout
                             session={session!}
                             profile={profile!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
@@ -626,6 +638,7 @@ function AppRoot() {
                         <Route path="/sponsor" element={<Navigate to="/sponsor/rooms" replace />} />
                         <Route path="/sponsor/rooms" element={<SponsorRooms />} />
                         <Route path="/sponsor/vault" element={<SponsorVault />} />
+                        <Route path="/sponsor/delegations" element={<SponsorDelegations />} />
                     </Route>
                 </Route>
             </Route>

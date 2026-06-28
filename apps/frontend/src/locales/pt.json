@@ -18,7 +18,8 @@
     "unknown": "Desconhecido",
     "saving": "Salvando...",
     "syncing": "Sincronizando...",
-    "load_more": "Carregar Mais"
+    "load_more": "Carregar Mais",
+    "create": "Criar"
   },
   "nav": {
     "lobby": "Salas",
@@ -323,6 +324,7 @@
     "campaigns": "Campanhas B2B",
     "compliance": "Compliance",
     "users": "Usuários",
+    "sponsors": "Sponsors",
     "vault": "Vault de Drops",
     "my_panel": "Meu Painel",
     "rooms": "Salas",
@@ -533,6 +535,13 @@
     "users_col_wagered": "Apostado",
     "users_empty": "Nenhum usuário encontrado.",
     "users_error_load": "Falha ao carregar usuários.",
+    "edit_permissions": "Editar Permissões",
+    "sponsors_desc": "Gerencie organizações patrocinadoras e delegações de acesso.",
+    "new_delegation": "Nova Delegação",
+    "delegation_wallet": "Carteira do Delegado",
+    "no_delegations": "Nenhuma delegação ativa.",
+    "actions": "Ações",
+    "sponsors_empty": "Nenhuma organização encontrada.",
     "player_title": "Meu Painel",
     "player_loading": "Carregando seus dados...",
     "player_balance": "Saldo",
@@ -770,7 +779,17 @@
     "select_room": "Selecione uma sala...",
     "success_update": "Sala atualizada com sucesso.",
     "error_load": "Erro ao carregar salas.",
-    "error_update": "Erro ao salvar alterações."
+    "error_update": "Erro ao salvar alterações.",
+    "nav_delegations": "Delegações",
+    "delegations_desc": "Gerencie quem pode acessar e operar em nome da sua organização.",
+    "delegation_new": "Nova Delegação",
+    "delegation_new_title": "Criar Delegação",
+    "delegation_wallet": "Carteira do Delegado",
+    "delegation_col_wallet": "Carteira",
+    "delegation_col_perms": "Permissões",
+    "delegation_col_created": "Criado em",
+    "delegation_col_actions": "Ações",
+    "delegations_empty": "Nenhuma delegação ativa."
   },
   "errors": {
     "network": "Erro de conexão. Verifique sua internet.",

@@ -18,7 +18,8 @@
     "unknown": "Unknown",
     "saving": "Saving...",
     "syncing": "Syncing...",
-    "load_more": "Load More"
+    "load_more": "Load More",
+    "create": "Create"
   },
   "nav": {
     "lobby": "Lobbies",
@@ -323,6 +324,7 @@
     "campaigns": "B2B Campaigns",
     "compliance": "Compliance",
     "users": "Users",
+    "sponsors": "Sponsors",
     "vault": "Drop Vault",
     "my_panel": "My Panel",
     "rooms": "Rooms",
@@ -533,6 +535,13 @@
     "users_col_wagered": "Wagered",
     "users_empty": "No users found.",
     "users_error_load": "Failed to load users.",
+    "edit_permissions": "Edit Permissions",
+    "sponsors_desc": "Manage sponsor organizations and access delegations.",
+    "new_delegation": "New Delegation",
+    "delegation_wallet": "Delegate Wallet",
+    "no_delegations": "No active delegations.",
+    "actions": "Actions",
+    "sponsors_empty": "No organizations found.",
     "player_title": "My Panel",
     "player_loading": "Loading your data...",
     "player_balance": "Balance",
@@ -770,7 +779,17 @@
     "select_room": "Select a room...",
     "success_update": "Room updated successfully.",
     "error_load": "Failed to load rooms.",
-    "error_update": "Failed to save changes."
+    "error_update": "Failed to save changes.",
+    "nav_delegations": "Delegations",
+    "delegations_desc": "Manage who can access and operate on behalf of your organization.",
+    "delegation_new": "New Delegation",
+    "delegation_new_title": "Create Delegation",
+    "delegation_wallet": "Delegate Wallet",
+    "delegation_col_wallet": "Wallet",
+    "delegation_col_perms": "Permissions",
+    "delegation_col_created": "Created",
+    "delegation_col_actions": "Actions",
+    "delegations_empty": "No active delegations."
   },
   "errors": {
     "network": "Connection error. Check your internet.",

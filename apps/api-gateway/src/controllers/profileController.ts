@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import UserProfile from '../models/UserProfile';
+import { SponsorOrg } from '../models/SponsorOrg';
 import { Signature, Checksum256 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import type { UserRole } from '@cryptobingo/shared-types';
+import { logAudit } from '../utils/audit';
+
+const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 // Curva φ-tier (espelhada do xpEngine.ts — ADR-028 §9)
 const PHI = 1.618034;
@@ -62,9 +65,20 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
             profile = await UserProfile.create({
                 wallet_address,
                 role: isSystem ? 'contract_admin' : 'player',
-            });
+            } as any);
             console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}` +
                 (isSystem ? ' (contract_admin)' : ''));
+
+            if (isSystem) {
+                await logAudit({
+                    actor: wallet_address,
+                    action: 'role.autoassign',
+                    target: `wallet:${wallet_address}`,
+                    details: { role: 'contract_admin', reason: 'CONTRACT_ACCOUNT login' },
+                    ip: req.ip,
+                    userAgent: req.headers?.['user-agent'] as string,
+                });
+            }
         } else if (wallet_address === (process.env.CONTRACT_ACCOUNT || 'bingogamectr')
                    && profile.role !== 'contract_admin') {
             profile.role = 'contract_admin';
@@ -190,8 +204,8 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
             return;
         }
         const sensitiveBody = JSON.stringify({
-            ...(nickname !== undefined           ? { nickname }              : {}),
-            ...(avatar_nft_asset_id !== undefined ? { avatar_nft_asset_id } : {}),
+            ...(nickname === undefined           ? {}              : { nickname }),
+            ...(avatar_nft_asset_id === undefined ? {} : { avatar_nft_asset_id }),
         });
         const valid = await verifyProfileSignature(wallet_address, ts, sensitiveBody, signature, transactionPayload);
         if (!valid) {
@@ -332,6 +346,14 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
  * Atribui um papel (role) a uma conta.
  * Apenas contract_admin pode usar. O target wallet precisa já ter perfil.
  */
+function generateOrgId(): string {
+    let id = '';
+    for (let i = 0; i < 8; i++) {
+        id += ORG_ID_ALPHABET[Math.floor(Math.random() * ORG_ID_ALPHABET.length)]; // NOSONAR — ID não-críptografico, sem segurança envolvida
+    }
+    return `org_${id}`;
+}
+
 export const assignRole = async (req: Request, res: Response): Promise<void> => {
     const { wallet, role } = req.body;
 
@@ -345,19 +367,79 @@ export const assignRole = async (req: Request, res: Response): Promise<void> => 
     }
 
     try {
-        const profile = await UserProfile.findOneAndUpdate(
-            { wallet_address: wallet.trim().toLowerCase() },
-            { $set: { role } },
-            { returnDocument: 'after' },
-        );
+        const oldProfile = await UserProfile.findOne({ wallet_address: wallet.trim().toLowerCase() }).lean();
 
-        if (!profile) {
+        if (!oldProfile) {
             res.status(404).json({ error: 'Perfil não encontrado. Usuário precisa fazer login primeiro.' });
             return;
         }
 
-        console.log(`[RBAC] ${req.user?.wallet} atribuiu role ${role} para ${wallet}`);
-        res.status(200).json({ wallet: profile.wallet_address, role: profile.role });
+        const isDowngrade = ['admin', 'sponsor'].includes(oldProfile.role) && role === 'player';
+
+        let permissions: string[] = [];
+
+        if (role === 'admin') {
+            permissions = ['admin.*'];
+        } else if (role === 'sponsor') {
+            const existingOrg = await SponsorOrg.findOne({ owner_wallet: wallet.trim().toLowerCase() });
+
+            if (existingOrg) {
+                permissions = [`sponsor.${existingOrg.orgId}.*`];
+            } else {
+                const orgId = generateOrgId();
+                await SponsorOrg.create({
+                    orgId,
+                    owner_wallet: wallet.trim().toLowerCase(),
+                    name: `Org de ${wallet}`,
+                    settings: { autoApproveDelegations: true },
+                });
+                permissions = [`sponsor.${orgId}.*`];
+
+                await logAudit({
+                    actor: req.user?.wallet ?? 'system',
+                    action: 'org.create',
+                    target: `org:${orgId}`,
+                    details: { owner_wallet: wallet },
+                    ip: req.ip,
+                    userAgent: req.headers?.['user-agent'] as string,
+                });
+            }
+        } else if (isDowngrade) {
+            permissions = [];
+        }
+
+        const profile = await UserProfile.findOneAndUpdate(
+            { wallet_address: wallet.trim().toLowerCase() },
+            { $set: { role, permissions } },
+            { returnDocument: 'after' },
+        );
+
+        if (!profile) {
+            res.status(404).json({ error: 'Perfil não encontrado após atualização.' });
+            return;
+        }
+
+        await logAudit({
+            actor: req.user?.wallet ?? 'system',
+            action: 'role.assign',
+            target: `wallet:${wallet}`,
+            details: {
+                oldRole: oldProfile.role,
+                newRole: role,
+                oldPermissions: (oldProfile as any).permissions ?? [],
+                newPermissions: permissions,
+                reason: isDowngrade ? 'rebaixamento' : undefined,
+            },
+            ip: req.ip,
+            userAgent: req.headers?.['user-agent'] as string,
+        });
+
+        console.log(`[RBAC] ${req.user?.wallet} atribuiu role ${role} para ${wallet} perms=${JSON.stringify(permissions)}`);
+        res.status(200).json({
+            wallet: profile.wallet_address,
+            role: profile.role,
+            permissions,
+        });
     } catch (error) {
         console.error('[RBAC] Erro ao atribuir role:', error);
         res.status(500).json({ error: 'Erro interno ao atribuir role.' });
