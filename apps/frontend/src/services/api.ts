@@ -1037,3 +1037,45 @@ export async function sendChatMessage(
     });
     return handleResponse(res);
 }
+
+// ── Admin: Permissions & Sponsors (ADR-036) ──────────────────────────────────
+
+export async function updateUserPermissions(wallet: string, permissions: string[]): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/users/${wallet}/permissions`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ permissions }),
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar permissões');
+}
+
+export async function fetchSponsorOrgs(page = 1, limit = 20): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs?page=${page}&limit=${limit}`, {
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function fetchSponsorOrg(orgId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}`, {
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function createDelegation(orgId: string, wallet: string, permissions: string[]): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}/delegations`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ wallet_address: wallet, permissions }),
+    });
+    return handleResponse(res);
+}
+
+export async function removeDelegation(orgId: string, wallet: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}/delegations/${wallet}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
