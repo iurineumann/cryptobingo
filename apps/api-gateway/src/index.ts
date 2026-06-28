@@ -71,6 +71,12 @@ import {
     createDelegation,
     removeDelegation,
 } from './controllers/permissionController';
+import {
+    getMyOrg,
+    listMyDelegations,
+    createMyDelegation,
+    removeMyDelegation,
+} from './controllers/sponsorPermissionController';
 
 dotenv.config();
 
@@ -319,6 +325,27 @@ function registerRoutes(): void {
     app.delete('/api/v1/admin/sponsor-orgs/:orgId/delegations/:wallet',
         adminLimiter, requireAuth, requireRole('admin'), requirePerm('admin.sponsors.manage'),
         removeDelegation
+    );
+
+    // ── Sponsor Self-Service (Permission System) ──────────────────────────────
+    app.get('/api/v1/sponsor/org',
+        authLimiter, requireAuth,
+        getMyOrg
+    );
+
+    app.get('/api/v1/sponsor/delegations',
+        authLimiter, requireAuth,
+        listMyDelegations
+    );
+
+    app.post('/api/v1/sponsor/delegations',
+        authLimiter, requireAuth,
+        createMyDelegation
+    );
+
+    app.delete('/api/v1/sponsor/delegations/:wallet',
+        authLimiter, requireAuth,
+        removeMyDelegation
     );
 
     // ── Sponsors B2B (SPEC.md §1.4, brief.md §1) ─────────────────────────────
