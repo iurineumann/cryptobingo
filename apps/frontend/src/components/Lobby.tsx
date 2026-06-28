@@ -29,8 +29,8 @@ const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
-const POLL_NORMAL_MS       = 8_000;   // salas idle
-const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
+const POLL_NORMAL_MS       = 4_000;   // salas idle
+const POLL_ACTIVE_MS       = 1_000;   // quando há funding ou drawing
 
 const STATUS_DOT: Record<string, string> = {
     created: 'var(--cb-text-tertiary)',
@@ -347,9 +347,9 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         const gtInfo = gametypeMap.get(String(room.gametype_id));
                         const maxPrizeVal = (() => {
                             if (!gtInfo || gtInfo.max_win_weight === 0) return 0;
-                            const defQty = room.ticket_price_default?.quantity;
-                            if (!defQty) return 0;
-                            const priceAmt = parseFloat(splitAmount(defQty).amount) || 0;
+                            const qty = room.ticket_price_max?.quantity ?? room.ticket_price_default?.quantity;
+                            if (!qty) return 0;
+                            const priceAmt = parseFloat(splitAmount(qty).amount) || 0;
                             return priceAmt * gtInfo.base_multiplier * gtInfo.max_win_weight / 100;
                         })();
                         const priceSymbol = splitAmount(room.ticket_price_default?.quantity ?? '').symbol;
@@ -381,7 +381,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                 <div className="lobby-card-head">
                                     <div>
                                         <span className="lobby-card-id">Sala #{room.room_id}</span>
-                                        {room.metadata?.name && <p className="lobby-card-name">{roomName}</p>}
+                                        <p className="lobby-card-name">{roomName}</p>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
                                         {isDrawing ? (
