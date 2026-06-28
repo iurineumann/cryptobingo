@@ -6,6 +6,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { hasAnyPermission } from '../../utils/permissionMatcher';
 import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import { PaletteSelector } from '../ui/PaletteSelector';
@@ -32,12 +33,13 @@ interface AdminLayoutProps {
   profile:        MongoUserProfile;
   session?:       Session;
   theme:          string;
+  permissions?:   string[];
   onToggleTheme:  () => void;
   onLogout:       () => void;
 }
 
 export default function AdminLayout({
-  profile, session, theme, onToggleTheme, onLogout,
+  profile, session, permissions = [], theme, onToggleTheme, onLogout,
 }: AdminLayoutProps) {
   const { t, i18n } = useTranslation();
   const navigate     = useNavigate();
@@ -83,12 +85,34 @@ export default function AdminLayout({
     }
   }
 
-  const currentNav = ADMIN_NAV.find(n => n.id === section);
+  const SECTION_PERMS: Record<string, string[]> = {
+    dashboard:    ['admin.dashboard.view'],
+    rooms:        ['admin.rooms.manage'],
+    patterns:     ['admin.patterns.manage'],
+    gametypes:    ['admin.gametypes.manage'],
+    campaigns:    ['admin.campaigns.manage'],
+    vault:        ['admin.vault.manage'],
+    nfts:         ['admin.nfts.manage'],
+    token:        ['admin.tokens.manage'],
+    'config-tokens': ['admin.config.manage'],
+    compliance:   ['admin.compliance.view'],
+    users:        ['admin.users.view'],
+    mypanel:      [],
+  };
+
+  const visibleNav = ADMIN_NAV.filter(
+    (item) =>
+      !SECTION_PERMS[item.id] ||
+      SECTION_PERMS[item.id].length === 0 ||
+      hasAnyPermission(permissions, SECTION_PERMS[item.id])
+  );
+
+  const currentNav = visibleNav.find(n => n.id === section);
 
   const SidebarGroup = ({ group, title }: { group: string; title: string }) => (
     <div className="site-sidebar-section">
       <span className="site-sidebar-title">{title}</span>
-      {ADMIN_NAV.filter(n => n.group === group).map(item => (
+      {visibleNav.filter(n => n.group === group).map(item => (
         <a
           key={item.id}
           href={`/admin/${item.id}`}

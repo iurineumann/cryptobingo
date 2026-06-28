@@ -45,6 +45,7 @@ import {
 import { sessionKit }    from './services/wharfkit';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import { useAuth }       from './hooks/useAuth';
+import { hasAnyPermission } from './utils/permissionMatcher';
 import { useTheme }      from './hooks/useTheme';
 import { PaletteSelector } from './components/ui/PaletteSelector';
 import { RPC_PRESETS, getSelectedRpcUrl, setSelectedRpcUrl } from './utils/rpcStore';
@@ -160,6 +161,7 @@ interface PageProps {
     session:  Session;
     profile:  MongoUserProfile;
     isAdmin:  boolean;
+    permissions: string[];
     theme:    'dark' | 'light';
     onToggleTheme:    () => void;
     onLanguageChange: (locale: string) => void;
@@ -242,15 +244,20 @@ function AppRoot() {
     const [restoringSession, setRestoringSession] = useState(true);
     const [showAchievements, setShowAchievements] = useState(false);
 
+    const userPermissions: string[] = (profile as any)?.permissions ?? [];
+
     const isAdmin = !!(
         profile && (
             profile.role === 'admin' ||
             profile.role === 'contract_admin' ||
-            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
+            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString())) ||
+            hasAnyPermission(userPermissions, ['admin.*', 'admin.dashboard.view'])
         )
     );
     const isSponsor = !!(
         profile?.role === 'sponsor' ||
+        profile?.role === 'contract_admin' ||
+        userPermissions.some(p => p.startsWith('sponsor.')) ||
         (import.meta.env.DEV && session && devSponsorActors.has(session.actor.toString()))
     );
 
@@ -350,6 +357,7 @@ function AppRoot() {
         session:          session!,
         profile:          profile!,
         isAdmin,
+        permissions:      userPermissions,
         theme,
         onToggleTheme:    toggleTheme,
         onLanguageChange: handleLanguageChange,
@@ -605,6 +613,7 @@ function AppRoot() {
                         <AdminLayout
                             profile={profile!}
                             session={session!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
@@ -618,6 +627,7 @@ function AppRoot() {
                         <SponsorLayout
                             session={session!}
                             profile={profile!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}

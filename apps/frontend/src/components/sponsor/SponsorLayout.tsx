@@ -16,17 +16,18 @@ interface SponsorLayoutProps {
   profile:       MongoUserProfile;
   session:       Session;
   theme:         string;
+  permissions?:  string[];
   onToggleTheme: () => void;
   onLogout:      () => void;
 }
 
 const SPONSOR_NAV = [
-  { path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
-  { path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
+  { key: 'rooms', path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
+  { key: 'vault', path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
 ];
 
 export default function SponsorLayout({
-  profile, session, theme, onToggleTheme, onLogout,
+  profile, session, permissions = [], theme, onToggleTheme, onLogout,
 }: SponsorLayoutProps) {
   const { t, i18n } = useTranslation();
   const navigate     = useNavigate();
@@ -36,6 +37,13 @@ export default function SponsorLayout({
     i18n.changeLanguage(locale);
     try { await updateUserLocale(locale); } catch { /* silencioso */ }
   };
+
+  const visibleNav = SPONSOR_NAV.filter((item) => {
+    if (permissions.length === 0) return true;
+    if (item.key === 'rooms')   return permissions.some(p => p.includes('.rooms.'));
+    if (item.key === 'vault')   return permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
+    return true;
+  });
 
   return (
     <div className="site-shell mode-admin" style={{ height: '100dvh' }}>
@@ -94,7 +102,7 @@ export default function SponsorLayout({
         <aside className="site-sidebar" aria-label={t('sponsor.nav_aria')}>
           <div className="site-sidebar-section">
             <span className="site-sidebar-title">{t('sponsor.nav_section')}</span>
-            {SPONSOR_NAV.map(item => (
+            {visibleNav.map(item => (
               <a
                 key={item.path}
                 href={item.path}
