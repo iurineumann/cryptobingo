@@ -25,7 +25,17 @@ import {
     requestAuthChallenge,
     verifyAuthChallenge,
     getAuthToken,
+    clearAuthToken,
 } from '../services/api';
+
+function isJwtExpired(token: string): boolean {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return Date.now() >= (payload.exp * 1000);
+    } catch {
+        return true;
+    }
+}
 
 export interface UseAuthReturn {
     isAuthenticating: boolean;
@@ -38,8 +48,10 @@ export function useAuth(): UseAuthReturn {
     const [authError,        setAuthError]         = useState<string | null>(null);
 
     const authenticateSession = useCallback(async (session: Session): Promise<boolean> => {
-        // Reutiliza token existente sem novo roundtrip
-        if (getAuthToken()) return true;
+        // Reutiliza token existente se ainda válido
+        const existing = getAuthToken();
+        if (existing && !isJwtExpired(existing)) return true;
+        if (existing) clearAuthToken();
 
         setIsAuthenticating(true);
         setAuthError(null);
