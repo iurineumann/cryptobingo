@@ -1079,3 +1079,27 @@ export async function removeDelegation(orgId: string, wallet: string): Promise<a
     });
     return handleResponse(res);
 }
+
+// ── Sponsor: Self-service Delegations (ADR-036 / Fase 7) ─────────────────────
+
+export async function fetchMyDelegations(): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function createMyDelegation(wallet: string, permissions: string[]): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ wallet_address: wallet, permissions }),
+    });
+    return handleResponse(res);
+}
+
+export async function removeMyDelegation(wallet: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations/${wallet}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}

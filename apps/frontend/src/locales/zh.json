@@ -18,7 +18,8 @@
     "unknown": "未知",
     "saving": "保存中...",
     "syncing": "同步中...",
-    "load_more": "加载更多"
+    "load_more": "加载更多",
+    "create": "创建"
   },
   "nav": {
     "lobby": "游戏大厅",
@@ -778,7 +779,17 @@
     "select_room": "选择房间...",
     "success_update": "房间更新成功。",
     "error_load": "加载房间失败。",
-    "error_update": "保存更改失败。"
+    "error_update": "保存更改失败。",
+    "nav_delegations": "委派管理",
+    "delegations_desc": "管理谁可以代表您的组织进行访问和操作。",
+    "delegation_new": "新建委派",
+    "delegation_new_title": "创建委派",
+    "delegation_wallet": "委派钱包",
+    "delegation_col_wallet": "钱包",
+    "delegation_col_perms": "权限",
+    "delegation_col_created": "创建时间",
+    "delegation_col_actions": "操作",
+    "delegations_empty": "没有活跃的委派。"
   },
   "errors": {
     "network": "连接错误。请检查您的网络。",

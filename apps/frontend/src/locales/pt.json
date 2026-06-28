@@ -18,7 +18,8 @@
     "unknown": "Desconhecido",
     "saving": "Salvando...",
     "syncing": "Sincronizando...",
-    "load_more": "Carregar Mais"
+    "load_more": "Carregar Mais",
+    "create": "Criar"
   },
   "nav": {
     "lobby": "Salas",
@@ -778,7 +779,17 @@
     "select_room": "Selecione uma sala...",
     "success_update": "Sala atualizada com sucesso.",
     "error_load": "Erro ao carregar salas.",
-    "error_update": "Erro ao salvar alterações."
+    "error_update": "Erro ao salvar alterações.",
+    "nav_delegations": "Delegações",
+    "delegations_desc": "Gerencie quem pode acessar e operar em nome da sua organização.",
+    "delegation_new": "Nova Delegação",
+    "delegation_new_title": "Criar Delegação",
+    "delegation_wallet": "Carteira do Delegado",
+    "delegation_col_wallet": "Carteira",
+    "delegation_col_perms": "Permissões",
+    "delegation_col_created": "Criado em",
+    "delegation_col_actions": "Ações",
+    "delegations_empty": "Nenhuma delegação ativa."
   },
   "errors": {
     "network": "Erro de conexão. Verifique sua internet.",
