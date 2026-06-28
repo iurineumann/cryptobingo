@@ -12,7 +12,7 @@ interface UserRow {
 }
 
 interface UsersAdminProps {
-    permissions: string[];
+    readonly permissions: string[];
 }
 
 const AVAILABLE_PERMS = [
@@ -45,12 +45,12 @@ function PermEditModal({
     currentPerms,
     onClose,
     onSaved,
-}: {
+}: Readonly<{
     wallet: string;
     currentPerms: string[];
     onClose: () => void;
     onSaved: () => void;
-}) {
+}>) {
     const { t } = useTranslation();
     const [selected, setSelected] = useState<Set<string>>(new Set(currentPerms));
     const [saving, setSaving] = useState(false);

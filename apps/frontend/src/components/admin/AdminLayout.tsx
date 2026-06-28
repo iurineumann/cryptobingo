@@ -31,12 +31,12 @@ import TokenAdmin         from './TokenAdmin';
 import SystemTokensAdmin  from './SystemTokensAdmin';
 
 interface AdminLayoutProps {
-  profile:        MongoUserProfile;
-  session?:       Session;
-  theme:          string;
-  permissions?:   string[];
-  onToggleTheme:  () => void;
-  onLogout:       () => void;
+  readonly profile:        MongoUserProfile;
+  readonly session?:       Session;
+  readonly theme:          string;
+  readonly permissions?:   string[];
+  readonly onToggleTheme:  () => void;
+  readonly onLogout:       () => void;
 }
 
 export default function AdminLayout({

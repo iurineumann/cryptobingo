@@ -4,7 +4,7 @@ import { X, TriangleAlert, Plus, Trash2, ChevronDown, ChevronRight } from 'lucid
 import { getAuthToken, createDelegation, removeDelegation } from '../../services/api';
 
 interface SponsorsAdminProps {
-    permissions: string[];
+    readonly permissions: string[];
 }
 
 interface Delegation {
@@ -36,11 +36,11 @@ function CreateDelegationModal({
     orgId,
     onClose,
     onCreated,
-}: {
+}: Readonly<{
     orgId: string;
     onClose: () => void;
     onCreated: () => void;
-}) {
+}>) {
     const { t } = useTranslation();
     const [wallet, setWallet] = useState('');
     const [selected, setSelected] = useState<Set<string>>(new Set());
