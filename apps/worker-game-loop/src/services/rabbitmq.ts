@@ -285,6 +285,9 @@ function consumeMessages(): void {
                         }
                     }).catch(() => {});
 
+                    // Marca como processado antes — impede dupla execução via autoClaimDrawnGames (race)
+                    processedGames.add(gameId);
+
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
                     orchestrateGame(gameId).catch(err =>
                         console.error(`❌ [RabbitMQ] orchestrateGame error (jogo ${gameId}):`, err)
