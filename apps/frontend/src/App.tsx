@@ -21,6 +21,7 @@
 //   /sponsor              → redirect /sponsor/rooms
 //   /sponsor/rooms        → SponsorLayout > SponsorRooms (role sponsor)
 //   /sponsor/vault        → SponsorLayout > SponsorVault  (role sponsor)
+//   /sponsor/delegations  → SponsorLayout > SponsorDelegations (perm delegations.manage)
 //
 // Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms), ADR-015 (Routing)
 
@@ -61,6 +62,7 @@ import AdminLayout         from './components/admin/AdminLayout';
 import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
+import SponsorDelegations from './components/sponsor/SponsorDelegations';
 import Logo             from './components/Logo';
 import XpProgressBar    from './components/XpProgressBar';
 import AchievementModal from './components/AchievementModal';
@@ -636,6 +638,7 @@ function AppRoot() {
                         <Route path="/sponsor" element={<Navigate to="/sponsor/rooms" replace />} />
                         <Route path="/sponsor/rooms" element={<SponsorRooms />} />
                         <Route path="/sponsor/vault" element={<SponsorVault />} />
+                        <Route path="/sponsor/delegations" element={<SponsorDelegations />} />
                     </Route>
                 </Route>
             </Route>

@@ -9,7 +9,7 @@ import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import { PaletteSelector } from '../ui/PaletteSelector';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
-import { Building2, ShieldCheck } from 'lucide-react';
+import { Building2, ShieldCheck, UserPlus } from 'lucide-react';
 import Logo from '../Logo';
 
 interface SponsorLayoutProps {
@@ -24,6 +24,7 @@ interface SponsorLayoutProps {
 const SPONSOR_NAV = [
   { key: 'rooms', path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
   { key: 'vault', path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
+  { key: 'delegations', path: '/sponsor/delegations', label: 'sponsor.nav_delegations', icon: <UserPlus className="size-4 shrink-0" /> },
 ];
 
 export default function SponsorLayout({
@@ -40,8 +41,9 @@ export default function SponsorLayout({
 
   const visibleNav = SPONSOR_NAV.filter((item) => {
     if (permissions.length === 0) return true;
-    if (item.key === 'rooms')   return permissions.some(p => p.includes('.rooms.'));
-    if (item.key === 'vault')   return permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
+    if (item.key === 'rooms')       return permissions.some(p => p.includes('.rooms.'));
+    if (item.key === 'vault')       return permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
+    if (item.key === 'delegations') return permissions.some(p => p.includes('.delegations.'));
     return true;
   });
 
