@@ -14,6 +14,7 @@ import RoomSocial from './gameroom/RoomSocial';
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
 import { useGameRoomState } from './gameroom/useGameRoomState';
+import { useRoomSocial } from '../hooks/useRoomSocial';
 import PatternsPanel from './gameroom/PatternsPanel';
 import PrizePanels from './gameroom/PrizePanels';
 import TicketsGrid from './gameroom/TicketsGrid';
@@ -65,6 +66,11 @@ export default function GameRoom({
   } = state;
   const roomPatterns = gamePatterns;
 
+  // ── Social ao vivo: presença online, reações efêmeras (Fase 4) ────────────
+  const { onlineCount, reactions, sendReaction } = useRoomSocial({
+    roomId: room?.room_id ?? '',
+  });
+
   // UI puramente local do orquestrador (showPatterns migra para painel na Task 4)
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
@@ -98,6 +104,7 @@ export default function GameRoom({
         timeRemaining={timeRemaining} isDrawing={isDrawing} isAborted={isAborted}
         ingameBalances={ingameBalances} wsStatus={wsStatus}
         isAdmin={isAdmin} theme={theme}
+        onlineCount={onlineCount}
         onLeave={onLeave} onGoToHistory={onGoToHistory} onGoToWallet={onGoToWallet}
         onGoToAdmin={onGoToAdmin} onToggleTheme={onToggleTheme} onLogout={onLogout}
         onLanguageChange={onLanguageChange}
@@ -105,14 +112,6 @@ export default function GameRoom({
 
       {/* ── Grid principal ──────────────────────────────────────────────────── */}
       <div className={`gr-main gr-${density}`}>
-
-        {/* ── Faixa de dados: pote, bônus patrocinado e bolas (Task 2) ─────── */}
-        <MatchStats
-          totalWagered={game?.total_wagered?.quantity ?? ''}
-          sponsorPool={game?.sponsor_pool ?? []}
-          drawnCount={drawnNumbers.length}
-          maxBalls={maxBalls}
-        />
 
         {/* ── Linha superior: stage + patterns lado a lado ───────────────────── */}
         <div className="gr-top-row">
@@ -153,6 +152,14 @@ export default function GameRoom({
           onLeave={onLeave} onGoToHistory={onGoToHistory}
         />
 
+        {/* ── Faixa de dados: pote, bônus patrocinado e bolas ──────────────── */}
+        <MatchStats
+          totalWagered={game?.total_wagered?.quantity ?? ''}
+          sponsorPool={game?.sponsor_pool ?? []}
+          drawnCount={drawnNumbers.length}
+          maxBalls={maxBalls}
+        />
+
         {/* ── Cartelas ──────────────────────────────────────────────────────── */}
         <TicketsGrid
           playerTickets={playerTickets} groupedTickets={groupedTickets} loadingGame={loadingGame}
@@ -170,6 +177,9 @@ export default function GameRoom({
         walletAddress={profile.wallet_address}
         localWinners={localWinners}
         clearedStages={clearedStages}
+        onlineCount={onlineCount}
+        reactions={reactions}
+        sendReaction={sendReaction}
       />
 
       {/* ── Modal de compra ────────────────────────────────────────────────── */}

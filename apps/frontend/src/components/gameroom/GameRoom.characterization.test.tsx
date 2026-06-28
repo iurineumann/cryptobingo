@@ -50,6 +50,11 @@ vi.mock('../../hooks/useSlowReveal', () => ({
   useSlowReveal: () => slowRevealState,
 }));
 
+// useRoomSocial: mock para evitar conexão socket nos testes
+vi.mock('../../hooks/useRoomSocial', () => ({
+  useRoomSocial: () => ({ onlineCount: 0, reactions: [], sendReaction: vi.fn() }),
+}));
+
 // API: espalha os exports reais e substitui apenas as funções assíncronas usadas.
 // Isso garante que helpers síncronos (getAuthToken, clearAuthToken, etc.) continuem
 // disponíveis para hooks filhos como useChat e ChatFloating.

@@ -1,6 +1,5 @@
-// apps/frontend/src/components/gameroom/RoomSocial.test.tsx
 // Testes unitários de RoomSocial (Task 4, Fase 4).
-// Mocka useRoomSocial e ChatFloating para isolar o componente.
+// Online count agora no GameRoomHeader; RoomSocial recebe social state como props.
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, afterEach } from 'vitest';
 import RoomSocial from './RoomSocial';
@@ -13,45 +12,74 @@ vi.mock('react-i18next', () => ({
 }));
 
 const sendReaction = vi.fn();
-vi.mock('../../hooks/useRoomSocial', () => ({
-  useRoomSocial: () => ({ onlineCount: 4, reactions: [], sendReaction }),
-}));
-
 vi.mock('../chat/ChatFloating', () => ({ default: () => <div data-testid="chat-stub" /> }));
 
 afterEach(() => cleanup());
 
 const room = { room_id: '1', metadata: { name: 'Sala' } } as never;
 
+function renderSocial(over: Record<string, unknown> = {}) {
+  return render(
+    <RoomSocial
+      room={room}
+      walletAddress="alice"
+      localWinners={[]}
+      clearedStages={[]}
+      onlineCount={4}
+      reactions={[]}
+      sendReaction={sendReaction}
+      {...over}
+    />,
+  );
+}
+
 describe('RoomSocial', () => {
-  it('mostra contagem de online', () => {
-    render(<RoomSocial room={room} walletAddress="alice" localWinners={[]} clearedStages={[]} />);
-    expect(screen.getByTestId('gr-online-count').textContent).toContain('4');
+  it('renderiza toggle de reações', () => {
+    renderSocial();
+    expect(screen.getByTestId('gr-reaction-toggle')).toBeTruthy();
   });
 
-  it('clicar numa reação chama sendReaction', () => {
-    render(<RoomSocial room={room} walletAddress="alice" localWinners={[]} clearedStages={[]} />);
-    const bar = screen.getByTestId('gr-reaction-bar');
-    fireEvent.click(bar.querySelector('button')!);
+  it('barra de reações aparece ao clicar toggle', () => {
+    renderSocial();
+    fireEvent.click(screen.getByTestId('gr-reaction-toggle'));
+    expect(screen.getByTestId('gr-reaction-bar')).toBeTruthy();
+  });
+
+  it('barra de reações some ao clicar toggle novamente', () => {
+    renderSocial();
+    fireEvent.click(screen.getByTestId('gr-reaction-toggle'));
+    expect(screen.getByTestId('gr-reaction-bar')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('gr-reaction-toggle'));
+    expect(screen.queryByTestId('gr-reaction-bar')).toBeNull();
+  });
+
+  it('clicar numa reação chama sendReaction e fecha', () => {
+    renderSocial();
+    fireEvent.click(screen.getByTestId('gr-reaction-toggle'));
+    fireEvent.click(screen.getByTestId('gr-reaction-bar').querySelector('button')!);
     expect(sendReaction).toHaveBeenCalled();
+    expect(screen.queryByTestId('gr-reaction-bar')).toBeNull();
   });
 
   it('feed lista vitórias recentes', () => {
-    render(
-      <RoomSocial
-        room={room}
-        walletAddress="alice"
-        localWinners={[{ ticket_id: '7', win_pattern: 'Linha' }]}
-        clearedStages={[]}
-      />,
-    );
+    renderSocial({
+      localWinners: [{ ticket_id: '7', win_pattern: 'Linha' }],
+    });
     expect(screen.getByTestId('gr-event-feed').textContent).toContain('7');
   });
 
   it('retorna null sem sala', () => {
     const { container } = render(
-      <RoomSocial room={null} walletAddress="alice" localWinners={[]} clearedStages={[]} />,
+      <RoomSocial
+        room={null}
+        walletAddress="alice"
+        localWinners={[]}
+        clearedStages={[]}
+        onlineCount={0}
+        reactions={[]}
+        sendReaction={sendReaction}
+      />,
     );
-    expect(container.querySelector('[data-testid="gr-reaction-bar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="gr-reaction-wrapper"]')).toBeNull();
   });
 });

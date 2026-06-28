@@ -23,6 +23,7 @@ export interface GameRoomHeaderProps {
   isAborted: boolean;
   ingameBalances: BlockchainBalance[];
   wsStatus: string;
+  onlineCount: number;
   isAdmin?: boolean;
   theme?: 'dark' | 'light';
   onLeave: () => void;
@@ -39,7 +40,7 @@ export default function GameRoomHeader(props: GameRoomHeaderProps): React.JSX.El
     gameId, room, game,
     effectiveDisplayStatus, gameStatusText, timeRemaining,
     isDrawing, isAborted, ingameBalances, wsStatus,
-    isAdmin, theme,
+    onlineCount, isAdmin, theme,
     onLeave, onGoToHistory, onGoToWallet, onGoToAdmin,
     onToggleTheme, onLogout, onLanguageChange,
   } = props;
@@ -104,6 +105,12 @@ export default function GameRoomHeader(props: GameRoomHeaderProps): React.JSX.El
           <option value="en-US">EN</option>
           <option value="zh-CN">中</option>
         </select>
+
+        {/* Online count */}
+        <span className="gr-online" data-testid="gr-online-count">
+          <span className="dot" aria-hidden="true" />
+          {t('game_room.social_online', { count: onlineCount })}
+        </span>
 
         {/* Status WS */}
         <span
