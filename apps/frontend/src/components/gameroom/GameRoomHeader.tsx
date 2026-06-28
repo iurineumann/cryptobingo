@@ -54,24 +54,31 @@ export default function GameRoomHeader(props: GameRoomHeaderProps): React.JSX.El
       {/* ── Esquerda: logo + crumb ── */}
       <div className="gr-nav-left">
         <Logo variant="icon" height={28} onClick={onLeave} alt="Voltar ao Lobby" />
-        <div className="gr-nav-crumb">
-          <span className="sep">/</span>
-          <span style={{ color: 'var(--cb-text-tertiary)', fontSize: '0.75rem' }}>
-            {room?.metadata?.name ?? (room ? `Sala ${room.room_id}` : `#${gameId}`)}
-          </span>
-          {game && (
-            <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary] inline-flex items-center gap-1">
-              {effectiveDisplayStatus && <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveDisplayStatus] }} />}
-              {gameStatusText}
+        <div>
+          <div className="gr-nav-crumb">
+            <span className="sep">/</span>
+            <span className="room">
+              {room?.metadata?.name || (room ? `Sala ${room.room_id}` : `#${gameId}`)}
             </span>
+            {game && (
+              <span data-testid="gr-game-status" data-status={effectiveDisplayStatus} className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[--cb-bg-elevated] border border-[--cb-border-default] text-[--cb-text-secondary] inline-flex items-center gap-1">
+                {effectiveDisplayStatus && <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveDisplayStatus] }} />}
+                {gameStatusText}
+              </span>
+            )}
+            {timeRemaining && (
+              <span className="text-xs font-mono font-bold text-[--cb-accent] bg-[--cb-bg-elevated] px-2 py-0.5 rounded-md border border-[--cb-border-default]">
+                {timeRemaining}
+              </span>
+            )}
+            {isDrawing && <span className="gr-live">{t('game_room.badge_live')}</span>}
+            {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
+          </div>
+          {room?.metadata?.description && (
+            <div className="gr-nav-desc" data-testid={`gr-desc-${room.room_id}`}>
+              {room.metadata.description}
+            </div>
           )}
-          {timeRemaining && (
-            <span className="text-xs font-mono font-bold text-[--cb-accent] bg-[--cb-bg-elevated] px-2 py-0.5 rounded-md border border-[--cb-border-default]">
-              {timeRemaining}
-            </span>
-          )}
-          {isDrawing && <span className="gr-live">{t('game_room.badge_live')}</span>}
-          {isAborted && <span className="cb-status-aborted">{t('game_room.badge_aborted')}</span>}
         </div>
       </div>
 

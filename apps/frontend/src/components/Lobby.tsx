@@ -18,6 +18,7 @@ import RoomHistoryPanel                  from './RoomHistoryPanel';
 import { Badge }                         from '@/components/ui/badge';
 import { Button }                        from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 interface LobbyProps {
     readonly session:       Session;
@@ -222,6 +223,50 @@ function RoomCardStatus({
     );
 }
 
+// ── RoomCardDescription: descrição truncada + popover ──────────────────
+const DESC_MAX_CHARS = 80;
+
+function RoomCardDescription({
+    room, t,
+}: {
+    readonly room: EnrichedRoom;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const desc = room.metadata?.description;
+    if (!desc) return null;
+
+    const isLong = desc.length > DESC_MAX_CHARS;
+    const short  = isLong ? desc.slice(0, DESC_MAX_CHARS).trimEnd() + '…' : desc;
+
+    if (!isLong) {
+        return (
+            <p className="lobby-card-desc" data-testid={`lobby-desc-${room.room_id}`}>
+                {desc}
+            </p>
+        );
+    }
+
+    return (
+        <Popover>
+            <PopoverTrigger
+                className="lobby-card-desc cursor-pointer"
+                data-testid={`lobby-desc-${room.room_id}`}
+                onClick={e => e.stopPropagation()}
+            >
+                {short}
+            </PopoverTrigger>
+            <PopoverContent
+                side="top"
+                align="start"
+                sideOffset={6}
+                className="max-w-xs text-xs leading-relaxed"
+            >
+                {desc}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 // ── RoomCardActions: botões de ação ─────────────────────────────────────
 function RoomCardActions({
     isFunding, isDrawing, isIdle, navGameId, currentGame,
@@ -375,6 +420,7 @@ function RoomCard({
                 currentGame={currentGame}
                 t={t}
             />
+            <RoomCardDescription room={room} t={t} />
             <RoomCardStats
                 room={room}
                 currentGame={currentGame}
