@@ -43,7 +43,16 @@ export default function RoomSocial({ room, walletAddress, localWinners, clearedS
 
   return (
     <>
-      {/* Barra de reações — popover toggle perto do chat */}
+      {/* Reações flutuantes efêmeras */}
+      <div className="gr-reactions-overlay" aria-hidden="true">
+        {reactions.map(r => (
+          <span key={r.id} className="gr-reaction-float">
+            {r.emoji}
+          </span>
+        ))}
+      </div>
+
+      {/* Botão + popover de reações — flutuante perto do chat FAB */}
       <div className="gr-reaction-wrapper" data-testid="gr-reaction-wrapper">
         <button
           type="button"
@@ -71,20 +80,11 @@ export default function RoomSocial({ room, walletAddress, localWinners, clearedS
         )}
       </div>
 
-      {/* Reações flutuantes efêmeras */}
-      <div className="gr-reactions-overlay" aria-hidden="true">
-        {reactions.map(r => (
-          <span key={r.id} className="gr-reaction-float">
-            {r.emoji}
-          </span>
-        ))}
-      </div>
-
       {/* Feed de eventos: vitórias e stages */}
       {feedItems.length > 0 && (
         <div className="gr-event-feed" data-testid="gr-event-feed">
-          {feedItems.map((item, idx) => (
-            <span key={idx} className="ev">{item}</span>
+          {feedItems.map(item => (
+            <span key={item} className="ev">{item}</span>
           ))}
         </div>
       )}

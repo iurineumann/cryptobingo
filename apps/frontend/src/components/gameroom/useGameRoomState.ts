@@ -14,7 +14,7 @@ import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainBalance, ExtendedAsset } from '@cryptobingo/shared-types';
 import type { EnrichedRoom } from '../../services/api';
 import { useSlowReveal } from '../../hooks/useSlowReveal';
-import type { DrawnBall, GoldenBallInfo, ClearedStage } from '../../hooks/useSlowReveal';
+import type { DrawnBall, GoldenBallInfo, GoldenMultiplierProgress, ClearedStage } from '../../hooks/useSlowReveal';
 import type { WinnerPayload } from '../../types/events';
 import {
   Pattern, BINGO_COLORS, getCol,
@@ -69,7 +69,7 @@ export interface GameRoomState {
   // WS
   drawnBalls: DrawnBall[]; lastBall: DrawnBall | null; isDrawing: boolean;
   winners: WinnerPayload[]; isAborted: boolean; abortReason: string | null;
-  wsStatus: string; goldenBall: GoldenBallInfo | null; clearedStages: ClearedStage[];
+  wsStatus: string; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
   // derivados
   isStaticFinalState: boolean;
   effectiveBalls: DrawnBall[]; drawnNumbers: number[]; drawnSet: Set<number>;
@@ -150,7 +150,7 @@ export function useGameRoomState(
   // ── WebSocket (Slow Reveal) ───────────────────────────────────────────────
   const {
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
-    isGameEnded, goldenBall, clearedStages, drawMode,
+    isGameEnded, goldenBall, goldenMultiplierProgress, clearedStages, drawMode,
   } = useSlowReveal(gameId);
 
   const timeRemaining = useMemo(() => {
@@ -630,7 +630,7 @@ export function useGameRoomState(
     playerTickets: playerTickets as Array<{ id: string; matrix: number[]; pricePaid?: string }>,
     room, loadingGame, maxBalls, gamePatterns, gameCombinations, ingameBalances,
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
-    goldenBall, clearedStages,
+    goldenBall, goldenMultiplierProgress, clearedStages,
     isStaticFinalState,
     effectiveBalls, drawnNumbers, drawnSet, lastDrawn, isEffectiveGameEnded,
     effectiveDisplayStatus, gameStatusText, timeRemaining, nextGameTimer,

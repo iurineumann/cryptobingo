@@ -6,7 +6,6 @@
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
@@ -25,19 +24,19 @@ import MatchStats from './gameroom/MatchStats';
 // ==========================================
 
 interface GameRoomProps {
-  gameId:            string;
-  roomId?:           string;
-  session:           Session;
-  profile:           MongoUserProfile;
-  onLeave:           () => void;
-  onGoToHistory?:    () => void;
-  onGoToWallet?:     () => void;
-  onGoToAdmin?:      () => void;
-  isAdmin?:          boolean;
-  onLogout?:         () => void;
-  theme?:            'dark' | 'light';
-  onToggleTheme?:    () => void;
-  onLanguageChange?: (locale: string) => void;
+  readonly gameId:            string;
+  readonly roomId?:           string;
+  readonly session:           Session;
+  readonly profile:           MongoUserProfile;
+  readonly onLeave:           () => void;
+  readonly onGoToHistory?:    () => void;
+  readonly onGoToWallet?:     () => void;
+  readonly onGoToAdmin?:      () => void;
+  readonly isAdmin?:          boolean;
+  readonly onLogout?:         () => void;
+  readonly theme?:            'dark' | 'light';
+  readonly onToggleTheme?:    () => void;
+  readonly onLanguageChange?: (locale: string) => void;
 }
 
 // ==========================================
@@ -49,14 +48,12 @@ export default function GameRoom({
   onGoToHistory, onGoToWallet, onGoToAdmin, isAdmin,
   onLogout, theme, onToggleTheme, onLanguageChange,
 }: GameRoomProps) {
-  const { t } = useTranslation();
-
   // ── Estado/efeitos/derivações vivem no hook (Fase 0 do refactor) ──────────
   const state = useGameRoomState({ gameId, roomId, session });
   const {
     game, nextGame, playerTickets, room, loadingGame, maxBalls, gamePatterns,
-    gameCombinations, ingameBalances, drawnBalls, lastBall, isDrawing, isAborted,
-    wsStatus, goldenBall, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
+    gameCombinations, ingameBalances, isDrawing, isAborted,
+    wsStatus, goldenBall, goldenMultiplierProgress, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
     lastDrawn, isEffectiveGameEnded, effectiveDisplayStatus, gameStatusText,
     timeRemaining, nextGameTimer, localWinners, winnerMap, patternByName,
     playerWinEntries, adjustedPatternWinCount, allGameCombinationWinCount,
@@ -145,7 +142,8 @@ export default function GameRoom({
 
         {/* ── Banners (golden ball, stages, fim) + confete — extraídos em PrizePanels ── */}
         <PrizePanels
-          hasBanners={hasBanners} goldenBall={goldenBall} clearedStages={clearedStages}
+          hasBanners={hasBanners} goldenBall={goldenBall} goldenMultiplierProgress={goldenMultiplierProgress}
+          clearedStages={clearedStages}
           isEffectiveGameEnded={isEffectiveGameEnded} isStaticFinalState={isStaticFinalState}
           playerWinEntries={playerWinEntries} localWinners={localWinners} playerTickets={playerTickets}
           nextGame={nextGame} nextGameTimer={nextGameTimer} game={game} room={room} now={now}

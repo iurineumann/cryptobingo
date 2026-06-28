@@ -77,7 +77,8 @@ function PermEditModal({
             await updateUserPermissions(wallet, perms);
             onSaved();
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('common.error'));
+            console.error('[UsersAdmin]', err);
+            setError(t('errors.generic'));
         } finally {
             setSaving(false);
         }

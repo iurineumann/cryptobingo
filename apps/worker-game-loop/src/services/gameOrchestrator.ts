@@ -113,8 +113,8 @@ async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gamety
     await startSlowReveal(gameId, balls, balls.length);
     endRevealSession(gameId);
 
-    await processAllGameWinners(gameId);
     const winResults = await findAllWinners(gameId, balls, gametypeId);
+    await processAllGameWinners(gameId);
 
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
@@ -159,9 +159,9 @@ async function orchestrateGoldenBall(
     endRevealSession(gameId);
 
     // 5. Avalia e paga
-    await processAllGameWinners(gameId);
     const effectiveBalls = drawnBalls.slice(0, ga + 1);
     const winResults     = await findAllWinners(gameId, effectiveBalls, gametypeId);
+    await processAllGameWinners(gameId);
 
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier, multiplier);
