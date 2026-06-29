@@ -28,9 +28,13 @@
     "profile": "Profile",
     "logout": "Disconnect",
     "my_history": "History",
+    "explore": "Explore",
     "how_it_works": "How It Works",
     "audit": "Audit",
     "sponsors": "Sponsors",
+    "tutorials": "Tutorials",
+    "faq": "FAQ",
+    "news": "News",
     "theme_dark": "Dark mode",
     "theme_light": "Light mode"
   },
@@ -991,6 +995,13 @@
     "title": "News & Promotions",
     "empty": "No publications available at the moment.",
     "pinned": "Pinned"
+  },
+  "content": {
+    "loading": "Loading...",
+    "error": "Error loading content",
+    "empty": "No content available",
+    "published_at": "Published on",
+    "back": "Back"
   },
   "welcome": "Welcome to CryptoBingo",
   "loading": "Loading profile...",

@@ -114,7 +114,7 @@ function formatLargeNumber(n: number): string {
   return n.toLocaleString('pt-BR');
 }
 
-export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme, onToggleTheme, authError, loading, onRetryLogin }: LandingPageProps) {
+export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme, onToggleTheme, authError, loading, onRetryLogin }: Readonly<LandingPageProps>) {
   const { t, i18n } = useTranslation();
   const navigate    = useNavigate();
 
@@ -253,9 +253,11 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
       <header className="sticky top-0 z-50" style={{ background: 'color-mix(in srgb, var(--cb-bg-base) 90%, transparent)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--cb-border-subtle)' }}>
         <div className="cb-container flex items-center justify-between gap-4" style={{ height: '4rem' }}>
           <Logo variant="horizontal" height={64} />
-          <nav className="flex gap-6 text-sm text-[--cb-text-secondary]" aria-label={t('landing.nav_aria')}>
+          <nav className="flex gap-6 text-sm text-[--cb-text-secondary]" aria-label={t('landing.nav_aria')} data-testid="landing-nav">
             <a href="#rooms" className="no-underline text-inherit">{t('nav.lobby')}</a>
             <a href="#stats" className="no-underline text-inherit">{t('nav.audit')}</a>
+            <a href="/how-it-works" className="no-underline text-inherit" onClick={(e) => { e.preventDefault(); navigate('/how-it-works'); }}>{t('nav.how_it_works')}</a>
+            <a href="/news" className="no-underline text-inherit" onClick={(e) => { e.preventDefault(); navigate('/news'); }}>{t('nav.news')}</a>
             <a href="#sponsors" className="no-underline text-inherit">{t('nav.sponsors')}</a>
           </nav>
           <div className="flex items-center gap-3">

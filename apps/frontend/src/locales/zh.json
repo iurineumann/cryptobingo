@@ -28,9 +28,13 @@
     "profile": "个人资料",
     "logout": "断开连接",
     "my_history": "历史记录",
+    "explore": "探索",
     "how_it_works": "如何运作",
     "audit": "审计",
     "sponsors": "赞助商",
+    "tutorials": "教程",
+    "faq": "常见问题",
+    "news": "新闻",
     "theme_dark": "深色模式",
     "theme_light": "浅色模式"
   },
@@ -991,6 +995,13 @@
     "title": "新闻与促销",
     "empty": "暂无发布内容。",
     "pinned": "置顶"
+  },
+  "content": {
+    "loading": "加载中...",
+    "error": "加载内容时出错",
+    "empty": "暂无内容",
+    "published_at": "发布于",
+    "back": "返回"
   },
   "welcome": "欢迎来到CryptoBingo",
   "landing_lobby": "游戏大厅",
