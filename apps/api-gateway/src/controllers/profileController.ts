@@ -176,7 +176,8 @@ async function verifyProfileSignature(
  */
 export const updatePreferences = async (req: Request, res: Response): Promise<void> => { // NOSONAR — validação de nickname/avatar com assinatura WAX e múltiplos campos opcionais; complexidade inerente à ADR-028 §2D
     const wallet_address = req.user!.wallet;
-    const { nickname, locale, avatar_nft_asset_id, signature, ts, transactionPayload } = req.body;
+    const { nickname, locale, avatar_nft_asset_id, signature, ts, transactionPayload,
+            rpc_url, explorer_url, sound_enabled } = req.body;
 
     const hasSensitive = nickname !== undefined || avatar_nft_asset_id !== undefined;
 
@@ -194,6 +195,18 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
     }
     if (avatar_nft_asset_id !== undefined && avatar_nft_asset_id !== null && typeof avatar_nft_asset_id !== 'string') {
         res.status(400).json({ error: 'Campo "avatar_nft_asset_id" deve ser string ou null.' });
+        return;
+    }
+    if (rpc_url !== undefined && typeof rpc_url !== 'string') {
+        res.status(400).json({ error: 'rpc_url deve ser string.' });
+        return;
+    }
+    if (explorer_url !== undefined && typeof explorer_url !== 'string') {
+        res.status(400).json({ error: 'explorer_url deve ser string.' });
+        return;
+    }
+    if (sound_enabled !== undefined && typeof sound_enabled !== 'boolean') {
+        res.status(400).json({ error: 'sound_enabled deve ser booleano.' });
         return;
     }
 
@@ -218,6 +231,9 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
     if (nickname !== undefined)             updateFields['nickname']              = nickname;
     if (locale   !== undefined)             updateFields['preferences.locale']   = locale;
     if (avatar_nft_asset_id !== undefined)  updateFields['avatar_nft_asset_id']  = avatar_nft_asset_id;
+    if (rpc_url  !== undefined)             updateFields['preferences.rpc_url']  = rpc_url;
+    if (explorer_url !== undefined)         updateFields['preferences.explorer_url'] = explorer_url;
+    if (sound_enabled !== undefined)        updateFields['preferences.sound_enabled'] = sound_enabled;
 
     if (Object.keys(updateFields).length === 0) {
         res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });

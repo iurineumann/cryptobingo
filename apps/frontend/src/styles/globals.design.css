@@ -1133,3 +1133,99 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .block-content .bn-inline-content {
   color: var(--cb-text-secondary);
 }
+
+/* ── UserSettings ───────────────────────────────────────── */
+.settings-page {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+.settings-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--cb-text, inherit);
+  margin: 0;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.settings-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--cb-text, inherit);
+  margin: 0 0 0.25rem;
+}
+.settings-section-desc {
+  font-size: 0.875rem;
+  color: var(--cb-text-secondary, #666);
+  margin: 0;
+}
+.settings-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.settings-preset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--cb-border-subtle, #ddd);
+  border-radius: 0.375rem;
+  background: var(--cb-bg-elevated, #fff);
+  color: var(--cb-text, inherit);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.settings-preset-btn:hover {
+  border-color: var(--cb-brand, #6366f1);
+}
+.settings-preset-btn.is-selected {
+  border-color: var(--cb-brand, #6366f1);
+  background: color-mix(in srgb, var(--cb-brand, #6366f1) 10%, transparent);
+  color: var(--cb-brand, #6366f1);
+  font-weight: 600;
+}
+.settings-custom-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.settings-custom-row .cb-input {
+  flex: 1;
+  max-width: 24rem;
+}
+.settings-current {
+  font-size: 0.75rem;
+}
+.settings-current-value {
+  color: var(--cb-text-tertiary, #999);
+  word-break: break-all;
+}
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  color: var(--cb-text, inherit);
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--cb-border-subtle, #eee);
+}
+.settings-message {
+  font-size: 0.875rem;
+  margin: 0;
+}
+.settings-message--ok   { color: var(--cb-success, #22c55e); }
+.settings-message--err   { color: var(--cb-danger, #ef4444); }
