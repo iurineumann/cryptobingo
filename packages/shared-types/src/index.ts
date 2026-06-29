@@ -26,7 +26,9 @@ export type AdminPermission =
   | 'admin.vault.manage'
   | 'admin.compliance.view'
   | 'admin.news.manage'
-  | 'admin.config.manage';
+  | 'admin.config.manage'
+  | 'admin.content.*'
+  | `admin.content.${string}.${'view' | 'create' | 'edit' | 'publish' | 'delete' | 'translate'}`;
 
 export type SponsorPermission =
   | `sponsor.${string}.dashboard.view`
@@ -275,6 +277,8 @@ export interface MongoUserProfile {
         locale:           SupportedLocale;
         currency_display: string;
         sound_enabled:    boolean;
+        rpc_url:          string;
+        explorer_url:     string;
     };
     progression: {
         xp:           number;
@@ -531,8 +535,31 @@ export interface LeaderboardXpEntry {
 }
 
 /**
+ * Item de conteúdo unificado. Collection 'content' no MongoDB.
+ * content_format define se o campo content é texto plano ou JSON de blocks do BlockNote.
+ * locale_overrides segue mesmo formato do content (text ou blocks).
+ */
+export interface ContentItem {
+    id:               string;
+    type:             'faq' | 'howitworks' | 'sponsors' | 'tutorials' | 'news';
+    slug:             string;
+    title:            string;
+    content_format:   'text' | 'blocks';
+    content:          string | unknown[];   // string para text, PartialBlock[] para blocks
+    image_url:        string | null;
+    metadata:         Record<string, unknown> | null;
+    pinned:           boolean;
+    sort_order:       number;
+    locale_overrides: Partial<Record<'en-US' | 'zh-CN', { title: string; content: string | unknown[] }>>;
+    active:           boolean;
+    published_at:     string;
+    published_by:     string;
+}
+
+/**
  * Publicação de notícia/promoção. Armazenada em MongoDB (coleção news_feed).
  * Soft delete: active=false oculta da listagem pública.
+ * @deprecated Migrando para ContentItem (collection content). Manter para compat.
  */
 export interface NewsItem {
     id:               string;

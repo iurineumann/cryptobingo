@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@blocknote/core": "0.23",
+    "@blocknote/react": "0.23",
     "@cryptobingo/blockchain-core": "workspace:*",
     "@cryptobingo/shared-types": "workspace:*",
     "@fontsource-variable/geist": "^5.2.9",
