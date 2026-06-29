@@ -957,6 +957,82 @@ export async function deleteNewsItem(id: string): Promise<{ message: string }> {
 }
 
 // ==========================================
+// CONTEÚDO UNIFICADO — Content (ADR-037)
+// ==========================================
+
+export interface ContentListResponse {
+    items:     import('@cryptobingo/shared-types').ContentItem[];
+    total:     number;
+    cached_at: string;
+}
+
+type ContentType = 'faq' | 'howitworks' | 'sponsors' | 'tutorials' | 'news';
+
+export async function fetchContentByType(
+    type: ContentType,
+    opts?: { limit?: number; offset?: number },
+): Promise<ContentListResponse> {
+    const params = new URLSearchParams();
+    if (opts?.limit)  params.set('limit',  String(opts.limit));
+    if (opts?.offset) params.set('offset', String(opts.offset));
+    const res = await fetch(`${API_BASE}/content/${type}?${params}`, { headers: publicHeaders() });
+    return handleResponse(res);
+}
+
+export async function fetchContentItem(
+    type: ContentType,
+    id: string,
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, { headers: publicHeaders() });
+    return handleResponse(res);
+}
+
+export async function createContentItem(
+    type: ContentType,
+    data: {
+        title: string;
+        content: string | unknown[];
+        content_format: 'text' | 'blocks';
+        image_url?: string | null;
+        pinned?: boolean;
+        sort_order?: number;
+        locale_overrides?: Record<string, { title: string; content: string | unknown[] }>;
+    },
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function updateContentItem(
+    type: ContentType,
+    id: string,
+    data: {
+        title?: string;
+        content?: string | unknown[];
+        content_format?: 'text' | 'blocks';
+        image_url?: string | null;
+        pinned?: boolean;
+        sort_order?: number;
+        active?: boolean;
+        locale_overrides?: Record<string, { title: string; content: string | unknown[] }>;
+    },
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+}
+
+export async function deleteContentItem(type: ContentType, id: string): Promise<{ deleted: boolean }> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+// ==========================================
 // SYNC BURNS (ADR-028 §8)
 // ==========================================
 

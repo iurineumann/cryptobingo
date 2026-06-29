@@ -13,7 +13,7 @@ import { PaletteSelector } from '../ui/PaletteSelector';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import {
   LayoutDashboard, Building2, Grid3x3, Puzzle, Megaphone, ShieldCheck,
-  Image, Coins, Settings, Users, UserCircle, Handshake,
+  Image, Coins, Settings, Users, UserCircle, Handshake, FileText,
 } from 'lucide-react';
 import Logo from '../Logo';
 import AdminDashboard   from './AdminDashboard';
@@ -29,6 +29,7 @@ import VaultAdmin       from './VaultAdmin';
 import NftAdmin         from './NftAdmin';
 import TokenAdmin         from './TokenAdmin';
 import SystemTokensAdmin  from './SystemTokensAdmin';
+import ContentAdmin      from './ContentAdmin';
 
 interface AdminLayoutProps {
   readonly profile:        MongoUserProfile;
@@ -59,6 +60,7 @@ export default function AdminLayout({
     { id: 'patterns',   label: t('admin.patterns'),   group: 'operation',  icon: <Grid3x3 className="size-4 shrink-0" /> },
     { id: 'gametypes',  label: t('admin.gametypes'),  group: 'operation',  icon: <Puzzle className="size-4 shrink-0" /> },
     { id: 'campaigns',  label: t('admin.campaigns'),  group: 'operation',  icon: <Megaphone className="size-4 shrink-0" /> },
+    { id: 'content',    label: t('admin.content'),    group: 'operation',  icon: <FileText className="size-4 shrink-0" /> },
     { id: 'vault',      label: t('admin.vault'),      group: 'operation',  icon: <ShieldCheck className="size-4 shrink-0" /> },
     { id: 'nfts',       label: t('admin.nfts'),       group: 'assets',     icon: <Image className="size-4 shrink-0" /> },
     { id: 'token',          label: t('admin.token'),          group: 'assets',     icon: <Coins className="size-4 shrink-0" /> },
@@ -75,6 +77,7 @@ export default function AdminLayout({
       case 'rooms':      return <RoomsAdmin />;
       case 'patterns':   return <PatternsAdmin />;
       case 'gametypes':  return <GametypesAdmin />;
+      case 'content':    return <ContentAdmin />;
       case 'campaigns':  return <SponsorDashboard />;
       case 'vault':      return <VaultAdmin />;
       case 'nfts':       return <NftAdmin session={session} />;
@@ -91,6 +94,7 @@ export default function AdminLayout({
   const SECTION_PERMS: Record<string, string[]> = {
     dashboard:    ['admin.dashboard.view'],
     rooms:        ['admin.rooms.manage'],
+    content:      ['admin.content.*'],
     patterns:     ['admin.patterns.manage'],
     gametypes:    ['admin.gametypes.manage'],
     campaigns:    ['admin.campaigns.manage'],
