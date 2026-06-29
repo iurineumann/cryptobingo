@@ -1069,6 +1069,19 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<void
     return handleResponse(res);
 }
 
+export async function updateUserPreferences(prefs: {
+    rpc_url?:      string;
+    explorer_url?: string;
+    sound_enabled?: boolean;
+}): Promise<void> {
+    const res = await fetch(`${API_BASE}/profile`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(prefs),
+    });
+    return handleResponse(res);
+}
+
 // ==========================================
 // SYSTEM TOKENS (config pública)
 // ==========================================

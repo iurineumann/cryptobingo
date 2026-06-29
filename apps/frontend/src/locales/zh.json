@@ -1070,5 +1070,19 @@
     "success_create": "代币已添加！",
     "success_delete": "代币已删除。",
     "native_badge": "原生"
+  },
+  "settings": {
+    "title": "设置",
+    "rpc_title": "WAX RPC节点",
+    "rpc_desc": "选择连接到WAX网络的RPC节点。",
+    "explorer_title": "区块浏览器",
+    "explorer_desc": "选择用于查看交易的区块浏览器。",
+    "sound_title": "声音",
+    "sound_desc": "启用或禁用游戏音效。",
+    "sound_label": "音效",
+    "saved": "偏好设置已保存！",
+    "save_error": "保存偏好设置时出错。",
+    "custom_rpc_placeholder": "自定义URL...",
+    "custom_explorer_placeholder": "自定义URL..."
   }
 }

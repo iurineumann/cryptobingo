@@ -37,7 +37,7 @@ import {
     useLocation,
     useParams,
 } from 'react-router-dom';
-import { Medal, FlaskConical, Moon, Sun, ChevronDown }  from 'lucide-react';
+import { Medal, FlaskConical, Moon, Sun, ChevronDown, Settings }  from 'lucide-react';
 import { Session }                          from '@wharfkit/session';
 import {
     fetchUserProfile, updateUserLocale,
@@ -71,6 +71,7 @@ import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
 import PublicLayout     from './components/PublicLayout';
 import ContentPage      from './components/content/ContentPage';
+import UserSettingsPage from './components/UserSettingsPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -548,6 +549,15 @@ function AppRoot() {
                         {theme === 'dark' ? <Moon className="size-4 shrink-0" /> : <Sun className="size-4 shrink-0" />}
                     </button>
 
+                    <button
+                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                        onClick={() => navigate('/settings')}
+                        data-testid="nav-settings"
+                        aria-label={t('settings.title') ?? 'Configurações'}
+                    >
+                        <Settings className="size-4 shrink-0" />
+                    </button>
+
                     <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={logout}>
                         {t('nav.logout') ?? 'Desconectar'}
                     </button>
@@ -655,6 +665,12 @@ function AppRoot() {
                             session={session!}
                             profile={profile!}
                             onProfileUpdated={loadProfile}
+                        />
+                    } />
+                    <Route path="/settings" element={
+                        <UserSettingsPage
+                            profile={profile!}
+                            onPreferencesUpdated={loadProfile}
                         />
                     } />
                 </Route>

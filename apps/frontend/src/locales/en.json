@@ -1070,5 +1070,19 @@
     "success_create": "Token added!",
     "success_delete": "Token removed.",
     "native_badge": "native"
+  },
+  "settings": {
+    "title": "Settings",
+    "rpc_title": "WAX RPC Node",
+    "rpc_desc": "Select the RPC node to connect to the WAX network.",
+    "explorer_title": "Block Explorer",
+    "explorer_desc": "Select the block explorer to view transactions.",
+    "sound_title": "Sound",
+    "sound_desc": "Enable or disable game sound effects.",
+    "sound_label": "Sound Effects",
+    "saved": "Preferences saved!",
+    "save_error": "Error saving preferences.",
+    "custom_rpc_placeholder": "Custom URL...",
+    "custom_explorer_placeholder": "Custom URL..."
   }
 }
