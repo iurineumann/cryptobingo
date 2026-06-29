@@ -64,6 +64,7 @@ import { setupChatSocket }                            from './socket/chatSocket'
 import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
+import { listContent, getContentItem, createContentItem, updateContentItem, deleteContentItem } from './controllers/contentController';
 import {
     updateUserPermissions,
     listSponsorOrgs,
@@ -396,6 +397,13 @@ function registerRoutes(): void {
     app.post  ('/api/v1/news',        adminLimiter,  requireAuth, requireRole('admin'), createNews);
     app.patch ('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), updateNews);
     app.delete('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), deleteNews);
+
+    // ── Conteúdo Unificado (ADR-037) ──────────────────────────────────────────
+    app.get   ('/api/v1/content/:type',        playerLimiter, listContent);
+    app.get   ('/api/v1/content/:type/:id',    playerLimiter, getContentItem);
+    app.post  ('/api/v1/content/:type',        adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), createContentItem);
+    app.put   ('/api/v1/content/:type/:id',    adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), updateContentItem);
+    app.delete('/api/v1/content/:type/:id',    adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), deleteContentItem);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {

@@ -54,3 +54,5 @@ contracts/orng/dev-rsa-private.pem
 contracts/orng/dev-rsa-public.pem
 debug/
 .planning/
+
+.scannerwork
