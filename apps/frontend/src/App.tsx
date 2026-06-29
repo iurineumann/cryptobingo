@@ -37,7 +37,7 @@ import {
     useLocation,
     useParams,
 } from 'react-router-dom';
-import { Medal, FlaskConical, Moon, Sun }  from 'lucide-react';
+import { Medal, FlaskConical, Moon, Sun, ChevronDown }  from 'lucide-react';
 import { Session }                          from '@wharfkit/session';
 import {
     fetchUserProfile, updateUserLocale,
@@ -69,6 +69,8 @@ import AchievementModal from './components/AchievementModal';
 import LeaderboardPage  from './components/LeaderboardPage';
 import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
+import PublicLayout     from './components/PublicLayout';
+import ContentPage      from './components/content/ContentPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -232,6 +234,21 @@ function RoomHistoryPage({ session }: { session?: Session | null }) {
 
 // ── APP ROOT (dentro do BrowserRouter — pode usar hooks de router) ────────────
 
+const PUBLIC_PAGES = [
+    { path: '/how-it-works', key: 'nav.how_it_works', testId: 'nav-explore-how-it-works' },
+    { path: '/sponsors',     key: 'nav.sponsors',      testId: 'nav-explore-sponsors' },
+    { path: '/tutorials',    key: 'nav.tutorials',     testId: 'nav-explore-tutorials' },
+    { path: '/faq',          key: 'nav.faq',           testId: 'nav-explore-faq' },
+    { path: '/news',         key: 'nav.news',          testId: 'nav-explore-news' },
+];
+
+function resolveActiveTab(pathname: string): string {
+    if (pathname.startsWith('/wallet')) return 'wallet';
+    if (pathname.startsWith('/history')) return 'my_history';
+    if (pathname.startsWith('/profile')) return 'profile';
+    return 'lobby';
+}
+
 function AppRoot() {
     const { t, i18n }                                          = useTranslation();
     const { isAuthenticating, authError, authenticateSession } = useAuth();
@@ -367,10 +384,7 @@ function AppRoot() {
     };
 
     // ── activeTab derivado da URL (ADR-015) ───────────────────────────────────
-    const activeTab = location.pathname.startsWith('/wallet')  ? 'wallet'
-                    : location.pathname.startsWith('/history') ? 'my_history'
-                    : location.pathname.startsWith('/profile') ? 'profile'
-                    : 'lobby';
+    const activeTab = resolveActiveTab(location.pathname);
 
     const NAV_TABS = [
         { id: 'lobby',      path: '/lobby',   label: t('nav.lobby')      ?? 'Salas'    },
@@ -378,6 +392,8 @@ function AppRoot() {
         { id: 'wallet',     path: '/wallet',  label: t('nav.wallet')     ?? 'Carteira' },
         { id: 'profile',    path: '/profile', label: t('nav.profile')    ?? 'Perfil'   },
     ];
+
+    const [showExplore, setShowExplore] = useState(false);
 
     // Shell do jogador — nav + conteúdo (Lobby / History / Wallet)
     const PlayerShell = () => (
@@ -401,6 +417,38 @@ function AppRoot() {
                                 {tab.label}
                             </a>
                         ))}
+                        {/* Dropdown "Explorar" — páginas públicas de conteúdo */}
+                        <div
+                            className="site-tab-dropdown"
+                            onMouseEnter={() => setShowExplore(true)}
+                            onMouseLeave={() => setShowExplore(false)}
+                        >
+                            <button
+                                className="site-tab"
+                                data-testid="nav-explore"
+                                aria-haspopup="true"
+                                aria-expanded={showExplore}
+                                onClick={() => setShowExplore(s => !s)}
+                            >
+                                {t('nav.explore') ?? 'Explorar'}
+                                <ChevronDown className="size-3 ml-1" />
+                            </button>
+                            {showExplore && (
+                                <div className="site-dropdown-menu" data-testid="nav-explore-menu">
+                                    {PUBLIC_PAGES.map(page => (
+                                        <a
+                                            key={page.path}
+                                            href={page.path}
+                                            data-testid={page.testId}
+                                            className="site-dropdown-item"
+                                            onClick={(e) => { e.preventDefault(); setShowExplore(false); navigate(page.path); }}
+                                        >
+                                            {t(page.key)}
+                                        </a>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </nav>
                 </div>
 
@@ -565,11 +613,18 @@ function AppRoot() {
                 }
             />
 
-            {/* ── Rotas públicas sem auth (ADR-015 + ADR-024) ── */}
+            {/* ── Rotas públicas sem auth (ADR-015 + ADR-024 + ADR-037) ── */}
             <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session} />} />
             <Route path="/leaderboard"          element={<LeaderboardPage />} />
-            <Route path="/faq"                  element={<FaqPage />} />
-            <Route path="/news"                 element={<NewsPage />} />
+
+            {/* ── Páginas públicas de conteúdo (PublicLayout) ── */}
+            <Route element={<PublicLayout />}>
+                <Route path="/how-it-works" element={<ContentPage type="howitworks" testId="how-it-works" titleKey="nav.how_it_works" />} />
+                <Route path="/sponsors"     element={<ContentPage type="sponsors"     testId="sponsors"     titleKey="nav.sponsors" />} />
+                <Route path="/tutorials"    element={<ContentPage type="tutorials"    testId="tutorials"    titleKey="nav.tutorials" />} />
+                <Route path="/faq"          element={<FaqPage />} />
+                <Route path="/news"         element={<NewsPage />} />
+            </Route>
 
             {/* ── Rotas protegidas por autenticação ── */}
             <Route element={

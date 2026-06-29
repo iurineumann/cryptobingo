@@ -1,88 +1,101 @@
-// apps/frontend/src/components/FaqPage.tsx
-// Página de perguntas frequentes — estática, i18n, sem autenticação. Ref: ADR-024.
-
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-
-interface FaqEntry {
-    question: string;
-    answer:   string;
-}
+import { fetchContentByType } from '../services/api';
+import type { ContentItem } from '@cryptobingo/shared-types';
 
 export default function FaqPage() {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const [items, setItems] = useState<ContentItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [openIndex, setOpenIndex] = useState<number | null>(null);
 
-    const items: FaqEntry[] = t('faq.items', { returnObjects: true }) as FaqEntry[];
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await fetchContentByType('faq');
+            setItems(data.items ?? []);
+        } catch {
+            setError(t('content.error'));
+        } finally {
+            setLoading(false);
+        }
+    }, [t]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const locale = i18n.language as 'en-US' | 'zh-CN' | string;
 
     return (
         <div
             data-testid="faq-page"
-            style={{ maxWidth: '760px', margin: '0 auto', padding: '2rem 1rem' }}
+            className="content-page"
         >
             <h1
                 data-testid="faq-title"
-                style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--cb-text-primary)' }}
+                className="content-page-title"
             >
                 {t('faq.title')}
             </h1>
-            <p style={{ color: 'var(--cb-text-secondary)', marginBottom: '2rem' }}>
+            <p className="content-page-subtitle">
                 {t('faq.subtitle')}
             </p>
 
-            <div data-testid="faq-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {Array.isArray(items) && items.map((item, idx) => (
-                    <div
-                        key={idx}
-                        data-testid={`faq-item-${idx}`}
-                        style={{
-                            border: '1px solid var(--cb-border)',
-                            borderRadius: '0.5rem',
-                            overflow: 'hidden',
-                            background: 'var(--cb-bg-card)',
-                        }}
-                    >
-                        <button
-                            data-testid={`faq-question-${idx}`}
-                            onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
-                            aria-expanded={openIndex === idx}
-                            style={{
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '1rem 1.25rem',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                                fontSize: '0.95rem',
-                                color: 'var(--cb-text-primary)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: '1rem',
-                            }}
-                        >
-                            <span>{item.question}</span>
-                            <span style={{ flexShrink: 0, fontSize: '1.1rem', color: 'var(--cb-text-secondary)' }}>
-                                {openIndex === idx ? '−' : '+'}
-                            </span>
-                        </button>
+            {loading && (
+                <div data-testid="faq-loading" className="content-loading">
+                    <div className="cb-shimmer" style={{ height: '3rem', marginBottom: '0.5rem' }} />
+                    <div className="cb-shimmer" style={{ height: '3rem', marginBottom: '0.5rem' }} />
+                    <div className="cb-shimmer" style={{ height: '3rem', marginBottom: '0.5rem' }} />
+                </div>
+            )}
 
-                        {openIndex === idx && (
-                            <div
-                                data-testid={`faq-answer-${idx}`}
-                                style={{
-                                    padding: '0 1.25rem 1rem',
-                                    color: 'var(--cb-text-secondary)',
-                                    lineHeight: '1.6',
-                                    fontSize: '0.9rem',
-                                }}
+            {error && (
+                <div data-testid="faq-error" className="content-error">
+                    {error}
+                </div>
+            )}
+
+            {!loading && !error && items.length === 0 && (
+                <p data-testid="faq-empty" className="content-empty">
+                    {t('content.empty')}
+                </p>
+            )}
+
+            <div data-testid="faq-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {items.map((item, idx) => {
+                    const override = item.locale_overrides?.[locale as 'en-US' | 'zh-CN'];
+                    const question = (override?.content ?? item.metadata?.question ?? item.title) as string;
+                    const answer   = (override?.content ?? item.content) as string;
+
+                    return (
+                        <div
+                            key={item.id}
+                            data-testid={`faq-item-${idx}`}
+                            className="faq-item"
+                        >
+                            <button
+                                data-testid={`faq-question-${idx}`}
+                                onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
+                                aria-expanded={openIndex === idx}
+                                className="faq-question"
                             >
-                                {item.answer}
-                            </div>
-                        )}
-                    </div>
-                ))}
+                                <span>{question}</span>
+                                <span className="faq-toggle" aria-hidden="true">
+                                    {openIndex === idx ? '−' : '+'}
+                                </span>
+                            </button>
+                            {openIndex === idx && (
+                                <div
+                                    data-testid={`faq-answer-${idx}`}
+                                    className="faq-answer"
+                                >
+                                    {answer}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

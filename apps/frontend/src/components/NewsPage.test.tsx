@@ -1,6 +1,3 @@
-// Testes de NewsPage (ADR-024).
-// Cobre: render, lista de itens, pinned badge, locale override, estado vazio, erro, load more.
-
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import NewsPage from './NewsPage';
@@ -8,7 +5,7 @@ import NewsPage from './NewsPage';
 afterEach(cleanup);
 
 vi.mock('../services/api', () => ({
-    fetchNews: vi.fn(),
+    fetchContentByType: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => {
@@ -17,17 +14,22 @@ vi.mock('react-i18next', () => {
     return { useTranslation: () => ({ t, i18n }) };
 });
 
-import { fetchNews } from '../services/api';
-const mockFetchNews = fetchNews as ReturnType<typeof vi.fn>;
+import { fetchContentByType } from '../services/api';
+const mockApi = fetchContentByType as ReturnType<typeof vi.fn>;
 
 const ITEM_BASE = {
     id:              'n1',
+    type:            'news' as const,
+    slug:            'promocao-bingo',
     title:           'Promoção de Bingo',
     content:         'Ganhe bônus este fim de semana!',
+    content_format:  'text' as const,
     image_url:       null,
+    metadata:        null,
+    pinned:          false,
+    sort_order:      0,
     locale_overrides: {},
     active:          true,
-    pinned:          false,
     published_at:    '2026-01-15T10:00:00Z',
     published_by:    'admin.wam',
 };
@@ -37,7 +39,7 @@ const PAGE_2 = { items: [{ ...ITEM_BASE, id: 'n2', title: 'Notícia 2' }], total
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockFetchNews.mockResolvedValue(PAGE_1);
+    mockApi.mockResolvedValue(PAGE_1);
 });
 
 describe('NewsPage — render e estado inicial', () => {
@@ -47,7 +49,7 @@ describe('NewsPage — render e estado inicial', () => {
     });
 
     it('[REG] mostra spinner enquanto carrega', () => {
-        mockFetchNews.mockImplementation(() => new Promise(() => {}));
+        mockApi.mockImplementation(() => new Promise(() => {}));
         render(<NewsPage />);
         expect(screen.getByTestId('news-loading')).toBeDefined();
     });
@@ -78,7 +80,7 @@ describe('NewsPage — lista de itens', () => {
     });
 
     it('[REG] item com image_url renderiza img', async () => {
-        mockFetchNews.mockResolvedValue({
+        mockApi.mockResolvedValue({
             ...PAGE_1,
             items: [{ ...ITEM_BASE, image_url: 'https://example.com/img.png' }],
         });
@@ -89,7 +91,7 @@ describe('NewsPage — lista de itens', () => {
 
 describe('NewsPage — pinned badge', () => {
     it('[REG] item pinned exibe badge', async () => {
-        mockFetchNews.mockResolvedValue({ items: [{ ...ITEM_BASE, pinned: true }], total: 1, cached_at: '' });
+        mockApi.mockResolvedValue({ items: [{ ...ITEM_BASE, pinned: true }], total: 1, cached_at: '' });
         render(<NewsPage />);
         await waitFor(() => expect(screen.getByTestId('news-pinned-n1')).toBeDefined());
     });
@@ -106,7 +108,7 @@ describe('NewsPage — locale overrides', () => {
             ...ITEM_BASE,
             locale_overrides: { 'en-US': { title: 'Bingo Promo EN', content: 'Get bonus!' } },
         };
-        mockFetchNews.mockResolvedValue({ items: [item], total: 1, cached_at: '' });
+        mockApi.mockResolvedValue({ items: [item], total: 1, cached_at: '' });
         render(<NewsPage />);
         await waitFor(() => expect(screen.getByTestId('news-heading-n1')).toBeDefined());
     });
@@ -114,7 +116,7 @@ describe('NewsPage — locale overrides', () => {
 
 describe('NewsPage — estado vazio', () => {
     it('[REG] lista vazia mostra mensagem news.empty', async () => {
-        mockFetchNews.mockResolvedValue({ items: [], total: 0, cached_at: '' });
+        mockApi.mockResolvedValue({ items: [], total: 0, cached_at: '' });
         render(<NewsPage />);
         await waitFor(() => expect(screen.getByTestId('news-empty')).toBeDefined());
     });
@@ -122,7 +124,7 @@ describe('NewsPage — estado vazio', () => {
 
 describe('NewsPage — erro', () => {
     it('[REG] mostra news-error ao falhar', async () => {
-        mockFetchNews.mockRejectedValue(new Error('Servidor fora'));
+        mockApi.mockRejectedValue(new Error('Servidor fora'));
         render(<NewsPage />);
         await waitFor(() => expect(screen.getByTestId('news-error')).toBeDefined());
     });
@@ -137,7 +139,7 @@ describe('NewsPage — paginação load more', () => {
     });
 
     it('[REG] botão load more não aparece quando total == items.length', async () => {
-        mockFetchNews.mockResolvedValue({ items: [ITEM_BASE], total: 1, cached_at: '' });
+        mockApi.mockResolvedValue({ items: [ITEM_BASE], total: 1, cached_at: '' });
         render(<NewsPage />);
         await waitFor(() => expect(screen.queryByTestId('news-loading')).toBeNull());
         expect(screen.queryByTestId('news-load-more')).toBeNull();
