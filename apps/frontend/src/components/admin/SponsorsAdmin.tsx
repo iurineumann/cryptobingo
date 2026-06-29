@@ -63,7 +63,8 @@ function CreateDelegationModal({
             await createDelegation(orgId, wallet.trim(), perms);
             onCreated();
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('common.error'));
+            console.error('[SponsorsAdmin]', err);
+            setError(t('errors.generic'));
         } finally {
             setSaving(false);
         }
@@ -146,7 +147,8 @@ export default function SponsorsAdmin({ permissions }: SponsorsAdminProps) {
             const data = await res.json();
             setOrgs(data.orgs?.map((o: any) => ({ ...o, _expanded: false })) ?? []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : t('common.error'));
+            console.error('[SponsorsAdmin]', err);
+            setError(t('errors.http_status', { status: (err as any)?.status ?? '' }) || t('common.error'));
         } finally {
             setLoading(false);
         }

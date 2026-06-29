@@ -145,6 +145,27 @@ describe('useSlowReveal — eventos de fim de jogo', () => {
     expect(result.current.drawMode).toBe('goldenball');
   });
 
+  it('golden_multiplier_progress → goldenMultiplierProgress preenchido', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('golden_multiplier_progress', {
+      game_id: 1,
+      payload: { multiplier: 5, is_final: false },
+    }));
+    expect(result.current.goldenMultiplierProgress).toEqual({ multiplier: 5, isFinal: false });
+  });
+
+  it('golden_multiplier_progress isFinal=true → goldenMultiplierProgress.isFinal true', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('golden_multiplier_progress', {
+      game_id: 1,
+      payload: { multiplier: 50, is_final: true },
+    }));
+    expect(result.current.goldenMultiplierProgress?.isFinal).toBe(true);
+    expect(result.current.goldenMultiplierProgress?.multiplier).toBe(50);
+  });
+
   it('golden_ball → goldenBall preenchido com ballNum e multiplier', () => {
     const { result } = renderHook(() => useSlowReveal('1'));
     act(() => emit('connect', undefined));

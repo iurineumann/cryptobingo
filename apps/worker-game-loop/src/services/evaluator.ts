@@ -437,14 +437,16 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
         }
     }
 
-    console.log(`🎯 [MULTI_MATCH] Pré-computando cutoffs: ${allTickets.length} tickets, ${stages.length} estágios.`);
+    console.log(`🎯 [MULTI_MATCH] Pré-computando cutoffs sequenciais: ${allTickets.length} tickets, ${stages.length} estágios.`);
 
     const results: StageCutoffResult[] = [];
+    let prevCutoff = 0;
 
     for (const stageDef of stages.toSorted((a, b) => a.patterns_required - b.patterns_required)) {
         let cutoffBall = drawnBalls.length + 1; // sentinela: sem vencedor
 
-        for (let i = 1; i <= drawnBalls.length; i++) {
+        // Cada estágio começa do cutoff do anterior — não reinicia da bola 1
+        for (let i = prevCutoff + 1; i <= drawnBalls.length; i++) {
             const partialBalls = drawnBalls.slice(0, i);
             const hit = allTickets.some(t =>
                 checkWinPatterns(applyDrawnBalls(t, partialBalls), dynamicPatterns).length >= stageDef.patterns_required
@@ -462,6 +464,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
                     winners.push({ ticket, patternMask: best.mask, ballCount: cutoffBall });
                 }
             }
+            prevCutoff = cutoffBall;
         }
 
         results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, cutoffBall, winners });
@@ -561,9 +564,10 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
         `Gametype: ${gametypeId}`
     );
 
-    // ── MULTI_MATCH: delega para handler especializado ───────────────────────
+    // ── MULTI_MATCH: orquestrador gerencia payout por estágio.
+    // Esta função só valida estado e limpa índice — sem liquidar.
     if (drawMode === 'multimatch') {
-        await processMultiMatchWinners(gameId, game.drawn_balls.slice(0, maxBalls), gametypeId);
+        console.log(`🎯 [MULTI_MATCH] Estado validado. Liquidado pelo orquestrador por estágio.`);
         if (hasIndex) await deleteIndex(gameId);
         return;
     }

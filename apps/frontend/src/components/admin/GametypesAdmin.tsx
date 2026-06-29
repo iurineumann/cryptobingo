@@ -251,7 +251,8 @@ export default function GametypesAdmin() {
                 name, base_multiplier: parseFloat(baseMultiplier),
                 rules,
                 draw_mode:          drawMode,
-                max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0 : 0,
+                max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0
+                                    : drawMode === 'goldenball' ? (parseInt(goldenBallAfter) || 0) + 1 : 0,
                 golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
                 master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
             });
@@ -295,7 +296,8 @@ export default function GametypesAdmin() {
                 gametype_id, name, base_multiplier: parseFloat(baseMultiplier),
                 rules, rules_extended, combinations,
                 draw_mode:          drawMode,
-                max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0 : 0,
+                max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0
+                                    : drawMode === 'goldenball' ? (parseInt(goldenBallAfter) || 0) + 1 : 0,
                 golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
                 master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
             });

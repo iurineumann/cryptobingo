@@ -18,19 +18,20 @@ import RoomHistoryPanel                  from './RoomHistoryPanel';
 import { Badge }                         from '@/components/ui/badge';
 import { Button }                        from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 interface LobbyProps {
-    session:       Session;
-    onEnterRoom?:  (roomId: string, gameId: string) => void;
-    onReplayGame?: (gameId: string) => void;
+    readonly session:       Session;
+    readonly onEnterRoom?:  (roomId: string, gameId: string) => void;
+    readonly onReplayGame?: (gameId: string) => void;
 }
 
 const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
-const POLL_NORMAL_MS       = 8_000;   // salas idle
-const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
+const POLL_NORMAL_MS       = 4_000;   // salas idle
+const POLL_ACTIVE_MS       = 1_000;   // quando há funding ou drawing
 
 const STATUS_DOT: Record<string, string> = {
     created: 'var(--cb-text-tertiary)',
@@ -46,12 +47,410 @@ function fmtCountdown(ms: number): string {
     if (ms <= 0) return '0s';
     const s = Math.ceil(ms / 1000);
     if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
+    const secPart = s % 60 > 0 ? `${s % 60}s` : '';
+    return `${Math.floor(s / 60)}m ${secPart}`.trim();
 }
 
 function splitAmount(quantity: string): { amount: string; symbol: string } {
     const parts = quantity.trim().split(' ');
     return { amount: parts[0] ?? '0', symbol: parts.slice(1).join(' ') };
+}
+
+// ── RoomCardHead: nome da sala + status badges ─────────────────────────
+function RoomCardHead({
+    room, isDrawing, isFunding, statusLabel, hasMyTickets, myCount,
+    displayStatus, currentGame, t,
+}: {
+    readonly room: EnrichedRoom;
+    readonly isDrawing: boolean;
+    readonly isFunding: boolean;
+    readonly statusLabel: string;
+    readonly hasMyTickets: boolean;
+    readonly myCount: number;
+    readonly displayStatus: string;
+    readonly currentGame: BlockchainGameState | undefined;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const hasNftDrop   = room.metadata?.drops?.some(d => d.template_id != null) ?? false;
+    const hasTokenDrop = room.metadata?.drops?.some(d => d.amount != null)       ?? false;
+
+    return (
+        <div className="lobby-card-head">
+            <div>
+                {room.metadata?.name
+                    ? <p className="lobby-card-name">{room.metadata.name}</p>
+                    : <span className="lobby-card-id">{t('lobby.room_label')} #{room.room_id}</span>
+                }
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+                {isDrawing ? (
+                    <span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>
+                ) : (
+                    <Badge
+                        variant="secondary"
+                        className={isFunding ? 'text-success-400' : ''}
+                        data-testid={`lobby-status-${room.room_id}`}
+                    >
+                        {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }} />}
+                        {statusLabel}
+                    </Badge>
+                )}
+                {hasMyTickets && (
+                    <span className="lobby-card-mine">
+                        {t('lobby.my_tickets', { count: myCount })}
+                    </span>
+                )}
+                {hasNftDrop && (
+                    <Badge variant="outline" className="text-violet-400 border-violet-400/30 bg-violet-400/10">
+                        🎁 {t('lobby.drop_nft')}
+                    </Badge>
+                )}
+                {hasTokenDrop && (
+                    <Badge variant="outline" className="text-yellow-300 border-yellow-400/30 bg-yellow-400/10">
+                        💰 {t('lobby.drop_token')}
+                    </Badge>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── RoomCardStats: grid de preço, prêmio máximo, tickets vendidos ──────
+function RoomCardStats({
+    room, currentGame, gametypeMap, hasMyTickets, myCount, t,
+}: {
+    readonly room: EnrichedRoom;
+    readonly currentGame: BlockchainGameState | undefined;
+    readonly gametypeMap: Map<string, { base_multiplier: number; max_win_weight: number }>;
+    readonly hasMyTickets: boolean;
+    readonly myCount: number;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const ticketsSold = (() => {
+        if (!currentGame) return null;
+        const pool  = Number.parseFloat(currentGame.total_wagered?.quantity?.split(' ')[0] ?? '0');
+        const price = Number.parseFloat(currentGame.ticket_price?.quantity?.split(' ')[0] ?? '0');
+        return pool > 0 && price > 0 ? Math.round(pool / price) : null;
+    })();
+
+    const priceDisplay = (() => {
+        const min = room.ticket_price_min?.quantity;
+        const max = room.ticket_price_max?.quantity;
+        const def = room.ticket_price_default?.quantity ?? currentGame?.ticket_price?.quantity;
+        if (min && max) {
+            const minAmt = splitAmount(min).amount;
+            const maxAmt = splitAmount(max).amount;
+            const sym    = splitAmount(min).symbol;
+            if (minAmt === maxAmt) return def ?? `${minAmt} ${sym}`;
+            return `${minAmt}–${maxAmt} ${sym}`;
+        }
+        return def ?? '—';
+    })();
+
+    const gtInfo = gametypeMap.get(String(room.gametype_id));
+    const maxPrizeVal = (() => {
+        if (!gtInfo || gtInfo.max_win_weight === 0) return 0;
+        const qty = room.ticket_price_max?.quantity ?? room.ticket_price_default?.quantity;
+        if (!qty) return 0;
+        const priceAmt = Number.parseFloat(splitAmount(qty).amount) || 0;
+        return priceAmt * gtInfo.base_multiplier * gtInfo.max_win_weight / 100;
+    })();
+    const priceSymbol = splitAmount(room.ticket_price_default?.quantity ?? '').symbol;
+    const hasSponsor  = (currentGame?.sponsor_pool?.length ?? 0) > 0;
+
+    return (
+        <dl className="lobby-card-stats">
+            <div>
+                <dt>{t('lobby.price')}</dt>
+                <dd className="font-mono" style={{ fontSize: '0.8rem' }}>{priceDisplay}</dd>
+            </div>
+            <div>
+                <dt>{t('lobby.max_prize_label')}</dt>
+                <dd className={maxPrizeVal > 0 ? 'prize' : ''}>
+                    {maxPrizeVal > 0 ? maxPrizeVal.toFixed(4) : '—'}
+                    {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}{hasSponsor ? ' ✨' : ''}</span>}
+                </dd>
+            </div>
+            <div>
+                <dt>{t('lobby.buy_tickets')}</dt>
+                <dd style={{ color: hasMyTickets ? 'var(--cb-brand)' : undefined }}>
+                    {hasMyTickets ? myCount : '—'}
+                </dd>
+            </div>
+            {ticketsSold != null && ticketsSold > 0 && (
+                <div>
+                    <dt>🎫 {t('replay.col_tickets_sold')}</dt>
+                    <dd>{ticketsSold}</dd>
+                </div>
+            )}
+        </dl>
+    );
+}
+
+// ── RoomCardStatus: countdown / status info ────────────────────────────
+function RoomCardStatus({
+    isFunding, isIdle, room, now, currentGame, t,
+}: {
+    readonly isFunding: boolean;
+    readonly isIdle: boolean;
+    readonly room: EnrichedRoom;
+    readonly now: number;
+    readonly currentGame: BlockchainGameState | undefined;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const closeAt   = currentGame ? Number(currentGame.game_id) + AUTO_LOCK_SEC * 1000 : 0;
+    const remaining = closeAt - now;
+    const isUrgent  = remaining > 0 && remaining < 15_000;
+
+    return (
+        <>
+            {isFunding && remaining > 0 && (
+                <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`} data-testid={`lobby-ticker-${room.room_id}`}>
+                    ⏱ {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
+                </span>
+            )}
+            {isFunding && remaining <= 0 && (
+                <span className="lobby-card-ticker is-urgent" data-testid={`lobby-ticker-${room.room_id}`}>
+                    {t('lobby.starts_soon')}
+                </span>
+            )}
+            {isIdle && (
+                <span className="lobby-card-scheduled">
+                    ⏳ {t('lobby.next_game_soon')}
+                </span>
+            )}
+        </>
+    );
+}
+
+// ── RoomCardDescription: descrição truncada + popover ──────────────────
+const DESC_MAX_CHARS = 80;
+
+function RoomCardDescription({
+    room, t,
+}: {
+    readonly room: EnrichedRoom;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const desc = room.metadata?.description;
+    if (!desc) return null;
+
+    const isLong = desc.length > DESC_MAX_CHARS;
+    const short  = isLong ? desc.slice(0, DESC_MAX_CHARS).trimEnd() + '…' : desc;
+
+    if (!isLong) {
+        return (
+            <p className="lobby-card-desc" data-testid={`lobby-desc-${room.room_id}`}>
+                {desc}
+            </p>
+        );
+    }
+
+    return (
+        <Popover>
+            <PopoverTrigger
+                className="lobby-card-desc cursor-pointer"
+                data-testid={`lobby-desc-${room.room_id}`}
+                onClick={e => e.stopPropagation()}
+            >
+                {short}
+            </PopoverTrigger>
+            <PopoverContent
+                side="top"
+                align="start"
+                sideOffset={6}
+                className="max-w-xs text-xs leading-relaxed"
+            >
+                {desc}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+// ── RoomCardActions: botões de ação ─────────────────────────────────────
+function RoomCardActions({
+    isFunding, isDrawing, isIdle, navGameId, currentGame,
+    room, onEnterRoom, onNavigate, playerRoomIds, t,
+}: {
+    readonly isFunding: boolean;
+    readonly isDrawing: boolean;
+    readonly isIdle: boolean;
+    readonly navGameId: string;
+    readonly currentGame: BlockchainGameState | undefined;
+    readonly room: EnrichedRoom;
+    readonly onEnterRoom?: (roomId: string, gameId: string) => void;
+    readonly onNavigate: (path: string) => void;
+    readonly playerRoomIds: Set<string>;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const canBuy   = isFunding && !!onEnterRoom;
+    const canWatch = isDrawing && !!onEnterRoom;
+
+    return (
+        <div className="lobby-card-actions">
+            <div className="lobby-card-actions-row">
+                {canBuy && (
+                    <Button
+                        variant="default"
+                        className="flex-1"
+                        data-testid={`lobby-buy-${room.room_id}`}
+                        onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
+                        aria-label={t('lobby.buy_aria', { id: room.room_id })}
+                    >
+                        {t('lobby.buy_tickets')}
+                    </Button>
+                )}
+                {canWatch && (
+                    <Button
+                        variant="outline"
+                        className="flex-1"
+                        data-testid={`lobby-watch-${room.room_id}`}
+                        onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
+                        aria-label={t('lobby.watch_aria', { id: room.room_id })}
+                    >
+                        👁 {t('lobby.watch_live')}
+                    </Button>
+                )}
+                {!canBuy && !canWatch && navGameId && (
+                    <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => onEnterRoom!(room.room_id, navGameId)}
+                        aria-label={t('lobby.enter_room_aria', { id: room.room_id })}
+                    >
+                        📊 {t('lobby.view_results')}
+                    </Button>
+                )}
+                {!canBuy && !canWatch && !navGameId && !isIdle && (
+                    <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
+                        ⏳ {t('lobby.no_game_yet')}
+                    </span>
+                )}
+            </div>
+
+            <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start gap-1.5 text-xs"
+                data-testid={`lobby-history-${room.room_id}`}
+                onClick={e => { e.stopPropagation(); onNavigate(`/room/${room.room_id}/history`); }}
+                aria-label={t('lobby.replay_aria', { id: room.room_id })}
+            >
+                📋 {t('lobby.history')}
+                {playerRoomIds.has(String(room.room_id)) && (
+                    <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
+                )}
+            </Button>
+        </div>
+    );
+}
+
+// ── RoomCard: sub-component extraído p/ reduzir complexidade cognitiva (S3776) ─
+
+// ── RoomCard: sub-component extraído p/ reduzir complexidade cognitiva (S3776) ─
+function RoomCard({
+    room,
+    currentGame,
+    displayStatus,
+    myTickets,
+    gametypeMap,
+    now,
+    onEnterRoom,
+    onNavigate,
+    playerRoomIds,
+    t,
+}: {
+    readonly room: EnrichedRoom;
+    readonly currentGame: BlockchainGameState | undefined;
+    readonly displayStatus: string;
+    readonly myTickets: Map<string, number>;
+    readonly gametypeMap: Map<string, { base_multiplier: number; max_win_weight: number }>;
+    readonly now: number;
+    readonly onEnterRoom?: (roomId: string, gameId: string) => void;
+    readonly onNavigate: (path: string) => void;
+    readonly playerRoomIds: Set<string>;
+    readonly t: (key: string, opts?: any) => string;
+}) {
+    const isFunding = displayStatus === 'funding';
+    const isDrawing = displayStatus === 'drawing';
+    const isIdle    = !currentGame;
+    const myCount   = myTickets.get(String(room.room_id)) ?? 0;
+    const hasMyTickets = myCount > 0;
+
+    const navGameId = currentGame?.game_id
+        ?? (String(room.current_game_id) === '0' ? null : String(room.current_game_id))
+        ?? '';
+
+    const roomName = room.metadata?.name || `${t('lobby.room_label')} #${room.room_id}`;
+
+    const statusLabel = currentGame
+        ? t(`lobby.${displayStatus}` as any, displayStatus)
+        : t('lobby.room_waiting');
+
+    const cardClass = [
+        'lobby-card',
+        isFunding ? 'is-funding' : '',
+        isDrawing ? 'is-drawing' : '',
+        isIdle    ? 'is-idle'    : '',
+        hasMyTickets ? 'is-watching' : '',
+    ].filter(Boolean).join(' ');
+
+    return (
+        <a
+            href="#"
+            data-testid={`lobby-card-${room.room_id}`}
+            className={cardClass}
+            style={{ cursor: onEnterRoom && navGameId ? 'pointer' : 'default', textDecoration: 'none', color: 'inherit', display: 'block' }}
+            onClick={e => {
+                e.preventDefault();
+                if (onEnterRoom && navGameId && !(e.target as HTMLElement).closest('button')) {
+                    onEnterRoom(room.room_id, navGameId);
+                }
+            }}
+            aria-label={`${roomName}, ${statusLabel}`}
+        >
+            <RoomCardHead
+                room={room}
+                isDrawing={isDrawing}
+                isFunding={isFunding}
+                statusLabel={statusLabel}
+                hasMyTickets={hasMyTickets}
+                myCount={myCount}
+                displayStatus={displayStatus}
+                currentGame={currentGame}
+                t={t}
+            />
+            <RoomCardDescription room={room} t={t} />
+            <RoomCardStats
+                room={room}
+                currentGame={currentGame}
+                gametypeMap={gametypeMap}
+                hasMyTickets={hasMyTickets}
+                myCount={myCount}
+                t={t}
+            />
+            <RoomCardStatus
+                isFunding={isFunding}
+                isIdle={isIdle}
+                room={room}
+                now={now}
+                currentGame={currentGame}
+                t={t}
+            />
+            <RoomCardActions
+                isFunding={isFunding}
+                isDrawing={isDrawing}
+                isIdle={isIdle}
+                navGameId={navGameId}
+                currentGame={currentGame}
+                room={room}
+                onEnterRoom={onEnterRoom}
+                onNavigate={onNavigate}
+                playerRoomIds={playerRoomIds}
+                t={t}
+            />
+        </a>
+    );
 }
 
 export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps) {
@@ -241,7 +640,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         <div className="lobby-wallet-chip" aria-label={t('lobby.balance_aria')}>
                             <span className="symbol" aria-hidden="true">◆</span>
                             {balances.map((b, i) => (
-                                <span key={i} style={i > 0 ? { borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.5rem', marginLeft: '0.25rem' } : {}}>
+                                <span key={b.balance.quantity} style={i > 0 ? { borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.5rem', marginLeft: '0.25rem' } : {}}>
                                     {b.balance.quantity}
                                 </span>
                             ))}
@@ -292,229 +691,20 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                     {activeRooms.map(room => {
                         const currentGame   = currentGameForRoom(room);
                         const displayStatus = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
-
-                        const isFunding = displayStatus === 'funding';
-                        const isDrawing = displayStatus === 'drawing';
-                        const isIdle    = !currentGame;
-                        const canBuy    = isFunding && !!onEnterRoom;
-                        const canWatch  = isDrawing && !!onEnterRoom;
-                        const myCount   = myTickets.get(String(room.room_id)) ?? 0;
-                        const hasMyTickets = myCount > 0;
-                        const hasNftDrop   = room.metadata?.drops?.some(d => d.template_id != null) ?? false;
-                        const hasTokenDrop = room.metadata?.drops?.some(d => d.amount != null)       ?? false;
-
-                        // Cartelas vendidas na partida atual (total_wagered / ticket_price)
-                        const ticketsSold = (() => {
-                            if (!currentGame) return null;
-                            const pool  = parseFloat(currentGame.total_wagered?.quantity?.split(' ')[0] ?? '0');
-                            const price = parseFloat(currentGame.ticket_price?.quantity?.split(' ')[0] ?? '0');
-                            return pool > 0 && price > 0 ? Math.round(pool / price) : null;
-                        })();
-
-                        const lastGameId = currentGame?.game_id
-                            ?? (String(room.current_game_id) !== '0' ? String(room.current_game_id) : null);
-                        const navGameId  = lastGameId ?? '';
-
-                        const roomName = room.metadata?.name ?? `${t('lobby.room_label')} #${room.room_id}`;
-
-                        // Preço: mostra faixa min–max da sala se disponível
-                        const priceDisplay = (() => {
-                            const min = room.ticket_price_min?.quantity;
-                            const max = room.ticket_price_max?.quantity;
-                            const def = room.ticket_price_default?.quantity ?? currentGame?.ticket_price?.quantity;
-                            if (min && max) {
-                                const minAmt = splitAmount(min).amount;
-                                const maxAmt = splitAmount(max).amount;
-                                const sym    = splitAmount(min).symbol;
-                                if (minAmt === maxAmt) return def ?? `${minAmt} ${sym}`;
-                                return `${minAmt}–${maxAmt} ${sym}`;
-                            }
-                            return def ?? '—';
-                        })();
-
-                        // Countdown
-                        const closeAt   = currentGame ? Number(currentGame.game_id) + AUTO_LOCK_SEC * 1000 : 0;
-                        const remaining = closeAt - now;
-                        const isUrgent  = remaining > 0 && remaining < 15_000;
-
-                        // Status label
-                        const statusLabel = currentGame
-                            ? t(`lobby.${displayStatus}` as any, displayStatus)
-                            : t('lobby.room_waiting');
-
-                        // Prêmio máximo por cartela (fixed-odds, ADR-005)
-                        // payout = ticket_price × base_multiplier × max_win_weight / 100
-                        const gtInfo = gametypeMap.get(String(room.gametype_id));
-                        const maxPrizeVal = (() => {
-                            if (!gtInfo || gtInfo.max_win_weight === 0) return 0;
-                            const defQty = room.ticket_price_default?.quantity;
-                            if (!defQty) return 0;
-                            const priceAmt = parseFloat(splitAmount(defQty).amount) || 0;
-                            return priceAmt * gtInfo.base_multiplier * gtInfo.max_win_weight / 100;
-                        })();
-                        const priceSymbol = splitAmount(room.ticket_price_default?.quantity ?? '').symbol;
-                        const hasSponsor  = (currentGame?.sponsor_pool?.length ?? 0) > 0;
-
-                        // Card class
-                        const cardClass = [
-                            'lobby-card',
-                            isFunding ? 'is-funding' : '',
-                            isDrawing ? 'is-drawing' : '',
-                            isIdle    ? 'is-idle'    : '',
-                            hasMyTickets ? 'is-watching' : '',
-                        ].filter(Boolean).join(' ');
-
                         return (
-                            <article
+                            <RoomCard
                                 key={`r-${room.room_id}`}
-                                data-testid={`lobby-card-${room.room_id}`}
-                                className={cardClass}
-                                style={{ cursor: onEnterRoom && navGameId ? 'pointer' : 'default' }}
-                                onClick={e => {
-                                    if (onEnterRoom && navGameId && !(e.target as HTMLElement).closest('button')) {
-                                        onEnterRoom(room.room_id, navGameId);
-                                    }
-                                }}
-                                aria-label={`${roomName}, ${statusLabel}`}
-                            >
-                                {/* ── Head: nome + status ── */}
-                                <div className="lobby-card-head">
-                                    <div>
-                                        <span className="lobby-card-id">Sala #{room.room_id}</span>
-                                        {room.metadata?.name && <p className="lobby-card-name">{roomName}</p>}
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
-                                        {isDrawing ? (
-                                            <span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>
-                                        ) : (
-                                            <Badge
-                                                variant="secondary"
-                                                className={isFunding ? 'text-success-400' : ''}
-                                                data-testid={`lobby-status-${room.room_id}`}
-                                            >
-                                                {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }} />}
-                                                {statusLabel}
-                                            </Badge>
-                                        )}
-                                        {hasMyTickets && (
-                                            <span className="lobby-card-mine">
-                                                {t('lobby.my_tickets', { count: myCount })}
-                                            </span>
-                                        )}
-                                        {hasNftDrop && (
-                                            <Badge variant="outline" className="text-violet-400 border-violet-400/30 bg-violet-400/10">
-                                                🎁 {t('lobby.drop_nft')}
-                                            </Badge>
-                                        )}
-                                        {hasTokenDrop && (
-                                            <Badge variant="outline" className="text-yellow-300 border-yellow-400/30 bg-yellow-400/10">
-                                                💰 {t('lobby.drop_token')}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* ── Stats grid ── */}
-                                <dl className="lobby-card-stats">
-                                    <div>
-                                        <dt>{t('lobby.price')}</dt>
-                                        <dd className="font-mono" style={{ fontSize: '0.8rem' }}>{priceDisplay}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>{t('lobby.max_prize_label')}</dt>
-                                        <dd className={maxPrizeVal > 0 ? 'prize' : ''}>
-                                            {maxPrizeVal > 0 ? maxPrizeVal.toFixed(4) : '—'}
-                                            {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}{hasSponsor ? ' ✨' : ''}</span>}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt>{t('lobby.buy_tickets')}</dt>
-                                        <dd style={{ color: hasMyTickets ? 'var(--cb-brand)' : undefined }}>
-                                            {hasMyTickets ? myCount : '—'}
-                                        </dd>
-                                    </div>
-                                    {ticketsSold != null && ticketsSold > 0 && (
-                                        <div>
-                                            <dt>🎫 {t('replay.col_tickets_sold')}</dt>
-                                            <dd>{ticketsSold}</dd>
-                                        </div>
-                                    )}
-                                </dl>
-
-                                {/* ── Countdown / status info ── */}
-                                {isFunding && remaining > 0 && (
-                                    <span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`} data-testid={`lobby-ticker-${room.room_id}`}>
-                                        ⏱ {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
-                                    </span>
-                                )}
-                                {isFunding && remaining <= 0 && (
-                                    <span className="lobby-card-ticker is-urgent" data-testid={`lobby-ticker-${room.room_id}`}>
-                                        {t('lobby.starts_soon')}
-                                    </span>
-                                )}
-                                {isIdle && (
-                                    <span className="lobby-card-scheduled">
-                                        ⏳ {t('lobby.next_game_soon')}
-                                    </span>
-                                )}
-
-                                {/* ── Actions ── */}
-                                <div className="lobby-card-actions">
-                                    <div className="lobby-card-actions-row">
-                                        {canBuy && (
-                                            <Button
-                                                variant="default"
-                                                className="flex-1"
-                                                data-testid={`lobby-buy-${room.room_id}`}
-                                                onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
-                                                aria-label={t('lobby.buy_aria', { id: room.room_id })}
-                                            >
-                                                {t('lobby.buy_tickets')}
-                                            </Button>
-                                        )}
-                                        {canWatch && (
-                                            <Button
-                                                variant="outline"
-                                                className="flex-1"
-                                                data-testid={`lobby-watch-${room.room_id}`}
-                                                onClick={() => onEnterRoom!(room.room_id, currentGame!.game_id)}
-                                                aria-label={t('lobby.watch_aria', { id: room.room_id })}
-                                            >
-                                                👁 {t('lobby.watch_live')}
-                                            </Button>
-                                        )}
-                                        {!canBuy && !canWatch && navGameId && (
-                                            <Button
-                                                variant="outline"
-                                                className="flex-1"
-                                                onClick={() => onEnterRoom!(room.room_id, navGameId)}
-                                                aria-label={t('lobby.enter_room_aria', { id: room.room_id })}
-                                            >
-                                                📊 {t('lobby.view_results')}
-                                            </Button>
-                                        )}
-                                        {!canBuy && !canWatch && !navGameId && !isIdle && (
-                                            <span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
-                                                ⏳ {t('lobby.no_game_yet')}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="justify-start gap-1.5 text-xs"
-                                        data-testid={`lobby-history-${room.room_id}`}
-                                        onClick={e => { e.stopPropagation(); navigate(`/room/${room.room_id}/history`); }}
-                                        aria-label={t('lobby.replay_aria', { id: room.room_id })}
-                                    >
-                                        📋 {t('lobby.history')}
-                                        {playerRoomIds.has(String(room.room_id)) && (
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>
-                                        )}
-                                    </Button>
-                                </div>
-                            </article>
+                                room={room}
+                                currentGame={currentGame}
+                                displayStatus={displayStatus}
+                                myTickets={myTickets}
+                                gametypeMap={gametypeMap}
+                                now={now}
+                                onEnterRoom={onEnterRoom}
+                                onNavigate={(path) => navigate(path)}
+                                playerRoomIds={playerRoomIds}
+                                t={t}
+                            />
                         );
                     })}
 
@@ -524,7 +714,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                         const tpSplit = splitAmount(game.ticket_price.quantity);
                         const orphanGt = gametypeMap.get(String(game.gametype_id));
                         const orphanMax = orphanGt && orphanGt.max_win_weight > 0
-                            ? (parseFloat(tpSplit.amount) || 0) * orphanGt.base_multiplier * orphanGt.max_win_weight / 100
+                            ? (Number.parseFloat(tpSplit.amount) || 0) * orphanGt.base_multiplier * orphanGt.max_win_weight / 100
                             : 0;
                         return (
                             <article

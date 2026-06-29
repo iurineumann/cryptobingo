@@ -6,7 +6,6 @@
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
@@ -14,6 +13,7 @@ import RoomSocial from './gameroom/RoomSocial';
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
 import { useGameRoomState } from './gameroom/useGameRoomState';
+import { useRoomSocial } from '../hooks/useRoomSocial';
 import PatternsPanel from './gameroom/PatternsPanel';
 import PrizePanels from './gameroom/PrizePanels';
 import TicketsGrid from './gameroom/TicketsGrid';
@@ -24,19 +24,19 @@ import MatchStats from './gameroom/MatchStats';
 // ==========================================
 
 interface GameRoomProps {
-  gameId:            string;
-  roomId?:           string;
-  session:           Session;
-  profile:           MongoUserProfile;
-  onLeave:           () => void;
-  onGoToHistory?:    () => void;
-  onGoToWallet?:     () => void;
-  onGoToAdmin?:      () => void;
-  isAdmin?:          boolean;
-  onLogout?:         () => void;
-  theme?:            'dark' | 'light';
-  onToggleTheme?:    () => void;
-  onLanguageChange?: (locale: string) => void;
+  readonly gameId:            string;
+  readonly roomId?:           string;
+  readonly session:           Session;
+  readonly profile:           MongoUserProfile;
+  readonly onLeave:           () => void;
+  readonly onGoToHistory?:    () => void;
+  readonly onGoToWallet?:     () => void;
+  readonly onGoToAdmin?:      () => void;
+  readonly isAdmin?:          boolean;
+  readonly onLogout?:         () => void;
+  readonly theme?:            'dark' | 'light';
+  readonly onToggleTheme?:    () => void;
+  readonly onLanguageChange?: (locale: string) => void;
 }
 
 // ==========================================
@@ -48,14 +48,12 @@ export default function GameRoom({
   onGoToHistory, onGoToWallet, onGoToAdmin, isAdmin,
   onLogout, theme, onToggleTheme, onLanguageChange,
 }: GameRoomProps) {
-  const { t } = useTranslation();
-
   // ── Estado/efeitos/derivações vivem no hook (Fase 0 do refactor) ──────────
   const state = useGameRoomState({ gameId, roomId, session });
   const {
     game, nextGame, playerTickets, room, loadingGame, maxBalls, gamePatterns,
-    gameCombinations, ingameBalances, drawnBalls, lastBall, isDrawing, isAborted,
-    wsStatus, goldenBall, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
+    gameCombinations, ingameBalances, isDrawing, isAborted,
+    wsStatus, goldenBall, goldenMultiplierProgress, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
     lastDrawn, isEffectiveGameEnded, effectiveDisplayStatus, gameStatusText,
     timeRemaining, nextGameTimer, localWinners, winnerMap, patternByName,
     playerWinEntries, adjustedPatternWinCount, allGameCombinationWinCount,
@@ -64,6 +62,11 @@ export default function GameRoom({
     ticketPrice, col, color, hasBanners, now, loadGame, isStaticFinalState,
   } = state;
   const roomPatterns = gamePatterns;
+
+  // ── Social ao vivo: presença online, reações efêmeras (Fase 4) ────────────
+  const { onlineCount, reactions, sendReaction } = useRoomSocial({
+    roomId: room?.room_id ?? '',
+  });
 
   // UI puramente local do orquestrador (showPatterns migra para painel na Task 4)
   const [showBuyModal, setShowBuyModal] = useState(false);
@@ -98,6 +101,7 @@ export default function GameRoom({
         timeRemaining={timeRemaining} isDrawing={isDrawing} isAborted={isAborted}
         ingameBalances={ingameBalances} wsStatus={wsStatus}
         isAdmin={isAdmin} theme={theme}
+        onlineCount={onlineCount}
         onLeave={onLeave} onGoToHistory={onGoToHistory} onGoToWallet={onGoToWallet}
         onGoToAdmin={onGoToAdmin} onToggleTheme={onToggleTheme} onLogout={onLogout}
         onLanguageChange={onLanguageChange}
@@ -105,14 +109,6 @@ export default function GameRoom({
 
       {/* ── Grid principal ──────────────────────────────────────────────────── */}
       <div className={`gr-main gr-${density}`}>
-
-        {/* ── Faixa de dados: pote, bônus patrocinado e bolas (Task 2) ─────── */}
-        <MatchStats
-          totalWagered={game?.total_wagered?.quantity ?? ''}
-          sponsorPool={game?.sponsor_pool ?? []}
-          drawnCount={drawnNumbers.length}
-          maxBalls={maxBalls}
-        />
 
         {/* ── Linha superior: stage + patterns lado a lado ───────────────────── */}
         <div className="gr-top-row">
@@ -146,11 +142,20 @@ export default function GameRoom({
 
         {/* ── Banners (golden ball, stages, fim) + confete — extraídos em PrizePanels ── */}
         <PrizePanels
-          hasBanners={hasBanners} goldenBall={goldenBall} clearedStages={clearedStages}
+          hasBanners={hasBanners} goldenBall={goldenBall} goldenMultiplierProgress={goldenMultiplierProgress}
+          clearedStages={clearedStages}
           isEffectiveGameEnded={isEffectiveGameEnded} isStaticFinalState={isStaticFinalState}
           playerWinEntries={playerWinEntries} localWinners={localWinners} playerTickets={playerTickets}
           nextGame={nextGame} nextGameTimer={nextGameTimer} game={game} room={room} now={now}
           onLeave={onLeave} onGoToHistory={onGoToHistory}
+        />
+
+        {/* ── Faixa de dados: pote, bônus patrocinado e bolas ──────────────── */}
+        <MatchStats
+          totalWagered={game?.total_wagered?.quantity ?? ''}
+          sponsorPool={game?.sponsor_pool ?? []}
+          drawnCount={drawnNumbers.length}
+          maxBalls={maxBalls}
         />
 
         {/* ── Cartelas ──────────────────────────────────────────────────────── */}
@@ -170,6 +175,9 @@ export default function GameRoom({
         walletAddress={profile.wallet_address}
         localWinners={localWinners}
         clearedStages={clearedStages}
+        onlineCount={onlineCount}
+        reactions={reactions}
+        sendReaction={sendReaction}
       />
 
       {/* ── Modal de compra ────────────────────────────────────────────────── */}

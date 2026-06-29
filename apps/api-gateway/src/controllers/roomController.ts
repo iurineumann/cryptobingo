@@ -35,15 +35,17 @@ export async function listRooms(_req: Request, res: Response): Promise<void> {
         });
         const rooms = response.rows as BlockchainRoom[];
 
+        const roomIds = rooms.map(r => String(r.room_id));
+
         const metadatas = await RoomMetadataModel.find({
-            room_id: { $in: rooms.map(r => r.room_id) },
+            room_id: { $in: roomIds },
         }).lean();
 
         const metaMap = new Map(metadatas.map(m => [m.room_id, m]));
 
         const enriched = rooms.map(room => ({
             ...room,
-            metadata: metaMap.get(room.room_id) ?? null,
+            metadata: metaMap.get(String(room.room_id)) ?? null,
         }));
 
         res.status(200).json({ rooms: enriched });

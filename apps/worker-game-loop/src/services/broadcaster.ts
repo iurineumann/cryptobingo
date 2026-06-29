@@ -65,6 +65,7 @@ interface RevealSession {
     timer:      ReturnType<typeof setInterval> | null;
     winners:    WinnerPayload[];           // Preenchido pelo evaluator ao detectar vencedores
     resolve:    () => void;                // ADR-014: resolve a Promise quando lote completo
+    totalBalls?: number;                   // Total de bolas esperado (progresso da UI)
 }
 
 export interface WinnerPayload {
@@ -283,7 +284,7 @@ chatNamespace.on('connection', (socket: Socket) => {
  * Pode ser chamado múltiplas vezes para o mesmo jogo em lotes (MULTI_MATCH, GOLDEN_BALL).
  * O session.currentIdx persiste entre lotes para manter o Sequence ID correto.
  */
-export function startSlowReveal(gameId: string, balls: number[]): Promise<void> {
+export function startSlowReveal(gameId: string, balls: number[], totalBalls?: number): Promise<void> {
     if (!balls || balls.length === 0) {
         console.warn(`⚠️  [WS] Lote vazio para jogo ${gameId}. Resolvendo imediatamente.`);
         return Promise.resolve();
@@ -293,6 +294,7 @@ export function startSlowReveal(gameId: string, balls: number[]): Promise<void> 
         // Se já existe uma sessão para este jogo (lote anterior), reutiliza o currentIdx
         const existing = activeSessions.get(gameId);
         const startIdx = existing?.currentIdx ?? 0;
+        const mergedTotalBalls = totalBalls ?? existing?.totalBalls;
 
         // Monta a sequência completa acumulada: bolas já emitidas + novo lote
         const allBalls = existing
@@ -306,6 +308,7 @@ export function startSlowReveal(gameId: string, balls: number[]): Promise<void> 
             timer:      null,
             winners:    existing?.winners ?? [],
             resolve,
+            totalBalls: mergedTotalBalls,
         };
 
         // Cancela timer anterior se existia (troca de lote)
@@ -339,7 +342,7 @@ export function startSlowReveal(gameId: string, balls: number[]): Promise<void> 
             io.to(room).emit('ball_drawn', {
                 event:   'ball_drawn',
                 game_id: parseInt(gameId, 10),
-                payload: { order, number, timestamp },
+                payload: { order, number, timestamp, total_balls: session.totalBalls },
             });
 
             slowRevealBallsTotal.inc();
@@ -388,6 +391,23 @@ export function notifyGoldenBall(
         payload: { ball_num: ballNum, multiplier },
     });
     console.log(`🌟 [WS] golden_ball ${ballNum} (×${multiplier}) — jogo ${gameId}`);
+}
+
+/**
+ * GOLDEN_BALL: animação sequencial do multiplicador.
+ * Emite valores intermediários para UI mostrar progressão ×2 → ×5 → ×10 → ... → final.
+ */
+export function notifyGoldenMultiplierProgress(
+    gameId:      string,
+    multiplier:  number,
+    isFinal:     boolean,
+): void {
+    io.to(`game:${gameId}`).emit('golden_multiplier_progress', {
+        event:   'golden_multiplier_progress',
+        game_id: parseInt(gameId, 10),
+        payload: { multiplier, is_final: isFinal },
+    });
+    console.log(`🎰 [WS] golden_multiplier_progress ×${multiplier}${isFinal ? ' (FINAL)' : ''} — jogo ${gameId}`);
 }
 
 /**

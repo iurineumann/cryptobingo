@@ -178,7 +178,9 @@ export function groupTicketsByCategory(
   drawnSet: Set<number>,
   patterns: Pattern[],
   winnerMap: Map<string, WinnerInfo>,
+  t?: (key: string) => string,
 ): GroupedTickets[] {
+  const _t = t ?? ((k: string) => k);
   const multiWinners: TicketEntry[] = [];
   const singleWinners: TicketEntry[] = [];
   const others: TicketEntry[] = [];
@@ -208,9 +210,9 @@ export function groupTicketsByCategory(
 
   const groups: GroupedTickets[] = [];
   if (multiWinners.length > 0)
-    groups.push({ category: 'multi-winner', label: 'Multi-Winners', tickets: multiWinners });
+    groups.push({ category: 'multi-winner', label: _t('game_room.ticket_section.winners_multi'), tickets: multiWinners });
   if (singleWinners.length > 0)
-    groups.push({ category: 'single-winner', label: 'Winners', tickets: singleWinners });
+    groups.push({ category: 'single-winner', label: _t('game_room.ticket_section.winners'), tickets: singleWinners });
 
   const scoreCache = new Map<string, { key: number; bestPattern: string }>();
   for (const t of others) {
@@ -271,7 +273,7 @@ export function groupTicketsByCategory(
       if (kA !== kB) return kB - kA;
       return a.id.localeCompare(b.id);
     });
-    groups.push({ category: 'none', label: 'Other', tickets: noneTickets });
+    groups.push({ category: 'none', label: _t('game_room.ticket_section.other'), tickets: noneTickets });
   }
   return groups;
 }
