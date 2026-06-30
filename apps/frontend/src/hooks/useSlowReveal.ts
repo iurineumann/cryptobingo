@@ -47,6 +47,13 @@ export interface ClearedStage {
     winners: WinnerPayload[];
 }
 
+/** Status de pagamento de um ticket, atualizado via prize_tx_sent / prize_confirmed. */
+export interface PrizeStatus {
+    status: 'preparing' | 'confirming' | 'confirmed';
+    tx_id?: string;
+    amount?: string;
+}
+
 export interface SlowRevealState {
     drawnBalls:      DrawnBall[];
     lastBall:        DrawnBall | null;
@@ -65,6 +72,8 @@ export interface SlowRevealState {
     clearedStages:   ClearedStage[];
     /** Draw mode do jogo, informado via game_ended. */
     drawMode:        string | null;
+    /** Status de pagamento por ticket — atualizado via winner_found → prize_tx_sent → prize_confirmed. */
+    prizeStatuses:   Record<string, PrizeStatus>;
 }
 
 // ==========================================
@@ -92,6 +101,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
     const [goldenMultiplierProgress, setGoldenMultiplierProgress] = useState<GoldenMultiplierProgress | null>(null);
     const [clearedStages, setClearedStages] = useState<ClearedStage[]>([]);
     const [drawMode,      setDrawMode]      = useState<string | null>(null);
+    const [prizeStatuses, setPrizeStatuses]  = useState<Record<string, PrizeStatus>>({});
 
     const resetState = useCallback(() => {
         setDrawnBalls([]);
@@ -105,6 +115,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         setGoldenMultiplierProgress(null);
         setClearedStages([]);
         setDrawMode(null);
+        setPrizeStatuses({});
         lastOrderRef.current = 0;
     }, []);
 
@@ -246,6 +257,15 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
 
             setWinners(msg.payload.winners);
             setIsDrawing(false);
+            setPrizeStatuses(prev => {
+                const next = { ...prev };
+                for (const w of msg.payload.winners) {
+                    if (!next[w.ticket_id]) {
+                        next[w.ticket_id] = { status: 'preparing' };
+                    }
+                }
+                return next;
+            });
         });
 
         // ── game_locked: vendas encerradas ────────────────────────────────────
@@ -301,6 +321,38 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
             setClearedStages(prev => [...prev, { stage: msg.payload.stage, winners: msg.payload.winners }]);
         });
 
+        // ── prize_tx_sent: transação de prêmio enviada à blockchain ─────────
+        socket.on('prize_tx_sent', (msg: {
+            event:   string;
+            game_id: number;
+            payload: { ticketId: string };
+        }) => {
+            if (String(msg.game_id) !== gameId) return;
+            console.log(`💸 [WS] prize_tx_sent: ticket ${msg.payload.ticketId}`);
+            setPrizeStatuses(prev => ({
+                ...prev,
+                [msg.payload.ticketId]: { status: 'confirming' },
+            }));
+        });
+
+        // ── prize_confirmed: prêmio confirmado no MongoDB ─────────────────
+        socket.on('prize_confirmed', (msg: {
+            event:   string;
+            game_id: number;
+            payload: { ticketId: string; transactionId: string; amount: string; currency: string };
+        }) => {
+            if (String(msg.game_id) !== gameId) return;
+            console.log(`✅ [WS] prize_confirmed: ticket ${msg.payload.ticketId} (${msg.payload.amount} ${msg.payload.currency})`);
+            setPrizeStatuses(prev => ({
+                ...prev,
+                [msg.payload.ticketId]: {
+                    status: 'confirmed',
+                    tx_id: msg.payload.transactionId,
+                    amount: msg.payload.amount,
+                },
+            }));
+        });
+
         // ── game_ended: reveal completo, próxima partida a caminho (ADR-014) ─
         socket.on('game_ended', (msg: {
             event:   string;
@@ -335,5 +387,6 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         goldenMultiplierProgress,
         clearedStages,
         drawMode,
+        prizeStatuses,
     };
 }

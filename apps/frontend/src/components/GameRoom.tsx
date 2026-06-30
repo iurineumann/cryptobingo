@@ -62,6 +62,7 @@ export default function GameRoom({
     completedCombinationsPerTicket, combinationCells, patternProximityMap,
     combinationProximityMap, sortedPatterns, groupedTickets, currencySymbol,
     ticketPrice, col, color, hasBanners, now, loadGame, isStaticFinalState,
+    prizeStatuses,
   } = state;
   const roomPatterns = gamePatterns;
 
@@ -75,14 +76,19 @@ export default function GameRoom({
   const [showPatterns, setShowPatterns] = useState(true);
   const density = 'comfortable' as const;
 
-  // ── Feed de eventos: winners ao vivo mapeados para EventFeedWinner ─────────
+  // ── Feed de eventos: winners + prizeStatuses (WS prize_tx_sent/prize_confirmed) ─
   const feedWinners = useMemo(() =>
-    (winners ?? []).map(w => ({
-      account: w.account,
-      pattern_name: w.win_pattern,
-      status: 'confirmed' as const,
-    })),
-    [winners],
+    (winners ?? []).map(w => {
+      const ps = prizeStatuses?.[w.ticket_id];
+      return {
+        account: w.account,
+        pattern_name: w.win_pattern,
+        status: ps?.status ?? 'preparing',
+        tx_id: ps?.tx_id,
+        amount: ps?.amount,
+      };
+    }),
+    [winners, prizeStatuses],
   );
 
   // ── Refs de layout ────────────────────────────────────────────────────────

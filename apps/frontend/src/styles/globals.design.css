@@ -928,8 +928,10 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
   15%  { transform: translateY(-30px) scale(1.1); opacity: 1; }
   100% { transform: translateY(-300px) scale(1); opacity: 0; }
 }
-.gr-event-feed { position: fixed; bottom: 132px; right: 20px; z-index: 9998; display: flex; flex-direction: column; gap: .2rem; max-width: 220px; padding: .5rem .65rem; background: var(--cb-bg-card); border: 1px solid var(--cb-border-default); border-radius: .75rem; box-shadow: var(--shadow-card); pointer-events: none; }
+.gr-event-feed { position: fixed; bottom: 132px; right: 20px; z-index: 9998; display: flex; flex-direction: column; gap: .2rem; max-width: 220px; padding: .5rem .65rem; background: var(--cb-bg-card); border: 1px solid var(--cb-border-default); border-radius: .75rem; box-shadow: var(--shadow-card); pointer-events: auto; }
 .gr-event-feed .ev { font-size: .66rem; color: var(--cb-text-secondary); line-height: 1.3; animation: cb-fade-in .3s ease forwards; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-event-feed-link { color: var(--cb-accent); text-decoration: underline; }
+.gr-event-feed-link:hover { color: var(--cb-accent-hover); }
 /* Reduced-motion: desativa animações de reação e fade do feed */
 @media (prefers-reduced-motion: reduce) {
   .gr-reaction-float { animation: none; opacity: 0; }

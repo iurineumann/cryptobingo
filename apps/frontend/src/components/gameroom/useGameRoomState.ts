@@ -70,6 +70,7 @@ export interface GameRoomState {
   drawnBalls: DrawnBall[]; lastBall: DrawnBall | null; isDrawing: boolean;
   winners: WinnerPayload[]; isAborted: boolean; abortReason: string | null;
   wsStatus: string; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
+  prizeStatuses: Record<string, import('../../hooks/useSlowReveal').PrizeStatus>;
   // derivados
   isStaticFinalState: boolean;
   effectiveBalls: DrawnBall[]; drawnNumbers: number[]; drawnSet: Set<number>;
@@ -151,6 +152,7 @@ export function useGameRoomState(
   const {
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
     isGameEnded, goldenBall, goldenMultiplierProgress, clearedStages, drawMode,
+    prizeStatuses,
   } = useSlowReveal(gameId);
 
   const timeRemaining = useMemo(() => {
@@ -630,7 +632,7 @@ export function useGameRoomState(
     playerTickets: playerTickets as Array<{ id: string; matrix: number[]; pricePaid?: string }>,
     room, loadingGame, maxBalls, gamePatterns, gameCombinations, ingameBalances,
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
-    goldenBall, goldenMultiplierProgress, clearedStages,
+    goldenBall, goldenMultiplierProgress, clearedStages, prizeStatuses,
     isStaticFinalState,
     effectiveBalls, drawnNumbers, drawnSet, lastDrawn, isEffectiveGameEnded,
     effectiveDisplayStatus, gameStatusText, timeRemaining, nextGameTimer,

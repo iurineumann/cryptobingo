@@ -1,8 +1,12 @@
 {
   "id": null,
   "uid": "cryptobingo-worker",
-  "title": "CryptoBingo — Game Loop Worker",
-  "tags": ["cryptobingo", "worker", "rabbitmq"],
+  "title": "CryptoBingo \u2014 Game Loop Worker",
+  "tags": [
+    "cryptobingo",
+    "worker",
+    "rabbitmq"
+  ],
   "timezone": "browser",
   "refresh": "5s",
   "schemaVersion": 38,
@@ -11,7 +15,12 @@
       "id": 1,
       "title": "Eventos Processados/s",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "rate(worker_events_processed_total[1m])",
@@ -21,16 +30,26 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       }
     },
     {
       "id": 2,
-      "title": "Falhas por Razão",
+      "title": "Falhas por Raz\u00e3o",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "rate(worker_events_failed_total[1m])",
@@ -40,16 +59,27 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "red", "mode": "fixed" },
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
         }
       }
     },
     {
       "id": 3,
-      "title": "Dead Letters (DLQ) — Total Acumulado",
+      "title": "Dead Letters (DLQ) \u2014 Total Acumulado",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "sum(worker_events_dead_lettered_total)",
@@ -57,15 +87,31 @@
           "refId": "A"
         }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
             ]
           }
         }
@@ -73,24 +119,42 @@
     },
     {
       "id": 4,
-      "title": "Conexões WebSocket Ativas",
+      "title": "Conex\u00f5es WebSocket Ativas",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "worker_ws_connections_active",
-          "legendFormat": "Conexões",
+          "legendFormat": "Conex\u00f5es",
           "refId": "A"
         }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           }
         }
@@ -98,9 +162,14 @@
     },
     {
       "id": 5,
-      "title": "Sessões Slow Reveal Ativas",
+      "title": "Sess\u00f5es Slow Reveal Ativas",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "worker_slow_reveal_sessions_active",
@@ -108,14 +177,27 @@
           "refId": "A"
         }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 3 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              }
             ]
           }
         }
@@ -125,7 +207,12 @@
       "id": 6,
       "title": "Bolas Emitidas/s (Slow Reveal)",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "rate(worker_slow_reveal_balls_emitted_total[1m])",
@@ -133,42 +220,62 @@
           "refId": "A"
         }
       ],
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
       "id": 7,
-      "title": "Latência de Processamento (p50 / p95 / p99)",
+      "title": "Lat\u00eancia de Processamento (p50 / p95 / p99)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, rate(worker_event_processing_duration_ms_bucket[5m]))",
-          "legendFormat": "p50 — {{action}}",
+          "legendFormat": "p50 \u2014 {{action}}",
           "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, rate(worker_event_processing_duration_ms_bucket[5m]))",
-          "legendFormat": "p95 — {{action}}",
+          "legendFormat": "p95 \u2014 {{action}}",
           "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, rate(worker_event_processing_duration_ms_bucket[5m]))",
-          "legendFormat": "p99 — {{action}}",
+          "legendFormat": "p99 \u2014 {{action}}",
           "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
         }
       }
     },
     {
       "id": 8,
-      "title": "Tentativas de Polling do Oráculo",
+      "title": "Tentativas de Polling do Or\u00e1culo",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.99, rate(worker_oracle_poll_attempts_bucket[5m]))",
@@ -186,9 +293,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 60 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
             ]
           }
         }
@@ -198,7 +314,12 @@
       "id": 9,
       "title": "Heap Node.js (Worker)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "worker_nodejs_heap_size_used_bytes",
@@ -214,46 +335,125 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
-          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
         }
       }
-    }
-    ,{
+    },
+    {
       "id": 10,
-      "title": "Resolução de Jogo — Duração p50/p95 por Draw Mode (ms)",
+      "title": "Resolu\u00e7\u00e3o de Jogo \u2014 Dura\u00e7\u00e3o p50/p95 por Draw Mode (ms)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 28, "w": 16, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 16,
+        "h": 8
+      },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))", "legendFormat": "p50 {{draw_mode}}", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))", "legendFormat": "p95 {{draw_mode}}", "refId": "B" }
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))",
+          "legendFormat": "p50 {{draw_mode}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))",
+          "legendFormat": "p95 {{draw_mode}}",
+          "refId": "B"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "ms" }
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "ms"
+        }
       }
     },
     {
       "id": 11,
       "title": "Jogos Resolvidos por Draw Mode",
       "type": "stat",
-      "gridPos": { "x": 16, "y": 28, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 16,
+        "y": 28,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
-        { "expr": "sum by (draw_mode) (worker_game_resolution_total{result=\"success\"})", "legendFormat": "{{draw_mode}}", "refId": "A" }
+        {
+          "expr": "sum by (draw_mode) (worker_game_resolution_total{result=\"success\"})",
+          "legendFormat": "{{draw_mode}}",
+          "refId": "A"
+        }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
     },
     {
       "id": 12,
-      "title": "Falhas de Resolução",
+      "title": "Falhas de Resolu\u00e7\u00e3o",
       "type": "stat",
-      "gridPos": { "x": 20, "y": 28, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 20,
+        "y": 28,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
-        { "expr": "sum(worker_game_resolution_total{result=\"failure\"})", "legendFormat": "falhas", "refId": "A" }
+        {
+          "expr": "sum(worker_game_resolution_total{result=\"failure\"})",
+          "legendFormat": "falhas",
+          "refId": "A"
+        }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          }
         }
       }
     },
@@ -261,52 +461,274 @@
       "id": 13,
       "title": "Vencedores Pagos (acumulado por Draw Mode)",
       "type": "bargauge",
-      "gridPos": { "x": 16, "y": 32, "w": 8, "h": 4 },
+      "gridPos": {
+        "x": 16,
+        "y": 32,
+        "w": 8,
+        "h": 4
+      },
       "targets": [
-        { "expr": "sum by (draw_mode) (worker_game_winners_total)", "legendFormat": "{{draw_mode}}", "refId": "A" }
+        {
+          "expr": "sum by (draw_mode) (worker_game_winners_total)",
+          "legendFormat": "{{draw_mode}}",
+          "refId": "A"
+        }
       ],
-      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "displayMode": "gradient" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayMode": "gradient"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
     },
     {
       "id": 14,
-      "title": "AutoAdvance — Execuções de Cron/min",
+      "title": "AutoAdvance \u2014 Execu\u00e7\u00f5es de Cron/min",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
-        { "expr": "rate(worker_autoadvance_runs_total[1m]) * 60", "legendFormat": "{{action}}", "refId": "A" }
+        {
+          "expr": "rate(worker_autoadvance_runs_total[1m]) * 60",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "id": 15,
-      "title": "AutoAdvance — Jogos Processados/min",
+      "title": "AutoAdvance \u2014 Jogos Processados/min",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 36, "w": 8, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
-        { "expr": "rate(worker_autoadvance_games_total[1m]) * 60", "legendFormat": "{{action}}", "refId": "A" }
+        {
+          "expr": "rate(worker_autoadvance_games_total[1m]) * 60",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" }
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "short"
+        }
       }
     },
     {
       "id": 16,
-      "title": "AutoAdvance — Erros de Cron",
+      "title": "AutoAdvance \u2014 Erros de Cron",
       "type": "stat",
-      "gridPos": { "x": 20, "y": 36, "w": 4, "h": 8 },
+      "gridPos": {
+        "x": 20,
+        "y": 36,
+        "w": 4,
+        "h": 8
+      },
       "targets": [
-        { "expr": "sum by (action) (worker_autoadvance_errors_total)", "legendFormat": "{{action}}", "refId": "A" }
+        {
+          "expr": "sum by (action) (worker_autoadvance_errors_total)",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
       ],
-      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Pagamentos/min \u2014 Prize Pipeline",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (winType) (rate(worker_prize_payments_total[5m]))",
+          "legendFormat": "{{winType}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cpm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "RTP Acumulado",
+      "type": "gauge",
+      "gridPos": {
+        "x": 8,
+        "y": 44,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "worker_prize_rtp_ratio",
+          "legendFormat": "RTP",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 85
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Lat\u00eancia Pipeline (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(worker_prize_pipeline_duration_ms_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(worker_prize_pipeline_duration_ms_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "showLegend": true
         }
       }
     }
   ],
-  "time": { "from": "now-1h", "to": "now" }
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  }
 }

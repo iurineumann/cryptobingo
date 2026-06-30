@@ -176,6 +176,45 @@ describe('useSlowReveal — eventos de fim de jogo', () => {
     expect(result.current.goldenBall).toEqual({ ballNum: 33, multiplier: 5 });
   });
 
+  it('prize_tx_sent → prizeStatuses ticket vira confirming', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('prize_tx_sent', {
+      game_id: 1,
+      payload: { ticketId: 't1' },
+    }));
+    expect(result.current.prizeStatuses['t1']).toEqual({ status: 'confirming' });
+  });
+
+  it('prize_confirmed → prizeStatuses ticket vira confirmed com tx_id e amount', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('prize_confirmed', {
+      game_id: 1,
+      payload: { ticketId: 't1', transactionId: 'tx1', amount: '3.5000', currency: 'BINGO' },
+    }));
+    expect(result.current.prizeStatuses['t1']).toEqual({
+      status: 'confirmed', tx_id: 'tx1', amount: '3.5000',
+    });
+  });
+
+  it('winner_found → candidates em prizeStatuses como preparing', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('winner_found', {
+      game_id: 1,
+      payload: { winning_ball: 42, winners: [{ account: 'a', ticket_id: 't1', win_pattern: 'ROW_0', payouts: [] }] },
+    }));
+    expect(result.current.prizeStatuses['t1']).toEqual({ status: 'preparing' });
+  });
+
+  it('prize_tx_sent de outro game_id ignorado', () => {
+    const { result } = renderHook(() => useSlowReveal('1'));
+    act(() => emit('connect', undefined));
+    act(() => emit('prize_tx_sent', { game_id: 99, payload: { ticketId: 't1' } }));
+    expect(result.current.prizeStatuses['t1']).toBeUndefined();
+  });
+
   it('stage_cleared → clearedStages acumula', () => {
     const { result } = renderHook(() => useSlowReveal('1'));
     act(() => emit('connect', undefined));

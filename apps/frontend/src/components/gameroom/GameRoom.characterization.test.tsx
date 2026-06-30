@@ -45,6 +45,7 @@ const slowRevealState = {
   goldenBall: null as unknown,
   clearedStages: [] as unknown[],
   drawMode: 'standard' as const,
+  prizeStatuses: {} as Record<string, unknown>,
 };
 vi.mock('../../hooks/useSlowReveal', () => ({
   useSlowReveal: () => slowRevealState,
@@ -120,6 +121,7 @@ describe('GameRoom — caracterização Fase 0', () => {
     slowRevealState.lastBall = null;
     slowRevealState.isGameEnded = false;
     slowRevealState.winners = [];
+    slowRevealState.prizeStatuses = {};
   });
 
   it('renderiza header, palco e seção de cartelas no estado funding', async () => {
