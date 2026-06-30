@@ -912,51 +912,6 @@ export async function fetchRoomLeaderboard(roomId: string, limit = 10): Promise<
 }
 
 // ==========================================
-// NEWS — Publicações públicas (ADR-024)
-// ==========================================
-
-export interface NewsListResponse {
-    items:     import('@cryptobingo/shared-types').NewsItem[];
-    total:     number;
-    cached_at: string;
-}
-
-export async function fetchNews(opts?: { limit?: number; offset?: number }): Promise<NewsListResponse> {
-    const params = new URLSearchParams();
-    if (opts?.limit)  params.set('limit',  String(opts.limit));
-    if (opts?.offset) params.set('offset', String(opts.offset));
-    const res = await fetch(`${API_BASE}/news?${params}`, { headers: publicHeaders() });
-    return handleResponse(res);
-}
-
-export async function createNewsItem(data: {
-    title: string; content: string; image_url?: string | null;
-    locale_overrides?: object; active?: boolean; pinned?: boolean;
-}): Promise<import('@cryptobingo/shared-types').NewsItem> {
-    const res = await fetch(`${API_BASE}/news`, {
-        method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
-    });
-    return handleResponse(res);
-}
-
-export async function updateNewsItem(id: string, data: {
-    title?: string; content?: string; image_url?: string | null;
-    locale_overrides?: object; active?: boolean; pinned?: boolean;
-}): Promise<import('@cryptobingo/shared-types').NewsItem> {
-    const res = await fetch(`${API_BASE}/news/${encodeURIComponent(id)}`, {
-        method: 'PATCH', headers: authHeaders(), body: JSON.stringify(data),
-    });
-    return handleResponse(res);
-}
-
-export async function deleteNewsItem(id: string): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/news/${encodeURIComponent(id)}`, {
-        method: 'DELETE', headers: authHeaders(),
-    });
-    return handleResponse(res);
-}
-
-// ==========================================
 // CONTEÚDO UNIFICADO — Content (ADR-037)
 // ==========================================
 

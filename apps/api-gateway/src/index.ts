@@ -63,7 +63,7 @@ import { startMetricsServer, metricsMiddleware } from './services/metrics';
 import { setupChatSocket }                            from './socket/chatSocket';
 import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
-import { listNews, createNews, updateNews, deleteNews } from './controllers/newsController';
+
 import { listContent, getContentItem, createContentItem, updateContentItem, deleteContentItem } from './controllers/contentController';
 import {
     updateUserPermissions,
@@ -391,12 +391,6 @@ function registerRoutes(): void {
     app.get ('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, getChatHistory);
     app.post('/api/v1/rooms/:roomId/chat', playerLimiter, requireAuth, saveChatMessage);
     app.post('/api/v1/internal/chat/system', requireInternalAuth, createSystemChatMessage);
-
-    // ── News / Promoções (ADR-024) ────────────────────────────────────────────
-    app.get   ('/api/v1/news',        playerLimiter, listNews);
-    app.post  ('/api/v1/news',        adminLimiter,  requireAuth, requireRole('admin'), createNews);
-    app.patch ('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), updateNews);
-    app.delete('/api/v1/news/:id',    adminLimiter,  requireAuth, requireRole('admin'), deleteNews);
 
     // ── Conteúdo Unificado (ADR-037) ──────────────────────────────────────────
     app.get   ('/api/v1/content/:type',        playerLimiter, listContent);
