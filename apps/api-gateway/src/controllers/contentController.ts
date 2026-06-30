@@ -54,7 +54,7 @@ async function invalidateCache(): Promise<void> {
 // ==========================================
 
 export async function listContent(req: Request, res: Response): Promise<void> {
-    const { type: rawType } = req.params;
+    const rawType = (req.params as Record<string, string>).type;
     const type = parseContentType(rawType);
     if (!type) { res.status(400).json({ error: 'Tipo inválido.' }); return; }
 
@@ -100,7 +100,9 @@ export async function listContent(req: Request, res: Response): Promise<void> {
 // ==========================================
 
 export async function getContentItem(req: Request, res: Response): Promise<void> {
-    const { type: rawType, id } = req.params;
+    const params = req.params as Record<string, string>;
+    const rawType = params.type;
+    const id = params.id;
     const type = parseContentType(rawType);
     if (!type) { res.status(400).json({ error: 'Tipo inválido.' }); return; }
 
@@ -135,7 +137,7 @@ export async function getContentItem(req: Request, res: Response): Promise<void>
 // ==========================================
 
 export async function createContentItem(req: Request, res: Response): Promise<void> {
-    const { type: rawType } = req.params;
+    const rawType = (req.params as Record<string, string>).type;
     const type = parseContentType(rawType);
     if (!type) { res.status(400).json({ error: 'Tipo inválido.' }); return; }
 
