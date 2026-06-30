@@ -5,13 +5,16 @@ import { getEffectiveExplorerUrl } from '../../utils/explorerStore';
 export interface EventFeedWinner {
     account:      string;
     pattern_name: string;
+    status:       'preparing' | 'confirming' | 'confirmed';
     tx_id?:       string;
+    amount?:      string;
 }
 
 interface Props {
     readonly loading:  boolean;
     readonly winners:  EventFeedWinner[];
     readonly error:    string | null;
+    readonly gameId?:  string;
 }
 
 export default function EventFeed({ loading, winners, error }: Props) {
@@ -49,21 +52,26 @@ export default function EventFeed({ loading, winners, error }: Props) {
         <div className="gr-event-feed" data-testid="gr-event-feed" style={{ maxHeight: '180px', overflowY: 'auto' }}>
             {winners.map((w, idx) => (
                 <span key={`${w.account}-${w.pattern_name}-${idx}`} className="ev" data-testid={`gr-event-feed-item-${idx}`}>
-                    {w.tx_id ? (
-                        <a
-                            href={`${explorerUrl}/transaction/${w.tx_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="gr-event-feed-link"
-                            data-testid={`gr-event-feed-tx-${idx}`}
-                        >
-                            {w.account} • {w.pattern_name}
-                            <ExternalLink className="size-3 shrink-0" style={{ display: 'inline', marginLeft: '0.2rem', verticalAlign: 'middle' }} />
-                        </a>
-                    ) : (
+                    <span>{w.account} • {w.pattern_name}</span>
+                    {w.status === 'preparing' && (
+                        <><span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', marginLeft: '0.3rem', verticalAlign: 'middle', borderWidth: '1.5px' }} /> {t('game_room.prize_preparing')}</>
+                    )}
+                    {w.status === 'confirming' && (
+                        <><span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', marginLeft: '0.3rem', verticalAlign: 'middle', borderWidth: '1.5px' }} /> {t('game_room.prize_confirming')}</>
+                    )}
+                    {w.status === 'confirmed' && w.tx_id && (
                         <>
-                            <span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', marginRight: '0.3rem', verticalAlign: 'middle', borderWidth: '1.5px' }} />
-                            {w.account} • {w.pattern_name}
+                            {w.amount} —
+                            <a
+                                href={`${explorerUrl}/transaction/${w.tx_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="gr-event-feed-link"
+                                data-testid={`gr-event-feed-tx-${idx}`}
+                            >
+                                {t('game_room.prize_confirmed')}
+                                <ExternalLink className="size-3 shrink-0" style={{ display: 'inline', marginLeft: '0.2rem', verticalAlign: 'middle' }} />
+                            </a>
                         </>
                     )}
                 </span>

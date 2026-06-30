@@ -80,6 +80,7 @@ export default function GameRoom({
     (winners ?? []).map(w => ({
       account: w.account,
       pattern_name: w.win_pattern,
+      status: 'confirmed' as const,
     })),
     [winners],
   );
@@ -187,6 +188,7 @@ export default function GameRoom({
         loading={isDrawing && winners.length === 0}
         winners={feedWinners}
         error={null}
+        gameId={gameId}
       />
 
       {/* ── Social: presença, reações flutuantes, feed e chat (Fase 4) ── */}

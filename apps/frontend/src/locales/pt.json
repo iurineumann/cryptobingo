@@ -182,7 +182,10 @@
     "pot_bonus": "Bônus patrocinado",
     "stats_balls": "Bolas",
     "player_prizes_title": "Seus prêmios",
-    "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)"
+    "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)",
+    "prize_preparing": "Processando pagamento...",
+    "prize_confirming": "Confirmando na blockchain...",
+    "prize_confirmed": "Confirmado"
   },
   "lobby": {
     "title": "Lobby de Jogos",

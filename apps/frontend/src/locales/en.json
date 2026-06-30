@@ -182,7 +182,10 @@
     "pot_bonus": "Sponsored bonus",
     "stats_balls": "Balls",
     "player_prizes_title": "Your prizes",
-    "room_prizes_summary": "Room paid {{total}} to {{count}} winner(s)"
+    "room_prizes_summary": "Room paid {{total}} to {{count}} winner(s)",
+    "prize_preparing": "Processing payment...",
+    "prize_confirming": "Confirming on blockchain...",
+    "prize_confirmed": "Confirmed"
   },
   "lobby": {
     "title": "Game Lobby",
