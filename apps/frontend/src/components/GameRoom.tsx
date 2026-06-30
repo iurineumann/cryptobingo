@@ -5,11 +5,13 @@
 // Design: classes gr-* definidas em globals.design.css
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
 import RoomSocial from './gameroom/RoomSocial';
+import EventFeed from './gameroom/EventFeed';
+import type { EventFeedWinner } from './gameroom/EventFeed';
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
 import { useGameRoomState } from './gameroom/useGameRoomState';
@@ -55,7 +57,7 @@ export default function GameRoom({
     gameCombinations, ingameBalances, isDrawing, isAborted,
     wsStatus, goldenBall, goldenMultiplierProgress, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
     lastDrawn, isEffectiveGameEnded, effectiveDisplayStatus, gameStatusText,
-    timeRemaining, nextGameTimer, localWinners, winnerMap, patternByName,
+    timeRemaining, nextGameTimer, localWinners, winners, winnerMap, patternByName,
     playerWinEntries, adjustedPatternWinCount, allGameCombinationWinCount,
     completedCombinationsPerTicket, combinationCells, patternProximityMap,
     combinationProximityMap, sortedPatterns, groupedTickets, currencySymbol,
@@ -72,6 +74,15 @@ export default function GameRoom({
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
   const density = 'comfortable' as const;
+
+  // ── Feed de eventos: winners ao vivo mapeados para EventFeedWinner ─────────
+  const feedWinners = useMemo(() =>
+    (winners ?? []).map(w => ({
+      account: w.account,
+      pattern_name: w.win_pattern,
+    })),
+    [winners],
+  );
 
   // ── Refs de layout ────────────────────────────────────────────────────────
   const stageRef    = useRef<HTMLElement>(null);
@@ -164,10 +175,19 @@ export default function GameRoom({
           gameStatus={game?.status} canBuyMore={game?.status === 'funding' && !!ticketPrice}
           winnerMap={winnerMap} patternByName={patternByName} drawnSet={drawnSet} lastDrawn={lastDrawn}
           roomPatterns={roomPatterns} completedCombinationsPerTicket={completedCombinationsPerTicket}
+          goldenBallNum={goldenBall?.ballNum ?? undefined}
+          effectiveMultiplier={goldenBall?.multiplier ?? undefined}
           onBuyMore={() => setShowBuyModal(true)}
         />
 
       </div>
+
+      {/* ── Feed de eventos ao vivo ─────────────────────────────────────── */}
+      <EventFeed
+        loading={isDrawing && winners.length === 0}
+        winners={feedWinners}
+        error={null}
+      />
 
       {/* ── Social: presença, reações flutuantes, feed e chat (Fase 4) ── */}
       <RoomSocial
