@@ -1147,3 +1147,18 @@ export async function removeMyDelegation(wallet: string): Promise<any> {
     });
     return handleResponse(res);
 }
+
+// ── Prize Pipeline ────────────────────────────────────────────────────
+
+export interface PrizeTxResponse {
+    items: import('@cryptobingo/shared-types').PrizeTx[];
+    total: number;
+    gameId: string;
+}
+
+export async function fetchGamePrizeTransactions(gameId: string): Promise<PrizeTxResponse> {
+    const res = await fetch(`${API_BASE}/games/${encodeURIComponent(gameId)}/prizes`, {
+        headers: publicHeaders(),
+    });
+    return handleResponse<PrizeTxResponse>(res);
+}
