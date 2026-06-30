@@ -238,6 +238,8 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           lastDrawn={lastDrawn}
           roomPatterns={patterns}
           completedCombinationsPerTicket={new Map()}
+          goldenBallNum={goldenBall?.ballNum}
+          effectiveMultiplier={goldenBall?.multiplier}
           onBuyMore={() => {}}
         />
       </div>

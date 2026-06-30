@@ -26,6 +26,8 @@ export interface TicketsGridProps {
   lastDrawn: number | null;
   roomPatterns: Pattern[];
   completedCombinationsPerTicket: Map<string, Array<{ name: string; weight: number }>>;
+  goldenBallNum?:         number;
+  effectiveMultiplier?:   number;
   onBuyMore: () => void;
 }
 
@@ -42,7 +44,9 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
   const {
     playerTickets, groupedTickets, loadingGame, gameStatus,
     canBuyMore, winnerMap, patternByName, drawnSet, lastDrawn,
-    roomPatterns, completedCombinationsPerTicket, onBuyMore,
+    roomPatterns, completedCombinationsPerTicket,
+    goldenBallNum, effectiveMultiplier,
+    onBuyMore,
   } = props;
 
   return (
@@ -99,6 +103,8 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
                     patterns={roomPatterns}
                     completedCombinations={completedCombinationsPerTicket.get(ticket.id)}
                     pricePaid={ticket.pricePaid}
+                    goldenBallNum={goldenBallNum}
+                    effectiveMultiplier={effectiveMultiplier}
                   />
                 );
               })}

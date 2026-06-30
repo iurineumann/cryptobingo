@@ -24,11 +24,14 @@ interface TicketCardProps {
   patterns:               Pattern[];
   completedCombinations?: CompletedComboInfo[];
   pricePaid?:             string;  // preço pago por esta cartela (ADR-010)
+  goldenBallNum?:         number;  // nº da golden ball, se ativa
+  effectiveMultiplier?:   number;  // multiplicador golden aplicado
 }
 
 export function TicketCard({
   ticketId, matrix, drawnSet, lastDrawn, winPattern,
   prize, density, patterns, completedCombinations, pricePaid,
+  goldenBallNum, effectiveMultiplier,
 }: TicketCardProps) {
   const { t } = useTranslation();
 
@@ -57,8 +60,9 @@ export function TicketCard({
     );
     const winning = new Set<number>();
     completed.forEach(p => p.cells.forEach((req, i) => { if (req) winning.add(i); }));
+    if (winPattern) winPattern.forEach(i => winning.add(i));
     return { completedPatterns: completed, winningCells: winning };
-  }, [grid, drawnSet, patterns]);
+  }, [grid, drawnSet, patterns, winPattern]);
 
   const nearMiss = useMemo(
     () => computeTicketNearMiss(matrix, drawnSet, patterns),
@@ -68,6 +72,12 @@ export function TicketCard({
   const isWinner    = winPattern !== null || completedPatterns.length > 0;
   const isClose     = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
   const showNearMiss = !isWinner && nearMiss.patternsOneAway > 0;
+  const isGoldenWinner = isWinner && goldenBallNum !== undefined &&
+    [...winningCells].some(gridIdx => {
+      const r = Math.floor(gridIdx / 5);
+      const c = gridIdx % 5;
+      return grid[r][c] === goldenBallNum;
+    });
 
   return (
     <article
@@ -78,6 +88,7 @@ export function TicketCard({
         isClose     ? 'is-close'    : '',
         showNearMiss ? 'is-near-miss' : '',
         !isWinner && !isClose && markedCount < 3 ? 'is-dimmed' : '',
+        isGoldenWinner ? 'is-golden-winner' : '',
       ].filter(Boolean).join(' ')}
       aria-label={isWinner ? t('game_room.ticket_winner_aria', { id: ticketId }) : t('game_room.ticket_aria', { id: ticketId })}
     >
@@ -88,16 +99,21 @@ export function TicketCard({
         <span className={`gr-ticket-marks${isWinner ? ' is-winner' : isClose ? ' is-close' : ''}`}>
           {isWinner ? t('game_room.winner_badge') : `${markedCount}/25`}
         </span>
-        {showNearMiss && (
-          <span
-            className="gr-ticket-near-miss"
-            data-testid="tc-near-miss"
-            aria-label={t('game_room.near_miss_aria', { id: ticketId })}
-          >
-            {t('game_room.near_miss')}
-          </span>
-        )}
-      </div>
+          {showNearMiss && (
+            <span
+              className="gr-ticket-near-miss"
+              data-testid="tc-near-miss"
+              aria-label={t('game_room.near_miss_aria', { id: ticketId })}
+            >
+              {t('game_room.near_miss')}
+            </span>
+          )}
+          {isGoldenWinner && effectiveMultiplier !== undefined && (
+            <span className="gr-ticket-golden-badge" data-testid="gr-ticket-golden-badge">
+              ×{effectiveMultiplier}
+            </span>
+          )}
+        </div>
 
       <div className="gr-bingo-grid" role="grid" aria-label={t('game_room.ticket_aria', { id: ticketId })}>
         <div className="gr-bingo-grid-head" role="row">
@@ -111,12 +127,13 @@ export function TicketCard({
           {grid.map((row, ri) => (
             <div key={ri} className="gr-bingo-row" role="row">
               {row.map((val, ci) => {
-                const gridIdx   = ri * 5 + ci;
-                const isFree    = val === null;
-                const isMarked  = isFree || drawnSet.has(val as number);
-                const isJustHit = !isFree && val === lastDrawn;
-                const inWin     = (winPattern?.has(gridIdx) ?? false) || winningCells.has(gridIdx);
-                const color     = BINGO_COLORS[COLS[ci]];
+                const gridIdx    = ri * 5 + ci;
+                const isFree     = val === null;
+                const isMarked   = isFree || drawnSet.has(val as number);
+                const isJustHit  = !isFree && val === lastDrawn;
+                const inWin      = (winPattern?.has(gridIdx) ?? false) || winningCells.has(gridIdx);
+                const color      = BINGO_COLORS[COLS[ci]];
+                const isGoldenCell = isGoldenWinner && val !== null && val === goldenBallNum;
 
                 return (
                   <div
@@ -138,6 +155,7 @@ export function TicketCard({
                       isJustHit           ? 'is-just-hit'        : '',
                       inWin               ? 'in-winning-pattern' : '',
                       showNearMiss && nearMiss.nearMissCells.has(gridIdx) && !isMarked ? 'is-near-miss-cell' : '',
+                      isGoldenCell        ? 'is-golden-cell'     : '',
                     ].filter(Boolean).join(' ')}
                     style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
                   >
