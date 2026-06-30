@@ -1,8 +1,12 @@
 // apps/frontend/src/components/replayroom/ReplaySummary.tsx
 import { useTranslation } from 'react-i18next';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { Pattern } from '../../components/ticketUtils';
 import type { AggregateStats } from '../../hooks/useReplay';
+import EventFeed from '../gameroom/EventFeed';
+import type { EventFeedWinner } from '../gameroom/EventFeed';
+import { fetchGamePrizeTransactions } from '../../services/api';
 
 export interface ReplaySummaryProps {
   show: boolean;
@@ -16,6 +20,7 @@ export interface ReplaySummaryProps {
   sponsorPool?: Array<{ quantity: string }>;
   goldenBall?: { ballNum: number; multiplier: number } | null;
   gameEnded?: boolean;
+  gameId?: string;
   onRestart: () => void;
   onLeave: () => void;
   onClose: () => void;
@@ -23,10 +28,30 @@ export interface ReplaySummaryProps {
 
 export default function ReplaySummary({
   show, isComplete, totalBalls, winners, winnerMap, currencySymbol,
-  aggregate, totalWagered, sponsorPool, goldenBall, gameEnded,
+  aggregate, totalWagered, sponsorPool, goldenBall, gameEnded, gameId,
   onRestart, onLeave, onClose,
 }: ReplaySummaryProps) {
   const { t } = useTranslation();
+
+  const [prizeWinners, setPrizeWinners] = useState<EventFeedWinner[]>([]);
+  const [prizesLoading, setPrizesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!gameId || !show) return;
+    setPrizesLoading(true);
+    fetchGamePrizeTransactions(gameId)
+      .then(data => {
+        setPrizeWinners(data.items.map(p => ({
+          account: p.account,
+          pattern_name: p.winLabel,
+          status: 'confirmed' as const,
+          tx_id: p.transactionId,
+          amount: p.amount,
+        })));
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => setPrizesLoading(false));
+  }, [gameId, show]);
 
   const myWinning = winnerMap.size > 0;
   const hasBanners = !!goldenBall || gameEnded;
@@ -131,6 +156,17 @@ export default function ReplaySummary({
             {t('replay.back_to_lobby')}
           </button>
         </div>
+
+        {/* ── Prize History ──────────────────────────────────────────── */}
+        {gameId && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <EventFeed
+              loading={prizesLoading}
+              winners={prizeWinners}
+              error={null}
+            />
+          </div>
+        )}
       </div>
       )}
     </>

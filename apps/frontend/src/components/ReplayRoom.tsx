@@ -221,6 +221,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           sponsorPool={game?.sponsor_pool}
           goldenBall={goldenBall}
           gameEnded={gameEnded}
+          gameId={gameId}
           onRestart={restart}
           onLeave={onLeave}
           onClose={() => setShowSummary(false)}

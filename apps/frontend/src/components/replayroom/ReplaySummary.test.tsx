@@ -1,5 +1,5 @@
 // apps/frontend/src/components/replayroom/ReplaySummary.test.tsx
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import type { AggregateStats, Pattern } from '../../hooks/useReplay';
 import ReplaySummary from './ReplaySummary';
@@ -15,6 +15,10 @@ const EMPTY_AGGREGATE: AggregateStats = {
 const MOCK_PATTERNS: Pattern[] = [
   { name: 'Linha Superior', cells: [1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], prize: '5.0000' },
 ];
+
+vi.mock('../../services/api', () => ({
+  fetchGamePrizeTransactions: vi.fn(),
+}));
 
 function renderSummary(props: Partial<React.ComponentProps<typeof ReplaySummary>> = {}) {
   return render(
@@ -82,5 +86,13 @@ describe('ReplaySummary', () => {
     });
     expect(screen.getByText(/5/)).toBeTruthy();
     expect(screen.getByText(/42/)).toBeTruthy();
+  });
+
+  it('busca prizes via API quando gameId está disponível', async () => {
+    const { fetchGamePrizeTransactions } = await import('../../services/api');
+    const mockData = { items: [{ account: 'alice', winLabel: 'Linha 1', transactionId: 'tx1', amount: '3.5000' }], total: 1, gameId: '1' };
+    (fetchGamePrizeTransactions as ReturnType<typeof vi.fn>).mockResolvedValue(mockData);
+    renderSummary({ gameId: '1' });
+    await waitFor(() => expect(fetchGamePrizeTransactions).toHaveBeenCalledWith('1'));
   });
 });
