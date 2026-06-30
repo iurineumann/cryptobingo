@@ -572,3 +572,34 @@ export interface NewsItem {
     published_at:     string;   // ISO 8601
     published_by:     string;   // wallet do admin
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Prize Pipeline — transações de premiação e buy-in (Prize Pipeline)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface PrizeTx {
+    gameId:    string;
+    account:   string;
+    ticketId:  string;
+    winType:   'pattern' | 'combo' | 'stage';
+    patternMask?: string;
+    comboId?:    number;
+    stageNumber?: number;
+    winLabel:     string;
+    weight:       number;
+    amount:       string;
+    currency:     string;
+    transactionId?: string;
+    goldenMultiplier?: number;
+    ticketPrice: string;
+    claimedAt:   string;
+}
+
+export interface BuyInTx {
+    gameId:      string;
+    account:     string;
+    ticketId:    string;
+    amount:      string;
+    currency:    string;
+    purchasedAt: string;
+}
