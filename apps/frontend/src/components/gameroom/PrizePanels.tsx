@@ -24,6 +24,13 @@ function fmtCountdown(ms: number): string {
   return `${Math.floor(s / 60)}m ${secPart}`.trim();
 }
 
+/** Traduz nome de estágio raw (stage_N) para i18n. Fallback p/ nome original. */
+function fmtStageName(t: ReturnType<typeof useTranslation>['t'], name: string): string {
+  const m = name.match(/^stage_(\d+)$/);
+  if (m) return t('game_room.stage_label', { stage: parseInt(m[1], 10) });
+  return name;
+}
+
 // S3358: extrair nested ternary para função legível
 function getEndedStatusText(
   playerWinEntries: { length: number },
@@ -119,6 +126,11 @@ export default function PrizePanels({
                     <span className="gr-stage-badge">
                       {t('game_room.stage_label', { stage: s.stage })}
                     </span>
+                    {s.winningBall && (
+                      <span className="gr-stage-ball">
+                        🎱 {s.winningBall}
+                      </span>
+                    )}
                     <span className="gr-stage-count">
                       {t('game_room.stage_winners', { count: s.winners.length })}
                     </span>
@@ -150,7 +162,7 @@ export default function PrizePanels({
                     {playerWinEntries.map(({ name, total, currency, isCombination }) => (
                       <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                         <span className="gr-ended-breakdown-pattern">
-                          {isCombination && '🔗 '}{name}
+                          {isCombination && '🔗 '}{fmtStageName(t, name)}
                         </span>
                         <span className="gr-ended-breakdown-prize">
                           {total.toFixed(4)} {currency}

@@ -20,7 +20,7 @@ vi.mock('react-router-dom', () => ({
 const mockRooms: any[] = [];
 vi.mock('../services/api', () => ({
     fetchRooms: vi.fn().mockImplementation(() => Promise.resolve({ rooms: mockRooms })),
-    fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [] }),
+    fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [], stages: [] }),
 }));
 
 // Helpers para montar session com dados controlados

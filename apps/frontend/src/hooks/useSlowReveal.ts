@@ -43,8 +43,9 @@ export interface GoldenMultiplierProgress {
 
 /** ADR-013/014: estágio limpo no MULTI_MATCH. */
 export interface ClearedStage {
-    stage:   number;
-    winners: WinnerPayload[];
+    stage:        number;
+    winners:      WinnerPayload[];
+    winningBall?: number;
 }
 
 /** Status de pagamento de um ticket, atualizado via prize_tx_sent / prize_confirmed. */
@@ -52,6 +53,7 @@ export interface PrizeStatus {
     status: 'preparing' | 'confirming' | 'confirmed';
     tx_id?: string;
     amount?: string;
+    currency?: string;
 }
 
 export interface SlowRevealState {
@@ -74,6 +76,53 @@ export interface SlowRevealState {
     drawMode:        string | null;
     /** Status de pagamento por ticket — atualizado via winner_found → prize_tx_sent → prize_confirmed. */
     prizeStatuses:   Record<string, PrizeStatus>;
+    /** true após primeira conexão WebSocket — usado como guard p/ evitar flash de tela final. */
+    wsEverConnected: boolean;
+    /** Hidrata prizeStatuses a partir de dados da API (jogos arquivados sem WS). */
+    hydratePrizeStatuses: (entries: Array<{
+        ticketId: string; winLabel: string; transactionId: string; amount: string; currency: string;
+    }>) => void;
+}
+
+// ==========================================
+// HANDLER EXTRAÍDO (S2004)
+// ==========================================
+
+function handleWinnerFound(
+  msg: {
+    event:   string;
+    game_id: number;
+    payload: { winning_ball: number | null; winners: WinnerPayload[] };
+  },
+  gameId: string,
+  setWinners: React.Dispatch<React.SetStateAction<WinnerPayload[]>>,
+  setIsDrawing: React.Dispatch<React.SetStateAction<boolean>>,
+  setPrizeStatuses: React.Dispatch<React.SetStateAction<Record<string, PrizeStatus>>>,
+): void {
+  if (String(msg.game_id) !== gameId) return;
+
+  console.log(
+    `🏆 [WS] winner_found no jogo ${gameId}: ` +
+    `${msg.payload.winners.length} vencedor(es)`
+  );
+
+  setWinners(prev => {
+    const existingKeys = new Set(prev.map(w => `${w.ticket_id}:${w.win_pattern}`));
+    const newWinners = msg.payload.winners.filter(w => !existingKeys.has(`${w.ticket_id}:${w.win_pattern}`));
+    if (newWinners.length === 0) return prev;
+    return [...prev, ...newWinners];
+  });
+  setIsDrawing(false);
+  setPrizeStatuses(prev => {
+    const next = { ...prev };
+    for (const w of msg.payload.winners) {
+      const key = `${w.ticket_id}:${w.win_pattern}`;
+      if (!next[key]) {
+        next[key] = { status: 'preparing' };
+      }
+    }
+    return next;
+  });
 }
 
 // ==========================================
@@ -100,8 +149,9 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
     const [goldenBall,    setGoldenBall]    = useState<GoldenBallInfo | null>(null);
     const [goldenMultiplierProgress, setGoldenMultiplierProgress] = useState<GoldenMultiplierProgress | null>(null);
     const [clearedStages, setClearedStages] = useState<ClearedStage[]>([]);
-    const [drawMode,      setDrawMode]      = useState<string | null>(null);
-    const [prizeStatuses, setPrizeStatuses]  = useState<Record<string, PrizeStatus>>({});
+    const [drawMode,          setDrawMode]          = useState<string | null>(null);
+    const [prizeStatuses,     setPrizeStatuses]     = useState<Record<string, PrizeStatus>>({});
+    const [wsEverConnected,   setWsEverConnected]   = useState(false);
 
     const resetState = useCallback(() => {
         setDrawnBalls([]);
@@ -117,6 +167,26 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         setDrawMode(null);
         setPrizeStatuses({});
         lastOrderRef.current = 0;
+    }, []);
+
+    const hydratePrizeStatuses = useCallback((
+        entries: Array<{ ticketId: string; winLabel: string; transactionId: string; amount: string; currency: string }>,
+    ) => {
+        setPrizeStatuses(prev => {
+            const next = { ...prev };
+            for (const e of entries) {
+                const key = `${e.ticketId}:${e.winLabel}`;
+                // Só preenche se não existe ou ainda está em 'preparing' (WS não chegou)
+                if (next[key] && next[key].status !== 'preparing') continue;
+                next[key] = {
+                    status: 'confirmed',
+                    tx_id: e.transactionId,
+                    amount: e.amount,
+                    currency: e.currency,
+                };
+            }
+            return next;
+        });
     }, []);
 
     // ── ball_drawn handler extraído do useEffect (S2004) ─────────────────
@@ -213,6 +283,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
 
         socket.on('connect', () => {
             setWsStatus('connected');
+            setWsEverConnected(true);
             console.log(`🔌 [WS] Conectado ao Broadcaster (jogo ${gameId})`);
 
             // Entra na room do jogo — o servidor envia o estado atual imediatamente
@@ -232,6 +303,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         // ── Reconexão: resubscreve na room após reconexão ────────────────────
         socket.on('reconnect', () => {
             setWsStatus('connected');
+            setWsEverConnected(true);
             console.log('[WS] Reconectado. Resubscrevendo na room...');
             socket.emit('subscribe', { game_id: Number.parseInt(gameId, 10) });
         });
@@ -243,30 +315,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         socket.on('sync_response', handleSyncResponse);
 
         // ── winner_found: vencedores detectados pelo evaluator ────────────────
-        socket.on('winner_found', (msg: {
-            event:   string;
-            game_id: number;
-            payload: { winning_ball: number | null; winners: WinnerPayload[] };
-        }) => {
-            if (String(msg.game_id) !== gameId) return;
-
-            console.log(
-                `🏆 [WS] winner_found no jogo ${gameId}: ` +
-                `${msg.payload.winners.length} vencedor(es)`
-            );
-
-            setWinners(msg.payload.winners);
-            setIsDrawing(false);
-            setPrizeStatuses(prev => {
-                const next = { ...prev };
-                for (const w of msg.payload.winners) {
-                    if (!next[w.ticket_id]) {
-                        next[w.ticket_id] = { status: 'preparing' };
-                    }
-                }
-                return next;
-            });
-        });
+        socket.on('winner_found', (msg) => handleWinnerFound(msg, gameId, setWinners, setIsDrawing, setPrizeStatuses));
 
         // ── game_locked: vendas encerradas ────────────────────────────────────
         socket.on('game_locked', (msg: { event: string; game_id: number }) => {
@@ -314,24 +363,28 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         socket.on('stage_cleared', (msg: {
             event:   string;
             game_id: number;
-            payload: { stage: number; winners: WinnerPayload[] };
+            payload: { stage: number; winners: WinnerPayload[]; winning_ball?: number };
         }) => {
             if (String(msg.game_id) !== gameId) return;
-            console.log(`🎯 [WS] stage_cleared: estágio ${msg.payload.stage}, ${msg.payload.winners.length} vencedor(es)`);
-            setClearedStages(prev => [...prev, { stage: msg.payload.stage, winners: msg.payload.winners }]);
+            console.log(`🎯 [WS] stage_cleared: estágio ${msg.payload.stage}, bola ${msg.payload.winning_ball}, ${msg.payload.winners.length} vencedor(es)`);
+            setClearedStages(prev => [...prev, {
+                stage: msg.payload.stage,
+                winners: msg.payload.winners,
+                winningBall: msg.payload.winning_ball,
+            }]);
         });
 
         // ── prize_tx_sent: transação de prêmio enviada à blockchain ─────────
         socket.on('prize_tx_sent', (msg: {
             event:   string;
             game_id: number;
-            payload: { ticketId: string };
+            payload: { ticketId: string; winLabel?: string };
         }) => {
             if (String(msg.game_id) !== gameId) return;
             console.log(`💸 [WS] prize_tx_sent: ticket ${msg.payload.ticketId}`);
             setPrizeStatuses(prev => ({
                 ...prev,
-                [msg.payload.ticketId]: { status: 'confirming' },
+                [`${msg.payload.ticketId}:${msg.payload.winLabel ?? ''}`]: { status: 'confirming' },
             }));
         });
 
@@ -339,16 +392,17 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         socket.on('prize_confirmed', (msg: {
             event:   string;
             game_id: number;
-            payload: { ticketId: string; transactionId: string; amount: string; currency: string };
+            payload: { ticketId: string; transactionId: string; amount: string; currency: string; winLabel?: string };
         }) => {
             if (String(msg.game_id) !== gameId) return;
             console.log(`✅ [WS] prize_confirmed: ticket ${msg.payload.ticketId} (${msg.payload.amount} ${msg.payload.currency})`);
             setPrizeStatuses(prev => ({
                 ...prev,
-                [msg.payload.ticketId]: {
+                [`${msg.payload.ticketId}:${msg.payload.winLabel ?? ''}`]: {
                     status: 'confirmed',
                     tx_id: msg.payload.transactionId,
                     amount: msg.payload.amount,
+                    currency: msg.payload.currency,
                 },
             }));
         });
@@ -388,5 +442,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         clearedStages,
         drawMode,
         prizeStatuses,
+        wsEverConnected,
+        hydratePrizeStatuses,
     };
 }

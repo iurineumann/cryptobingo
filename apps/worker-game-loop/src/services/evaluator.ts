@@ -402,6 +402,7 @@ export interface StageWinner {
 export interface StageCutoffResult {
     stage:             number;
     patterns_required: number;
+    weight:            number;   // weight do estágio (para cálculo de prêmio)
     cutoffBall:        number;   // índice 1-based; igual a drawnBalls.length = não houve vencedor
     winners:           StageWinner[];
 }
@@ -475,7 +476,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
             prevCutoff = cutoffBall;
         }
 
-        results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, cutoffBall, winners });
+        results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, weight: stageDef.weight, cutoffBall, winners });
         console.log(
             cutoffBall <= drawnBalls.length
                 ? `   Stage ${stageDef.stage}: cutoff bola ${cutoffBall}, ${winners.length} vencedor(es)`
@@ -491,12 +492,55 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
  * Chamado pelo gameOrchestrator após o reveal do cutoff de cada estágio.
  */
 export async function payMultiMatchStage(
-    gameId:  string,
-    result:  StageCutoffResult,
+    gameId:        string,
+    result:        StageCutoffResult,
+    baseMultiplier = 1,
 ): Promise<void> {
-    for (const { ticket, patternMask, ballCount } of result.winners) {
-        await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
-        checkStageWinAchievement(ticket.owner).catch(() => {});
+        const winLabel = `stage_${result.stage}`;
+        for (const { ticket, patternMask, ballCount } of result.winners) {
+            const txHash = await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
+            checkStageWinAchievement(ticket.owner).catch(() => {});
+
+            if (!txHash) continue;
+
+            // — Prize Pipeline: persistir + notificar + métricas ──────────
+            notifyPrizeTxSent(gameId, ticket.ticket_id, winLabel);
+
+            const winType  = 'stage' as const;
+
+        const actualPrice   = ticket.price?.quantity ?? '';
+        const priceParts    = actualPrice.split(' ');
+        const buyInAmount   = priceParts[0] ?? '0';
+        const buyInCurr     = priceParts.slice(1).join(' ') || 'WAX';
+
+        const payout = computePayoutAmount(actualPrice || '0.0000 WAX', baseMultiplier, result.weight, 0);
+
+        savePrizeTx({
+            gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+            winType, winLabel, weight: result.weight,
+            amount: payout.amount.toFixed(4), currency: payout.currency,
+            transactionId: txHash,
+            ticketPrice: actualPrice,
+            claimedAt: new Date().toISOString(),
+        }).then(() => {
+            prizePersistTotal.labels({ result: 'success' }).inc();
+            prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+            prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+            notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, winLabel);
+        }).catch(err => {
+            prizePersistTotal.labels({ result: 'error' }).inc();
+            console.error('[PrizePipeline] Erro ao persistir PrizeTx stage:', err);
+        });
+
+        saveBuyInTx({
+            gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+            amount: buyInAmount, currency: buyInCurr,
+            purchasedAt: new Date().toISOString(),
+        }).then(() => {
+            buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
+        }).catch(err => {
+            console.error('[PrizePipeline] Erro ao persistir BuyInTx stage:', err);
+        });
     }
 }
 
@@ -691,7 +735,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
 
                 // — Prize Pipeline: persistir + notificar + métricas ──────────
-                notifyPrizeTxSent(gameId, ticket.ticket_id);
+                notifyPrizeTxSent(gameId, ticket.ticket_id, patternName);
 
                 const winType    = isCombo ? 'combo' as const : 'pattern' as const;
                 const priceParts = actualPrice.split(' ');
@@ -710,7 +754,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                     prizePersistTotal.labels({ result: 'success' }).inc();
                     prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
                     prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
-                    notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency);
+                    notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, patternName);
                 }).catch(err => {
                     prizePersistTotal.labels({ result: 'error' }).inc();
                     console.error('[PrizePipeline] Erro ao persistir PrizeTx:', err);

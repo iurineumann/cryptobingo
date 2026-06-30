@@ -242,6 +242,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           goldenBallNum={goldenBall?.ballNum}
           effectiveMultiplier={goldenBall?.multiplier}
           onBuyMore={() => {}}
+          localWinners={[]}
         />
       </div>
     </div>

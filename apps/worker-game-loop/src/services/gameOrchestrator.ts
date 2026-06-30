@@ -34,6 +34,7 @@ import {
     notifyGoldenMultiplierProgress,
     notifyStageCleared,
     notifyGameEnded,
+    io,
     type WinnerPayload,
 } from './broadcaster';
 import { executeCloseGame }                                          from './blockchain';
@@ -72,7 +73,8 @@ async function buildWinnerPayloads(
 ): Promise<WinnerPayload[]> {
     const game = await fetchGame(gameId);
     return winResults.map(w => {
-        const ticketPrice = w.ticket.price?.quantity ?? game?.ticket_price.quantity ?? '';
+        const gameTicketPrice = game?.ticket_price.quantity ?? '';
+        const ticketPrice = w.ticket.price?.quantity ?? gameTicketPrice;
         if (!game || !ticketPrice) return {
             account: w.ticket.owner, ticket_id: w.ticket.ticket_id,
             win_pattern: w.patternName, payouts: [], winType: 'pattern' as const,
@@ -98,12 +100,15 @@ async function orchestrateStandard(gameId: string, drawnBalls: number[], maxBall
     endRevealSession(gameId);
 
     const winResults = await findAllWinners(gameId, balls, gametypeId);
-    await processAllGameWinners(gameId);
 
+    // winner_found BEFORE processAllGameWinners (prize_tx_sent) —
+    // frontend vê preparing → confirming → confirmed
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
         notifyWinners(gameId, payloads);
     }
+
+    await processAllGameWinners(gameId);
     return winResults.length;
 }
 
@@ -115,12 +120,13 @@ async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gamety
     endRevealSession(gameId);
 
     const winResults = await findAllWinners(gameId, balls, gametypeId);
-    await processAllGameWinners(gameId);
 
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
         notifyWinners(gameId, payloads);
     }
+
+    await processAllGameWinners(gameId);
     return winResults.length;
 }
 
@@ -162,19 +168,21 @@ async function orchestrateGoldenBall(
     // 5. Avalia e paga
     const effectiveBalls = drawnBalls.slice(0, ga + 1);
     const winResults     = await findAllWinners(gameId, effectiveBalls, gametypeId);
-    await processAllGameWinners(gameId);
 
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier, multiplier);
         notifyWinners(gameId, payloads);
     }
+
+    await processAllGameWinners(gameId);
     return winResults.length;
 }
 
 async function orchestrateMultiMatch(
-    gameId:     string,
-    drawnBalls: number[],
-    gametypeId: string,
+    gameId:        string,
+    drawnBalls:    number[],
+    gametypeId:    string,
+    baseMultiplier = 1,
 ): Promise<number> {
     // Valida estado on-chain (gametype, status drawn, índice) antes do reveal
     await processAllGameWinners(gameId);
@@ -196,17 +204,32 @@ async function orchestrateMultiMatch(
         }
 
         if (winners.length > 0) {
-            // Paga on-chain
-            await payMultiMatchStage(gameId, result);
+            // Computa payouts dos vencedores do estágio
+            const payloads: WinnerPayload[] = winners.map(w => {
+                const actualPrice = w.ticket.price?.quantity ?? '';
+                const payout = computePayoutAmount(actualPrice || '0.0000 WAX', baseMultiplier, result.weight, 0);
+                return {
+                    account:     w.ticket.owner,
+                    ticket_id:   w.ticket.ticket_id,
+                    win_pattern: `stage_${stage}`,
+                    winType:     'stage' as const,
+                    payouts:     payout.amount > 0 ? [`${payout.amount.toFixed(4)} ${payout.currency}`] : [],
+                };
+            });
 
-            // Anuncia vencedores deste estágio
-            const payloads: WinnerPayload[] = winners.map(w => ({
-                account:     w.ticket.owner,
-                ticket_id:   w.ticket.ticket_id,
-                win_pattern: `stage_${stage}`,
-                payouts:     [],
-            }));
-            notifyStageCleared(gameId, stage, payloads);
+            // winner_found ANTES de payMultiMatchStage (prize_tx_sent) —
+            // frontend vê preparing → confirming → confirmed
+            io.to(`game:${gameId}`).emit('winner_found', {
+                event:   'winner_found',
+                game_id: parseInt(gameId, 10),
+                payload: { winning_ball: null, winners: payloads },
+            });
+
+            // Paga on-chain (prize_tx_sent emitido internamente)
+            await payMultiMatchStage(gameId, result, baseMultiplier);
+
+            // Anuncia estágio limpo (PatternsPanel progresso)
+            notifyStageCleared(gameId, stage, payloads, cutoffBall, drawnBalls);
             totalWinners += winners.length;
 
             await sleep(STAGE_PAUSE_MS);
@@ -289,7 +312,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
             case 'multimatch':
                 // Sem limite de bolas pré-estipulado: sorteio continua até todos os estágios
                 // serem completados, como firstfull. max_balls não se aplica ao multimatch.
-                totalWinners = await orchestrateMultiMatch(gameId, drawnBalls, gametypeId);
+                totalWinners = await orchestrateMultiMatch(gameId, drawnBalls, gametypeId, baseMultiplier);
                 break;
 
             default:

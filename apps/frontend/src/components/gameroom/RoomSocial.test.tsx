@@ -61,11 +61,11 @@ describe('RoomSocial', () => {
     expect(screen.queryByTestId('gr-reaction-bar')).toBeNull();
   });
 
-  it('feed lista vitórias recentes', () => {
+  it('feed vitórias removido — EventFeed em GameRoom substituiu', () => {
     renderSocial({
       localWinners: [{ ticket_id: '7', win_pattern: 'Linha' }],
     });
-    expect(screen.getByTestId('gr-event-feed').textContent).toContain('7');
+    expect(screen.queryByTestId('gr-event-feed')).toBeNull();
   });
 
   it('retorna null sem sala', () => {

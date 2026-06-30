@@ -33,6 +33,7 @@ jest.mock('./broadcaster', () => ({
     notifyGameEnded:    jest.fn(),
     notifyGameLocked:   jest.fn(),
     notifyGameAborted:  jest.fn(),
+    io: { to: jest.fn().mockReturnValue({ emit: jest.fn() }) },
 }));
 jest.mock('./blockchain', () => ({
     executeCloseGame: jest.fn().mockResolvedValue('tx-close'),

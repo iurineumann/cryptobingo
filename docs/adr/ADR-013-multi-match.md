@@ -126,6 +126,68 @@ do gametype é ignorado pelo modo multimatch.
 | `apps/frontend/src/components/admin/GametypesAdmin.tsx` | Editor de estágios |
 | `apps/harness/tests/fsm.test.ts` | Fixes ADR-012 + suite MULTI_MATCH |
 
+## 6. Visual — Premiação e Seções de Cartela
+
+### 6a. Duas Seções de Cartela
+
+`groupTicketsByCategory` divide cartelas do jogador em:
+
+| Seção | category | Critério | Ordenação |
+|-------|----------|----------|-----------|
+| **Premiadas** | `won` | `winnerMap.has(ticket.id)` | `totalPrize` descending |
+| **Disputando** | `active` | resto | `ticketCompositeSortKey` descending (proximidade × peso do padrão) |
+
+### 6b. suppressWinner
+
+Cartelas na seção "Disputando" não recebem decoração de vitória (`.is-winner`, badge "Vencedora",
+prêmio em verde) mesmo que `completedPatterns.length > 0`. TicketCard recebe `suppressWinner={true}`
+quando `group.category === 'active'`.
+
+### 6c. Stage Badges
+
+Cartela que venceu um ou mais estágios exibe badges no card em vez de padrões individuais.
+Badge usa `fmtStageLabel` para traduzir `stage_N` → "Estágio N". Dados de `stageWonKeys`
+extraídos de `localWinners` filtrados por `ticket_id` e prefixo `stage_`.
+
+### 6d. Gráfico de Premiação da Sala (`gr-room-prizes`)
+
+Painel de resultados globais agrupa vencedores por `pattern_name` (que em MULTI_MATCH é
+`stage_N`). Cada grupo exibe header "Estágio N" e linhas com ticket_id, account, amount,
+currency e status do pagamento:
+
+- `preparing`: spinner — transação enviando
+- `confirming`: spinner — aguardando confirmação MongoDB
+- `confirmed`: 🔗 link para explorer com txHash
+
+### 6e. prizeStatuses Chave Composta
+
+PrizeStatuses no frontend usa chave `ticket_id:winLabel` em vez de apenas `ticket_id`.
+Necessário porque em MULTI_MATCH a mesma cartela pode ter pagamentos independentes
+para estágios diferentes (stage_1, stage_2, etc.). Worker passa `winLabel` em
+`notifyPrizeTxSent` e `notifyPrizeConfirmed`.
+
+### 6f. Winner Reorder
+
+`winner_found` (WebSocket) é emitido **antes** de `processAllGameWinners` (pagamento
+on-chain). Isso garante que o frontend veja o status "preparing" antes de a transação
+ser submetida, permitindo a cadeia preparing → confirming → confirmed.
+
+### 6g. NotifyStageCleared com winning_ball
+
+`notifyStageCleared` agora recebe `cutoffBall` e `drawnBalls` para computar o número
+da bola que fechou o estágio. O campo `winning_ball` é incluído no payload WS
+`stage_cleared`, exibido no `PrizePanels`.
+
+### 6h. PayMultiMatchStage com Prize Pipeline
+
+`payMultiMatchStage` agora integra o prize pipeline completo:
+1. `executeClaimStage` (tx on-chain)
+2. `notifyPrizeTxSent(gameId, ticket_id, winLabel)`
+3. `computePayoutAmount` com `baseMultiplier` e `weight`
+4. `savePrizeTx` (MongoDB) + `saveBuyInTx`
+5. Métricas: `prizePersistTotal`, `prizePaymentsTotal`, `prizePaymentsAmountTotal`
+6. `notifyPrizeConfirmed` com txHash, amount, currency, winLabel
+
 ---
 
 ## Referências

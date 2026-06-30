@@ -129,6 +129,19 @@ para cada estágio, qual é o cutoff ball e quais tickets ganham.
 Esse scan ocorre ANTES do reveal, enquanto o jogador vê a transição visual de
 "sorteando…". Evita double-scan (o evaluator não precisa re-varrer).
 
+#### 4a. Reorder: winner_found antes de processAllGameWinners
+
+Em todos os draw modes (standard, first_full, golden_ball, multimatch), o evento
+`winner_found` é emitido **antes** da chamada a `processAllGameWinners` (pagamento
+on-chain). Isso garante a cadeia visual:
+
+winner_found → frontend: "preparing"
+prize_tx_sent → frontend: "confirming"
+prize_confirmed → frontend: "confirmed"
+
+Anteriormente `processAllGameWinners` era chamado antes de `notifyWinners`,
+fazendo o pagamento acontecer antes do anúncio visual.
+
 ### 5. Novos eventos WebSocket
 
 | Evento | Quando | Payload |

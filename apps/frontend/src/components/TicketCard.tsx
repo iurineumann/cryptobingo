@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BINGO_COLORS, COLS, type Pattern, computeTicketNearMiss } from './ticketUtils';
 import { Star, Link2 } from 'lucide-react';
+import type { TFunction } from 'i18next';
 
 interface CompletedComboInfo {
   name:   string;
@@ -26,12 +27,135 @@ interface TicketCardProps {
   pricePaid?:             string;  // preço pago por esta cartela (ADR-010)
   goldenBallNum?:         number;  // nº da golden ball, se ativa
   effectiveMultiplier?:   number;  // multiplicador golden aplicado
+  /** ADR-013 MULTI_MATCH: chaves dos estágios que esta cartela venceu (ex: ['stage_2','stage_3']). */
+  stageWonKeys?:          string[];
+  /** Remove decoração de winner mesmo se padrões completos (seção "Disputando"). */
+  suppressWinner?:        boolean;
+}
+
+/** Traduz stage_N → i18n (ex: stage_2 → "Estágio 2"). */
+function fmtStageLabel(t: TFunction, key: string): string {
+  const m = key.match(/^stage_(\d+)$/);
+  if (m) return t('game_room.stage_label', { stage: Number(m[1]) });
+  return key;
+}
+
+interface TicketCellProps {
+  gridIdx:      number;
+  val:          number | null;
+  isFree:       boolean;
+  isMarked:     boolean;
+  isJustHit:    boolean;
+  inWin:        boolean;
+  color:        string;
+  isGoldenCell: boolean;
+  showNearMiss: boolean;
+  nearMissCells: Set<number>;
+  t:            TFunction;
+}
+
+interface TicketPatternsSectionProps {
+  stageWonKeys?: string[];
+  completedPatterns: Pattern[];
+  completedCombinations?: CompletedComboInfo[];
+  t: TFunction;
+}
+
+function TicketFooterView({ isWinner, completedPatterns, markedCount, pricePaid, prize, total, t }: {
+  isWinner: boolean;
+  completedPatterns: Pattern[];
+  markedCount: number;
+  pricePaid?: string;
+  prize: string | null;
+  total: number;
+  t: TFunction;
+}) {
+  return (
+    <div className="gr-ticket-foot">
+      <span className="best">
+        {isWinner
+          ? t('game_room.ticket_footer_pattern', { count: completedPatterns.length || 1 })
+          : t('game_room.ticket_footer_marked', { marked: markedCount, total })}
+      </span>
+      <div className="gr-ticket-foot-right">
+        {pricePaid && <span className="ticket-price-paid">{pricePaid}</span>}
+        {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
+      </div>
+    </div>
+  );
+}
+
+function TicketPatternsSection({ stageWonKeys, completedPatterns, completedCombinations, t }: TicketPatternsSectionProps) {
+  if (stageWonKeys && stageWonKeys.length > 0) {
+    return (
+      <div className="gr-ticket-patterns">
+        {stageWonKeys.map(key => (
+          <span key={key} className="gr-ticket-pattern-badge">
+            <span><Star className="size-3 shrink-0" /></span>{fmtStageLabel(t, key)}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  const total = completedPatterns.length + (completedCombinations?.length ?? 0);
+  if (total === 0) return null;
+  const allItems = [
+    ...completedPatterns.map(p => ({ label: p.name, isCombo: false, multiplier: parseFloat(p.prize) || 0 })),
+    ...(completedCombinations ?? []).map(c => ({ label: c.name, isCombo: true, multiplier: c.weight / 100 })),
+  ].sort((a, b) => b.multiplier - a.multiplier);
+  return (
+    <div className="gr-ticket-patterns">
+      {allItems.map(item => (
+        <span
+          key={item.label}
+          className={`gr-ticket-pattern-badge${item.isCombo ? ' gr-ticket-combo-badge' : ''}`}
+        >
+          <span>{item.isCombo ? <Link2 className="size-3 shrink-0" /> : <Star className="size-3 shrink-0" />}</span>{item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function TicketCell({
+  gridIdx, val, isFree, isMarked, isJustHit, inWin, color,
+  isGoldenCell, showNearMiss, nearMissCells, t,
+}: TicketCellProps) {
+  let ariaLabel: string;
+  if (isFree) {
+    ariaLabel = t('game_room.free_space_aria');
+  } else if (isMarked) {
+    ariaLabel = t('game_room.cell_marked_aria', { col: COLS[gridIdx % 5], val });
+  } else {
+    ariaLabel = t('game_room.cell_aria', { col: COLS[gridIdx % 5], val });
+  }
+
+  return (
+    <div
+      data-testid={`tc-cell-${gridIdx}`}
+      role="gridcell" // NOSONAR — CSS grid layout with ARIA roles intentional for 5×5 bingo card
+      aria-selected={isMarked}
+      aria-label={ariaLabel}
+      className={[
+        'gr-bingo-cell',
+        isFree              ? 'is-free'            : '',
+        isMarked && !isFree ? 'is-marked'          : '',
+        isJustHit           ? 'is-just-hit'        : '',
+        inWin               ? 'in-winning-pattern' : '',
+        showNearMiss && nearMissCells.has(gridIdx) && !isMarked ? 'is-near-miss-cell' : '',
+        isGoldenCell        ? 'is-golden-cell'     : '',
+      ].filter(Boolean).join(' ')}
+      style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
+    >
+      {isFree ? <Star className="size-3 shrink-0 fill-current" /> : val}
+    </div>
+  );
 }
 
 export function TicketCard({
   ticketId, matrix, drawnSet, lastDrawn, winPattern,
   prize, density, patterns, completedCombinations, pricePaid,
-  goldenBallNum, effectiveMultiplier,
+  goldenBallNum, effectiveMultiplier, stageWonKeys, suppressWinner = false,
 }: TicketCardProps) {
   const { t } = useTranslation();
 
@@ -69,15 +193,19 @@ export function TicketCard({
     [matrix, drawnSet, patterns],
   );
 
-  const isWinner    = winPattern !== null || completedPatterns.length > 0;
-  const isClose     = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
-  const showNearMiss = !isWinner && nearMiss.patternsOneAway > 0;
-  const isGoldenWinner = isWinner && goldenBallNum !== undefined &&
+  const isWinner        = !suppressWinner && (winPattern !== null || completedPatterns.length > 0);
+  const isClose         = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
+  const showNearMiss    = !isWinner && nearMiss.patternsOneAway > 0;
+  const isGoldenWinner  = isWinner && goldenBallNum !== undefined &&
     [...winningCells].some(gridIdx => {
       const r = Math.floor(gridIdx / 5);
       const c = gridIdx % 5;
       return grid[r][c] === goldenBallNum;
     });
+  let marksClassName = '';
+  if (isWinner) marksClassName = ' is-winner';
+  else if (isClose) marksClassName = ' is-close';
+  const marksLabel = isWinner ? t('game_room.winner_badge') : `${markedCount}/25`;
 
   return (
     <article
@@ -96,8 +224,8 @@ export function TicketCard({
         <div className="gr-ticket-id">
           <span className="label">{t('game_room.ticket_label', { id: ticketId })}</span>
         </div>
-        <span className={`gr-ticket-marks${isWinner ? ' is-winner' : isClose ? ' is-close' : ''}`}>
-          {isWinner ? t('game_room.winner_badge') : `${markedCount}/25`}
+        <span className={`gr-ticket-marks${marksClassName}`}>
+          {marksLabel}
         </span>
           {showNearMiss && (
             <span
@@ -125,42 +253,24 @@ export function TicketCard({
         </div>
         <div className="gr-bingo-grid-body">
           {grid.map((row, ri) => (
-            <div key={ri} className="gr-bingo-row" role="row">
+            <div key={`${ticketId}-row-${ri}`} className="gr-bingo-row" role="row">
               {row.map((val, ci) => {
-                const gridIdx    = ri * 5 + ci;
-                const isFree     = val === null;
-                const isMarked   = isFree || drawnSet.has(val as number);
-                const isJustHit  = !isFree && val === lastDrawn;
-                const inWin      = (winPattern?.has(gridIdx) ?? false) || winningCells.has(gridIdx);
-                const color      = BINGO_COLORS[COLS[ci]];
-                const isGoldenCell = isGoldenWinner && val !== null && val === goldenBallNum;
-
+                const gridIdx = ri * 5 + ci;
                 return (
-                  <div
-                    key={ci}
-                    data-testid={`tc-cell-${gridIdx}`}
-                    role="gridcell"
-                    aria-selected={isMarked}
-                    aria-label={
-                      isFree
-                        ? t('game_room.free_space_aria')
-                        : isMarked
-                          ? t('game_room.cell_marked_aria', { col: COLS[ci], val })
-                          : t('game_room.cell_aria', { col: COLS[ci], val })
-                    }
-                    className={[
-                      'gr-bingo-cell',
-                      isFree              ? 'is-free'            : '',
-                      isMarked && !isFree ? 'is-marked'          : '',
-                      isJustHit           ? 'is-just-hit'        : '',
-                      inWin               ? 'in-winning-pattern' : '',
-                      showNearMiss && nearMiss.nearMissCells.has(gridIdx) && !isMarked ? 'is-near-miss-cell' : '',
-                      isGoldenCell        ? 'is-golden-cell'     : '',
-                    ].filter(Boolean).join(' ')}
-                    style={isMarked && !isFree ? { '--cell-color': color } as React.CSSProperties : {}}
-                  >
-                    {isFree ? <Star className="size-3 shrink-0 fill-current" /> : val}
-                  </div>
+                  <TicketCell
+                    key={gridIdx}
+                    gridIdx={gridIdx}
+                    val={val}
+                    isFree={val === null}
+                    isMarked={val === null || drawnSet.has(val)}
+                    isJustHit={val !== null && val === lastDrawn}
+                    inWin={(winPattern?.has(gridIdx) ?? false) || winningCells.has(gridIdx)}
+                    color={BINGO_COLORS[COLS[ci]]}
+                    isGoldenCell={isGoldenWinner && val !== null && val === goldenBallNum}
+                    showNearMiss={showNearMiss}
+                    nearMissCells={nearMiss.nearMissCells}
+                    t={t}
+                  />
                 );
               })}
             </div>
@@ -168,30 +278,12 @@ export function TicketCard({
         </div>
       </div>
 
-      {(() => {
-        // max_weight (ADR-005): exibe apenas a entrada de maior peso
-        let best: { label: string; isCombo: boolean } | null = null;
-        let bestMultiplier = 0;
-        for (const p of completedPatterns) {
-          const m = parseFloat(p.prize) || 0;
-          if (m > bestMultiplier) { bestMultiplier = m; best = { label: p.name, isCombo: false }; }
-        }
-        for (const c of completedCombinations ?? []) {
-          const m = c.weight / 100;
-          if (m > bestMultiplier) { bestMultiplier = m; best = { label: c.name, isCombo: true }; }
-        }
-        if (!best) return null;
-        return (
-          <div className="gr-ticket-patterns">
-            <span
-              key={best.label}
-              className={`gr-ticket-pattern-badge${best.isCombo ? ' gr-ticket-combo-badge' : ''}`}
-            >
-              <span>{best.isCombo ? <Link2 className="size-3 shrink-0" /> : <Star className="size-3 shrink-0" />}</span>{best.label}
-            </span>
-          </div>
-        );
-      })()}
+      <TicketPatternsSection
+        stageWonKeys={stageWonKeys}
+        completedPatterns={completedPatterns}
+        completedCombinations={completedCombinations}
+        t={t}
+      />
 
       {!isWinner && nearMiss.closestPct > 0 && (
         <div className="gr-ticket-progress" data-testid="tc-progress" aria-hidden="true">
@@ -199,17 +291,15 @@ export function TicketCard({
         </div>
       )}
 
-      <div className="gr-ticket-foot">
-        <span className="best">
-          {isWinner
-            ? t('game_room.ticket_footer_pattern', { count: completedPatterns.length || 1 })
-            : t('game_room.ticket_footer_marked', { marked: markedCount, total: 25 })}
-        </span>
-        <div className="gr-ticket-foot-right">
-          {pricePaid && <span className="ticket-price-paid">{pricePaid}</span>}
-          {prize && <span className={`prize${isWinner ? ' is-paid' : ''}`}>{prize}</span>}
-        </div>
-      </div>
+      <TicketFooterView
+        isWinner={isWinner}
+        completedPatterns={completedPatterns}
+        markedCount={markedCount}
+        pricePaid={pricePaid}
+        prize={prize}
+        total={25}
+        t={t}
+      />
     </article>
   );
 }

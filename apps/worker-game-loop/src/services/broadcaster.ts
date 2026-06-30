@@ -416,16 +416,21 @@ export function notifyGoldenMultiplierProgress(
  * Emite pausa visual entre estágios.
  */
 export function notifyStageCleared(
-    gameId:  string,
-    stage:   number,
-    winners: WinnerPayload[],
+    gameId:    string,
+    stage:     number,
+    winners:   WinnerPayload[],
+    cutoffBall: number,
+    drawnBalls: number[],
 ): void {
+    const winningBall = cutoffBall > 0 && cutoffBall <= drawnBalls.length
+        ? drawnBalls[cutoffBall - 1]
+        : 0;
     io.to(`game:${gameId}`).emit('stage_cleared', {
         event:   'stage_cleared',
         game_id: parseInt(gameId, 10),
-        payload: { stage, winners },
+        payload: { stage, winners, winning_ball: winningBall },
     });
-    console.log(`🎯 [WS] stage_cleared estágio ${stage} (${winners.length} vencedor(es)) — jogo ${gameId}`);
+    console.log(`🎯 [WS] stage_cleared estágio ${stage} (${winners.length} vencedor(es), bola ${winningBall}) — jogo ${gameId}`);
 }
 
 /**
@@ -473,11 +478,11 @@ export function notifyWinners(gameId: string, winners: WinnerPayload[]): void {
 /**
  * Emite prize_tx_sent — transação de prêmio enviada à blockchain.
  */
-export function notifyPrizeTxSent(gameId: string, ticketId: string): void {
+export function notifyPrizeTxSent(gameId: string, ticketId: string, winLabel?: string): void {
     io.to(`game:${gameId}`).emit('prize_tx_sent', {
         event:   'prize_tx_sent',
         game_id: parseInt(gameId, 10),
-        payload: { ticketId },
+        payload: { ticketId, winLabel },
     });
 }
 
@@ -485,12 +490,12 @@ export function notifyPrizeTxSent(gameId: string, ticketId: string): void {
  * Emite prize_confirmed — prêmio persistido no MongoDB.
  */
 export function notifyPrizeConfirmed(
-    gameId: string, ticketId: string, transactionId: string, amount: string, currency: string,
+    gameId: string, ticketId: string, transactionId: string, amount: string, currency: string, winLabel?: string,
 ): void {
     io.to(`game:${gameId}`).emit('prize_confirmed', {
         event:   'prize_confirmed',
         game_id: parseInt(gameId, 10),
-        payload: { ticketId, transactionId, amount, currency },
+        payload: { ticketId, transactionId, amount, currency, winLabel },
     });
 }
 

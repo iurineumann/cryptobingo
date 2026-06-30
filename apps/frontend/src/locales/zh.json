@@ -122,6 +122,7 @@
     "stages_title": "阶段",
     "stage_label": "第{{stage}}阶段",
     "stage_winners": "{{count}}位获奖者",
+    "patterns_required": "{{count}}个模式",
     "game_ended_title": "游戏结束",
     "game_ended_winners": "本局{{count}}位获奖者",
     "game_ended_you_won": "你赢了！🎉",
@@ -174,9 +175,8 @@
     "near_miss": "差1个!",
     "near_miss_aria": "卡片 {{id}}：再差一个号码即可中奖",
     "ticket_section": {
-      "winners_multi": "多重中奖",
-      "winners": "中奖者",
-      "other": "其他"
+      "won": "已中奖",
+      "active": "进行中"
     },
     "pot_label": "本局奖池",
     "pot_bonus": "赞助奖金",

@@ -45,6 +45,8 @@ channels:
           - $ref: '#/components/messages/BallDrawn'
           - $ref: '#/components/messages/WinnerFound'
           - $ref: '#/components/messages/GameAborted'
+          - $ref: '#/components/messages/PrizeTxSent'
+          - $ref: '#/components/messages/PrizeConfirmed'
           - $ref: '#/components/messages/GameEnded'
           - $ref: '#/components/messages/GoldenBall'
           - $ref: '#/components/messages/StageCleared'
@@ -192,6 +194,66 @@ components:
                 items:
                   $ref: '#/components/schemas/WinnerObject'
 
+    PrizeTxSent:
+      name: prize_tx_sent
+      title: Transação de Prêmio Enviada
+      summary: |
+        Emitido após transação on-chain de claimwin/claimstage ser submetida.
+        Frontend transita prizeStatus[ticket_id:winLabel] para "confirming".
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: prize_tx_sent
+          game_id:
+            type: string
+          payload:
+            type: object
+            required: [ticket_id]
+            properties:
+              ticket_id:
+                type: string
+              win_label:
+                type: string
+                description: Opcional. Rótulo da vitória (ex. "stage_1"). Chave composta com ticket_id.
+
+    PrizeConfirmed:
+      name: prize_confirmed
+      title: Prêmio Confirmado
+      summary: |
+        Emitido após persistência MongoDB do prêmio (savePrizeTx).
+        Frontend transita prizeStatus[ticket_id:winLabel] para "confirmed",
+        exibe link explorer e valor.
+      payload:
+        type: object
+        required: [event, game_id, payload]
+        properties:
+          event:
+            type: string
+            const: prize_confirmed
+          game_id:
+            type: string
+          payload:
+            type: object
+            required: [ticket_id, transaction_id, amount, currency]
+            properties:
+              ticket_id:
+                type: string
+              transaction_id:
+                type: string
+                description: Hash da transação WAX.
+              amount:
+                type: string
+                description: Valor do prêmio (ex. "125.0000").
+              currency:
+                type: string
+                description: Símbolo da moeda (ex. "WAX").
+              win_label:
+                type: string
+                description: Opcional. Rótulo da vitória.
+
     GameAborted:
       name: game_aborted
       title: Partida Abortada (Fail-Safe)
@@ -276,6 +338,7 @@ components:
       summary: |
         Exclusivo do modo multimatch. Emitido quando um conjunto de padrões
         é completado, liberando o prêmio do estágio.
+        Campo winning_ball exibido no PrizePanels.
       payload:
         type: object
         required: [event, game_id, payload]
@@ -292,6 +355,10 @@ components:
               stage:
                 type: integer
                 description: Número do estágio (1-based).
+              winning_ball:
+                type: integer
+                description: Número da bola que completou o estágio.
+                nullable: true
               winners:
                 type: array
                 items:
@@ -528,6 +595,13 @@ components:
         win_pattern:
           type: string
           description: Nome do padrão vencido (ex. "ROW_1", "FULL_HOUSE", etc.).
+        win_type:
+          type: string
+          enum: [pattern, combo, stage]
+          description: Tipo de vitória (opcional, default pattern).
+        win_label:
+          type: string
+          description: Rótulo único da vitória (ex. "stage_1", "stage_2"). Usado como chave composta com ticket_id no frontend.
         payouts:
           type: array
           description: Prêmios creditados na wallet interna do jogador.

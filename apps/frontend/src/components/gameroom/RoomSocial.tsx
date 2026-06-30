@@ -13,10 +13,6 @@ const EMOJIS_ALLOWLIST = ['👏', '🔥', '😮', '😢', '🍀', '🎉'] as con
 export interface RoomSocialProps {
   room: EnrichedRoom | null;
   walletAddress: string;
-  /** Últimas vitórias locais (do hook useGameRoomState) para o feed. */
-  localWinners: Array<{ ticket_id: string; win_pattern: string }>;
-  /** Estágios liberados (do hook useGameRoomState) para o feed. */
-  clearedStages: Array<{ stage: number; winners: unknown[] }>;
   /** Presença online (do hook useRoomSocial no pai). */
   onlineCount: number;
   /** Reações flutuantes efêmeras. */
@@ -25,21 +21,11 @@ export interface RoomSocialProps {
   sendReaction: (emoji: string) => void;
 }
 
-export default function RoomSocial({ room, walletAddress, localWinners, clearedStages, onlineCount, reactions, sendReaction }: RoomSocialProps) {
+export default function RoomSocial({ room, walletAddress, onlineCount, reactions, sendReaction }: RoomSocialProps) {
   const { t } = useTranslation();
   const [showReactions, setShowReactions] = useState(false);
 
   if (!room) return null;
-
-  // Feed: últimas 5 vitórias + stages liberados (mais recentes primeiro → reverse)
-  const feedItems: string[] = [
-    ...localWinners.slice(-5).map(w =>
-      t('game_room.social_feed_win', { id: w.ticket_id, pattern: w.win_pattern }),
-    ),
-    ...clearedStages.map(s =>
-      t('game_room.social_feed_stage', { stage: s.stage }),
-    ),
-  ].reverse();
 
   return (
     <>
@@ -79,15 +65,6 @@ export default function RoomSocial({ room, walletAddress, localWinners, clearedS
           </fieldset>
         )}
       </div>
-
-      {/* Feed de eventos: vitórias e stages */}
-      {feedItems.length > 0 && (
-        <div className="gr-event-feed" data-testid="gr-event-feed">
-          {feedItems.map(item => (
-            <span key={item} className="ev">{item}</span>
-          ))}
-        </div>
-      )}
 
       {/* Chat flutuante (mantido da Fase anterior) */}
       <ChatFloating

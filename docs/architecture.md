@@ -3,97 +3,88 @@
 **Domínio:** Plataforma Descentralizada de Bingo GameFi
 **Padrão de Diagramação:** Mermaid.js (Diagrams-as-Code)
 
-Este documento centraliza a representação visual dos fluxos de dados, da infraestrutura de implantação e da máquina de estados do Smart Contract. Ele serve como mapa de navegação primário para novos desenvolvedores entenderem a fronteira entre On-chain (Antelope/WAX) e Off-chain (Node.js/React).
+Este documento centraliza a representação visual dos fluxos de dados, da infraestrutura e da máquina de estados do Smart Contract. Serve como mapa de navegação entre On-chain (Antelope/WAX) e Off-chain (Node.js/React monorepo).
 
 ---
 
 ## 1. Topologia Macro e Infraestrutura Híbrida (CQRS)
 
-O sistema utiliza o padrão Command Query Responsibility Segregation (CQRS). Operações de alta segurança e movimentação financeira ocorrem on-chain (Command), enquanto a leitura, resolução algébrica e transmissão de eventos em tempo real ocorrem off-chain (Query/Stream).
+O sistema utiliza CQRS. Operações financeiras ocorrem on-chain (Command). Leitura, resolução algébrica e eventos em tempo real ocorrem off-chain (Query/Stream).
 
 ```mermaid
 graph TD
     %% Atores e Clientes
-    Player[📱 Celular do Jogador]
+    Player[📱 Frontend React]
     CloudWallet[☁️ WAX Cloud Wallet]
 
-    %% Camada de Backend (Kubernetes)
-    subgraph "Cluster Kubernetes (Microsserviço Node.js)"
-        Ingress[🌐 NGINX Ingress]
-        Broadcaster[📡 Broadcaster Workers\n(WebSocket / Alto RAM)]
-        Resolution[⚙️ Resolution Engine\n(Bitmasking / Alta CPU)]
-        Redis[(🗄️ Cluster Redis\nÍndice Invertido & Pub/Sub)]
+    %% Camada Off-chain (Monorepo pnpm)
+    subgraph "Off-chain (Monorepo pnpm)"
+        APIGateway[🌐 api-gateway\nExpress + TS + JWT]
+        Worker[⚙️ worker-game-loop\nResolução + Orquestração]
+        Broadcaster[📡 Broadcaster\nSocket.io WS Events]
+        Redis[(🗄️ Redis\nÍndice Invertido + Cache)]
+        Mongo[(🗄️ MongoDB\nEdge Data + PrizeTx)]
     end
 
     %% Camada Blockchain (Antelope/WAX)
     subgraph "Blockchain WAX (Imutável)"
-        Contract[📜 Smart Contract\n(bingo.cpp)]
-        Oracle[🎲 orng.wax\n(Oráculo de Entropia)]
-        EosioToken[🪙 eosio.token\n(Contrato Base)]
+        Contract[📜 Smart Contract\nbingo.cpp]
+        Oracle[🎲 orng.wax\nOráculo RNG]
     end
 
-    %% Conexões Frontend
-    Player <-->|1. Autenticação & Assinatura| CloudWallet
-    Player <-->|2. Eventos Socket.io (Slow Reveal)| Ingress
-    Player -->|3. RPC API (Checkout/Saques)| Contract
-    
-    %% Conexões Backend Internas
-    Ingress <--> Broadcaster
-    Broadcaster <-->|Subscribe| Redis
-    Resolution <-->|Atualiza Índices/Bitmask| Redis
+    %% Conexões
+    Player <-->|JWT Auth + API REST| APIGateway
+    Player <-->|Socket.io Slow Reveal| Broadcaster
+    Player -->|RPC get_table_rows| Contract
 
-    %% Conexões Backend <-> Blockchain
-    Resolution -->|4. Indexa State Stream| Contract
-    Resolution -->|5. Assina claimwin() O_1| Contract
-    Oracle -->|6. Callback RNG| Contract
-    Contract <-->|7. Multidrop Payout| EosioToken
+    APIGateway <-->|Leitura/Escrita| Mongo
+    Worker <-->|Leitura| Mongo
+    Worker <-->|Índice Invertido| Redis
+    Broadcaster <-->|Pub/Sub| Redis
 
+    Worker -->|Transações Wharfkit| Contract
+    Oracle -->|Callback RNG| Contract
 ```
 
 ---
 
 ## 2. Máquina de Estados Finita (FSM) do Smart Contract
 
-A FSM do contrato C++ é estritamente linear e bloqueante. Validações de estado (`eosio::check`) impedem que ações sejam chamadas fora de ordem temporal, protegendo a economia do DApp.
+A FSM do contrato C++ é estritamente linear e bloqueante. Validações de estado impedem ações fora de ordem temporal.
 
 ```mermaid
 stateDiagram-v2
     [*] --> CREATED: creategame()\n[Admin]
-    note right of CREATED
-        Jogo agendado.
-        Aguarda fundgame() do worker.
-    end note
 
     CREATED --> FUNDING: fundgame()\n[bingogamesvc]
     note right of FUNDING
-        buytickets() liberado.\n        linkcampaign() disponível.\n        Cartelas alocadas em lote na RAM.
+        buytickets() liberado.
+        Cartelas alocadas em lote na RAM.
     end note
 
     FUNDING --> LOCKED: lockgame()\n[bingogamesvc]
     note left of LOCKED
-        Vendas encerradas.\n        Worker indexa Redis (Índice Invertido).
+        Vendas encerradas.
+        Worker indexa Redis (Índice Invertido).
     end note
 
     LOCKED --> DRAWING: startdraw()\n[bingogamesvc → orng.wax]
     note right of DRAWING
-        Requisição de entropia enviada.\n        Aguardando receiverand().
+        Requisição de entropia enviada.
+        Aguardando receiverand().
     end note
 
     DRAWING --> DRAWN: receiverand()\n[orng.wax Oracle]
     note right of DRAWN
-        75 dezenas recebidas.\n        Worker inicia Slow Reveal.
+        75 dezenas recebidas.
+        Worker inicia Slow Reveal.
     end note
 
-    DRAWN --> ARCHIVED: claimwin()\n[bingogamesvc]
-    note right of ARCHIVED
-        Payout Multidrop O(1) executado.\n        end_time registrado.\n        Quarentena de 24h iniciada.
-    end note
+    DRAWN --> PAYING: claimwin()\n[bingogamesvc - first call]
+    PAYING --> ARCHIVED: closegame()\n[bingogamesvc]
 
     LOCKED --> ABORTED: abortgame()\n[bingogamesvc / Admin]
     DRAWING --> ABORTED: abortgame()\n[timeout orng.wax]
-    note left of ABORTED
-        Fail-Safe ativado.\n        end_time registrado.\n        refundticket() liberado O(1).
-    end note
 
     ARCHIVED --> [*]: cleargame()\n[após 24h — libera RAM]
     ABORTED --> [*]: cleargame()\n[imediato — após refundall]
@@ -101,138 +92,124 @@ stateDiagram-v2
 
 ---
 
-## 3. Diagrama de Sequência: Do Patrocínio ao "Winner Found"
+## 3. Diagrama de Sequência: Jogo Completo + Prize Pipeline
 
-Este fluxo detalha a linha do tempo (Timeline) que sustenta o motor de patrocínio B2B (Trustless Sponsorship) e o desacoplamento visual via WebSockets (Slow Reveal).
+Fluxo do início da partida ao painel de premiação com 3 estados de pagamento.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Sponsor as 👽 Alien Worlds (B2B)
-    actor Player as 📱 Frontend (Celular do Jogador)
-    participant Backend as ⚙️ Node.js Engine
-    participant Redis as 🗄️ Redis (Pub/Sub)
+    actor Player as 📱 Frontend (React)
+    participant APIGateway as 🌐 API Gateway
+    participant Worker as ⚙️ Worker Game Loop
+    participant Redis as 🗄️ Redis
+    participant Mongo as 🗄️ MongoDB
     participant Contract as 📜 Smart Contract
     participant Oracle as 🎲 WAX Oracle
 
-    %% Setup do Patrocínio
-    Note over Sponsor, Contract: Fase 1: Injeção de Liquidez Trustless
-    Sponsor->>Contract: eosio.token::transfer (1000 TLM, memo: "campaign_1")
-    Contract-->>Contract: Atualiza tabela `campaigns` (total_budget: 1000 TLM)
-    Backend->>Contract: linkgame(game_id: 105, campaign_id: 1)
-    Contract-->>Contract: Injeta 50 TLM no `sponsor_pool` do Jogo 105
+    Note over Player, Contract: Fase 1: Compra de Cartelas
+    Player->>APIGateway: POST /games/{id}/tickets/generate
+    APIGateway-->>Player: Matrizes + Assinaturas ECDSA
+    Player->>Contract: buytickets(matrices, signatures)
+    Contract-->>Contract: Debita wallet interna, emplace tickets
 
-    %% Compra de Cartelas
-    Note over Player, Backend: Fase 2: Geração de Cartelas e Checkout
-    Player->>Backend: GET /api/v1/games/105/tickets/generate?count=3
-    Backend-->>Player: Retorna Array com Matrizes + Signature ECDSA
-    Player->>Contract: buytickets(matrices, signature)
-    Contract-->>Contract: recover_key() -> Assinatura da Casa Válida! Debita Wallet Interna.
-
-    %% Sorteio e Resolução O(1)
-    Note over Backend, Oracle: Fase 3: Fechamento e Entropia On-chain
-    Backend->>Contract: lockgame()
-    Backend->>Redis: Lê RAM On-chain e Constrói Índice Invertido
+    Note over Worker, Oracle: Fase 2: Sorteio e Entropia
+    Worker->>Contract: lockgame()
+    Worker->>Redis: Constrói Índice Invertido (ball→tickets)
+    Worker->>Contract: startdraw()
     Contract->>Oracle: request_random()
-    Oracle-->>Contract: receiverand(75_dezenas_hash)
-    
-    %% O Slow Reveal e Payout
-    Note over Player, Backend: Fase 4: Slow Reveal Visual e Payout Multidrop
-    Backend->>Redis: Inicia Bitmasking Algebraico O(1)
-    loop A cada 3 segundos
-        Backend->>Redis: PUBLISH `ball_drawn`
-        Redis-->>Player: WebSocket Event (Bola Cai na Tela)
-    end
-    Backend-->>Backend: Bitmask match! Winner Found (Ticket 88)
-    Backend->>Contract: claimwin(ticket_88, ball_count, win_pattern)
-    Contract-->>Contract: Transfere WAX (RTP) + TLM (Sponsor) para Vencedor O(1)
-    Backend->>Redis: PUBLISH `winner_found`
-    Redis-->>Player: WebSocket Event (Animação de BINGO! Saldo Atualizado)
+    Oracle-->>Contract: receiverand(75 dezenas)
 
+    Note over Player, Worker: Fase 3: Slow Reveal (3s/bola)
+    loop A cada ~3 segundos
+        Worker->>Redis: PUBLISH ball_drawn
+        Redis-->>Player: WS Event ball_drawn
+    end
+
+    Note over Worker, Mongo: Fase 4: Prize Pipeline (ADR-038)
+    Worker->>Worker: Evaluator detecta vencedores
+    Worker->>Redis: PUBLISH winner_found{winType, winLabel}
+    Redis-->>Player: WS Event → status "preparing"
+
+    Worker->>Contract: claimwin/claimstage/claimcombo
+    Worker->>Redis: PUBLISH prize_tx_sent{ticketId, winLabel}
+    Redis-->>Player: WS Event → status "confirming"
+
+    Worker->>Mongo: savePrizeTx{gameId, ticketId, txHash, amount}
+    Worker->>Redis: PUBLISH prize_confirmed{ticketId, txHash, amount, currency}
+    Redis-->>Player: WS Event → status "confirmed"
+
+    Note over Player, Worker: Fase 5: Replay / Arquivo
+    Player->>APIGateway: GET /games/{id}/prizes (se archived)
+    APIGateway->>Mongo: Busca prizetxs do jogo
+    APIGateway-->>Player: PrizeTx[] → hydratePrizeStatuses
 ```
 
 ---
 
-## 4. Arquitetura Off-Chain (Microsserviços)
-A camada off-chain é projetada para escalar horizontalmente em clusters Kubernetes, utilizando containers Docker para garantir isolamento e resiliência. 
+## 4. Arquitetura Off-Chain (Monorepo)
 
-### 4.1. Topologia de Serviços
-* **Game Loop Worker (Juiz Autônomo):** Serviço em Node.js responsável por monitorar o cronômetro das salas (Lobbies). Assina transações de `lockgame`, `startdraw` e `claimwin`. Falhas de rede são mitigadas por re-tentativas automáticas via fila.
-* **Blockchain Indexer:** Consome os blocos da rede Antelope/WAX via WebSockets (State History Plugin). Grava eventos financeiros, compras de cartelas e vitórias no banco de dados relacional para consultas ultrarrápidas pelo frontend.
-* **Community & Profile API:** Gerencia cadastros (off-chain), perfis, sistema de experiência (XP), guildas e Ligas Semanais.
-* **Notification & Chat Service:** Serviço de WebSockets para bate-papo em tempo real e notificações push para o celular ou navegador do usuário (ex: alertas de "Near-Miss" / "Falta 1 número").
+### 4.1. Serviços
 
-### 4.2. Persistência Poliglota e Mensageria
-* **PostgreSQL (Core Ledger):** Banco de dados relacional (ACID). Armazena dados sensíveis, mapeamento de perfis, logs de auditoria e espelhamento do histórico financeiro on-chain para emissão de relatórios contábeis e conformidade com a Lei 14.790/2023.
-* **MongoDB (Dynamic Edge):** Banco de dados NoSQL. Armazena histórico efêmero de chat, telemetria de cliques do usuário, configurações de skins de cartelas e logs de Lobbies ativos. Permite alta mutabilidade sem travar esquemas relacionais.
-* **RabbitMQ (Message Broker):** Espinha dorsal da comunicação assíncrona. Desacopla o Game Loop do Indexer. Exemplo: Quando o tempo do lobby expira, uma mensagem `Trancar_Lobby_ID` entra na fila. O Worker consome e garante o processamento on-chain.
+| Serviço | Diretório | Stack | Responsabilidade |
+|---------|-----------|-------|------------------|
+| **Frontend** | `apps/frontend/` | React 19 + Vite + TS + Vitest | UI do jogador/admin/sponsor. Slow Reveal, GameRoom, ReplayRoom. i18n pt/en/zh. |
+| **API Gateway** | `apps/api-gateway/` | Express 5 + TS + Jest | REST API: auth JWT, tickets, rooms, admin, prizes. MongoDB leitura. |
+| **Worker Game Loop** | `apps/worker-game-loop/` | Node + Wharfkit + Jest | Orquestração FSM, evaluator bitmask, payouts, prize persistence, RabbitMQ consumer. Redis inverted index. |
+| **Broadcaster** | `apps/worker-game-loop/` (mesmo processo) | Socket.io + Redis Pub/Sub | Eventos WS em tempo real (ball_drawn, winner_found, prize_tx_sent, prize_confirmed). |
+| **Harness E2E** | `apps/harness/` | Jest + Wharfkit | Testes on-chain contra nodeos real + oracle daemon. |
 
-## 5. Tokenomics e Economia NFT (AtomicAssets)
-O ecossistema financeiro é autossustentável, utilizando NFTs utilitárias e lastreadas.
+### 4.2. Persistência e Mensageria
 
-### 5.1. Initial NFT Offering (INO) com Backed Tokens
-* **O Ativo Base:** Emissão do token nativo `$BINGO` (CryptoBingo Token) via contrato `eosio.token` customizado.
-* **Credit Packs:** Venda primária de NFTs (Starter, Pro, Whale) precificados em WAX. Todo o capital arrecadado vai para a *Treasury* (Multi-sig) da plataforma.
-* **Lastro (Backed Tokens):** Cada NFT "Credit Pack" carrega nativamente um lastro de tokens `$BINGO` utilizando a mecânica *Backed Tokens* do protocolo AtomicAssets. O preço no mercado secundário (AtomicHub) nunca será inferior ao valor do token lastreado, protegendo investidores.
-* **Burn Mechanism:** Para utilizar os créditos, o jogador realiza a ação de `burn` (queima) do NFT no frontend. O contrato AtomicAssets destrói a mídia e libera os tokens `$BINGO` líquidos para a carteira do usuário jogar.
+| Sistema | Uso |
+|---------|-----|
+| **Redis** | Índice Invertido (game→ball→tickets), Cache de queries, Pub/Sub do Broadcaster |
+| **MongoDB** | Dados off-chain: profiles, rooms_metadata, chat_messages, gametypes_metadata, prizetxs (ADR-038), buyintxs, nfts_cache |
+| **RabbitMQ** | Filas assíncronas para drops (dropWorker), notificações |
 
-### 5.2. Utilidade e Royalties B2B
-* Todos os cosméticos (Avatares), VIP Passes e Cartelas Patrocinadas são cunhados como NFTs.
-* **Creator Fee:** Uma taxa percentual (ex: 5%) é aplicada no mercado secundário. O contrato arrecada passivamente receita em cada negociação entre jogadores.
-* **Airdrops e XP:** Rankings semanais e níveis de XP disparam airdrops automatizados de NFTs consumíveis (Boosters) e tokens como cashback.
+### 4.3. Prize Pipeline (ADR-038)
+
+Cadeia de 3 eventos WS + persistência MongoDB + API REST:
+
+```
+winner_found ──────► Frontend: "preparing"
+    ↓ (executa tx on-chain)
+prize_tx_sent ──────► Frontend: "confirming"
+    ↓ (savePrizeTx MongoDB)
+prize_confirmed ────► Frontend: "confirmed"  {txHash, amount, currency}
+```
+
+**Collections MongoDB:**
+
+`prizetxs` — índice único `{gameId, ticketId, winLabel}`. Idempotência garantida.
+`buyintxs` — índice único `{gameId, ticketId}`.
+
+**API pública:** `GET /api/v1/games/{gameId}/prizes` → `{items: PrizeTx[], total, gameId}`
+
+**Frontend:** `hydratePrizeStatuses` injeta dados da API em jogos arquivados (`isStaticFinalState`). Chave composta `ticket_id:winLabel`. Nunca sobrescreve WS ativo.
+
+### 4.4. Observabilidade (Prometheus + Grafana)
+
+Métricas do worker em `infra/grafana/dashboards/worker-game-loop.json`:
+- `prize_payments_total`, `prize_payments_amount_total`
+- `prize_pipeline_duration` (prepare/send/confirm)
+- `prize_persist_total` (success/duplicate/error)
+- `buyin_persisted_total`, `prize_rtp_ratio`
 
 ---
 
-## 6. Modelo de Entidades e Relacionamentos (MER) - Persistência Poliglota
+## 5. Modelo de Entidades — MongoDB
 
-Para suportar o alto volume de leitura/escrita do ecossistema e garantir total adequação às regulamentações de proteção de dados (LGPD) e normativas de apostas de quota fixa (Lei 14.790/2023), o armazenamento de dados é hibridizado.
+### Coleção: `profiles`
 
-### 6.1. PostgreSQL (Core Ledger & Compliance)
-Responsável por dados imutáveis, histórico financeiro espelhado da blockchain e dados sensíveis pseudonimizados.
-
-**Tabela: `users` (Identidade Base)**
-* `id` (UUID, PK)
-* `wallet_address` (VARCHAR, Unique, Index) - *Ex: jogador1.wax*
-* `role` (ENUM: 'player', 'moderator', 'sponsor', 'admin')
-* `kyc_status` (ENUM: 'none', 'pending', 'verified')
-* `created_at` (TIMESTAMP)
-
-**Tabela: `kyc_vault` (Cofre de Dados Sensíveis - LGPD)**
-* `id` (UUID, PK)
-* `user_id` (UUID, FK -> users.id, Unique)
-* `encrypted_real_name` (VARCHAR)
-* `encrypted_document` (VARCHAR) - *Criptografia em repouso (AES-256)*
-* `country_code` (VARCHAR) - *Para controle de jurisdição*
-
-**Tabela: `games_history` (Espelho do Smart Contract)**
-* `game_id` (BIGINT, PK) - *Sincronizado com o on-chain*
-* `status` (VARCHAR)
-* `drawn_balls` (INT[])
-* `total_wagered` (DECIMAL)
-* `resolved_at` (TIMESTAMP)
-
-**Tabela: `transactions_ledger` (Auditoria Financeira)**
-* `tx_id` (VARCHAR, PK) - *Hash da transação on-chain*
-* `user_id` (UUID, FK -> users.id)
-* `game_id` (BIGINT, FK -> games_history.game_id)
-* `action_type` (ENUM: 'deposit', 'withdraw', 'buy_ticket', 'claim_win')
-* `amount` (DECIMAL)
-* `currency` (VARCHAR) - *Ex: WAX, BINGO*
-* `timestamp` (TIMESTAMP)
-
-### 6.2. MongoDB (Dynamic Edge & Engagement)
-Responsável pela camada social, internacionalização, gamificação e dados efêmeros que exigem leitura em milissegundos e esquemas dinâmicos.
-
-**Coleção: `profiles` (Gamificação e Preferências)**
 ```json
 {
   "_id": "ObjectId",
-  "wallet_address": "jogador1.wax", // Chave de ligação com o Postgres
+  "wallet_address": "jogador1.wax",
   "nickname": "CryptoKing",
   "avatar_nft_asset_id": "1099511627776",
   "preferences": {
-    "locale": "zh-CN", // Motor de i18n (Suporte: en, pt, es, fr, ru, zh, ja)
-    "currency_display": "USD",
+    "locale": "pt-BR",
     "sound_enabled": true
   },
   "progression": {
@@ -241,40 +218,108 @@ Responsável pela camada social, internacionalização, gamificação e dados ef
     "games_played": 142
   }
 }
-
 ```
 
-**Coleção: `chat_messages` (Interação Efêmera)**
+### Coleção: `chat_messages`
+
+Índice TTL 7 dias.
 
 ```json
 {
   "_id": "ObjectId",
-  "lobby_id": "game.slxs2",
+  "room_id": "12345",
   "wallet_address": "jogador1.wax",
   "message": "Bingo!!",
   "is_sponsor_drop": false,
   "timestamp": "ISODate"
 }
-
 ```
 
-*(Nota: Esta coleção terá um índice TTL (Time-To-Live) para apagar mensagens automaticamente após 7 dias, economizando custos de storage).*
+### Coleção: `prizetxs` (ADR-038)
 
-**Coleção: `nfts_cache` (Espelho de Inventário do AtomicHub)**
+Índice único composto: `{ gameId, ticketId, winLabel }`.
+
+```json
+{
+  "_id": "ObjectId",
+  "game_id": "1780000000001",
+  "ticket_id": "abc123def456",
+  "win_type": "stage",
+  "win_label": "stage_1",
+  "account": "jogador1",
+  "transaction_id": "abc123...",
+  "amount": "125.0000",
+  "currency": "WAX",
+  "status": "confirmed"
+}
+```
+
+### Coleção: `buyintxs` (ADR-038)
+
+Índice único composto: `{ gameId, ticketId }`.
+
+```json
+{
+  "_id": "ObjectId",
+  "game_id": "1780000000001",
+  "ticket_id": "abc123def456",
+  "account": "jogador1",
+  "amount": "10.0000",
+  "currency": "WAX"
+}
+```
+
+### Coleção: `rooms_metadata`
+
+```json
+{
+  "_id": "12345",
+  "name": "Sala Platinum",
+  "description": "Sala VIP com prêmios maiores",
+  "chat_enabled": true,
+  "auto_start_delay_sec": 30,
+  "drops": [],
+  "cover_image_url": "https://..."
+}
+```
+
+### Coleção: `gametypes_metadata`
+
+```json
+{
+  "_id": "ObjectId",
+  "gametype_id": "1",
+  "combinations": [...],
+  "rules": [...]
+}
+```
+
+### Coleção: `nfts_cache`
 
 ```json
 {
   "_id": "ObjectId",
   "wallet_address": "jogador1.wax",
-  "assets": [
-    {
-      "asset_id": "1099511627776",
-      "schema_name": "credit_packs",
-      "name": "Whale Pack",
-      "backed_tokens": "10000.0000 BINGO"
-    }
-  ],
+  "assets": [{
+    "asset_id": "1099511627776",
+    "schema_name": "credit_packs",
+    "name": "Whale Pack",
+    "backed_tokens": "10000.0000 BINGO"
+  }],
   "last_synced": "ISODate"
 }
-
 ```
+
+---
+
+## 6. Referências
+
+| Documento | Descrição |
+|-----------|-----------|
+| `CLAUDE.md` | Guia do projeto, comandos, git flow |
+| `docs/adr/ADR-038-prize-pipeline.md` | Prize pipeline completo |
+| `docs/adr/ADR-013-multi-match.md` | Multi-match + seções de cartela |
+| `docs/adr/ADR-014-game-orchestration.md` | Orquestração FSM |
+| `docs/asyncapi.yaml` | Eventos WS (prize_tx_sent, prize_confirmed) |
+| `docs/openapi.yaml` | API REST (GET /games/:gameId/prizes) |
+| `docs/SPEC.md` | Especificação mestre (§1.8 Prize Pipeline) |

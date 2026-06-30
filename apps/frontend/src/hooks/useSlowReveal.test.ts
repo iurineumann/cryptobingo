@@ -181,9 +181,9 @@ describe('useSlowReveal — eventos de fim de jogo', () => {
     act(() => emit('connect', undefined));
     act(() => emit('prize_tx_sent', {
       game_id: 1,
-      payload: { ticketId: 't1' },
+      payload: { ticketId: 't1', winLabel: 'ROW_0' },
     }));
-    expect(result.current.prizeStatuses['t1']).toEqual({ status: 'confirming' });
+    expect(result.current.prizeStatuses['t1:ROW_0']).toEqual({ status: 'confirming' });
   });
 
   it('prize_confirmed → prizeStatuses ticket vira confirmed com tx_id e amount', () => {
@@ -191,10 +191,10 @@ describe('useSlowReveal — eventos de fim de jogo', () => {
     act(() => emit('connect', undefined));
     act(() => emit('prize_confirmed', {
       game_id: 1,
-      payload: { ticketId: 't1', transactionId: 'tx1', amount: '3.5000', currency: 'BINGO' },
+      payload: { ticketId: 't1', transactionId: 'tx1', amount: '3.5000', currency: 'BINGO', winLabel: 'ROW_0' },
     }));
-    expect(result.current.prizeStatuses['t1']).toEqual({
-      status: 'confirmed', tx_id: 'tx1', amount: '3.5000',
+    expect(result.current.prizeStatuses['t1:ROW_0']).toEqual({
+      status: 'confirmed', tx_id: 'tx1', amount: '3.5000', currency: 'BINGO',
     });
   });
 
@@ -205,7 +205,7 @@ describe('useSlowReveal — eventos de fim de jogo', () => {
       game_id: 1,
       payload: { winning_ball: 42, winners: [{ account: 'a', ticket_id: 't1', win_pattern: 'ROW_0', payouts: [] }] },
     }));
-    expect(result.current.prizeStatuses['t1']).toEqual({ status: 'preparing' });
+    expect(result.current.prizeStatuses['t1:ROW_0']).toEqual({ status: 'preparing' });
   });
 
   it('prize_tx_sent de outro game_id ignorado', () => {

@@ -24,6 +24,7 @@ tags:
   - name: Sponsors
   - name: Leaderboard
   - name: News
+  - name: Prizes
 
 paths:
 
@@ -44,6 +45,36 @@ paths:
                 properties:
                   status: { type: string, example: "Gateway Online" }
                   timestamp: { type: string, format: date-time }
+
+  /games/{gameId}/prizes:
+    get:
+      summary: Histórico de prêmios de um jogo (público)
+      tags: [Prizes]
+      description: |
+        Retorna todas as transações de prêmio pagas em um jogo.
+        Sem autenticação — dados públicos na blockchain.
+        Usado por ReplaySummary e GameRoom (archived) para preencher
+        prizeStatuses via hydratePrizeStatuses.
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista de transações de prêmio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PrizeTx' }
+                  total: { type: integer }
+                  gameId: { type: string }
+        '404':
+          description: Jogo não encontrado
 
   # ══════════════════════════════════════════
   # AUTENTICAÇÃO — Challenge-Response (ADR-006)
@@ -1770,3 +1801,35 @@ components:
                 content: { type: string }
         active:           { type: boolean, default: true }
         pinned:           { type: boolean, default: false }
+
+    PrizeTx:
+      type: object
+      description: Transação de prêmio persistida no MongoDB (ADR-038)
+      properties:
+        game_id:
+          type: string
+        ticket_id:
+          type: string
+        win_type:
+          type: string
+          enum: [pattern, combo, stage]
+          description: Tipo de vitória.
+        win_label:
+          type: string
+          description: Rótulo único (ex. "stage_1", "ROW_1"). Chave composta com ticket_id.
+        account:
+          type: string
+          description: Conta WAX do vencedor.
+        transaction_id:
+          type: string
+          description: Hash da transação on-chain.
+        amount:
+          type: string
+          description: Valor do prêmio (ex. "125.0000").
+        currency:
+          type: string
+          description: Símbolo da moeda (ex. "WAX").
+        status:
+          type: string
+          enum: [confirmed]
+          description: Status da transação.

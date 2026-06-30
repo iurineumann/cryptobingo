@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { ExternalLink } from 'lucide-react';
 import { getEffectiveExplorerUrl } from '../../utils/explorerStore';
 
 export interface EventFeedWinner {
@@ -8,6 +7,7 @@ export interface EventFeedWinner {
     status:       'preparing' | 'confirming' | 'confirmed';
     tx_id?:       string;
     amount?:      string;
+    currency?:    string;
 }
 
 interface Props {
@@ -15,6 +15,13 @@ interface Props {
     readonly winners:  EventFeedWinner[];
     readonly error:    string | null;
     readonly gameId?:  string;
+}
+
+/** Traduz nome de estágio raw (stage_N) para i18n. Fallback p/ nome original. */
+function fmtPatternName(t: ReturnType<typeof useTranslation>['t'], name: string): string {
+  const m = name.match(/^stage_(\d+)$/);
+  if (m) return t('game_room.stage_label', { stage: parseInt(m[1], 10) });
+  return name;
 }
 
 export default function EventFeed({ loading, winners, error }: Props) {
@@ -52,7 +59,7 @@ export default function EventFeed({ loading, winners, error }: Props) {
         <div className="gr-event-feed" data-testid="gr-event-feed" style={{ maxHeight: '180px', overflowY: 'auto' }}>
             {winners.map((w, idx) => (
                 <span key={`${w.account}-${w.pattern_name}-${idx}`} className="ev" data-testid={`gr-event-feed-item-${idx}`}>
-                    <span>{w.account} • {w.pattern_name}</span>
+                    <span>{w.account} • {fmtPatternName(t, w.pattern_name)}</span>
                     {w.status === 'preparing' && (
                         <><span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', marginLeft: '0.3rem', verticalAlign: 'middle', borderWidth: '1.5px' }} /> {t('game_room.prize_preparing')}</>
                     )}
@@ -61,7 +68,7 @@ export default function EventFeed({ loading, winners, error }: Props) {
                     )}
                     {w.status === 'confirmed' && w.tx_id && (
                         <>
-                            {w.amount} —
+                            {w.amount} {w.currency ?? ''}
                             <a
                                 href={`${explorerUrl}/transaction/${w.tx_id}`}
                                 target="_blank"
@@ -69,8 +76,7 @@ export default function EventFeed({ loading, winners, error }: Props) {
                                 className="gr-event-feed-link"
                                 data-testid={`gr-event-feed-tx-${idx}`}
                             >
-                                {t('game_room.prize_confirmed')}
-                                <ExternalLink className="size-3 shrink-0" style={{ display: 'inline', marginLeft: '0.2rem', verticalAlign: 'middle' }} />
+                                🔗
                             </a>
                         </>
                     )}

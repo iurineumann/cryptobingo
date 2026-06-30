@@ -122,6 +122,7 @@
     "stages_title": "Estágios",
     "stage_label": "Estágio {{stage}}",
     "stage_winners": "{{count}} vencedor(es)",
+    "patterns_required": "{{count}} padrões",
     "game_ended_title": "Partida Encerrada",
     "game_ended_winners": "{{count}} vencedor(es) nesta partida",
     "game_ended_you_won": "Você venceu! 🎉",
@@ -174,9 +175,8 @@
     "near_miss": "Falta 1!",
     "near_miss_aria": "Cartela {{id}}: falta uma bola para fechar",
     "ticket_section": {
-      "winners_multi": "Multi-Vencedores",
-      "winners": "Vencedores",
-      "other": "Outras"
+      "won": "Premiadas",
+      "active": "Disputando"
     },
     "pot_label": "Pote da partida",
     "pot_bonus": "Bônus patrocinado",

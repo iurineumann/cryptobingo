@@ -258,13 +258,20 @@ export async function setAdminGametypeStages(
     return handleResponse(res);
 }
 
+export interface StageRule {
+    stage:             number;
+    patterns_required: number;
+    weight:            number;
+}
+
 export async function fetchPublicGametypeMetadata(gametypeId: string): Promise<{
     gametype_id:  string;
     rules:        ExtendedRule[];
     combinations: CombinationRuleInput[];
+    stages:       StageRule[];
 }> {
     const res = await fetch(`${API_BASE}/gametypes/${gametypeId}/metadata`);
-    if (!res.ok) return { gametype_id: gametypeId, rules: [], combinations: [] };
+    if (!res.ok) return { gametype_id: gametypeId, rules: [], combinations: [], stages: [] };
     return res.json();
 }
 

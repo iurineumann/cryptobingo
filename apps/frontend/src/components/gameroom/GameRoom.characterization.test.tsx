@@ -41,11 +41,13 @@ const slowRevealState = {
   isAborted: false,
   abortReason: null as string | null,
   wsStatus: 'connected' as const,
+  wsEverConnected: true,
   isGameEnded: false,
   goldenBall: null as unknown,
   clearedStages: [] as unknown[],
   drawMode: 'standard' as const,
   prizeStatuses: {} as Record<string, unknown>,
+  hydratePrizeStatuses: vi.fn(),
 };
 vi.mock('../../hooks/useSlowReveal', () => ({
   useSlowReveal: () => slowRevealState,
@@ -63,7 +65,7 @@ vi.mock('../../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/api')>();
   return {
     ...actual,
-    fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [] }),
+    fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [], stages: [] }),
     fetchRoom: vi.fn().mockResolvedValue({ room_id: '1', metadata: { name: 'Sala Teste' }, current_game_id: '0' }),
   };
 });

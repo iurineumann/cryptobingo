@@ -122,6 +122,7 @@
     "stages_title": "Stages",
     "stage_label": "Stage {{stage}}",
     "stage_winners": "{{count}} winner(s)",
+    "patterns_required": "{{count}} patterns",
     "game_ended_title": "Game Over",
     "game_ended_winners": "{{count}} winner(s) this round",
     "game_ended_you_won": "You won! 🎉",
@@ -174,9 +175,8 @@
     "near_miss": "1 to go!",
     "near_miss_aria": "Ticket {{id}}: one ball away from a win",
     "ticket_section": {
-      "winners_multi": "Multi-Winners",
-      "winners": "Winners",
-      "other": "Other"
+      "won": "Won",
+      "active": "Active"
     },
     "pot_label": "Match pot",
     "pot_bonus": "Sponsored bonus",

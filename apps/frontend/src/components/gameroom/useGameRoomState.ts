@@ -16,6 +16,7 @@ import type { EnrichedRoom } from '../../services/api';
 import { useSlowReveal } from '../../hooks/useSlowReveal';
 import type { DrawnBall, GoldenBallInfo, GoldenMultiplierProgress, ClearedStage } from '../../hooks/useSlowReveal';
 import type { WinnerPayload } from '../../types/events';
+import type { StageRule } from '../../services/api';
 import {
   Pattern, BINGO_COLORS, getCol,
   fetchGamePatterns, sortPatterns,
@@ -24,7 +25,7 @@ import {
   getCombinationCells, computeCombinationProximity, detectComboWinsForTicket,
   type CombinationRuleInput, type ExtendedRule,
 } from '../ticketUtils';
-import { fetchPublicGametypeMetadata } from '../../services/api';
+import { fetchPublicGametypeMetadata, fetchGamePrizeTransactions } from '../../services/api';
 
 function parseHexMatrix(hex: string): number[] {
   const bytes: number[] = [];
@@ -69,8 +70,10 @@ export interface GameRoomState {
   // WS
   drawnBalls: DrawnBall[]; lastBall: DrawnBall | null; isDrawing: boolean;
   winners: WinnerPayload[]; isAborted: boolean; abortReason: string | null;
-  wsStatus: string; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
+  wsStatus: string; wsEverConnected: boolean; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
   prizeStatuses: Record<string, import('../../hooks/useSlowReveal').PrizeStatus>;
+  drawMode: string | null;
+  gameStages: StageRule[];
   // derivados
   isStaticFinalState: boolean;
   effectiveBalls: DrawnBall[]; drawnNumbers: number[]; drawnSet: Set<number>;
@@ -93,6 +96,9 @@ export interface GameRoomState {
   col: string; color: string; hasBanners: boolean;
   now: number;
   loadGame: () => Promise<void>;
+  hydratePrizeStatuses: (entries: Array<{
+    ticketId: string; winLabel: string; transactionId: string; amount: string; currency: string;
+  }>) => void;
 }
 
 export function useGameRoomState(
@@ -110,7 +116,9 @@ export function useGameRoomState(
   const [now,          setNow]          = useState(Date.now());
   const [maxBalls,          setMaxBalls]          = useState(75);
   const [gamePatterns,      setGamePatterns]      = useState<Pattern[]>([]);
-  const [gameCombinations,  setGameCombinations]  = useState<CombinationRuleInput[]>([]);
+  const [gameCombinations, setGameCombinations] = useState<CombinationRuleInput[]>([]);
+  const [gameStages, setGameStages] = useState<StageRule[]>([]);
+  const [localDrawMode, setLocalDrawMode] = useState<string | null>(null);
   const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
   const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
 
@@ -129,6 +137,7 @@ export function useGameRoomState(
     setGameCombinations([]);
     setExtendedRules([]);
     setIngameBalances([]);
+    setLocalDrawMode(null);
     setLoadingGame(true);
   }, [gameId]);
 
@@ -152,7 +161,7 @@ export function useGameRoomState(
   const {
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
     isGameEnded, goldenBall, goldenMultiplierProgress, clearedStages, drawMode,
-    prizeStatuses,
+    prizeStatuses, wsEverConnected, hydratePrizeStatuses,
   } = useSlowReveal(gameId);
 
   const timeRemaining = useMemo(() => {
@@ -186,6 +195,22 @@ export function useGameRoomState(
       .map((num, idx) => ({ order: idx + 1, number: num, timestamp: '' }));
   }, [isStaticFinalState, game, maxBalls]);
 
+  // Hidrata prizeStatuses da API p/ jogos encerrados onde WS não re-emite eventos
+  useEffect(() => {
+    if (!gameId || !isStaticFinalState) return;
+    fetchGamePrizeTransactions(gameId)
+      .then(res => {
+        hydratePrizeStatuses(res.items.map(p => ({
+          ticketId: p.ticketId,
+          winLabel: p.winLabel,
+          transactionId: p.transactionId ?? '',
+          amount: p.amount,
+          currency: p.currency,
+        })));
+      })
+      .catch(() => { /* silencioso — fallback apenas */ });
+  }, [gameId, isStaticFinalState, hydratePrizeStatuses]);
+
   const effectiveBalls = drawnBalls.length > 0 ? drawnBalls : fallbackBalls;
 
   const drawnNumbers = useMemo(
@@ -195,8 +220,13 @@ export function useGameRoomState(
   const drawnSet  = useMemo(() => new Set(drawnNumbers), [drawnNumbers]);
   const lastDrawn = (lastBall?.number ?? effectiveBalls[effectiveBalls.length - 1]?.number) ?? null;
 
-  // Jogo efetivamente encerrado: via WS ou por status archived/drawn
-  const isEffectiveGameEnded = isGameEnded || isStaticFinalState;
+  // drawMode final: prefere on-chain (disponível desde o load), fallback WS game_ended
+  const resolvedDrawMode = localDrawMode ?? drawMode;
+
+  // Jogo efetivamente encerrado: via WS ou por status archived/drawn.
+  // Só considera staticFinalState após WS ter conectado ao menos 1x (evita flash
+  // do resultado final antes do slow reveal começar — entre closing e live).
+  const isEffectiveGameEnded = isGameEnded || (isStaticFinalState && wsEverConnected);
 
   // Status efetivo para exibição: enquanto o slow reveal estiver ativo (bolas chegando
   // via WS mas jogo ainda não encerrado), mostra "drawing" independentemente do status
@@ -217,6 +247,7 @@ export function useGameRoomState(
   // ── Vencedores locais para estado archived sem WS ─────────────────────────
   // Quando o WS não tem vencedores (jogo já encerrou), calcula localmente
   // cruzando as cartelas do jogador com os padrões e as bolas sorteadas.
+  // NOSONAR — business logic complexity inherent to prize aggregation, extracted where practical
   const localWinners = useMemo(() => {
     if (winners.length > 0 || !isStaticFinalState) return winners;
     if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
@@ -270,13 +301,18 @@ export function useGameRoomState(
     const map = new Map<string, { prize: string; patternName: string; totalPrize: number; patternCount: number }>();
     for (const w of localWinners) {
       const existing = map.get(w.ticket_id);
-      const prizeVal = parseFloat(w.payouts[0]) || 0;
+      const ps = prizeStatuses[`${w.ticket_id}:${w.win_pattern}`];
+      const amt = ps?.amount ?? w.payouts[0] ?? '0';
+      const prizeVal = parseFloat(amt) || 0;
+      // extrai currency do prizeStatuses ou do payout raw
+      const curr = ps?.currency ?? w.payouts[0]?.split(' ').slice(1).join(' ') ?? '';
       if (existing) {
         existing.patternCount++;
         existing.totalPrize += prizeVal;
+        existing.prize = `${existing.totalPrize.toFixed(4)} ${curr}`;
       } else {
         map.set(w.ticket_id, {
-          prize: w.payouts.join(', ') || null!,
+          prize: `${prizeVal.toFixed(4)} ${curr}`,
           patternName: w.win_pattern,
           totalPrize: prizeVal,
           patternCount: 1,
@@ -284,7 +320,7 @@ export function useGameRoomState(
       }
     }
     return map;
-  }, [localWinners]);
+  }, [localWinners, prizeStatuses]);
 
   // lookup de Pattern pelo nome
   const patternByName = useMemo(() => {
@@ -357,9 +393,10 @@ export function useGameRoomState(
             : patternWins
                 .filter(w => subsumedPatterns.includes(w.pattern))
                 .reduce((s, w) => s + (parseFloat(w.payout.split(' ')[0]) || 0), 0);
+          const comboWeightMultiplier = combo ? combo.weight / 100 : 0;
           const comboTotal = fromPayouts > 0
             ? fromPayouts
-            : pricePaidNum * (combo ? combo.weight / 100 : 0);
+            : pricePaidNum * comboWeightMultiplier;
           const existing = comboMap.get(comboName);
           if (existing) existing.total += comboTotal;
           else comboMap.set(comboName, { total: comboTotal, currency: priceCurrency });
@@ -538,6 +575,7 @@ export function useGameRoomState(
           if (gtRes.rows.length) {
             const gt = gtRes.rows[0] as any;
             setMaxBalls(gt.max_balls > 0 ? Number(gt.max_balls) : 75);
+            if (gt.draw_mode) setLocalDrawMode(gt.draw_mode);
           }
         } catch { /* mantém default 75 */ }
         // Busca patterns e combinações deste gametype
@@ -549,6 +587,7 @@ export function useGameRoomState(
           if (patterns.length) setGamePatterns(patterns);
           if (meta.combinations?.length) setGameCombinations(meta.combinations);
           if (meta.rules?.length) setExtendedRules(meta.rules);
+          if (meta.stages?.length) setGameStages(meta.stages);
         } catch { /* patterns/combos indisponíveis */ }
       }
       if (loadedGame && loadedGame.room_id && loadedGame.room_id !== '0') {
@@ -631,8 +670,8 @@ export function useGameRoomState(
     game, nextGame,
     playerTickets: playerTickets as Array<{ id: string; matrix: number[]; pricePaid?: string }>,
     room, loadingGame, maxBalls, gamePatterns, gameCombinations, ingameBalances,
-    drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
-    goldenBall, goldenMultiplierProgress, clearedStages, prizeStatuses,
+    drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus, wsEverConnected,
+    goldenBall, goldenMultiplierProgress, clearedStages, prizeStatuses, drawMode: resolvedDrawMode, gameStages,
     isStaticFinalState,
     effectiveBalls, drawnNumbers, drawnSet, lastDrawn, isEffectiveGameEnded,
     effectiveDisplayStatus, gameStatusText, timeRemaining, nextGameTimer,
@@ -640,5 +679,6 @@ export function useGameRoomState(
     adjustedPatternWinCount, allGameCombinationWinCount, completedCombinationsPerTicket,
     combinationCells, patternProximityMap, combinationProximityMap, sortedPatterns,
     groupedTickets, currencySymbol, ticketPrice, col, color, hasBanners, now, loadGame,
+    hydratePrizeStatuses,
   };
 }

@@ -29,6 +29,8 @@ export interface TicketsGridProps {
   goldenBallNum?:         number;
   effectiveMultiplier?:   number;
   onBuyMore: () => void;
+  /** Lista completa de vencedores (WS + local) para extrair estágios por cartela. */
+  localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
 }
 
 // ==========================================
@@ -46,8 +48,14 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
     canBuyMore, winnerMap, patternByName, drawnSet, lastDrawn,
     roomPatterns, completedCombinationsPerTicket,
     goldenBallNum, effectiveMultiplier,
-    onBuyMore,
+    onBuyMore, localWinners,
   } = props;
+
+  const emptyMessage = loadingGame
+    ? t('game_room.tickets_loading')
+    : gameStatus === 'funding'
+      ? t('game_room.tickets_empty_funding')
+      : t('game_room.tickets_empty_default');
 
   return (
     <div className="gr-tickets-section" data-testid="gr-my-tickets">
@@ -70,11 +78,7 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
 
       {playerTickets.length === 0 ? (
         <div className="gr-summary-empty">
-          {loadingGame
-            ? t('game_room.tickets_loading')
-            : gameStatus === 'funding'
-              ? t('game_room.tickets_empty_funding')
-              : t('game_room.tickets_empty_default')}
+          {emptyMessage}
         </div>
       ) : (
         groupedTickets.map(group => (
@@ -90,6 +94,9 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
                 const winPatternSet = pat
                   ? new Set(pat.cells.map((req, i) => (req ? i : -1)).filter(i => i !== -1))
                   : null;
+                const stageWonKeys = localWinners
+                  .filter(lw => lw.ticket_id === ticket.id && lw.win_pattern.startsWith('stage_'))
+                  .map(lw => lw.win_pattern);
                 return (
                   <TicketCard
                     key={ticket.id}
@@ -105,6 +112,8 @@ export default function TicketsGrid(props: TicketsGridProps): React.JSX.Element 
                     pricePaid={ticket.pricePaid}
                     goldenBallNum={goldenBallNum}
                     effectiveMultiplier={effectiveMultiplier}
+                    stageWonKeys={stageWonKeys.length > 0 ? stageWonKeys : undefined}
+                    suppressWinner={group.category === 'active'}
                   />
                 );
               })}
