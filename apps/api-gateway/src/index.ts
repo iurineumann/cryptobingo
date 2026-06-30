@@ -65,6 +65,7 @@ import { setIo }                                     from './socket';
 import { getLeaderboardGlobal, getLeaderboardByRoom, getLeaderboardXp } from './controllers/leaderboardController';
 
 import { listContent, getContentItem, createContentItem, updateContentItem, deleteContentItem } from './controllers/contentController';
+import { listGamePrizes } from './controllers/prizeController';
 import {
     updateUserPermissions,
     listSponsorOrgs,
@@ -398,6 +399,9 @@ function registerRoutes(): void {
     app.post  ('/api/v1/content/:type',        adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), createContentItem);
     app.put   ('/api/v1/content/:type/:id',    adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), updateContentItem);
     app.delete('/api/v1/content/:type/:id',    adminLimiter,  requireAuth, requireRole('admin'), requirePerm('admin.content'), deleteContentItem);
+
+    // ── Prize Pipeline (ADR pendente) ─────────────────────────────────────
+    app.get('/api/v1/games/:gameId/prizes', playerLimiter, listGamePrizes);
 
     // ── 404 catch-all ─────────────────────────────────────────────────────────
     app.use((_req, res) => {
