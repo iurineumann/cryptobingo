@@ -12,6 +12,14 @@ import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@crypto
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
+import { savePrizeTx, saveBuyInTx } from './prizeTransactionsService';
+import { notifyPrizeTxSent, notifyPrizeConfirmed } from './broadcaster';
+import {
+    prizePaymentsTotal,
+    prizePaymentsAmountTotal,
+    prizePersistTotal,
+    buyinPersistedTotal,
+} from './prizeMetrics';
 import { getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
@@ -681,6 +689,42 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 if (isCombo) awardComboXP(ticket.owner).catch(() => {});
                 // ADR-028 §3: decrementa usos de NFTs consumíveis usadas no boost
                 if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
+
+                // — Prize Pipeline: persistir + notificar + métricas ──────────
+                notifyPrizeTxSent(gameId, ticket.ticket_id);
+
+                const winType    = isCombo ? 'combo' as const : 'pattern' as const;
+                const priceParts = actualPrice.split(' ');
+                const buyInAmount = priceParts[0];
+                const buyInCurr   = priceParts.slice(1).join(' ') || 'WAX';
+
+                savePrizeTx({
+                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+                    winType, winLabel: patternName, weight,
+                    amount: payout.amount.toFixed(4), currency: payout.currency,
+                    transactionId: txHash,
+                    goldenMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
+                    ticketPrice: actualPrice,
+                    claimedAt: new Date().toISOString(),
+                }).then(() => {
+                    prizePersistTotal.labels({ result: 'success' }).inc();
+                    prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+                    prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+                    notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency);
+                }).catch(err => {
+                    prizePersistTotal.labels({ result: 'error' }).inc();
+                    console.error('[PrizePipeline] Erro ao persistir PrizeTx:', err);
+                });
+
+                saveBuyInTx({
+                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+                    amount: buyInAmount, currency: buyInCurr,
+                    purchasedAt: new Date().toISOString(),
+                }).then(() => {
+                    buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
+                }).catch(err => {
+                    console.error('[PrizePipeline] Erro ao persistir BuyInTx:', err);
+                });
             }
         }
     }

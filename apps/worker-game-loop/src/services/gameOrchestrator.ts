@@ -75,13 +75,14 @@ async function buildWinnerPayloads(
         const ticketPrice = w.ticket.price?.quantity ?? game?.ticket_price.quantity ?? '';
         if (!game || !ticketPrice) return {
             account: w.ticket.owner, ticket_id: w.ticket.ticket_id,
-            win_pattern: w.patternName, payouts: [],
+            win_pattern: w.patternName, payouts: [], winType: 'pattern' as const,
         };
         const payout = computePayoutAmount(ticketPrice, baseMultiplier, w.weight || 100, goldenMultiplier);
         return {
             account:     w.ticket.owner,
             ticket_id:   w.ticket.ticket_id,
             win_pattern: w.patternName,
+            winType:     w.comboId !== undefined ? 'combo' as const : 'pattern' as const,
             payouts:     payout.amount > 0 ? [`${payout.amount.toFixed(4)} ${payout.currency}`] : [],
         };
     });

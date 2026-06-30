@@ -72,6 +72,7 @@ export interface WinnerPayload {
     account:     string;
     ticket_id:   string;
     win_pattern: string;
+    winType:     'pattern' | 'combo' | 'stage';
     payouts:     string[];        // ["10.0000 WAX", ...]
 }
 
@@ -467,6 +468,30 @@ export function notifyWinners(gameId: string, winners: WinnerPayload[]): void {
             `🏆 [WS] Jogo ${gameId} — vencedores emitidos diretamente (reveal já encerrado)`
         );
     }
+}
+
+/**
+ * Emite prize_tx_sent — transação de prêmio enviada à blockchain.
+ */
+export function notifyPrizeTxSent(gameId: string, ticketId: string): void {
+    io.to(`game:${gameId}`).emit('prize_tx_sent', {
+        event:   'prize_tx_sent',
+        game_id: parseInt(gameId, 10),
+        payload: { ticketId },
+    });
+}
+
+/**
+ * Emite prize_confirmed — prêmio persistido no MongoDB.
+ */
+export function notifyPrizeConfirmed(
+    gameId: string, ticketId: string, transactionId: string, amount: string, currency: string,
+): void {
+    io.to(`game:${gameId}`).emit('prize_confirmed', {
+        event:   'prize_confirmed',
+        game_id: parseInt(gameId, 10),
+        payload: { ticketId, transactionId, amount, currency },
+    });
 }
 
 /**
