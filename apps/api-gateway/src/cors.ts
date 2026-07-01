@@ -5,6 +5,7 @@ const DEFAULT_ALLOWED_ORIGINS: string[] = [
   "http://localhost:3000",
   "https://test.cryptobingo.bet",
   "https://test-api.cryptobingo.bet",
+  "https://test-swap.cryptobingo.bet",
 ];
 
 function normalizeOrigin(origin: string): string | null {
