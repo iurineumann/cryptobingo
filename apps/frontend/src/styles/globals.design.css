@@ -978,7 +978,7 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
   color: var(--cb-text-tertiary);
 }
 
-/* ── Dropdown "Explorar" no PlayerShell ──────────────────── */
+/* ── Dropdown "Explorar" no PlayerShell / LandingPage ─────── */
 .site-tab-dropdown {
   position: relative;
 }
@@ -993,9 +993,13 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
   padding: 0.25rem;
   box-shadow: var(--shadow-card);
   z-index: 100;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 0.125rem;
+}
+.site-tab-dropdown:hover > .site-dropdown-menu,
+.site-tab-dropdown:focus-within > .site-dropdown-menu {
+  display: flex;
 }
 .site-dropdown-item {
   display: block;

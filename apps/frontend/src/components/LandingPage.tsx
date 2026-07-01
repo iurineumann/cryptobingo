@@ -256,9 +256,23 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
           <nav className="flex gap-6 text-sm text-[--cb-text-secondary]" aria-label={t('landing.nav_aria')} data-testid="landing-nav">
             <a href="#rooms" className="no-underline text-inherit">{t('nav.lobby')}</a>
             <a href="#stats" className="no-underline text-inherit">{t('nav.audit')}</a>
-            <a href="/how-it-works" className="no-underline text-inherit" onClick={(e) => { e.preventDefault(); navigate('/how-it-works'); }}>{t('nav.how_it_works')}</a>
-            <a href="/news" className="no-underline text-inherit" onClick={(e) => { e.preventDefault(); navigate('/news'); }}>{t('nav.news')}</a>
-            <a href="#sponsors" className="no-underline text-inherit">{t('nav.sponsors')}</a>
+            <div className="site-tab-dropdown" style={{ display: 'inline-flex' }}>
+              <button
+                className="no-underline text-inherit"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0 }}
+                data-testid="nav-explore-landing"
+                aria-haspopup="true"
+              >
+                {t('nav.explore') ?? 'Explorar'} ▾
+              </button>
+              <div className="site-dropdown-menu" data-testid="nav-explore-menu-landing">
+                <a href="/how-it-works" className="site-dropdown-item" onClick={(e) => { e.preventDefault(); navigate('/how-it-works'); }}>{t('nav.how_it_works')}</a>
+                <a href="/sponsors"     className="site-dropdown-item" onClick={(e) => { e.preventDefault(); navigate('/sponsors'); }}>{t('nav.sponsors')}</a>
+                <a href="/tutorials"    className="site-dropdown-item" onClick={(e) => { e.preventDefault(); navigate('/tutorials'); }}>{t('nav.tutorials')}</a>
+                <a href="/faq"          className="site-dropdown-item" onClick={(e) => { e.preventDefault(); navigate('/faq'); }}>{t('nav.faq')}</a>
+                <a href="/news"         className="site-dropdown-item" onClick={(e) => { e.preventDefault(); navigate('/news'); }}>{t('nav.news')}</a>
+              </div>
+            </div>
           </nav>
           <div className="flex items-center gap-3">
             <div className="flex gap-1" data-testid="lang-select">

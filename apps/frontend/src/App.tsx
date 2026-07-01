@@ -71,6 +71,10 @@ import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
 import PublicLayout     from './components/PublicLayout';
 import ContentPage      from './components/content/ContentPage';
+import TutorialsPage    from './pages/TutorialsPage';
+import HowItWorksPage   from './pages/HowItWorksPage';
+import SponsorsPage     from './pages/SponsorsPage';
+import TutorialsAdmin   from './components/admin/TutorialsAdmin';
 import UserSettingsPage from './components/UserSettingsPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
@@ -394,8 +398,6 @@ function AppRoot() {
         { id: 'profile',    path: '/profile', label: t('nav.profile')    ?? 'Perfil'   },
     ];
 
-    const [showExplore, setShowExplore] = useState(false);
-
     // Shell do jogador — nav + conteúdo (Lobby / History / Wallet)
     const PlayerShell = () => (
         <div className="site-shell mode-player" style={{ minHeight: '100dvh' }}>
@@ -418,37 +420,30 @@ function AppRoot() {
                                 {tab.label}
                             </a>
                         ))}
-                        {/* Dropdown "Explorar" — páginas públicas de conteúdo */}
-                        <div
-                            className="site-tab-dropdown"
-                            onMouseEnter={() => setShowExplore(true)}
-                            onMouseLeave={() => setShowExplore(false)}
-                        >
+                        {/* Dropdown "Explorar" — páginas públicas de conteúdo (CSS :hover) */}
+                        <div className="site-tab-dropdown">
                             <button
                                 className="site-tab"
                                 data-testid="nav-explore"
                                 aria-haspopup="true"
-                                aria-expanded={showExplore}
-                                onClick={() => setShowExplore(s => !s)}
+                                aria-expanded={undefined}
                             >
                                 {t('nav.explore') ?? 'Explorar'}
                                 <ChevronDown className="size-3 ml-1" />
                             </button>
-                            {showExplore && (
-                                <div className="site-dropdown-menu" data-testid="nav-explore-menu">
-                                    {PUBLIC_PAGES.map(page => (
-                                        <a
-                                            key={page.path}
-                                            href={page.path}
-                                            data-testid={page.testId}
-                                            className="site-dropdown-item"
-                                            onClick={(e) => { e.preventDefault(); setShowExplore(false); navigate(page.path); }}
-                                        >
-                                            {t(page.key)}
-                                        </a>
-                                    ))}
-                                </div>
-                            )}
+                            <div className="site-dropdown-menu" data-testid="nav-explore-menu">
+                                {PUBLIC_PAGES.map(page => (
+                                    <a
+                                        key={page.path}
+                                        href={page.path}
+                                        data-testid={page.testId}
+                                        className="site-dropdown-item"
+                                        onClick={(e) => { e.preventDefault(); navigate(page.path); }}
+                                    >
+                                        {t(page.key)}
+                                    </a>
+                                ))}
+                            </div>
                         </div>
                     </nav>
                 </div>
@@ -629,9 +624,9 @@ function AppRoot() {
 
             {/* ── Páginas públicas de conteúdo (PublicLayout) ── */}
             <Route element={<PublicLayout />}>
-                <Route path="/how-it-works" element={<ContentPage type="howitworks" testId="how-it-works" titleKey="nav.how_it_works" />} />
-                <Route path="/sponsors"     element={<ContentPage type="sponsors"     testId="sponsors"     titleKey="nav.sponsors" />} />
-                <Route path="/tutorials"    element={<ContentPage type="tutorials"    testId="tutorials"    titleKey="nav.tutorials" />} />
+                <Route path="/how-it-works" element={<HowItWorksPage />} />
+                <Route path="/sponsors"     element={<SponsorsPage />} />
+                <Route path="/tutorials"    element={<TutorialsPage />} />
                 <Route path="/faq"          element={<FaqPage />} />
                 <Route path="/news"         element={<NewsPage />} />
             </Route>
