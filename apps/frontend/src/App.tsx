@@ -74,7 +74,6 @@ import ContentPage      from './components/content/ContentPage';
 import TutorialsPage    from './pages/TutorialsPage';
 import HowItWorksPage   from './pages/HowItWorksPage';
 import SponsorsPage     from './pages/SponsorsPage';
-import TutorialsAdmin   from './components/admin/TutorialsAdmin';
 import UserSettingsPage from './components/UserSettingsPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────

@@ -23,7 +23,7 @@ interface ContentAdminProps {
     defaultType?: string;
 }
 
-export default function ContentAdmin({ defaultType = 'faq' }: ContentAdminProps) {
+export default function ContentAdmin({ defaultType = 'faq' }: Readonly<ContentAdminProps>) {
     const { t } = useTranslation();
 
     const [activeType, setActiveType] = useState<string>(defaultType);
