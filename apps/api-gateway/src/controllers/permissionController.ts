@@ -2,6 +2,17 @@ import type { Request, Response } from 'express';
 import { UserProfile } from '../models/UserProfile';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
+import { logAudit } from '../utils/audit';
+
+const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+function generateOrgId(): string {
+    let id = '';
+    for (let i = 0; i < 8; i++) {
+        id += ORG_ID_ALPHABET[Math.floor(Math.random() * ORG_ID_ALPHABET.length)];
+    }
+    return `org_${id}`;
+}
 export async function updateUserPermissions(req: Request, res: Response) {
   try {
     const { wallet } = req.params;
@@ -62,6 +73,65 @@ export async function getSponsorOrg(req: Request, res: Response) {
     res.json({ ...org, delegations });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar organização' });
+  }
+}
+
+export async function createSponsorOrg(req: Request, res: Response) {
+  try {
+    const { owner_wallet, name } = req.body;
+
+    if (!owner_wallet || typeof owner_wallet !== 'string') {
+      res.status(400).json({ error: 'Campo "owner_wallet" obrigatório.' });
+      return;
+    }
+
+    const wallet = owner_wallet.trim().toLowerCase();
+
+    const profile = await UserProfile.findOne({ wallet_address: wallet }).lean();
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil não encontrado. Usuário precisa fazer login primeiro.' });
+      return;
+    }
+
+    const existingOrg = await SponsorOrg.findOne({ owner_wallet: wallet }).lean();
+    if (existingOrg) {
+      res.status(409).json({ error: 'Wallet já possui uma organização sponsor.' });
+      return;
+    }
+
+    const orgId = generateOrgId();
+
+    await SponsorOrg.create({
+      orgId,
+      owner_wallet: wallet,
+      name: name?.trim() || `Org de ${owner_wallet}`,
+      settings: { autoApproveDelegations: true },
+    });
+
+    let permissionsAutoAssigned = false;
+    try {
+      await UserProfile.updateOne(
+        { wallet_address: wallet },
+        { $addToSet: { permissions: `sponsor.${orgId}.*` } }
+      );
+      permissionsAutoAssigned = true;
+    } catch {
+      // não-bloqueante — admin pode atribuir manualmente
+    }
+
+    await logAudit({
+      actor: (req as any).user?.wallet ?? 'system',
+      action: 'org.create',
+      target: `org:${orgId}`,
+      details: { owner_wallet: owner_wallet },
+      ip: req.ip,
+      userAgent: req.headers?.['user-agent'] as string,
+    });
+
+    res.status(201).json({ orgId, owner_wallet: wallet, name: name?.trim() || `Org de ${owner_wallet}`, permissionsAutoAssigned });
+  } catch (err) {
+    console.error('[PermissionController] createSponsorOrg:', err);
+    res.status(500).json({ error: 'Erro ao criar organização sponsor.' });
   }
 }
 

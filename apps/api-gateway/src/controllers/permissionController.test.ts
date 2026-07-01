@@ -12,18 +12,23 @@ function findChainResult(data: unknown) {
 }
 
 const userFindOneAndUpdate = jest.fn();
+const userFindOne = jest.fn();
+const userUpdateOne = jest.fn();
 const orgFindOne = jest.fn();
+const orgCreate = jest.fn();
 const orgFind = jest.fn();
 const orgCountDocuments = jest.fn();
 const delFindOneAndUpdate = jest.fn();
 const delFind = jest.fn();
+const auditLog = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('../models/UserProfile', () => ({
-  UserProfile: { findOneAndUpdate: userFindOneAndUpdate },
+  UserProfile: { findOneAndUpdate: userFindOneAndUpdate, findOne: userFindOne, updateOne: userUpdateOne },
 }));
 jest.mock('../models/SponsorOrg', () => ({
   SponsorOrg: {
     findOne: orgFindOne,
+    create: orgCreate,
     find: orgFind,
     countDocuments: orgCountDocuments,
   },
@@ -34,11 +39,15 @@ jest.mock('../models/SponsorDelegation', () => ({
     find: delFind,
   },
 }));
+jest.mock('../utils/audit', () => ({
+  logAudit: auditLog,
+}));
 
 import {
   updateUserPermissions,
   listSponsorOrgs,
   getSponsorOrg,
+  createSponsorOrg,
   createDelegation,
   removeDelegation,
 } from './permissionController';
@@ -149,6 +158,71 @@ describe('permissionController', () => {
       await getSponsorOrg(req as Request, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe('createSponsorOrg', () => {
+    it('deve criar org + auto-assign permissão sponsor', async () => {
+      req.body = { owner_wallet: 'novosponsor', name: 'Org Teste' };
+
+      userFindOne.mockReturnValue(queryResult({ wallet_address: 'novosponsor' }));
+      orgFindOne.mockReturnValue(queryResult(null));
+      orgCreate.mockResolvedValue({
+        orgId: 'org_test123',
+        owner_wallet: 'novosponsor',
+        name: 'Org Teste',
+      });
+      userUpdateOne.mockResolvedValue({ modifiedCount: 1 });
+
+      await createSponsorOrg(req as Request, res);
+
+      expect(orgFindOne).toHaveBeenCalledWith({ owner_wallet: 'novosponsor' });
+      expect(orgCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ owner_wallet: 'novosponsor', name: 'Org Teste' })
+      );
+      expect(userUpdateOne).toHaveBeenCalledWith(
+        { wallet_address: 'novosponsor' },
+        { $addToSet: { permissions: expect.stringMatching(/^sponsor\.org_.+\.\*$/) } }
+      );
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'org.create' })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: expect.stringMatching(/^org_/),
+          owner_wallet: 'novosponsor',
+          name: 'Org Teste',
+          permissionsAutoAssigned: true,
+        })
+      );
+    });
+
+    it('deve rejeitar se owner_wallet não existe como usuário', async () => {
+      req.body = { owner_wallet: 'inexistente' };
+
+      userFindOne.mockReturnValue(queryResult(null));
+
+      await createSponsorOrg(req as Request, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringContaining('Perfil') })
+      );
+    });
+
+    it('deve rejeitar se owner_wallet já possui org', async () => {
+      req.body = { owner_wallet: 'sponsorexistente' };
+
+      userFindOne.mockReturnValue(queryResult({ wallet_address: 'sponsorexistente' }));
+      orgFindOne.mockReturnValue(queryResult({ orgId: 'org_existing' }));
+
+      await createSponsorOrg(req as Request, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringContaining('já possui') })
+      );
     });
   });
 
