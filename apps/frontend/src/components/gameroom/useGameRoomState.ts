@@ -83,7 +83,7 @@ export interface GameRoomState {
   localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
   winnerMap: Map<string, { prize: string; patternName: string; totalPrize: number; patternCount: number }>;
   patternByName: Map<string, Pattern>;
-  playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean }>;
+  playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean; goldenMultiplier?: number }>;
   adjustedPatternWinCount: Map<string, number>;
   allGameCombinationWinCount: Map<string, number>;
   completedCombinationsPerTicket: Map<string, Array<{ name: string; weight: number }>>;
@@ -345,8 +345,33 @@ export function useGameRoomState(
   // padrões absorvidos por combinações são excluídos da listagem individual
   const playerWinEntries = useMemo(() => {
     const playerTicketIds = new Set(playerTickets.map(t => t.id));
-    // nomes dos combos configurados neste gametype (para detectar wins diretos via WS)
     const comboNameSet    = new Set(gameCombinations.map(c => c.name));
+
+    const isWinGolden = (ticketId: string, patternName: string): number | undefined => {
+      if (!goldenBall) return undefined;
+      const pat = patternByName.get(patternName);
+      if (!pat) return undefined;
+      const ticket = playerTickets.find(t => t.id === ticketId);
+      if (!ticket) return undefined;
+      const m = ticket.matrix;
+      for (let fi = 0; fi < 25; fi++) {
+        if (!pat.cells[fi]) continue;
+        const col = fi % 5;
+        const row = Math.floor(fi / 5);
+        if (col === 2 && row === 2) continue;
+        let mi: number;
+        if (col === 0) mi = row;
+        else if (col === 1) mi = row + 5;
+        else if (col === 2) mi = 10 + (row < 2 ? row : row - 1);
+        else if (col === 3) mi = row + 14;
+        else mi = row + 19;
+        if (m[mi] === goldenBall.ballNum) return goldenBall.multiplier;
+      }
+      return undefined;
+    };
+
+    type WinEntry = { total: number; currency: string; goldenMultiplier?: number };
+    const GOLD_KEY = '::gld';
 
     const byTicket = new Map<string, Array<{ pattern: string; payout: string }>>();
     for (const w of localWinners) {
@@ -355,16 +380,16 @@ export function useGameRoomState(
       arr.push({ pattern: w.win_pattern, payout: w.payouts[0] ?? '' });
       byTicket.set(w.ticket_id, arr);
     }
-    const comboMap   = new Map<string, { total: number; currency: string }>();
-    const patternMap = new Map<string, { total: number; currency: string }>();
+    const comboMap   = new Map<string, WinEntry>();
+    const patternMap = new Map<string, WinEntry>();
+
     for (const [ticketId, wins] of byTicket) {
       const ticket       = playerTickets.find(t => t.id === ticketId);
       const pricePaidStr = (ticket as any)?.pricePaid ?? '';
       const pricePaidNum = parseFloat(pricePaidStr.split(' ')[0]) || 0;
       const priceCurrency = pricePaidStr.trim().split(' ')[1] ?? '';
 
-      // caso 1: WS enviou nome do combo diretamente (worker chamou claimcombo)
-      // — o payout já é o valor real do combo, não dos padrões membros
+      // caso 1: WS enviou nome do combo diretamente
       const directComboNames = new Set<string>();
       for (const w of wins) {
         if (!comboNameSet.has(w.pattern)) continue;
@@ -372,9 +397,10 @@ export function useGameRoomState(
         const parts  = w.payout.trim().split(' ');
         const amount = parseFloat(parts[0]) || 0;
         const curr   = parts[1] || priceCurrency;
-        const existing = comboMap.get(w.pattern);
+        const k = isWinGolden(ticketId, w.pattern) ? w.pattern + GOLD_KEY : w.pattern;
+        const existing = comboMap.get(k);
         if (existing) existing.total += amount;
-        else comboMap.set(w.pattern, { total: amount, currency: curr });
+        else comboMap.set(k, { total: amount, currency: curr, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
       }
 
       // caso 2: padrões individuais → detecta combos e aplica max_weight
@@ -386,8 +412,6 @@ export function useGameRoomState(
         for (const { comboName, subsumedPatterns } of comboWins) {
           for (const sp of subsumedPatterns) subsumed.add(sp);
           const combo = gameCombinations.find(c => c.name === comboName);
-          // Em modo estático, fromPayouts reflete prizes individuais dos padrões membros
-          // (não o prêmio real do combo) — usar combo.weight diretamente.
           const fromPayouts = isStaticFinalState
             ? 0
             : patternWins
@@ -397,29 +421,33 @@ export function useGameRoomState(
           const comboTotal = fromPayouts > 0
             ? fromPayouts
             : pricePaidNum * comboWeightMultiplier;
-          const existing = comboMap.get(comboName);
+          const k = isWinGolden(ticketId, comboName) ? comboName + GOLD_KEY : comboName;
+          const existing = comboMap.get(k);
           if (existing) existing.total += comboTotal;
-          else comboMap.set(comboName, { total: comboTotal, currency: priceCurrency });
+          else comboMap.set(k, { total: comboTotal, currency: priceCurrency, goldenMultiplier: isWinGolden(ticketId, comboName) });
         }
         for (const w of patternWins) {
           if (subsumed.has(w.pattern)) continue;
           const parts    = w.payout.trim().split(' ');
           const amount   = parseFloat(parts[0]) || 0;
           const currency = parts[1] ?? '';
-          const existing = patternMap.get(w.pattern);
+          const k = isWinGolden(ticketId, w.pattern) ? w.pattern + GOLD_KEY : w.pattern;
+          const existing = patternMap.get(k);
           if (existing) existing.total += amount;
-          else patternMap.set(w.pattern, { total: amount, currency });
+          else patternMap.set(k, { total: amount, currency, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
         }
       }
     }
+    const stripKey = (k: string) => k.endsWith(GOLD_KEY) ? k.slice(0, -GOLD_KEY.length) : k;
+    const hasGold  = (k: string) => k.endsWith(GOLD_KEY);
     const combos   = [...comboMap.entries()]
-      .map(([name, v]) => ({ name, ...v, isCombination: true }))
+      .map(([k, v]) => ({ name: stripKey(k), ...v, isCombination: true, goldenMultiplier: hasGold(k) ? v.goldenMultiplier : undefined }))
       .sort((a, b) => b.total - a.total);
     const patterns = [...patternMap.entries()]
-      .map(([name, v]) => ({ name, ...v, isCombination: false }))
+      .map(([k, v]) => ({ name: stripKey(k), ...v, isCombination: false, goldenMultiplier: hasGold(k) ? v.goldenMultiplier : undefined }))
       .sort((a, b) => b.total - a.total);
     return [...combos, ...patterns];
-  }, [localWinners, playerTickets, gameCombinations, patternTypeByName, patternNameById, isStaticFinalState]);
+  }, [localWinners, playerTickets, gameCombinations, patternTypeByName, patternNameById, isStaticFinalState, goldenBall, patternByName]);
 
   // Detecta combinações satisfeitas em localWinners e constrói contagens ajustadas.
   // Padrões absorvidos por uma combinação são excluídos da contagem individual.
@@ -521,8 +549,8 @@ export function useGameRoomState(
 
   // ── Cartelas ordenadas + agrupadas ─────────────────────────────────────
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, t),
-    [playerTickets, drawnSet, gamePatterns, winnerMap],
+    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, drawMode ?? undefined, t),
+    [playerTickets, drawnSet, gamePatterns, winnerMap, drawMode],
   );
 
   // ── Carrega jogo + cartelas + room (se aplicável) ─────────────────────────

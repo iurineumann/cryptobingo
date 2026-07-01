@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
 
-const ATOMIC_API   = import.meta.env.VITE_ATOMIC_API        ?? 'https://test.api.atomicassets.io';
+const ATOMIC_API   = import.meta.env.VITE_ATOMIC_API        ?? '/api/v1/atomic';
 const COLLECTION   = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo1';
 const EXPLORER_URL = import.meta.env.VITE_EXPLORER_URL      ?? 'https://wax.bloks.io';
 
@@ -57,8 +57,11 @@ interface AtomicAsset {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function atomicFetch<T>(path: string): Promise<T[]> {
-    const res = await fetch(`${ATOMIC_API}/atomicassets/v1${path}`);
-    if (!res.ok) throw new Error(`AtomicAssets API ${res.status}`);
+    const res = await fetch(`${ATOMIC_API}${path}`);
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `AtomicAssets API ${res.status}`);
+    }
     const json = await res.json() as { success: boolean; data: T[] };
     if (!json.success) throw new Error('AtomicAssets API error');
     return json.data;
@@ -359,7 +362,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
             {!loading && tab === 'collections' && (
                 <div>
                     <div className="flex justify-between mb-4">
-                        <span className="text-sm text-[--cb-text-tertiary]">{collections.length} {t('admin.nft_collections_found')}</span>
+                        <span className="text-sm text-[--cb-text-tertiary]">{error ? '—' : collections.length} {t('admin.nft_collections_found')}</span>
                         <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={() => setShowCreateCol(v => !v)}>
                             {showCreateCol ? t('common.cancel') : `+ ${t('admin.nft_create_collection')}`}
                         </button>
@@ -419,7 +422,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                 </div>
                             </div>
                         ))}
-                        {collections.length === 0 && !loading && (
+                        {collections.length === 0 && !loading && !error && (
                             <p className="text-[--cb-text-tertiary] text-sm col-span-full">{t('admin.nft_no_collections')}</p>
                         )}
                     </div>
@@ -430,7 +433,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
             {!loading && tab === 'schemas' && (
                 <div>
                     <div className="flex justify-between mb-4">
-                        <span className="text-sm text-[--cb-text-tertiary]">{schemas.length} schemas · {COLLECTION}</span>
+                        <span className="text-sm text-[--cb-text-tertiary]">{error ? '—' : schemas.length} schemas · {COLLECTION}</span>
                         <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={() => setShowCreateSchema(v => !v)}>
                             {showCreateSchema ? t('common.cancel') : `+ ${t('admin.nft_create_schema')}`}
                         </button>
@@ -518,7 +521,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                 )}
                             </div>
                         ))}
-                        {schemas.length === 0 && !loading && (
+                        {schemas.length === 0 && !loading && !error && (
                             <p className="text-[--cb-text-tertiary] text-sm col-span-full">{t('admin.nft_no_schemas')}</p>
                         )}
                     </div>
@@ -529,7 +532,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
             {!loading && tab === 'templates' && (
                 <div>
                     <div className="flex justify-between mb-4">
-                        <span className="text-sm text-[--cb-text-tertiary]">{templates.length} templates · {COLLECTION}</span>
+                        <span className="text-sm text-[--cb-text-tertiary]">{error ? '—' : templates.length} templates · {COLLECTION}</span>
                         <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={() => setShowCreateTpl(v => !v)}>
                             {showCreateTpl ? t('common.cancel') : `+ ${t('admin.nft_create_template')}`}
                         </button>
@@ -615,7 +618,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                 </button>
                             </div>
                         ))}
-                        {templates.length === 0 && !loading && (
+                        {templates.length === 0 && !loading && !error && (
                             <p className="text-[--cb-text-tertiary] text-sm col-span-full">{t('admin.nft_no_templates')}</p>
                         )}
                     </div>
@@ -626,7 +629,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
             {!loading && tab === 'assets' && (
                 <div>
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                        <span className="text-sm text-[--cb-text-tertiary]">{assets.length} assets · {COLLECTION}</span>
+                        <span className="text-sm text-[--cb-text-tertiary]">{error ? '—' : assets.length} assets · {COLLECTION}</span>
                         <div className="flex gap-2">
                             {selected.size > 0 && (
                                 <>
@@ -698,7 +701,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                 </div>
                             </div>
                         ))}
-                        {assets.length === 0 && !loading && (
+                        {assets.length === 0 && !loading && !error && (
                             <p className="text-[--cb-text-tertiary] text-sm col-span-full">{t('admin.nft_no_assets')}</p>
                         )}
                     </div>

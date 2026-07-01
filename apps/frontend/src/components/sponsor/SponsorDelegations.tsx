@@ -137,7 +137,7 @@ export default function SponsorDelegations({ permissions = [] }: SponsorDelegati
     const [error, setError] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
 
-    const canManage = permissions.some(p => p.includes('.delegations.manage'));
+    const canManage = permissions.some(p => p.endsWith('.*') || p.includes('.delegations.manage'));
 
     const load = async () => {
         setLoading(true);

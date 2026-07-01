@@ -52,7 +52,7 @@ export interface PrizePanelsProps {
   readonly clearedStages: ClearedStage[];
   readonly isEffectiveGameEnded: boolean;
   readonly isStaticFinalState: boolean;
-  readonly playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean }>;
+  readonly playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean; goldenMultiplier?: number }>;
   readonly localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
   readonly playerTickets: Array<{ id: string; matrix: number[] }>;
   readonly nextGame: BlockchainGameState | null;
@@ -106,7 +106,7 @@ export default function PrizePanels({
           )}
 
           {/* ADR-014: Golden Ball multiplier progress (animação) */}
-          {goldenMultiplierProgress && !goldenMultiplierProgress.isFinal && (
+          {goldenBall && goldenMultiplierProgress && !goldenMultiplierProgress.isFinal && (
             <output className="gr-multiplier-progress" aria-live="polite">
               <span className="gr-multiplier-icon">✨</span>
               <div className="gr-multiplier-text">
@@ -159,10 +159,15 @@ export default function PrizePanels({
                 {playerWinEntries.length > 0 && (
                   <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
                     <div className="gr-ended-breakdown-title">{t('game_room.player_prizes_title')}</div>
-                    {playerWinEntries.map(({ name, total, currency, isCombination }) => (
-                      <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
+                    {playerWinEntries.map(({ name, total, currency, isCombination, goldenMultiplier }) => (
+                      <div key={`${name}${goldenMultiplier !== undefined ? '-gld' : ''}`} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                         <span className="gr-ended-breakdown-pattern">
                           {isCombination && '🔗 '}{fmtStageName(t, name)}
+                          {goldenMultiplier !== undefined && (
+                            <span className="gr-golden-badge-inline" data-testid="gr-golden-badge-inline">
+                              ×{goldenMultiplier}
+                            </span>
+                          )}
                         </span>
                         <span className="gr-ended-breakdown-prize">
                           {total.toFixed(4)} {currency}

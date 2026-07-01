@@ -103,16 +103,16 @@ function TicketPatternsSection({ stageWonKeys, completedPatterns, completedCombi
     ...completedPatterns.map(p => ({ label: p.name, isCombo: false, multiplier: parseFloat(p.prize) || 0 })),
     ...(completedCombinations ?? []).map(c => ({ label: c.name, isCombo: true, multiplier: c.weight / 100 })),
   ].sort((a, b) => b.multiplier - a.multiplier);
+  const top = allItems[0];
+  if (!top) return null;
   return (
     <div className="gr-ticket-patterns">
-      {allItems.map(item => (
-        <span
-          key={item.label}
-          className={`gr-ticket-pattern-badge${item.isCombo ? ' gr-ticket-combo-badge' : ''}`}
-        >
-          <span>{item.isCombo ? <Link2 className="size-3 shrink-0" /> : <Star className="size-3 shrink-0" />}</span>{item.label}
-        </span>
-      ))}
+      <span
+        key={top.label}
+        className={`gr-ticket-pattern-badge${top.isCombo ? ' gr-ticket-combo-badge' : ''}`}
+      >
+        <span>{top.isCombo ? <Link2 className="size-3 shrink-0" /> : <Star className="size-3 shrink-0" />}</span>{top.label}
+      </span>
     </div>
   );
 }
@@ -196,8 +196,9 @@ export function TicketCard({
   const isWinner        = !suppressWinner && (winPattern !== null || completedPatterns.length > 0);
   const isClose         = !isWinner && markedCount >= (density === 'compact' ? 20 : 18);
   const showNearMiss    = !isWinner && nearMiss.patternsOneAway > 0;
+  const goldenBallCheckSet = winPattern ?? winningCells;
   const isGoldenWinner  = isWinner && goldenBallNum !== undefined &&
-    [...winningCells].some(gridIdx => {
+    [...goldenBallCheckSet].some(gridIdx => {
       const r = Math.floor(gridIdx / 5);
       const c = gridIdx % 5;
       return grid[r][c] === goldenBallNum;

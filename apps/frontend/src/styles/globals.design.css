@@ -509,6 +509,7 @@ body:has(.gr-shell) { overflow-x: hidden; overflow-y: auto; }
 .gr-golden-banner .gr-golden-text strong { font-family: var(--font-family-display); font-size: .85rem; font-weight: 700; color: var(--cb-accent); }
 .gr-golden-banner .gr-golden-text span { font-size: .75rem; color: var(--cb-text-secondary); }
 .gr-golden-banner .gr-golden-mult { font-family: var(--font-family-display); font-size: 1.4rem; font-weight: 800; color: var(--cb-accent); letter-spacing: -.03em; text-shadow: 0 0 20px rgba(251,191,36,.55); flex-shrink: 0; }
+.gr-golden-badge-inline { display: inline-flex; align-items: center; margin-inline-start: .35rem; padding: .05rem .35rem; font-size: .65rem; font-weight: 700; color: var(--cb-accent); background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.25); border-radius: .35rem; vertical-align: middle; line-height: 1.2; }
 
 /* ADR-014: multiplier progress animação — card style */
 .gr-multiplier-progress { display: flex; align-items: center; gap: 1rem; padding: .65rem 1rem; background: var(--cb-bg-card); border: 1px solid var(--cb-border-default); border-radius: .75rem; box-shadow: var(--shadow-card); animation: cb-fade-in .2s ease forwards; }

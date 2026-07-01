@@ -33,7 +33,7 @@ export default function GametypesAdmin() {
     const [drawMode, setDrawMode] = useState<DrawMode>('standard');
     const [maxBalls, setMaxBalls] = useState('35');
     const [goldenBallAfter, setGoldenBallAfter] = useState('35');
-    const [masterWeightOverride, setMasterWeightOverride] = useState('5.00');
+    const [masterWeightOverride, setMasterWeightOverride] = useState('5');
 
     // ADR-013: estágios MULTI_MATCH
     const [stages, setStages] = useState<StageRule[]>([]);
@@ -190,7 +190,7 @@ export default function GametypesAdmin() {
         setDrawMode((gt.draw_mode ?? 'standard') as DrawMode);
         setMaxBalls(String(gt.max_balls ?? '35'));
         setGoldenBallAfter(String(gt.golden_ball_after ?? '35'));
-        setMasterWeightOverride(String((gt.master_weight_ovrd ?? 0) / 100));
+        setMasterWeightOverride(String(gt.master_weight_ovrd ?? 0));
         setStages(gt.stages?.length ? gt.stages.map(s => ({ ...s })) : []);
 
         const rebuilt: Record<string, { weight: string; type: string }> = {};
@@ -254,7 +254,7 @@ export default function GametypesAdmin() {
                 max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0
                                     : drawMode === 'goldenball' ? (parseInt(goldenBallAfter) || 0) + 1 : 0,
                 golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
-                master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
+                master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride)) : 0,
             });
 
             // 2. Atualiza metadata MongoDB (tipos + combos)
@@ -299,7 +299,7 @@ export default function GametypesAdmin() {
                 max_balls:          drawMode === 'fixed'      ? parseInt(maxBalls) || 0
                                     : drawMode === 'goldenball' ? (parseInt(goldenBallAfter) || 0) + 1 : 0,
                 golden_ball_after:  drawMode === 'goldenball' ? parseInt(goldenBallAfter) || 0 : 0,
-                master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride) * 100) : 0,
+                master_weight_ovrd: drawMode === 'firstfull'  ? Math.round(parseFloat(masterWeightOverride)) : 0,
             });
             // Persiste combinações + tipos no MongoDB. NÃO engolir erro: se falhar, o
             // gametype existe on-chain mas sem combinações — o admin precisa saber para
