@@ -56,3 +56,8 @@ debug/
 .planning/
 
 .scannerwork
+
+# Claude Code worktrees
+.claude/worktrees/
+.opencode/
+debug.txt
