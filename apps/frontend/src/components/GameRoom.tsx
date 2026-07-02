@@ -181,6 +181,7 @@ export default function GameRoom({
               combinationCells={combinationCells} completedCombinationsPerTicket={completedCombinationsPerTicket}
               currencySymbol={currencySymbol} onClose={() => setShowPatterns(false)} panelRef={patternsRef}
               drawMode={drawMode} gameStages={gameStages} clearedStages={clearedStages}
+              playerTickets={playerTickets} drawnSet={drawnSet}
             />
           )}
 

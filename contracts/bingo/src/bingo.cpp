@@ -353,7 +353,7 @@ namespace bingo {
         patterns.erase(patterns.require_find(pattern_id, "pattern_id nao encontrado."));
     }
 
-    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd) {
+    void bingo_contract::addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint16_t master_weight_ovrd) {
         require_auth(permission_level{get_self(), "admin"_n});
         check(base_multiplier > 0, "base_multiplier deve ser maior que zero.");
         check(rules.size() > 0, "rules deve ter pelo menos 1 elemento.");
@@ -1036,6 +1036,10 @@ namespace bingo {
             auto pat_itr = patterns.find(rule.pattern_id);
             if (pat_itr != patterns.end() && (uint64_t)pat_itr->mask == win_pattern_mask) {
                 win_weight = rule.weight;
+                // ADR-012 §4: FIRST_FULL — master_weight_ovrd substitui peso do MASTER
+                if (gt_itr->master_weight_ovrd > 0 && (uint64_t)pat_itr->mask == 0x1FFFFFF) {
+                    win_weight = gt_itr->master_weight_ovrd;
+                }
                 break;
             }
         }

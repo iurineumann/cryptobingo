@@ -123,6 +123,8 @@
     "stage_label": "Stage {{stage}}",
     "stage_winners": "{{count}} winner(s)",
     "patterns_required": "{{count}} patterns",
+    "patterns_progress": "{{cur}}/{{total}} patterns",
+    "mm_patterns_heading": "Match patterns",
     "game_ended_title": "Game Over",
     "game_ended_winners": "{{count}} winner(s) this round",
     "game_ended_you_won": "You won! 🎉",

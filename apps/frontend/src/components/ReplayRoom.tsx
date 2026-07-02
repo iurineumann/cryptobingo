@@ -96,7 +96,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
   }, [patterns]);
 
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap, t),
+    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap, undefined, t),
     [tickets, revealedSet, patterns, winnerMap],
   );
 

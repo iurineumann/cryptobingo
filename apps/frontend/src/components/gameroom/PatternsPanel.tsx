@@ -30,6 +30,10 @@ export interface PatternsPanelProps {
   drawMode?: string | null;
   gameStages?: StageRule[];
   clearedStages?: ClearedStage[];
+  /** Cartelas do jogador p/ calcular progresso dos estágios */
+  playerTickets?: Array<{ id: string; matrix: number[] }>;
+  /** Bolas sorteadas p/ verificar padrões completos */
+  drawnSet?: Set<number>;
 }
 
 export default function PatternsPanel({
@@ -49,9 +53,50 @@ export default function PatternsPanel({
   drawMode,
   gameStages,
   clearedStages,
+  playerTickets,
+  drawnSet,
 }: PatternsPanelProps): React.JSX.Element {
   const { t } = useTranslation();
   const isMultiMatch = drawMode === 'multimatch';
+
+  // ── MULTI_MATCH: progresso real dos estágios pelas cartelas do jogador ──
+  // Conta quantos padrões o jogador completou em todas as cartelas.
+  // O progresso de cada estágio = min(completed, patterns_required) / patterns_required.
+  const stageProgress = React.useMemo(() => {
+    if (!isMultiMatch || !gameStages?.length || !playerTickets?.length || !roomPatterns.length || !drawnSet?.size) {
+      return new Map<number, { completed: number; total: number; pct: number }>();
+    }
+    const progress = new Map<number, { completed: number; total: number; pct: number }>();
+    for (const s of gameStages) {
+      progress.set(s.stage, { completed: 0, total: s.patterns_required, pct: 0 });
+    }
+    // Matriz vem com 24 elementos (FREE SPACE excluído). Converte para 25 posições
+    // row-major com null no índice 12 para comparar com padrões.
+    const ticketFlat = (matrix: number[]): (number | null)[] => {
+      const f: (number | null)[] = [];
+      for (let i = 0, j = 0; i < 25; i++) {
+        f.push(i === 12 ? null : (matrix[j++] ?? null));
+      }
+      return f;
+    };
+    // Conta padrões completos por ticket, agrega por estágio
+    let maxCompleted = 0;
+    for (const ticket of playerTickets) {
+      const flat = ticketFlat(ticket.matrix);
+      let ticketCompleted = 0;
+      for (const p of roomPatterns) {
+        const done = p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number));
+        if (done) ticketCompleted++;
+      }
+      if (ticketCompleted > maxCompleted) maxCompleted = ticketCompleted;
+    }
+    // Aplica ao progresso de cada estágio
+    for (const s of gameStages) {
+      const cap = Math.min(maxCompleted, s.patterns_required);
+      progress.set(s.stage, { completed: cap, total: s.patterns_required, pct: Math.round((cap / s.patterns_required) * 100) });
+    }
+    return progress;
+  }, [isMultiMatch, gameStages, playerTickets, roomPatterns, drawnSet]);
 
   function patternMeta(proxPct: number, winCount: number, patternWon: boolean, p: Pattern): string {
     if (patternWon) return `${t('game_room.pattern_completed')} (${winCount})`;
@@ -83,7 +128,8 @@ export default function PatternsPanel({
               const cleared = clearedStages?.find(cs => cs.stage === s.stage);
               const winnerCount = cleared?.winners?.length ?? 0;
               const isComplete = !!cleared;
-              const pct = isComplete ? 100 : 0;
+              const sp = stageProgress.get(s.stage);
+              const pct = isComplete ? 100 : (sp?.pct ?? 0);
               return (
                 <div key={s.stage} className={`gr-pattern${isComplete ? ' is-close' : ''}`} style={{ gridTemplateColumns: '1fr auto' }}>
                   <div className="gr-pattern-info">
@@ -99,7 +145,7 @@ export default function PatternsPanel({
                       </span>
                     ) : (
                       <span className="meta">
-                        {t('game_room.patterns_required', { count: s.patterns_required })}
+                        {sp ? t('game_room.patterns_progress', { cur: sp.completed, total: sp.total }) : t('game_room.patterns_required', { count: s.patterns_required })}
                       </span>
                     )}
                   </div>
@@ -110,6 +156,29 @@ export default function PatternsPanel({
                 </div>
               );
             })}
+            {sortedPatterns.length > 0 && (
+              <div className="gr-mm-patterns-sub">
+                <span className="gr-mm-patterns-sub-title">{t('game_room.mm_patterns_heading')}</span>
+                <div className="gr-mm-patterns-sub-list">
+                  {sortedPatterns.map(p => {
+                    const proxPct = patternProximityMap.get(p.name) ?? 0;
+                    return (
+                      <div key={p.name} className="gr-pattern" style={{ gridTemplateColumns: '24px 1fr' }}>
+                        <div className="gr-pattern-mini">
+                          {p.cells.map((on, j) => <i key={`mm-${p.name}-cell-${j}`} className={on ? 'on' : ''} />)}
+                        </div>
+                        <div className="gr-pattern-info">
+                          <span className="name">{p.name}</span>
+                          <div className="mini-progress">
+                            <i style={{ width: `${Math.round(proxPct * 100)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         ) : roomPatterns.length === 0 ? (
           <div className="gr-summary-empty" style={{ margin: '0.5rem 0' }}>

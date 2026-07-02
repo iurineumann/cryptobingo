@@ -252,6 +252,33 @@ export function useGameRoomState(
     if (winners.length > 0 || !isStaticFinalState) return winners;
     if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
 
+    // MULTI_MATCH: vencedores vêm exclusivamente dos estágios via WS/PrizePipeline.
+    // Não computar padrões individuais — isso marcaria cartelas como vencedoras
+    // sem terem completado estágio.
+    const mode = localDrawMode ?? drawMode;
+    if (mode === 'multimatch') {
+      // Tenta reconstruir de prizeStatuses (API hydrated) quando disponível
+      const psKeys = Object.keys(prizeStatuses);
+      if (psKeys.length > 0) {
+        const stageResults: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
+        const seen = new Set<string>();
+        for (const [key, ps] of Object.entries(prizeStatuses)) {
+          const [ticketId, winLabel] = key.split(':');
+          if (!winLabel?.startsWith('stage_')) continue;
+          const dedupKey = `${ticketId}:${winLabel}`;
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          stageResults.push({
+            ticket_id: ticketId,
+            win_pattern: winLabel,
+            payouts: ps.amount ? [`${ps.amount} ${ps.currency ?? ''}`.trim()] : [],
+          });
+        }
+        if (stageResults.length > 0) return stageResults;
+      }
+      return [];
+    }
+
     const result: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
     for (const ticket of playerTickets) {
       const B    = ticket.matrix.slice(0, 5);
@@ -294,7 +321,7 @@ export function useGameRoomState(
       }
     }
     return result;
-  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet]);
+  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet, drawMode, localDrawMode, prizeStatuses]);
 
   // constrói mapa ticket_id → prize + patternName + patternCount + totalPrize
   const winnerMap = useMemo(() => {
@@ -549,8 +576,8 @@ export function useGameRoomState(
 
   // ── Cartelas ordenadas + agrupadas ─────────────────────────────────────
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, drawMode ?? undefined, t),
-    [playerTickets, drawnSet, gamePatterns, winnerMap, drawMode],
+    () => groupTicketsByCategory(playerTickets, drawnSet, gamePatterns, winnerMap, resolvedDrawMode ?? undefined, t),
+    [playerTickets, drawnSet, gamePatterns, winnerMap, resolvedDrawMode],
   );
 
   // ── Carrega jogo + cartelas + room (se aplicável) ─────────────────────────
