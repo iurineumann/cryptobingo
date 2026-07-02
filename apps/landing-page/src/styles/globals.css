@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --color-brand-50:   #f5f3ff;
+    --color-brand-100:  #ede9fe;
+    --color-brand-200:  #ddd6fe;
+    --color-brand-300:  #c4b5fd;
+    --color-brand-400:  #a78bfa;
+    --color-brand-500:  #8b5cf6;
+    --color-brand-600:  #7c3aed;
+    --color-brand-700:  #6d28d9;
+    --color-brand-800:  #5b21b6;
+    --color-brand-900:  #4c1d95;
+    --color-brand-950:  #2e1065;
+
+    --color-accent-50:  #fffbeb;
+    --color-accent-100: #fef3c7;
+    --color-accent-200: #fde68a;
+    --color-accent-300: #fcd34d;
+    --color-accent-400: #fbbf24;
+    --color-accent-500: #f59e0b;
+    --color-accent-600: #d97706;
+    --color-accent-700: #b45309;
+    --color-accent-800: #92400e;
+    --color-accent-900: #78350f;
+
+    --color-surface-950: #0a0a0f;
+    --color-surface-900: #0f0f1a;
+    --color-surface-800: #1a1a2e;
+    --color-surface-750: #1e1e35;
+    --color-surface-700: #252541;
+    --color-surface-600: #2d2d52;
+    --color-surface-500: #3d3d6b;
+    --color-surface-400: #5252a3;
+
+    --color-success-400: #34d399;
+    --color-success-500: #10b981;
+    --color-success-600: #059669;
+    --color-danger-400:  #fb7185;
+    --color-danger-500:  #f43f5e;
+    --color-danger-600:  #e11d48;
+    --color-warning-400: #fbbf24;
+    --color-warning-500: #f59e0b;
+    --color-info-400:    #60a5fa;
+    --color-info-500:    #3b82f6;
+
+    --font-sans:    'Geist Variable', sans-serif;
+    --font-display: 'Geist Variable', sans-serif;
+    --font-mono:    'Geist Variable', monospace;
+
+    --font-size-xs:   clamp(0.70rem,  0.65rem + 0.25vw, 0.75rem);
+    --font-size-sm:   clamp(0.825rem, 0.80rem + 0.25vw, 0.875rem);
+    --font-size-base: clamp(0.9375rem,0.90rem + 0.25vw, 1rem);
+    --font-size-lg:   clamp(1.0625rem,1.00rem + 0.5vw,  1.125rem);
+    --font-size-xl:   clamp(1.175rem, 1.10rem + 0.75vw, 1.25rem);
+    --font-size-2xl:  clamp(1.35rem,  1.25rem + 1vw,    1.5rem);
+    --font-size-3xl:  clamp(1.6rem,   1.40rem + 1.5vw,  1.875rem);
+    --font-size-4xl:  clamp(1.9rem,   1.60rem + 2vw,    2.25rem);
+    --font-size-5xl:  clamp(2.4rem,   2.00rem + 2.5vw,  3rem);
+
+    --shadow-glow-brand:   0 0 20px -4px rgb(109 40 217 / 0.6), 0 0 40px -8px rgb(109 40 217 / 0.3);
+    --shadow-glow-accent:  0 0 20px -4px rgb(245 158 11 / 0.7), 0 0 40px -8px rgb(245 158 11 / 0.3);
+    --shadow-glow-success: 0 0 20px -4px rgb(16 185 129 / 0.6);
+    --shadow-glow-danger:  0 0 20px -4px rgb(244 63 94 / 0.6);
+    --shadow-card:         0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+    --shadow-card-hover:   0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+    --shadow-modal:        0 25px 50px -12px rgb(0 0 0 / 0.7);
+}
+
+html {
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: var(--color-surface-900);
+    color: #f1f5f9;
+}
+
+*, *::before, *::after { box-sizing: border-box; }

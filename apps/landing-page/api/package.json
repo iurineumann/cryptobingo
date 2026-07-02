@@ -1,0 +1,11 @@
+{
+  "name": "cryptobingo-landing-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@azure/functions": "^4.8.0",
+    "@azure/communication-email": "^1.0.0",
+    "pg": "^8.13.0"
+  }
+}
