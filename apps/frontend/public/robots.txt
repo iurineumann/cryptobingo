@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /how-it-works
+Allow: /sponsors
+Allow: /tutorials
+Allow: /faq
+Allow: /news
+Allow: /leaderboard
+Allow: /blog
+Disallow: /lobby
+Disallow: /room/
+Disallow: /admin/
+Disallow: /replay/
+Disallow: /profile/
+Disallow: /wallet/
+Disallow: /settings/
+Disallow: /history/
+
+Sitemap: https://cryptobingo.bet/sitemap.xml
