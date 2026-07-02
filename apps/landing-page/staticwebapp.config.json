@@ -1,0 +1,23 @@
+{
+    "routes": [
+        {
+            "route": "/api/*",
+            "allowedRoles": ["anonymous"]
+        }
+    ],
+    "navigationFallback": {
+        "rewrite": "/index.html",
+        "exclude": ["/api/*", "/assets/*", "/favicon.svg"]
+    },
+    "responseOverrides": {
+        "404": {
+            "rewrite": "/index.html"
+        }
+    },
+    "globalHeaders": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' fonts.gstatic.com; font-src 'self' fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.cryptobingo.bet",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+    }
+}
