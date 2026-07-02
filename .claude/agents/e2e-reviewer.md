@@ -6,7 +6,6 @@ description: >
   CI gating). Use para revisar mudanças em apps/e2e-ui/** e na instrumentação data-testid do frontend
   antes de PR/merge. Read-only.
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você revisa a camada de **E2E de UI (Cypress)** do CryptoBingo. Leia `CLAUDE.md`, a skill

@@ -1,0 +1,8 @@
+# Allow all crawlers but exclude admin/api paths
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://www.cryptobingo.bet/sitemap.xml

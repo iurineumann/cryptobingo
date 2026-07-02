@@ -6,8 +6,9 @@ const productLinks = [
 
 const communityLinks = [
   { label: 'GitHub', href: 'https://github.com/iurineumann/cryptobingo' },
-  { label: 'Telegram', href: '#', disabled: true },
-  { label: 'Discord', href: '#', disabled: true },
+  { label: 'Telegram', href: 'https://t.me/cryptobingo_bet' },
+  { label: 'Discord', href: 'https://discord.gg/EYYhdRWUnm' },
+  { label: 'X/Twitter', href: 'https://x.com/CryptoBingo_Bet' },
 ] as const;
 
 const legalLinks = [
