@@ -19,10 +19,14 @@ function isBlockType(t: string): boolean {
     return (BLOCK_TYPES as readonly string[]).includes(t);
 }
 
-export default function ContentAdmin() {
+interface ContentAdminProps {
+    defaultType?: string;
+}
+
+export default function ContentAdmin({ defaultType = 'faq' }: Readonly<ContentAdminProps>) {
     const { t } = useTranslation();
 
-    const [activeType, setActiveType] = useState<string>('faq');
+    const [activeType, setActiveType] = useState<string>(defaultType);
     const [items, setItems] = useState<ContentItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);

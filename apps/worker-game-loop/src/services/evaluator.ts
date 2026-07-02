@@ -108,15 +108,20 @@ function selectBestPayout(
     ticket:          BlockchainTicketRecord,
     winningPatterns: PatternEntry[],
     comboCtx:        ComboContext | null,
+    masterWeightOvrd = 0,
 ): WinResult {
     const best = winningPatterns.reduce((prev, curr) => curr.weight > prev.weight ? curr : prev, winningPatterns[0]!);
+    // ADR-012 §4: FIRST_FULL — master_weight_ovrd substitui peso do MASTER
+    const weight = (masterWeightOvrd > 0 && (best.mask & MASTER_MASK) === MASTER_MASK)
+        ? masterWeightOvrd
+        : best.weight;
     if (comboCtx) {
         const combo = bestSatisfiedCombo(winningPatterns.map(p => p.name), comboCtx);
-        if (combo && combo.weight > best.weight) {
+        if (combo && combo.weight > weight) {
             return { ticket, patternName: combo.name, patternMask: best.mask, weight: combo.weight, comboId: combo.combo_id };
         }
     }
-    return { ticket, patternName: best.name, patternMask: best.mask, weight: best.weight };
+    return { ticket, patternName: best.name, patternMask: best.mask, weight };
 }
 
 /** Par de padrão + weight para avaliação dinâmica. */
@@ -187,6 +192,7 @@ export async function findAllWinners(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string,
+    masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
     const comboCtx = await fetchComboContext(gametypeId); // ADR-016
@@ -214,7 +220,7 @@ export async function findAllWinners(
             const winningPatterns = checkWinPatterns(finalState, patterns);
 
             if (winningPatterns.length > 0) {
-                winners.push(selectBestPayout(ticket, winningPatterns, comboCtx));
+                winners.push(selectBestPayout(ticket, winningPatterns, comboCtx, masterWeightOvrd));
             }
         }
 
@@ -240,6 +246,7 @@ async function findAllWinnersWithIndex(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string,
+    masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
     const comboCtx = await fetchComboContext(gametypeId); // ADR-016
@@ -261,7 +268,7 @@ async function findAllWinnersWithIndex(
         if (winningPatterns.length > 0) {
             const ticketData = await fetchTicketById(gameId, ticketId);
             if (ticketData) {
-                winners.push(selectBestPayout(ticketData, winningPatterns, comboCtx));
+                winners.push(selectBestPayout(ticketData, winningPatterns, comboCtx, masterWeightOvrd));
             }
         }
     }
@@ -320,9 +327,13 @@ export function deriveGoldenMultiplierExported(drawnBalls: number[], goldenBallA
 }
 
 function deriveGoldenMultiplier(drawnBalls: number[], goldenBallAfter: number): number {
-    const b1   = drawnBalls[goldenBallAfter + 1] ?? 1;
-    const b2   = drawnBalls[goldenBallAfter + 2] ?? 1;
-    const roll = ((b1 << 8) | b2) % 10_000;
+    const b1 = drawnBalls[goldenBallAfter + 1] ?? 1;
+    const b2 = drawnBalls[goldenBallAfter + 2] ?? 1;
+    // b1,b2 ∈ [1,75] (permutação Fisher-Yates dos 75 bytes do oracle).
+    // Mapeia os 75×74=5550 pares (b1,b2) distintos para roll 0-9999 uniforme.
+    if (b1 === b2) return 2;
+    const idx = (b1 - 1) * 74 + (b2 < b1 ? b2 - 1 : b2 - 2);
+    const roll = Math.floor(idx * 10000 / 5550);
     if (roll < 6_000) return 2;
     if (roll < 8_500) return 3;
     if (roll < 9_500) return 5;
@@ -436,7 +447,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
     while (hasMore) {
         const res = await rpcClient.v1.chain.get_table_rows({
             code: CONTRACT_ACCOUNT, scope: Name.from(UInt64.from(gameId)), table: 'tickets',
-            limit: 100, lower_bound: lowerBound as any, json: true,
+            key_type: 'i64', limit: 100, lower_bound: lowerBound as any, json: true,
         });
         allTickets.push(...normalizeTickets(res.rows));
         hasMore = res.more === true && res.rows.length === 100;
@@ -606,6 +617,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     const maxBalls: number   = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
     const goldenBallAfter: number = gt.golden_ball_after ?? 0;
     const baseMultiplier: number = gt.base_multiplier ?? 1;
+    const masterWeightOvrd: number = gt.master_weight_ovrd ?? 0;
 
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
@@ -658,9 +670,9 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     let winners: WinResult[];
 
     if (hasIndex && drawMode === 'standard') {
-        winners = await findAllWinnersWithIndex(gameId, effectiveBalls, gametypeId);
+        winners = await findAllWinnersWithIndex(gameId, effectiveBalls, gametypeId, masterWeightOvrd);
     } else {
-        winners = await findAllWinners(gameId, effectiveBalls, gametypeId);
+        winners = await findAllWinners(gameId, effectiveBalls, gametypeId, masterWeightOvrd);
     }
 
     // FIRST_FULL: filtra apenas tickets que completaram MASTER

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, TriangleAlert, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, TriangleAlert, Plus, Trash2, ChevronDown, ChevronRight, Building2 } from 'lucide-react';
 import { getAuthToken, createDelegation, removeDelegation } from '../../services/api';
+import { hasAnyPermission } from '../../utils/permissionMatcher';
 
 interface SponsorsAdminProps {
     readonly permissions: string[];
@@ -125,14 +126,150 @@ function CreateDelegationModal({
     );
 }
 
+function CreateOrgModal({
+    onClose,
+    onCreated,
+}: Readonly<{
+    onClose: () => void;
+    onCreated: () => void;
+}>) {
+    const { t } = useTranslation();
+    const [users, setUsers] = useState<Array<{ wallet_address: string; username: string }>>([]);
+    const [filter, setFilter] = useState('');
+    const [selectedWallet, setSelectedWallet] = useState('');
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [name, setName] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch('/api/v1/admin/users?limit=100', {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        })
+            .then(res => res.json())
+            .then(data => setUsers(data.users ?? []))
+            .catch(() => {});
+    }, []);
+
+    const filteredUsers = users.filter(u =>
+        u.wallet_address.includes(filter) || (u.username && u.username.includes(filter))
+    );
+
+    const save = async () => {
+        const wallet = selectedWallet || filter.trim();
+        if (!wallet) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/v1/admin/sponsor-orgs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`,
+                },
+                body: JSON.stringify({ owner_wallet: wallet, name: name.trim() || undefined }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || `HTTP ${res.status}`);
+            }
+            onCreated();
+        } catch (err) {
+            setError((err as Error).message || t('errors.generic'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="modal-create-org">
+            <button className="absolute inset-0 bg-black/50 border-0 cursor-default" aria-label="Fechar" onClick={onClose} />
+            <div className="cb-card p-6 max-w-md w-full mx-4 relative z-10">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">{t('admin.new_org')}</h3>
+                    <button onClick={onClose} className="cb-btn cb-btn-ghost cb-btn-sm"><X className="size-4" /></button>
+                </div>
+
+                {error && (
+                    <div className="cb-alert cb-alert-error mb-4">
+                        <span><TriangleAlert className="size-4 shrink-0" /> {error}</span>
+                    </div>
+                )}
+
+                <div className="mb-4 relative">
+                    <label className="text-sm font-medium block mb-1">{t('admin.org_owner_wallet')}</label>
+                    <input
+                        type="text"
+                        data-testid="field-owner-wallet"
+                        value={filter}
+                        onChange={e => {
+                            setFilter(e.target.value);
+                            setSelectedWallet('');
+                            setShowDropdown(true);
+                        }}
+                        onFocus={() => setShowDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                        className="cb-input w-full"
+                        placeholder="wallet_address"
+                    />
+                    {showDropdown && filteredUsers.length > 0 && (
+                        <div className="absolute z-20 mt-1 w-full cb-card p-0 max-h-48 overflow-y-auto shadow-lg">
+                            {filteredUsers.map(u => (
+                                <button
+                                    key={u.wallet_address}
+                                    data-testid={`combobox-option-${u.wallet_address}`}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-[--cb-surface-elevated] border-0 flex flex-col"
+                                    onMouseDown={() => {
+                                        setFilter(u.wallet_address);
+                                        setSelectedWallet(u.wallet_address);
+                                        setShowDropdown(false);
+                                    }}
+                                >
+                                    <span className="font-mono text-[--cb-text-primary]">{u.wallet_address}</span>
+                                    {u.username && <span className="text-xs text-[--cb-text-tertiary]">{u.username}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="mb-4">
+                    <label className="text-sm font-medium block mb-1">{t('admin.org_name')}</label>
+                    <input
+                        type="text"
+                        data-testid="field-org-name"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="cb-input w-full"
+                        placeholder={t('admin.org_name_placeholder')}
+                    />
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6">
+                    <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onClose}>{t('common.cancel')}</button>
+                    <button
+                        className="cb-btn cb-btn-primary cb-btn-sm"
+                        data-testid="btn-submit-org"
+                        onClick={save}
+                        disabled={saving || !(selectedWallet || filter.trim())}
+                    >
+                        {saving ? t('common.saving') : <><Plus className="size-4" /> {t('common.create')}</>}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function SponsorsAdmin({ permissions }: SponsorsAdminProps) {
     const { t } = useTranslation();
     const [orgs, setOrgs] = useState<OrgRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [createOrgId, setCreateOrgId] = useState<string | null>(null);
 
-    const canManage = permissions.includes('admin.sponsors.manage');
+    const canManage = hasAnyPermission(permissions, ['admin.*', 'admin.sponsors.manage']);
 
     const load = async () => {
         setLoading(true);
@@ -171,7 +308,24 @@ export default function SponsorsAdmin({ permissions }: SponsorsAdminProps) {
 
     return (
         <div>
-            <p className="text-sm text-[--cb-text-tertiary] mb-6">{t('admin.sponsors_desc')}</p>
+            <div className="flex items-center justify-between mb-6">
+                <p className="text-sm text-[--cb-text-tertiary]">{t('admin.sponsors_desc')}</p>
+                {canManage && (
+                    <button className="cb-btn cb-btn-outline cb-btn-sm" data-testid="btn-create-org" onClick={() => setShowCreateModal(true)}>
+                        <Building2 className="size-4" /> {t('admin.new_org')}
+                    </button>
+                )}
+            </div>
+
+            {showCreateModal && (
+                <CreateOrgModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={() => {
+                        setShowCreateModal(false);
+                        load();
+                    }}
+                />
+            )}
 
             {error && (
                 <div className="cb-alert cb-alert-error mb-4">

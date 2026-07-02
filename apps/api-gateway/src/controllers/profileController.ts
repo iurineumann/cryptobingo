@@ -334,7 +334,7 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
 
         const [users, total] = await Promise.all([
             UserProfile.find({}, {
-                wallet_address: 1, nickname: 1, role: 1,
+                wallet_address: 1, nickname: 1, role: 1, permissions: 1,
                 'progression.games_played': 1, createdAt: 1,
             }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             UserProfile.countDocuments(),
@@ -345,6 +345,7 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
                 wallet_address: u.wallet_address,
                 username:       u.nickname,
                 role:           u.role,
+                permissions:    u.permissions ?? [],
                 total_games:    (u.progression as any)?.games_played ?? 0,
                 total_wagered:  null,
             })),

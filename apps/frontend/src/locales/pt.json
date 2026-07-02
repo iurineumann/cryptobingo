@@ -123,6 +123,8 @@
     "stage_label": "Estágio {{stage}}",
     "stage_winners": "{{count}} vencedor(es)",
     "patterns_required": "{{count}} padrões",
+    "patterns_progress": "{{cur}}/{{total}} padrões",
+    "mm_patterns_heading": "Padrões de verificação",
     "game_ended_title": "Partida Encerrada",
     "game_ended_winners": "{{count}} vencedor(es) nesta partida",
     "game_ended_you_won": "Você venceu! 🎉",

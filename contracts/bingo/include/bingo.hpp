@@ -253,7 +253,7 @@ namespace bingo {
         eosio::name               draw_mode          = "standard"_n;
         uint8_t                   max_balls          = 0;
         uint8_t                   golden_ball_after  = 0;
-        uint8_t                   master_weight_ovrd = 0;
+        uint16_t                  master_weight_ovrd = 0;
         std::vector<stage_rule>   stages;             // ADR-013: vazio = não é MULTI_MATCH
         // ADR-016: binary_extension → compatível com linhas existentes (sem este
         // campo) escritas antes do upgrade. Ausente = sem combinações.
@@ -495,7 +495,7 @@ namespace bingo {
         // ── Padrões Dinâmicos (ADR-004 Fase 2) ───────────────────────────────
         [[eosio::action]] void addpattern(uint64_t pattern_id, std::string name, uint32_t mask);
         [[eosio::action]] void delpattern(uint64_t pattern_id);
-        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint8_t master_weight_ovrd);
+        [[eosio::action]] void addgametype(uint64_t gametype_id, std::string name, uint8_t base_multiplier, std::vector<pattern_rule> rules, eosio::name draw_mode, uint8_t max_balls, uint8_t golden_ball_after, uint16_t master_weight_ovrd);
         [[eosio::action]] void setstages(uint64_t gametype_id, std::vector<stage_rule> stages); // ADR-013
         [[eosio::action]] void setcombos(uint64_t gametype_id, std::vector<combo_rule> combinations); // ADR-016
         [[eosio::action]] void delgametype(uint64_t gametype_id);

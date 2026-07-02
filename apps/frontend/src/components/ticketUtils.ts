@@ -172,9 +172,20 @@ function isWinnerTicket(ticket: TicketEntry, winnerMap: Map<string, WinnerInfo>)
   return winnerMap.has(ticket.id);
 }
 
+function ticketHasCompletedPattern(matrix: number[], drawnSet: Set<number>, patterns: Pattern[]): boolean {
+  const flat = ticketFlat(matrix);
+  for (const p of patterns) {
+    const allReq = p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number));
+    if (allReq) return true;
+  }
+  return false;
+}
+
 function sortWonTickets(a: TicketEntry, b: TicketEntry, winnerMap: Map<string, WinnerInfo>): number {
-  const pA = winnerMap.get(a.id)!.totalPrize;
-  const pB = winnerMap.get(b.id)!.totalPrize;
+  const wA = winnerMap.get(a.id);
+  const wB = winnerMap.get(b.id);
+  const pA = wA?.totalPrize ?? 0;
+  const pB = wB?.totalPrize ?? 0;
   if (pA !== pB) return pB - pA;
   return a.id.localeCompare(b.id);
 }
@@ -197,15 +208,22 @@ export function groupTicketsByCategory(
   drawnSet: Set<number>,
   patterns: Pattern[],
   winnerMap: Map<string, WinnerInfo>,
+  drawMode?: string,
   t?: (key: string) => string,
 ): GroupedTickets[] {
   const _t = t ?? ((k: string) => k);
+  const isMultiMatch = drawMode === 'multimatch';
   const won: TicketEntry[] = [];
   const active: TicketEntry[] = [];
 
   for (const tk of tickets) {
-    if (isWinnerTicket(tk, winnerMap)) won.push(tk);
-    else active.push(tk);
+    if (isWinnerTicket(tk, winnerMap)) {
+      won.push(tk);
+    } else if (!isMultiMatch && patterns.length > 0 && ticketHasCompletedPattern(tk.matrix, drawnSet, patterns)) {
+      won.push(tk);
+    } else {
+      active.push(tk);
+    }
   }
 
   // Premiadas: ordena por totalPrize desc

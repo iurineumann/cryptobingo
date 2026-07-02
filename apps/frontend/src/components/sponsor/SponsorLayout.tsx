@@ -41,9 +41,10 @@ export default function SponsorLayout({
 
   const visibleNav = SPONSOR_NAV.filter((item) => {
     if (permissions.length === 0) return true;
-    if (item.key === 'rooms')       return permissions.some(p => p.includes('.rooms.'));
-    if (item.key === 'vault')       return permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
-    if (item.key === 'delegations') return permissions.some(p => p.includes('.delegations.'));
+    const hasWildcard = permissions.some(p => p.endsWith('.*'));
+    if (item.key === 'rooms')       return hasWildcard || permissions.some(p => p.includes('.rooms.'));
+    if (item.key === 'vault')       return hasWildcard || permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
+    if (item.key === 'delegations') return hasWildcard || permissions.some(p => p.includes('.delegations.'));
     return true;
   });
 

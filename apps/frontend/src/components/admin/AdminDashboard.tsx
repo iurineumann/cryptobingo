@@ -115,9 +115,9 @@ export default function AdminDashboard({ session }: AdminDashboardProps = {}) {
                                                 'cb-badge-neutral'
                                             }`}>{g.status}</span>
                                         </td>
-                                        <td className="py-2 pr-4 text-right font-mono">{g.total_wagered.toFixed(2)}</td>
-                                        <td className="py-2 pr-4 text-right font-mono">{g.total_paid_out.toFixed(2)}</td>
-                                        <td className="py-2 text-right font-mono">{(g.rtp_pct * 100).toFixed(2)}%</td>
+                                        <td className="py-2 pr-4 text-right font-mono">{(Number(g.total_wagered)).toFixed(2)}</td>
+                                        <td className="py-2 pr-4 text-right font-mono">{(Number(g.total_paid_out)).toFixed(2)}</td>
+                                        <td className="py-2 text-right font-mono">{(Number(g.rtp_pct) * 100).toFixed(2)}%</td>
                                     </tr>
                                 ))}
                                 {history.length === 0 && (

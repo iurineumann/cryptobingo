@@ -123,6 +123,8 @@
     "stage_label": "第{{stage}}阶段",
     "stage_winners": "{{count}}位获奖者",
     "patterns_required": "{{count}}个模式",
+    "patterns_progress": "{{cur}}/{{total}} 模式",
+    "mm_patterns_heading": "验证模式",
     "game_ended_title": "游戏结束",
     "game_ended_winners": "本局{{count}}位获奖者",
     "game_ended_you_won": "你赢了！🎉",

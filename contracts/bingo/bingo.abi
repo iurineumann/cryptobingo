@@ -429,7 +429,7 @@
         },
         {
           "name": "master_weight_ovrd",
-          "type": "uint8"
+          "type": "uint16"
         },
         {
           "name": "stages",
@@ -733,7 +733,7 @@
         },
         {
           "name": "master_weight_ovrd",
-          "type": "uint8"
+          "type": "uint16"
         }
       ]
     },

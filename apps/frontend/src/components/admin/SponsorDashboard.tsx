@@ -4,7 +4,7 @@ import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
 import { UInt64 } from '@wharfkit/antelope';
 import {
-    fetchCampaigns, closeCampaign, fetchSponsorRooms, fetchRoomTreasury,
+    fetchCampaigns, closeCampaign, fetchSponsorRooms, fetchRooms, fetchRoomTreasury,
     type BlockchainCampaign, type EnrichedRoom, type RoomTreasury,
 } from '../../services/api';
 
@@ -29,13 +29,18 @@ export default function SponsorDashboard({ session }: SponsorDashboardProps) {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [cData, rData] = await Promise.all([fetchCampaigns(), fetchSponsorRooms()]);
+            const [cData] = await Promise.all([fetchCampaigns()]);
             setCampaigns(cData.campaigns);
-            setRooms(rData.rooms);
+            let roomData;
+            try {
+                roomData = await fetchSponsorRooms();
+            } catch {
+                roomData = await fetchRooms();
+            }
+            setRooms(roomData.rooms);
 
-            // saldos treasury em paralelo
             const treasuryEntries = await Promise.all(
-                rData.rooms
+                roomData.rooms
                     .filter(r => r.sponsor_room)
                     .map(async r => {
                         try {

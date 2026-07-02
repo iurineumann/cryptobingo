@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import { getAuthToken, updateUserPermissions } from '../../services/api';
+import { hasAnyPermission } from '../../utils/permissionMatcher';
 
 interface UserRow {
     wallet_address: string;
-    role: string;
-    permissions: string[];
+    username?: string;
+    role?: string;
+    permissions?: string[];
     total_games?: number;
     total_wagered?: string;
 }
@@ -136,7 +138,7 @@ export default function UsersAdmin({ permissions }: UsersAdminProps) {
     const [editWallet, setEditWallet] = useState<string | null>(null);
     const [editPerms, setEditPerms] = useState<string[]>([]);
 
-    const canManage = permissions.includes('admin.users.manage');
+    const canManage = hasAnyPermission(permissions, ['admin.*', 'admin.users.manage']);
 
     const load = async () => {
         setLoading(true);
@@ -188,16 +190,24 @@ export default function UsersAdmin({ permissions }: UsersAdminProps) {
                             {users.map(u => (
                                 <tr key={u.wallet_address} className="border-b border-[--cb-border-default] text-[--cb-text-primary]">
                                     <td className="py-2 pr-4 font-mono text-xs">{u.wallet_address}</td>
-                                    <td className="py-2 pr-4">--</td>
+                                    <td className="py-2 pr-4">{u.username || '—'}</td>
                                     <td className="py-2 pr-4">
-                                        <span className={`cb-badge text-xs ${roleBadgeClass(u.role)}`}>{u.role}</span>
+                                        {u.role ? (
+                                            <span className={`cb-badge text-xs ${roleBadgeClass(u.role)}`}>{u.role}</span>
+                                        ) : (
+                                            <span className="text-[--cb-text-tertiary]">—</span>
+                                        )}
                                     </td>
                                     <td className="py-2 pr-4">
-                                        <div className="flex flex-wrap gap-1">
-                                            {(u.permissions ?? []).map(p => (
-                                                <span key={p} className="cb-badge cb-badge-info text-xs">{p}</span>
-                                            ))}
-                                        </div>
+                                        {(u.permissions ?? []).length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {(u.permissions ?? []).map(p => (
+                                                    <span key={p} className="cb-badge cb-badge-info text-xs">{p}</span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-[--cb-text-tertiary]">—</span>
+                                        )}
                                     </td>
                                     <td className="py-2 text-right">
                                         {canManage && (

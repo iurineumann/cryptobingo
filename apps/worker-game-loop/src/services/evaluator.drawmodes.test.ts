@@ -37,54 +37,55 @@ const ROW0_MATRIX = [1,2,3,4,5, 16,17,18,19,20, 31,32,33,34, 46,47,48,49,50, 61,
 
 describe('deriveGoldenMultiplierExported — distribuição de multiplicadores', () => {
     it('roll < 6000 → multiplicador 2x', () => {
-        // b1=0, b2=0 → roll = 0 < 6000
-        const mult = deriveGoldenMultiplierExported([0, 0, 0], 0);
+        // idx=0 → roll=floor(0*10000/5550)=0 < 6000
+        const mult = deriveGoldenMultiplierExported([0, 1, 2], 0);
         expect(mult).toBe(2);
     });
 
-    it('roll exatamente 6000 → 3x (b1=23, b2=112)', () => {
-        // 23*256 + 112 = 5888 + 112 = 6000 → ≥ 6000 = 3x
-        const mult = deriveGoldenMultiplierExported([0, 23, 112], 0);
+    it('roll exatamente 6000 → 3x (b1=46, b2=1)', () => {
+        // idx=3330 → roll=floor(3330*10000/5550)=6000 → 3x
+        const mult = deriveGoldenMultiplierExported([0, 46, 1], 0);
         expect(mult).toBe(3);
     });
 
-    it('roll exatamente 8500 → 5x (b1=33, b2=44)', () => {
-        // 33*256 + 44 = 8448 + 44 = 8492? Try b1=33, b2=52: 8448+52=8500 → 5x
-        const mult = deriveGoldenMultiplierExported([0, 33, 52], 0);
+    it('roll exatamente 8500 → 5x (b1=64, b2=57)', () => {
+        // idx=4717 → roll=floor(4717*10000/5550)=8500 → 5x
+        const mult = deriveGoldenMultiplierExported([0, 64, 57], 0);
         expect(mult).toBe(5);
     });
 
-    it('roll exatamente 9500 → 10x (b1=37, b2=28)', () => {
-        // 37*256 + 28 = 9472 + 28 = 9500 → 10x
-        const mult = deriveGoldenMultiplierExported([0, 37, 28], 0);
+    it('roll exatamente 9500 → 10x (b1=72, b2=20)', () => {
+        // idx=5272 → roll=floor(5272*10000/5550)=9500 → 10x
+        const mult = deriveGoldenMultiplierExported([0, 72, 20], 0);
         expect(mult).toBe(10);
     });
 
-    it('drawnBalls curto (sem bytes extras) → defaults (1,1) → roll = (1<<8)|1 = 257 → 2x', () => {
-        const mult = deriveGoldenMultiplierExported([42], 0); // goldenBallAfter=0, sem índice 1 e 2
-        expect(mult).toBe(2); // b1=undefined→1, b2=undefined→1 → roll=257 < 6000 → 2x
+    it('drawnBalls curto (sem bytes extras) → fallback (1,1) → b1===b2 → 2x', () => {
+        const mult = deriveGoldenMultiplierExported([42], 0);
+        expect(mult).toBe(2);
     });
 
     it('distribuição com inputs variados: 2x é sempre o multiplicador mais frequente', () => {
-        // Com b1 e b2 como bolas reais (1-75):
-        //   max roll = (75<<8)|75 = 19275 % 10000 = 9275
-        //   portanto: 2x (roll<6000), 3x (6000-8499), 5x (8500-9499), 10x (9500-9800)
-        //   20x, 50x, 100x são inalcançáveis com bolas reais 1-75
-        const counts: Record<number, number> = { 2: 0, 3: 0, 5: 0, 10: 0, 20: 0 };
+        // b1,b2 ∈ [1,75] distintas (75×74=5550 pares).
+        // Roll mapeado uniformemente para 0-9999 via índice canônico.
+        // 20x/50x/100x agora são atingíveis com a correção.
+        const counts: Record<number, number> = {};
 
         for (let b1 = 1; b1 <= 75; b1++) {
             for (let b2 = 1; b2 <= 75; b2++) {
+                if (b1 === b2) continue;
                 const m = deriveGoldenMultiplierExported([0, b1, b2], 0);
                 counts[m] = (counts[m] ?? 0) + 1;
             }
         }
 
-        const total = 75 * 75; // 5625 combinações
-        // 2x deve ser o mais frequente (rolls 0-5999 — mais de 60% das combinações reais)
-        expect(counts[2] / total).toBeGreaterThan(0.5);
-        // 3x e 5x devem ter alguma frequência
+        const total = 75 * 74; // 5550 pares distintos
+        expect(counts[2]).toBeGreaterThan(0.5 * total);  // 60%
         expect(counts[3]).toBeGreaterThan(0);
         expect(counts[5]).toBeGreaterThan(0);
+        expect(counts[20]).toBeGreaterThan(0);  // agora atingível
+        expect(counts[50]).toBeGreaterThan(0);
+        expect(counts[100]).toBeGreaterThan(0);
     });
 });
 
