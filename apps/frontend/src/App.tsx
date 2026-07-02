@@ -21,6 +21,7 @@
 //   /sponsor              → redirect /sponsor/rooms
 //   /sponsor/rooms        → SponsorLayout > SponsorRooms (role sponsor)
 //   /sponsor/vault        → SponsorLayout > SponsorVault  (role sponsor)
+//   /sponsor/delegations  → SponsorLayout > SponsorDelegations (perm delegations.manage)
 //
 // Ref: ADR-006 (JWT), ADR-007 (WebSocket), ADR-009 (Admin), ADR-010 (Rooms), ADR-015 (Routing)
 
@@ -36,7 +37,7 @@ import {
     useLocation,
     useParams,
 } from 'react-router-dom';
-import { Medal, FlaskConical, Moon, Sun }  from 'lucide-react';
+import { Medal, FlaskConical, Moon, Sun, ChevronDown, Settings }  from 'lucide-react';
 import { Session }                          from '@wharfkit/session';
 import {
     fetchUserProfile, updateUserLocale,
@@ -45,8 +46,10 @@ import {
 import { sessionKit }    from './services/wharfkit';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import { useAuth }       from './hooks/useAuth';
+import { hasAnyPermission } from './utils/permissionMatcher';
 import { useTheme }      from './hooks/useTheme';
 import { PaletteSelector } from './components/ui/PaletteSelector';
+import { RPC_PRESETS, getSelectedRpcUrl, setSelectedRpcUrl } from './utils/rpcStore';
 import LandingPage       from './components/LandingPage';
 import Lobby             from './components/Lobby';
 import GameRoom          from './components/GameRoom';
@@ -59,12 +62,19 @@ import AdminLayout         from './components/admin/AdminLayout';
 import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
 import SponsorVault     from './components/sponsor/SponsorVault';
+import SponsorDelegations from './components/sponsor/SponsorDelegations';
 import Logo             from './components/Logo';
 import XpProgressBar    from './components/XpProgressBar';
 import AchievementModal from './components/AchievementModal';
 import LeaderboardPage  from './components/LeaderboardPage';
 import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
+import PublicLayout     from './components/PublicLayout';
+import ContentPage      from './components/content/ContentPage';
+import TutorialsPage    from './pages/TutorialsPage';
+import HowItWorksPage   from './pages/HowItWorksPage';
+import SponsorsPage     from './pages/SponsorsPage';
+import UserSettingsPage from './components/UserSettingsPage';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -159,6 +169,7 @@ interface PageProps {
     session:  Session;
     profile:  MongoUserProfile;
     isAdmin:  boolean;
+    permissions: string[];
     theme:    'dark' | 'light';
     onToggleTheme:    () => void;
     onLanguageChange: (locale: string) => void;
@@ -227,6 +238,21 @@ function RoomHistoryPage({ session }: { session?: Session | null }) {
 
 // ── APP ROOT (dentro do BrowserRouter — pode usar hooks de router) ────────────
 
+const PUBLIC_PAGES = [
+    { path: '/how-it-works', key: 'nav.how_it_works', testId: 'nav-explore-how-it-works' },
+    { path: '/sponsors',     key: 'nav.sponsors',      testId: 'nav-explore-sponsors' },
+    { path: '/tutorials',    key: 'nav.tutorials',     testId: 'nav-explore-tutorials' },
+    { path: '/faq',          key: 'nav.faq',           testId: 'nav-explore-faq' },
+    { path: '/news',         key: 'nav.news',          testId: 'nav-explore-news' },
+];
+
+function resolveActiveTab(pathname: string): string {
+    if (pathname.startsWith('/wallet')) return 'wallet';
+    if (pathname.startsWith('/history')) return 'my_history';
+    if (pathname.startsWith('/profile')) return 'profile';
+    return 'lobby';
+}
+
 function AppRoot() {
     const { t, i18n }                                          = useTranslation();
     const { isAuthenticating, authError, authenticateSession } = useAuth();
@@ -241,15 +267,20 @@ function AppRoot() {
     const [restoringSession, setRestoringSession] = useState(true);
     const [showAchievements, setShowAchievements] = useState(false);
 
+    const userPermissions: string[] = (profile as any)?.permissions ?? [];
+
     const isAdmin = !!(
         profile && (
             profile.role === 'admin' ||
             profile.role === 'contract_admin' ||
-            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString()))
+            (import.meta.env.DEV && session && devAdminActors.has(session.actor.toString())) ||
+            hasAnyPermission(userPermissions, ['admin.*', 'admin.dashboard.view'])
         )
     );
     const isSponsor = !!(
         profile?.role === 'sponsor' ||
+        profile?.role === 'contract_admin' ||
+        userPermissions.some(p => p.startsWith('sponsor.')) ||
         (import.meta.env.DEV && session && devSponsorActors.has(session.actor.toString()))
     );
 
@@ -339,11 +370,17 @@ function AppRoot() {
         }
     }, [i18n, session]);
 
+    const handleRpcChange = useCallback((url: string) => {
+        setSelectedRpcUrl(url);
+        window.location.reload();
+    }, []);
+
     // Props compartilhadas entre páginas autenticadas
     const pageProps: PageProps = {
         session:          session!,
         profile:          profile!,
         isAdmin,
+        permissions:      userPermissions,
         theme,
         onToggleTheme:    toggleTheme,
         onLanguageChange: handleLanguageChange,
@@ -351,10 +388,7 @@ function AppRoot() {
     };
 
     // ── activeTab derivado da URL (ADR-015) ───────────────────────────────────
-    const activeTab = location.pathname.startsWith('/wallet')  ? 'wallet'
-                    : location.pathname.startsWith('/history') ? 'my_history'
-                    : location.pathname.startsWith('/profile') ? 'profile'
-                    : 'lobby';
+    const activeTab = resolveActiveTab(location.pathname);
 
     const NAV_TABS = [
         { id: 'lobby',      path: '/lobby',   label: t('nav.lobby')      ?? 'Salas'    },
@@ -385,6 +419,31 @@ function AppRoot() {
                                 {tab.label}
                             </a>
                         ))}
+                        {/* Dropdown "Explorar" — páginas públicas de conteúdo (CSS :hover) */}
+                        <div className="site-tab-dropdown">
+                            <button
+                                className="site-tab"
+                                data-testid="nav-explore"
+                                aria-haspopup="true"
+                                aria-expanded={undefined}
+                            >
+                                {t('nav.explore') ?? 'Explorar'}
+                                <ChevronDown className="size-3 ml-1" />
+                            </button>
+                            <div className="site-dropdown-menu" data-testid="nav-explore-menu">
+                                {PUBLIC_PAGES.map(page => (
+                                    <a
+                                        key={page.path}
+                                        href={page.path}
+                                        data-testid={page.testId}
+                                        className="site-dropdown-item"
+                                        onClick={(e) => { e.preventDefault(); navigate(page.path); }}
+                                    >
+                                        {t(page.key)}
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
                     </nav>
                 </div>
 
@@ -460,6 +519,19 @@ function AppRoot() {
                         <option value="zh-CN">中</option>
                     </select>
 
+                    <select
+                        value={getSelectedRpcUrl() || import.meta.env.VITE_RPC_URL}
+                        onChange={(e) => handleRpcChange(e.target.value)}
+                        className="cb-input cb-select"
+                        style={{ padding: '0.3rem 2rem 0.3rem 0.6rem', fontSize: '0.75rem', height: '2.25rem', width: 'auto', maxWidth: '11rem' }}
+                        title="Nó RPC da WAX"
+                        aria-label="Nó RPC"
+                    >
+                        {RPC_PRESETS.map((p) => (
+                            <option key={p.url} value={p.url}>{p.label}</option>
+                        ))}
+                    </select>
+
                     <PaletteSelector />
 
                     <button
@@ -469,6 +541,15 @@ function AppRoot() {
                         title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
                     >
                         {theme === 'dark' ? <Moon className="size-4 shrink-0" /> : <Sun className="size-4 shrink-0" />}
+                    </button>
+
+                    <button
+                        className="cb-btn cb-btn-ghost cb-btn-sm"
+                        onClick={() => navigate('/settings')}
+                        data-testid="nav-settings"
+                        aria-label={t('settings.title') ?? 'Configurações'}
+                    >
+                        <Settings className="size-4 shrink-0" />
                     </button>
 
                     <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={logout}>
@@ -536,11 +617,18 @@ function AppRoot() {
                 }
             />
 
-            {/* ── Rotas públicas sem auth (ADR-015 + ADR-024) ── */}
+            {/* ── Rotas públicas sem auth (ADR-015 + ADR-024 + ADR-037) ── */}
             <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session} />} />
             <Route path="/leaderboard"          element={<LeaderboardPage />} />
-            <Route path="/faq"                  element={<FaqPage />} />
-            <Route path="/news"                 element={<NewsPage />} />
+
+            {/* ── Páginas públicas de conteúdo (PublicLayout) ── */}
+            <Route element={<PublicLayout />}>
+                <Route path="/how-it-works" element={<HowItWorksPage />} />
+                <Route path="/sponsors"     element={<SponsorsPage />} />
+                <Route path="/tutorials"    element={<TutorialsPage />} />
+                <Route path="/faq"          element={<FaqPage />} />
+                <Route path="/news"         element={<NewsPage />} />
+            </Route>
 
             {/* ── Rotas protegidas por autenticação ── */}
             <Route element={
@@ -573,6 +661,12 @@ function AppRoot() {
                             onProfileUpdated={loadProfile}
                         />
                     } />
+                    <Route path="/settings" element={
+                        <UserSettingsPage
+                            profile={profile!}
+                            onPreferencesUpdated={loadProfile}
+                        />
+                    } />
                 </Route>
 
                 {/* ── Telas full-screen ── */}
@@ -586,6 +680,7 @@ function AppRoot() {
                         <AdminLayout
                             profile={profile!}
                             session={session!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
@@ -599,6 +694,7 @@ function AppRoot() {
                         <SponsorLayout
                             session={session!}
                             profile={profile!}
+                            permissions={userPermissions}
                             theme={theme}
                             onToggleTheme={toggleTheme}
                             onLogout={logout}
@@ -607,6 +703,7 @@ function AppRoot() {
                         <Route path="/sponsor" element={<Navigate to="/sponsor/rooms" replace />} />
                         <Route path="/sponsor/rooms" element={<SponsorRooms />} />
                         <Route path="/sponsor/vault" element={<SponsorVault />} />
+                        <Route path="/sponsor/delegations" element={<SponsorDelegations />} />
                     </Route>
                 </Route>
             </Route>

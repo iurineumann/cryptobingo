@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
                 registerType:  'autoUpdate',
                 injectRegister: 'auto',
                 workbox: {
+                    maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB (default 2)
                     // Estratégia cache-first para assets estáticos
                     globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
                     // Não cachear chamadas à blockchain ou API (dados ao vivo)

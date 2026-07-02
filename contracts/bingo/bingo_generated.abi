@@ -61,7 +61,7 @@
                 },
                 {
                     "name": "master_weight_ovrd",
-                    "type": "uint8"
+                    "type": "uint16"
                 }
             ]
         },

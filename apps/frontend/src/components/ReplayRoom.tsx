@@ -96,7 +96,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
   }, [patterns]);
 
   const groupedTickets = useMemo(
-    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap),
+    () => groupTicketsByCategory(tickets, revealedSet, patterns, winnerMap, undefined, t),
     [tickets, revealedSet, patterns, winnerMap],
   );
 
@@ -221,6 +221,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           sponsorPool={game?.sponsor_pool}
           goldenBall={goldenBall}
           gameEnded={gameEnded}
+          gameId={gameId}
           onRestart={restart}
           onLeave={onLeave}
           onClose={() => setShowSummary(false)}
@@ -238,7 +239,10 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
           lastDrawn={lastDrawn}
           roomPatterns={patterns}
           completedCombinationsPerTicket={new Map()}
+          goldenBallNum={goldenBall?.ballNum}
+          effectiveMultiplier={goldenBall?.multiplier}
           onBuyMore={() => {}}
+          localWinners={[]}
         />
       </div>
     </div>

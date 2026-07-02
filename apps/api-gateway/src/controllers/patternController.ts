@@ -436,17 +436,26 @@ export async function getGametypeMetadata(req: Request, res: Response): Promise<
 export async function getGametypeMetadataPublic(req: Request, res: Response): Promise<void> {
     const { gametypeId } = req.params as Record<string, string>;
     try {
-        const metadata = await GametypeMetadataModel.findOne({ gametype_id: gametypeId })
-            .select('gametype_id rules combinations')
-            .lean();
+        const [metadata, gtRes] = await Promise.all([
+            GametypeMetadataModel.findOne({ gametype_id: gametypeId })
+                .select('gametype_id rules combinations')
+                .lean(),
+            rpcClient.v1.chain.get_table_rows({
+                code: CONTRACT_ACCOUNT, scope: CONTRACT_ACCOUNT, table: 'gametypes',
+                lower_bound: UInt64.from(gametypeId), upper_bound: UInt64.from(gametypeId),
+                limit: 1, json: true,
+            }),
+        ]);
+        const stages = gtRes.rows.length ? (gtRes.rows[0] as any).stages ?? [] : [];
         if (!metadata) {
-            res.status(200).json({ gametype_id: gametypeId, rules: [], combinations: [] });
+            res.status(200).json({ gametype_id: gametypeId, rules: [], combinations: [], stages });
             return;
         }
         res.status(200).json({
             gametype_id:  metadata.gametype_id,
             rules:        (metadata as any).rules        ?? [],
             combinations: (metadata as any).combinations ?? [],
+            stages,
         });
     } catch (err) {
         console.error('[PatternCtrl] Erro ao buscar metadados públicos do gametype:', err);

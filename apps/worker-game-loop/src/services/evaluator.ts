@@ -12,6 +12,14 @@ import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@crypto
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
 import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
+import { savePrizeTx, saveBuyInTx } from './prizeTransactionsService';
+import { notifyPrizeTxSent, notifyPrizeConfirmed } from './broadcaster';
+import {
+    prizePaymentsTotal,
+    prizePaymentsAmountTotal,
+    prizePersistTotal,
+    buyinPersistedTotal,
+} from './prizeMetrics';
 import { getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
@@ -100,15 +108,20 @@ function selectBestPayout(
     ticket:          BlockchainTicketRecord,
     winningPatterns: PatternEntry[],
     comboCtx:        ComboContext | null,
+    masterWeightOvrd = 0,
 ): WinResult {
     const best = winningPatterns.reduce((prev, curr) => curr.weight > prev.weight ? curr : prev, winningPatterns[0]!);
+    // ADR-012 §4: FIRST_FULL — master_weight_ovrd substitui peso do MASTER
+    const weight = (masterWeightOvrd > 0 && (best.mask & MASTER_MASK) === MASTER_MASK)
+        ? masterWeightOvrd
+        : best.weight;
     if (comboCtx) {
         const combo = bestSatisfiedCombo(winningPatterns.map(p => p.name), comboCtx);
-        if (combo && combo.weight > best.weight) {
+        if (combo && combo.weight > weight) {
             return { ticket, patternName: combo.name, patternMask: best.mask, weight: combo.weight, comboId: combo.combo_id };
         }
     }
-    return { ticket, patternName: best.name, patternMask: best.mask, weight: best.weight };
+    return { ticket, patternName: best.name, patternMask: best.mask, weight };
 }
 
 /** Par de padrão + weight para avaliação dinâmica. */
@@ -179,6 +192,7 @@ export async function findAllWinners(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string,
+    masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
     const comboCtx = await fetchComboContext(gametypeId); // ADR-016
@@ -206,7 +220,7 @@ export async function findAllWinners(
             const winningPatterns = checkWinPatterns(finalState, patterns);
 
             if (winningPatterns.length > 0) {
-                winners.push(selectBestPayout(ticket, winningPatterns, comboCtx));
+                winners.push(selectBestPayout(ticket, winningPatterns, comboCtx, masterWeightOvrd));
             }
         }
 
@@ -232,6 +246,7 @@ async function findAllWinnersWithIndex(
     gameId:     string,
     drawnBalls: number[],
     gametypeId: string,
+    masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
     const comboCtx = await fetchComboContext(gametypeId); // ADR-016
@@ -253,7 +268,7 @@ async function findAllWinnersWithIndex(
         if (winningPatterns.length > 0) {
             const ticketData = await fetchTicketById(gameId, ticketId);
             if (ticketData) {
-                winners.push(selectBestPayout(ticketData, winningPatterns, comboCtx));
+                winners.push(selectBestPayout(ticketData, winningPatterns, comboCtx, masterWeightOvrd));
             }
         }
     }
@@ -312,9 +327,13 @@ export function deriveGoldenMultiplierExported(drawnBalls: number[], goldenBallA
 }
 
 function deriveGoldenMultiplier(drawnBalls: number[], goldenBallAfter: number): number {
-    const b1   = drawnBalls[goldenBallAfter + 1] ?? 1;
-    const b2   = drawnBalls[goldenBallAfter + 2] ?? 1;
-    const roll = ((b1 << 8) | b2) % 10_000;
+    const b1 = drawnBalls[goldenBallAfter + 1] ?? 1;
+    const b2 = drawnBalls[goldenBallAfter + 2] ?? 1;
+    // b1,b2 ∈ [1,75] (permutação Fisher-Yates dos 75 bytes do oracle).
+    // Mapeia os 75×74=5550 pares (b1,b2) distintos para roll 0-9999 uniforme.
+    if (b1 === b2) return 2;
+    const idx = (b1 - 1) * 74 + (b2 < b1 ? b2 - 1 : b2 - 2);
+    const roll = Math.floor(idx * 10000 / 5550);
     if (roll < 6_000) return 2;
     if (roll < 8_500) return 3;
     if (roll < 9_500) return 5;
@@ -394,6 +413,7 @@ export interface StageWinner {
 export interface StageCutoffResult {
     stage:             number;
     patterns_required: number;
+    weight:            number;   // weight do estágio (para cálculo de prêmio)
     cutoffBall:        number;   // índice 1-based; igual a drawnBalls.length = não houve vencedor
     winners:           StageWinner[];
 }
@@ -427,7 +447,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
     while (hasMore) {
         const res = await rpcClient.v1.chain.get_table_rows({
             code: CONTRACT_ACCOUNT, scope: Name.from(UInt64.from(gameId)), table: 'tickets',
-            limit: 100, lower_bound: lowerBound as any, json: true,
+            key_type: 'i64', limit: 100, lower_bound: lowerBound as any, json: true,
         });
         allTickets.push(...normalizeTickets(res.rows));
         hasMore = res.more === true && res.rows.length === 100;
@@ -437,14 +457,16 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
         }
     }
 
-    console.log(`🎯 [MULTI_MATCH] Pré-computando cutoffs: ${allTickets.length} tickets, ${stages.length} estágios.`);
+    console.log(`🎯 [MULTI_MATCH] Pré-computando cutoffs sequenciais: ${allTickets.length} tickets, ${stages.length} estágios.`);
 
     const results: StageCutoffResult[] = [];
+    let prevCutoff = 0;
 
     for (const stageDef of stages.toSorted((a, b) => a.patterns_required - b.patterns_required)) {
         let cutoffBall = drawnBalls.length + 1; // sentinela: sem vencedor
 
-        for (let i = 1; i <= drawnBalls.length; i++) {
+        // Cada estágio começa do cutoff do anterior — não reinicia da bola 1
+        for (let i = prevCutoff + 1; i <= drawnBalls.length; i++) {
             const partialBalls = drawnBalls.slice(0, i);
             const hit = allTickets.some(t =>
                 checkWinPatterns(applyDrawnBalls(t, partialBalls), dynamicPatterns).length >= stageDef.patterns_required
@@ -462,9 +484,10 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
                     winners.push({ ticket, patternMask: best.mask, ballCount: cutoffBall });
                 }
             }
+            prevCutoff = cutoffBall;
         }
 
-        results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, cutoffBall, winners });
+        results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, weight: stageDef.weight, cutoffBall, winners });
         console.log(
             cutoffBall <= drawnBalls.length
                 ? `   Stage ${stageDef.stage}: cutoff bola ${cutoffBall}, ${winners.length} vencedor(es)`
@@ -480,12 +503,55 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
  * Chamado pelo gameOrchestrator após o reveal do cutoff de cada estágio.
  */
 export async function payMultiMatchStage(
-    gameId:  string,
-    result:  StageCutoffResult,
+    gameId:        string,
+    result:        StageCutoffResult,
+    baseMultiplier = 1,
 ): Promise<void> {
-    for (const { ticket, patternMask, ballCount } of result.winners) {
-        await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
-        checkStageWinAchievement(ticket.owner).catch(() => {});
+        const winLabel = `stage_${result.stage}`;
+        for (const { ticket, patternMask, ballCount } of result.winners) {
+            const txHash = await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
+            checkStageWinAchievement(ticket.owner).catch(() => {});
+
+            if (!txHash) continue;
+
+            // — Prize Pipeline: persistir + notificar + métricas ──────────
+            notifyPrizeTxSent(gameId, ticket.ticket_id, winLabel);
+
+            const winType  = 'stage' as const;
+
+        const actualPrice   = ticket.price?.quantity ?? '';
+        const priceParts    = actualPrice.split(' ');
+        const buyInAmount   = priceParts[0] ?? '0';
+        const buyInCurr     = priceParts.slice(1).join(' ') || 'WAX';
+
+        const payout = computePayoutAmount(actualPrice || '0.0000 WAX', baseMultiplier, result.weight, 0);
+
+        savePrizeTx({
+            gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+            winType, winLabel, weight: result.weight,
+            amount: payout.amount.toFixed(4), currency: payout.currency,
+            transactionId: txHash,
+            ticketPrice: actualPrice,
+            claimedAt: new Date().toISOString(),
+        }).then(() => {
+            prizePersistTotal.labels({ result: 'success' }).inc();
+            prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+            prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+            notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, winLabel);
+        }).catch(err => {
+            prizePersistTotal.labels({ result: 'error' }).inc();
+            console.error('[PrizePipeline] Erro ao persistir PrizeTx stage:', err);
+        });
+
+        saveBuyInTx({
+            gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+            amount: buyInAmount, currency: buyInCurr,
+            purchasedAt: new Date().toISOString(),
+        }).then(() => {
+            buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
+        }).catch(err => {
+            console.error('[PrizePipeline] Erro ao persistir BuyInTx stage:', err);
+        });
     }
 }
 
@@ -551,6 +617,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     const maxBalls: number   = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
     const goldenBallAfter: number = gt.golden_ball_after ?? 0;
     const baseMultiplier: number = gt.base_multiplier ?? 1;
+    const masterWeightOvrd: number = gt.master_weight_ovrd ?? 0;
 
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
@@ -561,9 +628,10 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
         `Gametype: ${gametypeId}`
     );
 
-    // ── MULTI_MATCH: delega para handler especializado ───────────────────────
+    // ── MULTI_MATCH: orquestrador gerencia payout por estágio.
+    // Esta função só valida estado e limpa índice — sem liquidar.
     if (drawMode === 'multimatch') {
-        await processMultiMatchWinners(gameId, game.drawn_balls.slice(0, maxBalls), gametypeId);
+        console.log(`🎯 [MULTI_MATCH] Estado validado. Liquidado pelo orquestrador por estágio.`);
         if (hasIndex) await deleteIndex(gameId);
         return;
     }
@@ -602,9 +670,9 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     let winners: WinResult[];
 
     if (hasIndex && drawMode === 'standard') {
-        winners = await findAllWinnersWithIndex(gameId, effectiveBalls, gametypeId);
+        winners = await findAllWinnersWithIndex(gameId, effectiveBalls, gametypeId, masterWeightOvrd);
     } else {
-        winners = await findAllWinners(gameId, effectiveBalls, gametypeId);
+        winners = await findAllWinners(gameId, effectiveBalls, gametypeId, masterWeightOvrd);
     }
 
     // FIRST_FULL: filtra apenas tickets que completaram MASTER
@@ -677,6 +745,42 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 if (isCombo) awardComboXP(ticket.owner).catch(() => {});
                 // ADR-028 §3: decrementa usos de NFTs consumíveis usadas no boost
                 if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
+
+                // — Prize Pipeline: persistir + notificar + métricas ──────────
+                notifyPrizeTxSent(gameId, ticket.ticket_id, patternName);
+
+                const winType    = isCombo ? 'combo' as const : 'pattern' as const;
+                const priceParts = actualPrice.split(' ');
+                const buyInAmount = priceParts[0];
+                const buyInCurr   = priceParts.slice(1).join(' ') || 'WAX';
+
+                savePrizeTx({
+                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+                    winType, winLabel: patternName, weight,
+                    amount: payout.amount.toFixed(4), currency: payout.currency,
+                    transactionId: txHash,
+                    goldenMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
+                    ticketPrice: actualPrice,
+                    claimedAt: new Date().toISOString(),
+                }).then(() => {
+                    prizePersistTotal.labels({ result: 'success' }).inc();
+                    prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+                    prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+                    notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, patternName);
+                }).catch(err => {
+                    prizePersistTotal.labels({ result: 'error' }).inc();
+                    console.error('[PrizePipeline] Erro ao persistir PrizeTx:', err);
+                });
+
+                saveBuyInTx({
+                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
+                    amount: buyInAmount, currency: buyInCurr,
+                    purchasedAt: new Date().toISOString(),
+                }).then(() => {
+                    buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
+                }).catch(err => {
+                    console.error('[PrizePipeline] Erro ao persistir BuyInTx:', err);
+                });
             }
         }
     }

@@ -167,6 +167,36 @@ export function sortTickets(
   });
 }
 
+// ── Extraídos de groupTicketsByCategory para reduzir complexidade cognitiva ──
+function isWinnerTicket(ticket: TicketEntry, winnerMap: Map<string, WinnerInfo>): boolean {
+  return winnerMap.has(ticket.id);
+}
+
+function ticketHasCompletedPattern(matrix: number[], drawnSet: Set<number>, patterns: Pattern[]): boolean {
+  const flat = ticketFlat(matrix);
+  for (const p of patterns) {
+    const allReq = p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number));
+    if (allReq) return true;
+  }
+  return false;
+}
+
+function sortWonTickets(a: TicketEntry, b: TicketEntry, winnerMap: Map<string, WinnerInfo>): number {
+  const wA = winnerMap.get(a.id);
+  const wB = winnerMap.get(b.id);
+  const pA = wA?.totalPrize ?? 0;
+  const pB = wB?.totalPrize ?? 0;
+  if (pA !== pB) return pB - pA;
+  return a.id.localeCompare(b.id);
+}
+
+function sortActiveTickets(a: TicketEntry, b: TicketEntry, scoreCache: Map<string, number>): number {
+  const kA = scoreCache.get(a.id)!;
+  const kB = scoreCache.get(b.id)!;
+  if (kA !== kB) return kB - kA;
+  return a.id.localeCompare(b.id);
+}
+
 export interface GroupedTickets {
   category: string;
   label: string;
@@ -178,101 +208,42 @@ export function groupTicketsByCategory(
   drawnSet: Set<number>,
   patterns: Pattern[],
   winnerMap: Map<string, WinnerInfo>,
+  drawMode?: string,
+  t?: (key: string) => string,
 ): GroupedTickets[] {
-  const multiWinners: TicketEntry[] = [];
-  const singleWinners: TicketEntry[] = [];
-  const others: TicketEntry[] = [];
-  for (const t of tickets) {
-    const w = winnerMap.get(t.id);
-    if (!w) others.push(t);
-    else if (w.patternCount > 1) multiWinners.push(t);
-    else singleWinners.push(t);
+  const _t = t ?? ((k: string) => k);
+  const isMultiMatch = drawMode === 'multimatch';
+  const won: TicketEntry[] = [];
+  const active: TicketEntry[] = [];
+
+  for (const tk of tickets) {
+    if (isWinnerTicket(tk, winnerMap)) {
+      won.push(tk);
+    } else if (!isMultiMatch && patterns.length > 0 && ticketHasCompletedPattern(tk.matrix, drawnSet, patterns)) {
+      won.push(tk);
+    } else {
+      active.push(tk);
+    }
   }
 
-  const sortByComposite = (ts: TicketEntry[]) => {
-    const cache = new Map<string, number>();
-    for (const t of ts) {
-      const score = computeTicketCompositeScore(t.matrix, drawnSet, patterns);
-      cache.set(t.id, ticketCompositeSortKey(score));
-    }
-    ts.sort((a, b) => {
-      const kA = cache.get(a.id)!;
-      const kB = cache.get(b.id)!;
-      if (kA !== kB) return kB - kA;
-      return a.id.localeCompare(b.id);
-    });
-  };
+  // Premiadas: ordena por totalPrize desc
+  won.sort((a, b) => sortWonTickets(a, b, winnerMap));
 
-  sortByComposite(multiWinners);
-  sortByComposite(singleWinners);
+  // Disputando: ordena por proximidade desc (composite score)
+  if (active.length > 0 && patterns.length > 0) {
+    const scoreCache = new Map<string, number>();
+    for (const tk of active) {
+      const score = computeTicketCompositeScore(tk.matrix, drawnSet, patterns);
+      scoreCache.set(tk.id, ticketCompositeSortKey(score));
+    }
+    active.sort((a, b) => sortActiveTickets(a, b, scoreCache));
+  }
 
   const groups: GroupedTickets[] = [];
-  if (multiWinners.length > 0)
-    groups.push({ category: 'multi-winner', label: 'Multi-Winners', tickets: multiWinners });
-  if (singleWinners.length > 0)
-    groups.push({ category: 'single-winner', label: 'Winners', tickets: singleWinners });
-
-  const scoreCache = new Map<string, { key: number; bestPattern: string }>();
-  for (const t of others) {
-    const score = computeTicketCompositeScore(t.matrix, drawnSet, patterns);
-    const key = ticketCompositeSortKey(score);
-
-    let bestPattern = '';
-    let bestProximity = 0;
-    for (const p of patterns) {
-      const prizeVal = parseFloat(p.prize) || 0;
-      const totalReq = p.cells.filter(Boolean).length;
-      if (totalReq === 0) continue;
-      const flat = ticketFlat(t.matrix);
-      let marked = 0;
-      for (let i = 0; i < 25; i++) {
-        if (!p.cells[i]) continue;
-        if (i === 12 || (flat[i] !== null && drawnSet.has(flat[i] as number))) marked++;
-      }
-      const prox = marked < totalReq ? (marked / totalReq) * prizeVal : 0;
-      if (prox > bestProximity) {
-        bestProximity = prox;
-        bestPattern = p.name;
-      }
-    }
-    scoreCache.set(t.id, { key, bestPattern: bestPattern || '__none__' });
-  }
-
-  const patternGroups = new Map<string, TicketEntry[]>();
-  for (const t of others) {
-    const entry = scoreCache.get(t.id)!;
-    if (!patternGroups.has(entry.bestPattern)) patternGroups.set(entry.bestPattern, []);
-    patternGroups.get(entry.bestPattern)!.push(t);
-  }
-
-  const groupEntries = [...patternGroups.entries()]
-    .filter(([k]) => k !== '__none__')
-    .sort(([, aTickets], [, bTickets]) => {
-      const aBest = aTickets.reduce((max, t) => Math.max(max, scoreCache.get(t.id)!.key), 0);
-      const bBest = bTickets.reduce((max, t) => Math.max(max, scoreCache.get(t.id)!.key), 0);
-      return bBest - aBest;
-    })
-    .map(([name, ts]) => {
-      ts.sort((a, b) => {
-        const kA = scoreCache.get(a.id)!.key;
-        const kB = scoreCache.get(b.id)!.key;
-        if (kA !== kB) return kB - kA;
-        return a.id.localeCompare(b.id);
-      });
-      return { category: `pattern:${name}`, label: name, tickets: ts };
-    });
-  groups.push(...groupEntries);
-
-  const noneTickets = patternGroups.get('__none__');
-  if (noneTickets && noneTickets.length > 0) {
-    noneTickets.sort((a, b) => {
-      const kA = scoreCache.get(a.id)!.key;
-      const kB = scoreCache.get(b.id)!.key;
-      if (kA !== kB) return kB - kA;
-      return a.id.localeCompare(b.id);
-    });
-    groups.push({ category: 'none', label: 'Other', tickets: noneTickets });
-  }
+  if (won.length > 0)
+    groups.push({ category: 'won', label: _t('game_room.ticket_section.won'), tickets: won });
+  if (active.length > 0)
+    groups.push({ category: 'active', label: _t('game_room.ticket_section.active'), tickets: active });
   return groups;
 }
 

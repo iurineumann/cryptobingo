@@ -258,13 +258,20 @@ export async function setAdminGametypeStages(
     return handleResponse(res);
 }
 
+export interface StageRule {
+    stage:             number;
+    patterns_required: number;
+    weight:            number;
+}
+
 export async function fetchPublicGametypeMetadata(gametypeId: string): Promise<{
     gametype_id:  string;
     rules:        ExtendedRule[];
     combinations: CombinationRuleInput[];
+    stages:       StageRule[];
 }> {
     const res = await fetch(`${API_BASE}/gametypes/${gametypeId}/metadata`);
-    if (!res.ok) return { gametype_id: gametypeId, rules: [], combinations: [] };
+    if (!res.ok) return { gametype_id: gametypeId, rules: [], combinations: [], stages: [] };
     return res.json();
 }
 
@@ -912,45 +919,76 @@ export async function fetchRoomLeaderboard(roomId: string, limit = 10): Promise<
 }
 
 // ==========================================
-// NEWS — Publicações públicas (ADR-024)
+// CONTEÚDO UNIFICADO — Content (ADR-037)
 // ==========================================
 
-export interface NewsListResponse {
-    items:     import('@cryptobingo/shared-types').NewsItem[];
+export interface ContentListResponse {
+    items:     import('@cryptobingo/shared-types').ContentItem[];
     total:     number;
     cached_at: string;
 }
 
-export async function fetchNews(opts?: { limit?: number; offset?: number }): Promise<NewsListResponse> {
+type ContentType = 'faq' | 'howitworks' | 'sponsors' | 'tutorials' | 'news';
+
+export async function fetchContentByType(
+    type: ContentType,
+    opts?: { limit?: number; offset?: number },
+): Promise<ContentListResponse> {
     const params = new URLSearchParams();
     if (opts?.limit)  params.set('limit',  String(opts.limit));
     if (opts?.offset) params.set('offset', String(opts.offset));
-    const res = await fetch(`${API_BASE}/news?${params}`, { headers: publicHeaders() });
+    const res = await fetch(`${API_BASE}/content/${type}?${params}`, { headers: publicHeaders() });
     return handleResponse(res);
 }
 
-export async function createNewsItem(data: {
-    title: string; content: string; image_url?: string | null;
-    locale_overrides?: object; active?: boolean; pinned?: boolean;
-}): Promise<import('@cryptobingo/shared-types').NewsItem> {
-    const res = await fetch(`${API_BASE}/news`, {
+export async function fetchContentItem(
+    type: ContentType,
+    id: string,
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, { headers: publicHeaders() });
+    return handleResponse(res);
+}
+
+export async function createContentItem(
+    type: ContentType,
+    data: {
+        title: string;
+        content: string | unknown[];
+        content_format: 'text' | 'blocks';
+        image_url?: string | null;
+        pinned?: boolean;
+        sort_order?: number;
+        locale_overrides?: Record<string, { title: string; content: string | unknown[] }>;
+    },
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
     });
     return handleResponse(res);
 }
 
-export async function updateNewsItem(id: string, data: {
-    title?: string; content?: string; image_url?: string | null;
-    locale_overrides?: object; active?: boolean; pinned?: boolean;
-}): Promise<import('@cryptobingo/shared-types').NewsItem> {
-    const res = await fetch(`${API_BASE}/news/${encodeURIComponent(id)}`, {
-        method: 'PATCH', headers: authHeaders(), body: JSON.stringify(data),
+export async function updateContentItem(
+    type: ContentType,
+    id: string,
+    data: {
+        title?: string;
+        content?: string | unknown[];
+        content_format?: 'text' | 'blocks';
+        image_url?: string | null;
+        pinned?: boolean;
+        sort_order?: number;
+        active?: boolean;
+        locale_overrides?: Record<string, { title: string; content: string | unknown[] }>;
+    },
+): Promise<import('@cryptobingo/shared-types').ContentItem> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify(data),
     });
     return handleResponse(res);
 }
 
-export async function deleteNewsItem(id: string): Promise<{ message: string }> {
-    const res = await fetch(`${API_BASE}/news/${encodeURIComponent(id)}`, {
+export async function deleteContentItem(type: ContentType, id: string): Promise<{ deleted: boolean }> {
+    const res = await fetch(`${API_BASE}/content/${type}/${encodeURIComponent(id)}`, {
         method: 'DELETE', headers: authHeaders(),
     });
     return handleResponse(res);
@@ -989,6 +1027,19 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<void
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+}
+
+export async function updateUserPreferences(prefs: {
+    rpc_url?:      string;
+    explorer_url?: string;
+    sound_enabled?: boolean;
+}): Promise<void> {
+    const res = await fetch(`${API_BASE}/profile`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(prefs),
     });
     return handleResponse(res);
 }
@@ -1036,4 +1087,85 @@ export async function sendChatMessage(
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ message }),
     });
     return handleResponse(res);
+}
+
+// ── Admin: Permissions & Sponsors (ADR-036) ──────────────────────────────────
+
+export async function updateUserPermissions(wallet: string, permissions: string[]): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/users/${wallet}/permissions`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ permissions }),
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar permissões');
+}
+
+export async function fetchSponsorOrgs(page = 1, limit = 20): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs?page=${page}&limit=${limit}`, {
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function fetchSponsorOrg(orgId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}`, {
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+export async function createDelegation(orgId: string, wallet: string, permissions: string[]): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}/delegations`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ wallet_address: wallet, permissions }),
+    });
+    return handleResponse(res);
+}
+
+export async function removeDelegation(orgId: string, wallet: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/sponsor-orgs/${orgId}/delegations/${wallet}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+// ── Sponsor: Self-service Delegations (ADR-036 / Fase 7) ─────────────────────
+
+export async function fetchMyDelegations(): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations`, { headers: authHeaders() });
+    return handleResponse(res);
+}
+
+export async function createMyDelegation(wallet: string, permissions: string[]): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ wallet_address: wallet, permissions }),
+    });
+    return handleResponse(res);
+}
+
+export async function removeMyDelegation(wallet: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/sponsor/delegations/${wallet}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    return handleResponse(res);
+}
+
+// ── Prize Pipeline ────────────────────────────────────────────────────
+
+export interface PrizeTxResponse {
+    items: import('@cryptobingo/shared-types').PrizeTx[];
+    total: number;
+    gameId: string;
+}
+
+export async function fetchGamePrizeTransactions(gameId: string): Promise<PrizeTxResponse> {
+    const res = await fetch(`${API_BASE}/games/${encodeURIComponent(gameId)}/prizes`, {
+        headers: publicHeaders(),
+    });
+    return handleResponse<PrizeTxResponse>(res);
 }

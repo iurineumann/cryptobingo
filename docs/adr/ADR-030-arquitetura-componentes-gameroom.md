@@ -80,3 +80,38 @@ no-behavior-change.
 - Plano: `docs/superpowers/plans/2026-06-23-gameroom-fase0-refactor.md`
 - ADR-007 (Slow Reveal — animação dirigida por Sequence ID, preservada)
 - ADR-005/010/016 (lógica de payout/combinações — movida verbatim, intocada)
+
+---
+
+## Prize Pipeline Integration
+
+### feedWinners usa localWinners
+
+`feedWinners` derivation no GameRoom usa `localWinners` em vez de `winners` (WS).
+`localWinners` = `winners` quando há dados WS; para jogos arquivados (staticFinalState),
+computa vencedores localmente de `gamePatterns` + `drawnSet`. Garante que o painel de
+resultados (`gr-room-prizes`) funcione mesmo sem WS.
+
+### hydratePrizeStatuses
+
+`useSlowReveal` expõe `hydratePrizeStatuses()` que injeta dados da API MongoDB
+no `prizeStatuses`. `useGameRoomState` chama `fetchGamePrizeTransactions(gameId)`
+quando `isStaticFinalState = true`. Só sobrescreve entries ainda `'preparing'` ou ausentes.
+
+### EventFeed removido do GameRoom
+
+EventFeed (feed flutuante de premiação) foi removido do GameRoom. Existe apenas no
+`ReplaySummary` (painel de partida encerrada) e no `EventFeed` isolado como componente
+autônomo. RoomSocial foi simplificado — não mais recebe `localWinners` ou `clearedStages`.
+
+### Ticket Sections (Premiadas / Disputando)
+
+`groupTicketsByCategory` foi reescrito para produzir apenas 2 grupos:
+
+| category | label (i18n) | Conteúdo | Ordenação |
+|----------|-------------|----------|-----------|
+| `won` | "Premiadas" | Cartelas em winnerMap | `totalPrize` desc |
+| `active` | "Disputando" | Demais cartelas | Proximidade (composite score) |
+
+Cartelas em "active" recebem `suppressWinner={true}` via TicketCard — perdem
+decoração de vitória mesmo se `completedPatterns.length > 0`.

@@ -10,6 +10,59 @@ export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 
 export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
 export type PatternType = 'simple' | 'special' | 'master';
 
+// Permissões granulares (ADR-036)
+export type AdminPermission =
+  | 'admin.dashboard.view'
+  | 'admin.rooms.manage'
+  | 'admin.patterns.manage'
+  | 'admin.gametypes.manage'
+  | 'admin.users.view'
+  | 'admin.users.manage'
+  | 'admin.sponsors.view'
+  | 'admin.sponsors.manage'
+  | 'admin.tokens.manage'
+  | 'admin.nfts.manage'
+  | 'admin.campaigns.manage'
+  | 'admin.vault.manage'
+  | 'admin.compliance.view'
+  | 'admin.news.manage'
+  | 'admin.config.manage'
+  | 'admin.content.*'
+  | `admin.content.${string}.${'view' | 'create' | 'edit' | 'publish' | 'delete' | 'translate'}`;
+
+export type SponsorPermission =
+  | `sponsor.${string}.dashboard.view`
+  | `sponsor.${string}.rooms.manage`
+  | `sponsor.${string}.rooms.${string}.manage`
+  | `sponsor.${string}.nfts.manage`
+  | `sponsor.${string}.treasury.view`
+  | `sponsor.${string}.treasury.withdraw`
+  | `sponsor.${string}.drops.manage`
+  | `sponsor.${string}.campaigns.manage`
+  | `sponsor.${string}.layouts.manage`
+  | `sponsor.${string}.delegations.manage`;
+
+export type Permission = AdminPermission | SponsorPermission | 'admin.*';
+
+export interface SponsorOrgDocument {
+  orgId: string;
+  owner_wallet: string;
+  name: string;
+  settings: { autoApproveDelegations: boolean };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SponsorDelegationDocument {
+  orgId: string;
+  wallet_address: string;
+  permissions: Permission[];
+  delegated_by: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Modos de sorteio do gametype (ADR-012).
  * Espelha os valores de draw_mode no contrato (eosio::name, max 12 chars).
@@ -218,11 +271,14 @@ export interface MongoUserProfile {
     wallet_address:     string;
     nickname:           string;
     role:               UserRole;
+    permissions:        Permission[];
     avatar_nft_asset_id: string | null;
     preferences: {
         locale:           SupportedLocale;
         currency_display: string;
         sound_enabled:    boolean;
+        rpc_url:          string;
+        explorer_url:     string;
     };
     progression: {
         xp:           number;
@@ -479,8 +535,31 @@ export interface LeaderboardXpEntry {
 }
 
 /**
+ * Item de conteúdo unificado. Collection 'content' no MongoDB.
+ * content_format define se o campo content é texto plano ou JSON de blocks do BlockNote.
+ * locale_overrides segue mesmo formato do content (text ou blocks).
+ */
+export interface ContentItem {
+    id:               string;
+    type:             'faq' | 'howitworks' | 'sponsors' | 'tutorials' | 'news';
+    slug:             string;
+    title:            string;
+    content_format:   'text' | 'blocks';
+    content:          string | unknown[];   // string para text, PartialBlock[] para blocks
+    image_url:        string | null;
+    metadata:         Record<string, unknown> | null;
+    pinned:           boolean;
+    sort_order:       number;
+    locale_overrides: Partial<Record<'en-US' | 'zh-CN', { title: string; content: string | unknown[] }>>;
+    active:           boolean;
+    published_at:     string;
+    published_by:     string;
+}
+
+/**
  * Publicação de notícia/promoção. Armazenada em MongoDB (coleção news_feed).
  * Soft delete: active=false oculta da listagem pública.
+ * @deprecated Migrando para ContentItem (collection content). Manter para compat.
  */
 export interface NewsItem {
     id:               string;
@@ -492,4 +571,35 @@ export interface NewsItem {
     pinned:           boolean;
     published_at:     string;   // ISO 8601
     published_by:     string;   // wallet do admin
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Prize Pipeline — transações de premiação e buy-in (Prize Pipeline)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface PrizeTx {
+    gameId:    string;
+    account:   string;
+    ticketId:  string;
+    winType:   'pattern' | 'combo' | 'stage';
+    patternMask?: string;
+    comboId?:    number;
+    stageNumber?: number;
+    winLabel:     string;
+    weight:       number;
+    amount:       string;
+    currency:     string;
+    transactionId?: string;
+    goldenMultiplier?: number;
+    ticketPrice: string;
+    claimedAt:   string;
+}
+
+export interface BuyInTx {
+    gameId:      string;
+    account:     string;
+    ticketId:    string;
+    amount:      string;
+    currency:    string;
+    purchasedAt: string;
 }

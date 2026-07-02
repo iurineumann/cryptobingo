@@ -10,7 +10,8 @@ import { Session }                from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { Checksum256 }            from '@wharfkit/antelope';
 
-const ATOMIC_CONTRACT    = 'atomicassets';
+const ATOMICAPI_PROXY_BASE = process.env.ATOMICAPI_PROXY_URL ?? 'https://wax.api.atomicassets.io';
+const ATOMIC_CONTRACT      = 'atomicassets';
 const BINGO_COLLECTION   = 'cryptobingo1';
 const CONTRACT_ACCOUNT   = process.env.CONTRACT_ACCOUNT   ?? 'bingogamectr';
 const MICROSERVICE_ACTOR = process.env.MICROSERVICE_ACTOR ?? 'bingogamesvc';
@@ -397,6 +398,27 @@ async function getOwnedBurnCandidates(
         lowerBound = res.next_key;
     }
     return candidates;
+}
+
+// ==========================================
+// GET /api/v1/atomic/*splat
+// Proxy para AtomicAssets REST API (evita CORS do navegador).
+// Retransmite resposta original (status + headers + body).
+// ==========================================
+
+export async function getAtomicAssets(req: Request, res: Response): Promise<void> {
+    try {
+        const suffix = req.originalUrl.replace(/^\/api\/v1\/atomic\//, '');
+        const targetUrl = `${ATOMICAPI_PROXY_BASE}/atomicassets/v1/${suffix}`;
+        const atomicRes = await fetch(targetUrl, { headers: { Accept: 'application/json' } });
+        const body = await atomicRes.text();
+        res.status(atomicRes.status)
+            .set('Content-Type', atomicRes.headers.get('content-type') ?? 'application/json')
+            .send(body);
+    } catch (err) {
+        console.error('[NFTCtrl] Erro ao acessar AtomicAssets API:', err);
+        res.status(502).json({ error: 'Falha ao acessar API AtomicAssets pelo proxy.' });
+    }
 }
 
 export async function syncBurns(req: Request, res: Response): Promise<void> {

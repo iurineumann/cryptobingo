@@ -18,7 +18,7 @@ vi.mock('../services/api', () => ({
   getAuthToken:         apiMocks.getAuthToken,
   requestAuthChallenge: apiMocks.requestAuthChallenge,
   verifyAuthChallenge:  apiMocks.verifyAuthChallenge,
-  saveAuthToken:        vi.fn(),
+  clearAuthToken:       vi.fn(),
 }));
 
 // Bloqueia qualquer operação de crypto wharfkit que possa falhar em jsdom
@@ -46,9 +46,23 @@ const mockSession = {
   walletPlugin: { id: 'wallet-plugin-anchor' },
   transact:     vi.fn().mockResolvedValue({
     signatures:  [{ toString: () => 'SIG_K1_mock' }],
-    transaction: { toJSON: () => ({}) },
+    transaction: {
+      expiration:            '2026-01-01T00:00:00',
+      ref_block_num:         1,
+      ref_block_prefix:      1,
+      max_net_usage_words:   0,
+      max_cpu_usage_ms:      0,
+      delay_sec:             0,
+      actions: [{
+        account:       'bingogamectr',
+        name:          'userlogin',
+        authorization: [{ actor: 'jogador1', permission: 'active' }],
+        data:          { nonce_data: { array: new Uint8Array([3, 65, 66, 67]) } },
+      }],
+    },
+    resolved: { signingDigest: { array: new Uint8Array(32) } },
   }),
-  publicKey: { toString: () => 'PUB_K1_mock' },
+  client: { provider: { url: 'http://localhost' } },
 } as any;
 
 // ── Setup / teardown ─────────────────────────────────────────────────────────
@@ -63,8 +77,9 @@ beforeEach(() => {
 // ── Testes ───────────────────────────────────────────────────────────────────
 
 describe('useAuth — cache hit', () => {
-  it('getAuthToken retorna token existente → authenticateSession retorna true sem chamar requestAuthChallenge', async () => {
-    apiMocks.getAuthToken.mockReturnValue('cached-jwt-token');
+  it('getAuthToken retorna token existente e válido → authenticateSession retorna true sem chamar requestAuthChallenge', async () => {
+    const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ3YWxsZXQiOiJqb2dhZG9yMSIsImp0aSI6InRlc3QtanRpIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjk5OTk5OTk5OTl9.fakesig';
+    apiMocks.getAuthToken.mockReturnValue(validToken);
 
     const { result } = renderHook(() => useAuth());
 
@@ -75,6 +90,27 @@ describe('useAuth — cache hit', () => {
 
     expect(returnValue).toBe(true);
     expect(apiMocks.requestAuthChallenge).not.toHaveBeenCalled();
+  });
+
+  it('getAuthToken retorna token expirado → faz login completo (clearAuthToken + challenge)', async () => {
+    const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ3YWxsZXQiOiJqb2dhZG9yMSIsImV4cCI6MX0.fakesig';
+    apiMocks.getAuthToken.mockReturnValue(expiredToken);
+
+    // Sessão dev (privatekey) — evita TextEncoder do modo produção em jsdom
+    const devSession = {
+      actor:        'jogador1',
+      walletPlugin: { id: 'wallet-plugin-privatekey' },
+    } as any;
+
+    const { result } = renderHook(() => useAuth());
+
+    let returnValue: boolean | undefined;
+    await act(async () => {
+      returnValue = await result.current.authenticateSession(devSession);
+    });
+
+    expect(apiMocks.requestAuthChallenge).toHaveBeenCalled();
+    expect(returnValue).toBe(true);
   });
 });
 

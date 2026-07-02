@@ -3,7 +3,7 @@
 **Domínio:** Plataforma Descentralizada de Bingo GameFi
 **Rede Alvo:** Antelope (WAX)
 **Padrões Arquiteturais:** Spec-Driven Development (SDD), CQRS, Event-Driven Architecture (EDA), Bitmasking Algébrico.
-**Última revisão:** 2026-06-03 — ADR-010 (Rooms), ADR-011 (Drop Vault), ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration), ADR-015 (Routing).
+**Última revisão:** 2026-06-30 — ADR-010 (Rooms), ADR-011 (Drop Vault), ADR-012 (Draw Modes), ADR-013 (Multi-Match), ADR-014 (Orchestration), ADR-015 (Routing), ADR-038 (Prize Pipeline).
 
 ---
 
@@ -194,6 +194,42 @@ Sistema trustless para sponsors depositarem tokens/NFTs que são distribuídos c
 | `goldenball` | `max_balls` normais + 1 bola extra com multiplicador aleatório. |
 | `multimatch` | Estágios progressivos por número de padrões cumpridos (ADR-013). |
 
+### 1.8. Prize Pipeline (Persistência MongoDB — ADR-038)
+
+Transações de prêmio são persistidas em MongoDB para consulta via API REST.
+
+**Coleção `prizetxs`** — transações de prêmio pagas.
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `game_id` | string | FK para jogo on-chain. |
+| `ticket_id` | string | FK para cartela. |
+| `win_type` | string | `pattern`, `combo`, `stage` |
+| `win_label` | string | Rótulo único da vitória. Chave composta com ticket_id. |
+| `account` | string | Conta WAX do vencedor. |
+| `transaction_id` | string | Hash da transação on-chain. |
+| `amount` | string | Valor do prêmio. |
+| `currency` | string | Símbolo da moeda. |
+| `status` | string | `confirmed` |
+
+Índice único composto: `{ game_id, ticket_id, win_label }` — garante idempotência.
+
+**Coleção `buyintxs`** — transações de compra de cartela.
+
+Índice único composto: `{ game_id, ticket_id }`.
+
+**Três eventos WS (cadeia preparing → confirming → confirmed):**
+
+| Evento | Frontend status | Momento |
+|--------|----------------|---------|
+| `winner_found` | `preparing` | Vencedor detectado pelo evaluator. |
+| `prize_tx_sent` | `confirming` | Transação on-chain submetida. |
+| `prize_confirmed` | `confirmed` | MongoDB persistiu o prêmio. |
+
+`win_label` opcional nos eventos — usado como chave composta `ticket_id:winLabel` p/ MULTI_MATCH.
+
+**API pública:** `GET /api/v1/games/{gameId}/prizes` → `{ items: PrizeTx[], total, gameId }`
+
 ---
 
 ## 2. Interface Binária de Aplicação (ABI) e Assinaturas
@@ -330,11 +366,13 @@ O servidor não envia estados brutos; orquestra uma Máquina de Estados Reativa 
 |---|---|---|
 | `game_locked` | S→C | FSM `FUNDING → LOCKED`. Vendas bloqueadas. |
 | `ball_drawn` | S→C | Bola revelada (intervalo ~3s). Campo `order` para reconciliação. |
-| `winner_found` | S→C | Vencedores detectados com payouts. |
+| `winner_found` | S→C | Vencedores detectados com payouts. Campos `win_type`, `win_label`. |
+| `prize_tx_sent` | S→C | Transação on-chain submetida. Frontend → "confirming". |
+| `prize_confirmed` | S→C | Prêmio persistido no MongoDB. Frontend → "confirmed". |
 | `game_aborted` | S→C | Fail-safe acionado — estornos em curso. |
 | `game_ended` | S→C | Partida completamente encerrada (ADR-014). |
 | `golden_ball` | S→C | Bola dourada sorteada com multiplicador (ADR-012). |
-| `stage_cleared` | S→C | Estágio de multi-match completado (ADR-013). |
+| `stage_cleared` | S→C | Estágio de multi-match completado. Campo `winning_ball`. |
 | `sync_response` | S→C | Resposta a `sync_request` — histórico de bolas. |
 | `subscribe_game` | C→S | Entra no canal da partida. |
 | `sync_request` | C→S | Solicita reconciliação (pacote perdido). |

@@ -10,14 +10,16 @@ vi.mock('../../hooks/useSlowReveal', () => ({
   useSlowReveal: () => ({
     drawnBalls: [], lastBall: null, isDrawing: false, winners: [],
     isAborted: false, abortReason: null, wsStatus: 'connected',
-    isGameEnded: false, goldenBall: null, clearedStages: [], drawMode: 'standard',
+    isGameEnded: false, goldenBall: null, clearedStages: [], drawMode: 'standard', prizeStatuses: {},
+    hydratePrizeStatuses: vi.fn(),
   }),
 }));
 
 vi.mock('../../services/api', () => ({
   fetchGamePatterns: vi.fn().mockResolvedValue([]),
-  fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [] }),
+  fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [], stages: [] }),
   fetchRoom: vi.fn().mockResolvedValue({ room_id: '1', metadata: { name: 'Sala' }, current_game_id: '0' }),
+  fetchGamePrizeTransactions: vi.fn().mockResolvedValue({ items: [], total: 0, gameId: '100' }),
 }));
 
 const M = [1,2,3,4,5, 16,17,18,19,20, 31,32,33,34, 46,47,48,49,50, 61,62,63,64,65];

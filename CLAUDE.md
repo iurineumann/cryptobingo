@@ -172,3 +172,53 @@ Use a **skill** da camada que você for tocar (procedimentos + gotchas) e delegu
 - **Draw modes (ADR-012/013/014):** standard / fixed / firstfull / goldenball / multimatch (stages).
 - **pricePaid (ADR-010):** prêmio = preço pago pela cartela × base_multiplier × weight/100 × golden.
 - FREE SPACE = bit 12 do bitmask 5×5 (sempre setado).
+
+## Prize Pipeline (ADR-038)
+
+Prêmios seguem cadeia de 3 eventos WebSocket + persistência MongoDB + API REST.
+Ver ADR-038 e SPEC.md §1.8.
+
+### Eventos WS
+
+```
+winner_found → frontend: "preparing"
+prize_tx_sent → frontend: "confirming"
+prize_confirmed → frontend: "confirmed"
+```
+
+Worker dispara `winner_found` ANTES de `processAllGameWinners` (reorder necessário).
+
+### Chave composta
+
+`prizeStatuses` key = `ticket_id:winLabel` (não apenas `ticket_id`). `winLabel` opcional
+nos eventos WS. MULTI_MATCH usa `stage_1`, `stage_2` etc.
+
+### API de prêmios
+
+`GET /api/v1/games/:gameId/prizes` → `{ items, total, gameId }`
+Usado por `hydratePrizeStatuses` quando `isStaticFinalState == true` (jogos arquivados).
+Não sobrescreve WS ativo — só preenche entries `'preparing'` ou ausentes.
+
+### Duas seções de cartela (Premiadas / Disputando)
+
+`groupTicketsByCategory` produz 2 grupos:
+- `won` (Premiadas): `winnerMap.has(t.id)`, sort por totalPrize desc
+- `active` (Disputando): resto, sort por compositeScore desc
+
+Cartelas ativas recebem `suppressWinner={true}` — perdem decoração de vitória mesmo
+se `completedPatterns.length > 0`.
+
+### Observabilidade
+
+Métricas Prometheus no worker: `prize_payments_total`, `prize_payments_amount_total`,
+`prize_pipeline_duration`, `prize_persist_total`, `buyin_persisted_total`, `prize_rtp_ratio`.
+Dashboard Grafana: `infra/grafana/dashboards/worker-game-loop.json`.
+
+### Arquivos críticos
+
+- `apps/worker-game-loop/src/services/broadcaster.ts:481-500`: notifyPrizeTxSent + notifyPrizeConfirmed
+- `apps/worker-game-loop/src/services/evaluator.ts:494-539`: payMultiMatchStage pipeline
+- `apps/worker-game-loop/src/services/gameOrchestrator.ts`: winner_found antes de processAllGameWinners
+- `apps/frontend/src/hooks/useSlowReveal.ts:265-369`: dedup + composite key + hydratePrizeStatuses
+- `apps/frontend/src/components/gameroom/useGameRoomState.ts:280-298`: API fetch effect
+- `apps/frontend/src/components/ticketUtils.ts:176-225`: groupTicketsByCategory

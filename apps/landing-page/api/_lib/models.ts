@@ -1,0 +1,196 @@
+import { query, queryOne } from './db.js';
+import type {
+  Idea, Vote, Confirmation, AdminSession, Subscriber, SiteStats,
+} from './types.js';
+
+export async function getStats(): Promise<SiteStats> {
+  const rows = await query<{
+    total_ideas: number;
+    total_votes: number;
+    total_subscribers: number;
+    approved_ideas: number;
+  }>(
+    `SELECT
+      (SELECT COUNT(*) FROM ideas)::int AS total_ideas,
+      (SELECT COUNT(*) FROM votes)::int AS total_votes,
+      (SELECT COUNT(*) FROM subscribers WHERE active = true)::int AS total_subscribers,
+      (SELECT COUNT(*) FROM ideas WHERE status = 'approved')::int AS approved_ideas`
+  );
+  const top = await queryOne<{ id: number; title: string; upvotes: number }>(
+    `SELECT id, title, upvotes FROM ideas ORDER BY upvotes DESC LIMIT 1`
+  );
+  return { ...rows[0], top_idea: top ?? null };
+}
+
+export async function getIdeas(sort: string = 'newest'): Promise<Idea[]> {
+  const order =
+    sort === 'top'
+      ? 'ORDER BY (upvotes - downvotes) DESC, created_at DESC'
+      : 'ORDER BY created_at DESC';
+  return query<Idea>(`SELECT * FROM ideas ${order}`);
+}
+
+export async function createIdea(data: {
+  title: string;
+  description: string;
+  author_name: string;
+  author_email: string;
+}): Promise<Idea> {
+  const idea = await queryOne<Idea>(
+    `INSERT INTO ideas (title, description, author_name, author_email)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [data.title, data.description, data.author_name, data.author_email]
+  );
+  if (!idea) throw new Error('Failed to create idea');
+  return idea;
+}
+
+export async function getIdeaById(id: number): Promise<Idea | null> {
+  return queryOne<Idea>('SELECT * FROM ideas WHERE id = $1', [id]);
+}
+
+export async function updateIdeaStatus(
+  id: number,
+  status: string
+): Promise<Idea | null> {
+  return queryOne<Idea>(
+    `UPDATE ideas SET status = $1 WHERE id = $2 RETURNING *`,
+    [status, id]
+  );
+}
+
+export async function createConfirmation(data: {
+  email: string;
+  code: string;
+  purpose: 'vote' | 'admin';
+  metadata?: Record<string, unknown>;
+}): Promise<Confirmation> {
+  const c = await queryOne<Confirmation>(
+    `INSERT INTO confirmations (email, code, purpose, metadata, expires_at)
+     VALUES ($1, $2, $3, $4, NOW() + INTERVAL '15 minutes') RETURNING *`,
+    [data.email, data.code, data.purpose, data.metadata ?? null]
+  );
+  if (!c) throw new Error('Failed to create confirmation');
+  return c;
+}
+
+export async function consumeConfirmation(
+  email: string,
+  code: string,
+  purpose: string
+): Promise<Confirmation | null> {
+  return queryOne<Confirmation>(
+    `UPDATE confirmations
+     SET used = true
+     WHERE email = $1 AND code = $2 AND purpose = $3
+       AND used = false AND expires_at > NOW()
+     RETURNING *`,
+    [email, code, purpose]
+  );
+}
+
+export async function upsertVote(
+  ideaId: number,
+  email: string,
+  type: 'upvote' | 'downvote'
+): Promise<void> {
+  await query(
+    `INSERT INTO votes (idea_id, email, vote_type)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (idea_id, email)
+     DO UPDATE SET vote_type = $3, created_at = NOW()`,
+    [ideaId, email, type]
+  );
+  await query(
+    `UPDATE ideas
+     SET upvotes = (SELECT COUNT(*) FROM votes WHERE idea_id = $1 AND vote_type = 'upvote')::int,
+         downvotes = (SELECT COUNT(*) FROM votes WHERE idea_id = $1 AND vote_type = 'downvote')::int
+     WHERE id = $1`,
+    [ideaId]
+  );
+}
+
+export async function getExistingVote(
+  ideaId: number,
+  email: string
+): Promise<Vote | null> {
+  return queryOne<Vote>(
+    'SELECT * FROM votes WHERE idea_id = $1 AND email = $2',
+    [ideaId, email]
+  );
+}
+
+export async function createAdminSession(
+  email: string
+): Promise<AdminSession> {
+  const s = await queryOne<AdminSession>(
+    `INSERT INTO admin_sessions (email, expires_at)
+     VALUES ($1, NOW() + INTERVAL '24 hours') RETURNING *`,
+    [email]
+  );
+  if (!s) throw new Error('Failed to create session');
+  return s;
+}
+
+export async function getAdminSessionByToken(
+  token: string
+): Promise<AdminSession | null> {
+  return queryOne<AdminSession>(
+    `SELECT * FROM admin_sessions
+     WHERE token = $1 AND expires_at > NOW()`,
+    [token]
+  );
+}
+
+export async function subscribe(
+  email: string
+): Promise<Subscriber> {
+  const existing = await queryOne<Subscriber>(
+    `SELECT * FROM subscribers WHERE email = $1`,
+    [email]
+  );
+  if (existing) {
+    if (!existing.active) {
+      await query(
+        `UPDATE subscribers SET active = true, unsubscribed_at = NULL WHERE email = $1`,
+        [email]
+      );
+    }
+    return { ...existing, active: true, unsubscribed_at: null };
+  }
+  const s = await queryOne<Subscriber>(
+    `INSERT INTO subscribers (email) VALUES ($1) RETURNING *`,
+    [email]
+  );
+  if (!s) throw new Error('Failed to subscribe');
+  return s;
+}
+
+export async function unsubscribe(
+  token: string
+): Promise<boolean> {
+  const result = await query(
+    `UPDATE subscribers
+     SET active = false, unsubscribed_at = NOW()
+     WHERE token = $1 AND active = true`,
+    [token]
+  );
+  return (result as unknown as { rowCount: number }).rowCount > 0;
+}
+
+export async function getActiveSubscribers(): Promise<Subscriber[]> {
+  return query<Subscriber>(
+    `SELECT * FROM subscribers WHERE active = true`
+  );
+}
+
+export async function logEmail(
+  to: string,
+  subject: string,
+  purpose: string
+): Promise<void> {
+  await query(
+    `INSERT INTO email_log (to_email, subject, purpose) VALUES ($1, $2, $3)`,
+    [to, subject, purpose]
+  );
+}

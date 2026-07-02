@@ -1,0 +1,50 @@
+name: Deploy Landing Page
+
+on:
+  push:
+    branches: [develop, master]
+    paths:
+      - 'apps/landing-page/**'
+      - '.github/workflows/deploy-landing.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/landing-page
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - run: pnpm --filter @cryptobingo/landing-page build
+        working-directory: .
+
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_LANDING }}
+          action: upload
+          app_location: apps/landing-page
+          api_location: apps/landing-page/api
+          output_location: dist
+          skip_app_build: true

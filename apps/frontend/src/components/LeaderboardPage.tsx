@@ -42,7 +42,8 @@ export default function LeaderboardPage({ roomId }: Props) {
                 setCachedAt(data.cached_at);
             }
         } catch (err: any) {
-            setError(err.message ?? t('common.error'));
+            console.error('[Leaderboard]', err);
+            setError(t('errors.generic'));
         } finally {
             setLoading(false);
         }

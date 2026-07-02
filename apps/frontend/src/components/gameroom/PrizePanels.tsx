@@ -11,7 +11,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import type { EnrichedRoom } from '../../services/api';
-import type { GoldenBallInfo, ClearedStage } from '../../hooks/useSlowReveal';
+import type { GoldenBallInfo, GoldenMultiplierProgress, ClearedStage } from '../../hooks/useSlowReveal';
 import { Button } from '@/components/ui/button';
 import { sumPayoutsByCurrency, countWinners } from './prizeFormat';
 
@@ -20,29 +20,52 @@ function fmtCountdown(ms: number): string {
   if (ms <= 0) return '0s';
   const s = Math.ceil(ms / 1000);
   if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m ${s % 60 > 0 ? `${s % 60}s` : ''}`.trim();
+  const secPart = s % 60 > 0 ? `${s % 60}s` : '';
+  return `${Math.floor(s / 60)}m ${secPart}`.trim();
+}
+
+/** Traduz nome de estágio raw (stage_N) para i18n. Fallback p/ nome original. */
+function fmtStageName(t: ReturnType<typeof useTranslation>['t'], name: string): string {
+  const m = name.match(/^stage_(\d+)$/);
+  if (m) return t('game_room.stage_label', { stage: parseInt(m[1], 10) });
+  return name;
+}
+
+// S3358: extrair nested ternary para função legível
+function getEndedStatusText(
+  playerWinEntries: { length: number },
+  localWinners: { length: number },
+  isStaticFinalState: boolean,
+  playerTickets: { length: number },
+  t: (key: string, opts?: any) => string,
+): string {
+  if (playerWinEntries.length > 0) return t('game_room.game_ended_you_won');
+  if (localWinners.length > 0) return t('game_room.game_ended_winners', { count: localWinners.length });
+  if (isStaticFinalState && playerTickets.length === 0) return t('game_room.game_ended_archived');
+  return t('game_room.game_ended_no_winners');
 }
 
 export interface PrizePanelsProps {
-  hasBanners: boolean;
-  goldenBall: GoldenBallInfo | null;
-  clearedStages: ClearedStage[];
-  isEffectiveGameEnded: boolean;
-  isStaticFinalState: boolean;
-  playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean }>;
-  localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
-  playerTickets: Array<{ id: string; matrix: number[] }>;
-  nextGame: BlockchainGameState | null;
-  nextGameTimer: string;
-  game: BlockchainGameState | null;
-  room: EnrichedRoom | null;
-  now: number;
-  onLeave: () => void;
-  onGoToHistory?: () => void;
+  readonly hasBanners: boolean;
+  readonly goldenBall: GoldenBallInfo | null;
+  readonly goldenMultiplierProgress: GoldenMultiplierProgress | null;
+  readonly clearedStages: ClearedStage[];
+  readonly isEffectiveGameEnded: boolean;
+  readonly isStaticFinalState: boolean;
+  readonly playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean; goldenMultiplier?: number }>;
+  readonly localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
+  readonly playerTickets: Array<{ id: string; matrix: number[] }>;
+  readonly nextGame: BlockchainGameState | null;
+  readonly nextGameTimer: string;
+  readonly game: BlockchainGameState | null;
+  readonly room: EnrichedRoom | null;
+  readonly now: number;
+  readonly onLeave: () => void;
+  readonly onGoToHistory?: () => void;
 }
 
 export default function PrizePanels({
-  hasBanners, goldenBall, clearedStages,
+  hasBanners, goldenBall, goldenMultiplierProgress, clearedStages,
   isEffectiveGameEnded, isStaticFinalState,
   playerWinEntries, localWinners, playerTickets,
   nextGame, nextGameTimer, game, room, now,
@@ -72,19 +95,30 @@ export default function PrizePanels({
 
           {/* ADR-014: Golden Ball */}
           {goldenBall && (
-            <div className="gr-golden-banner" role="status" aria-live="assertive">
+            <output className="gr-golden-banner" aria-live="assertive">
               <span className="gr-golden-icon">🌟</span>
               <div className="gr-golden-text">
                 <strong>{t('game_room.golden_ball_title')}</strong>
                 <span>{t('game_room.golden_ball_desc', { ball: goldenBall.ballNum, multiplier: goldenBall.multiplier })}</span>
               </div>
               <span className="gr-golden-mult">×{goldenBall.multiplier}</span>
-            </div>
+            </output>
+          )}
+
+          {/* ADR-014: Golden Ball multiplier progress (animação) */}
+          {goldenBall && goldenMultiplierProgress && !goldenMultiplierProgress.isFinal && (
+            <output className="gr-multiplier-progress" aria-live="polite">
+              <span className="gr-multiplier-icon">✨</span>
+              <div className="gr-multiplier-text">
+                <strong>{t('game_room.multiplier_title')}</strong>
+                <span>{t('game_room.multiplier_progress', { multiplier: goldenMultiplierProgress.multiplier })}</span>
+              </div>
+            </output>
           )}
 
           {/* ADR-013: Multi-Match stages */}
           {clearedStages.length > 0 && (
-            <div className="gr-stages-panel" role="status">
+            <output className="gr-stages-panel">
               <span className="gr-stages-title">{t('game_room.stages_title')}</span>
               <div className="gr-stages-list">
                 {clearedStages.map(s => (
@@ -92,21 +126,25 @@ export default function PrizePanels({
                     <span className="gr-stage-badge">
                       {t('game_room.stage_label', { stage: s.stage })}
                     </span>
+                    {s.winningBall && (
+                      <span className="gr-stage-ball">
+                        🎱 {s.winningBall}
+                      </span>
+                    )}
                     <span className="gr-stage-count">
                       {t('game_room.stage_winners', { count: s.winners.length })}
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
+            </output>
           )}
 
           {/* ADR-014: Game Ended */}
           {isEffectiveGameEnded && (
-            <div
+            <output
               data-testid="gr-ended-overlay"
               className={`gr-ended-banner${playerWinEntries.length > 0 ? ' gr-ended-banner--winner' : ''}`}
-              role="status"
               aria-live="polite"
             >
               <span className="gr-ended-icon">
@@ -115,22 +153,21 @@ export default function PrizePanels({
               <div className="gr-ended-text">
                 <strong>{t('game_room.game_ended_title')}</strong>
                 <span>
-                  {playerWinEntries.length > 0
-                    ? t('game_room.game_ended_you_won')
-                    : localWinners.length > 0
-                      ? t('game_room.game_ended_winners', { count: localWinners.length })
-                      : isStaticFinalState && playerTickets.length === 0
-                        ? t('game_room.game_ended_archived')
-                        : t('game_room.game_ended_no_winners')}
+                  {getEndedStatusText(playerWinEntries, localWinners, isStaticFinalState, playerTickets, t)}
                 </span>
 
                 {playerWinEntries.length > 0 && (
                   <div className="gr-ended-breakdown" data-testid="gr-prize-breakdown">
                     <div className="gr-ended-breakdown-title">{t('game_room.player_prizes_title')}</div>
-                    {playerWinEntries.map(({ name, total, currency, isCombination }) => (
-                      <div key={name} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
+                    {playerWinEntries.map(({ name, total, currency, isCombination, goldenMultiplier }) => (
+                      <div key={`${name}${goldenMultiplier !== undefined ? '-gld' : ''}`} className="gr-ended-breakdown-row" data-testid="gr-prize-breakdown-row">
                         <span className="gr-ended-breakdown-pattern">
-                          {isCombination && '🔗 '}{name}
+                          {isCombination && '🔗 '}{fmtStageName(t, name)}
+                          {goldenMultiplier !== undefined && (
+                            <span className="gr-golden-badge-inline" data-testid="gr-golden-badge-inline">
+                              ×{goldenMultiplier}
+                            </span>
+                          )}
                         </span>
                         <span className="gr-ended-breakdown-prize">
                           {total.toFixed(4)} {currency}
@@ -155,7 +192,7 @@ export default function PrizePanels({
                   </div>
                 )}
 
-                {nextGame && nextGame.status === 'funding' ? (
+                {nextGame?.status === 'funding' ? (
                   <span className="gr-ended-next">
                     {t('game_room.next_game_funding', { time: nextGameTimer })}
                   </span>
@@ -175,7 +212,7 @@ export default function PrizePanels({
                   );
                 })()}
               </div>
-              {nextGame && nextGame.status === 'funding' && (
+              {nextGame?.status === 'funding' && (
                 <Button
                   variant="default"
                   size="sm"
@@ -195,7 +232,7 @@ export default function PrizePanels({
                   {t('nav.my_history') ?? 'Histórico'}
                 </Button>
               )}
-            </div>
+            </output>
           )}
 
         </div>

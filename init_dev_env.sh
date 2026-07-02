@@ -7,6 +7,7 @@
 #   bash init_dev_env.sh          # setup completo (primeira vez)
 #   bash init_dev_env.sh --reset  # destrói e recria tudo
 #   bash init_dev_env.sh --envs   # só repropaga os .env (sem blockchain)
+#   bash init_dev_env.sh --perms  # só atualiza permissões MongoDB (após docker compose up)
 #
 # Ref: ADR-006, SPEC.md §2
 # ============================================================
@@ -121,6 +122,53 @@ if [[ "${1:-}" == "--envs" ]]; then
     fi
     source .waxdev.env
     SKIP_BLOCKCHAIN=true
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MODO --perms
+# ──────────────────────────────────────────────────────────────────────────────
+_setup_mongo_perms() {
+    local mongo_host="${1:-bingo_mongodb}"
+    if ! docker ps --format '{{.Names}}' | grep -q "$mongo_host"; then
+        echo "[!] MongoDB container '$mongo_host' não encontrado."
+        echo "    Execute 'docker compose up -d' primeiro."
+        return 1
+    fi
+    echo "[*] Promovendo contas admin no MongoDB..."
+    docker exec "$mongo_host" mongosh \
+        --username mongo_admin --password mongo_secure_pass_2026 \
+        --authenticationDatabase admin cryptobingo_edge \
+        --eval 'db.userprofiles.updateOne(
+            {wallet_address:"gameadmin11"},
+            {$set:{role:"admin",permissions:["admin.*"]}},
+            {upsert:true}
+        ); db.userprofiles.updateOne(
+            {wallet_address:"contractad1"},
+            {$set:{role:"admin",permissions:["admin.*"]}},
+            {upsert:true}
+        )' 2>/dev/null || { echo "[!] Falha ao atualizar admin perms"; return 1; }
+
+    echo "[*] Promovendo conta sponsor no MongoDB..."
+    docker exec "$mongo_host" mongosh \
+        --username mongo_admin --password mongo_secure_pass_2026 \
+        --authenticationDatabase admin cryptobingo_edge \
+        --eval 'db.userprofiles.updateOne(
+            {wallet_address:"sponsor1111"},
+            {$set:{role:"sponsor",permissions:["sponsor.org_sponsor1111.*"]}},
+            {upsert:true}
+        ); db.sponsororgs.updateOne(
+            {orgId:"org_sponsor1111"},
+            {$set:{orgId:"org_sponsor1111",owner_wallet:"sponsor1111",name:"Sponsor sponsor1111",settings:{autoApproveDelegations:true}}},
+            {upsert:true}
+        )' 2>/dev/null || { echo "[!] Falha ao atualizar sponsor perms"; return 1; }
+
+    echo "[✓] Permissões MongoDB atualizadas."
+}
+
+if [[ "${1:-}" == "--perms" ]]; then
+    echo "[*] Modo --perms: atualizando permissões MongoDB..."
+    _setup_mongo_perms "bingo_mongodb"
+    exit $?
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -971,23 +1019,7 @@ if docker network ls --format '{{.Name}}' | grep -qx 'cryptobingo-infra_bingo_ne
     docker network connect cryptobingo-infra_bingo_net "$CONTAINER_NAME" 2>/dev/null || true
 
     if docker ps --format '{{.Names}}' | grep -q 'bingo_mongodb'; then
-        echo "[*] Promovendo contas admin no MongoDB..."
-        docker exec bingo_mongodb mongosh \
-            --username mongo_admin --password mongo_secure_pass_2026 \
-            --authenticationDatabase admin cryptobingo_edge \
-            --eval 'db.userprofiles.updateMany(
-                {wallet_address:{$in:["gameadmin11","contractad1"]}},
-                {$set:{role:"admin"}}
-            )' 2>/dev/null || true
-
-        echo "[*] Promovendo conta sponsor no MongoDB..."
-        docker exec bingo_mongodb mongosh \
-            --username mongo_admin --password mongo_secure_pass_2026 \
-            --authenticationDatabase admin cryptobingo_edge \
-            --eval 'db.userprofiles.updateMany(
-                {wallet_address:{$in:["sponsor1111"]}},
-                {$set:{role:"sponsor"}}
-            )' 2>/dev/null || true
+        _setup_mongo_perms "bingo_mongodb" 2>/dev/null || true
     fi
 fi
 
@@ -1031,12 +1063,14 @@ echo "  RSA keypair  : contracts/orng/dev-rsa-private.pem"
 echo ""
 echo "  Próximos passos:"
 echo "    docker compose up -d"
+echo "    bash init_dev_env.sh --perms   # após compose up (perm MongoDB)"
 echo "    pnpm dev"
-echo ""
+
 echo "  Úteis:"
 echo "    Logs nodeos  : docker exec $CONTAINER_NAME tail -f /root/nodeos.log"
 echo "    Logs oracle  : tail -f logs/orng-oracle.log"
 echo "    Shell        : docker exec -it $CONTAINER_NAME bash"
 echo "    Reset        : bash init_dev_env.sh --reset"
 echo "    Só .env      : bash init_dev_env.sh --envs"
+echo "    Perms MongoDB: bash init_dev_env.sh --perms"
 echo ""

@@ -5,38 +5,42 @@
 // Design: classes gr-* definidas em globals.design.css
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
 import RoomSocial from './gameroom/RoomSocial';
+
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
 import { useGameRoomState } from './gameroom/useGameRoomState';
+import { useRoomSocial } from '../hooks/useRoomSocial';
 import PatternsPanel from './gameroom/PatternsPanel';
 import PrizePanels from './gameroom/PrizePanels';
 import TicketsGrid from './gameroom/TicketsGrid';
 import MatchStats from './gameroom/MatchStats';
+import { sumPayoutsByCurrency, countWinners } from './gameroom/prizeFormat';
+import { getEffectiveExplorerUrl } from '../utils/explorerStore';
 
 // ==========================================
 // TIPOS
 // ==========================================
 
 interface GameRoomProps {
-  gameId:            string;
-  roomId?:           string;
-  session:           Session;
-  profile:           MongoUserProfile;
-  onLeave:           () => void;
-  onGoToHistory?:    () => void;
-  onGoToWallet?:     () => void;
-  onGoToAdmin?:      () => void;
-  isAdmin?:          boolean;
-  onLogout?:         () => void;
-  theme?:            'dark' | 'light';
-  onToggleTheme?:    () => void;
-  onLanguageChange?: (locale: string) => void;
+  readonly gameId:            string;
+  readonly roomId?:           string;
+  readonly session:           Session;
+  readonly profile:           MongoUserProfile;
+  readonly onLeave:           () => void;
+  readonly onGoToHistory?:    () => void;
+  readonly onGoToWallet?:     () => void;
+  readonly onGoToAdmin?:      () => void;
+  readonly isAdmin?:          boolean;
+  readonly onLogout?:         () => void;
+  readonly theme?:            'dark' | 'light';
+  readonly onToggleTheme?:    () => void;
+  readonly onLanguageChange?: (locale: string) => void;
 }
 
 // ==========================================
@@ -48,27 +52,71 @@ export default function GameRoom({
   onGoToHistory, onGoToWallet, onGoToAdmin, isAdmin,
   onLogout, theme, onToggleTheme, onLanguageChange,
 }: GameRoomProps) {
-  const { t } = useTranslation();
-
   // ── Estado/efeitos/derivações vivem no hook (Fase 0 do refactor) ──────────
+  const { t } = useTranslation();
   const state = useGameRoomState({ gameId, roomId, session });
   const {
     game, nextGame, playerTickets, room, loadingGame, maxBalls, gamePatterns,
-    gameCombinations, ingameBalances, drawnBalls, lastBall, isDrawing, isAborted,
-    wsStatus, goldenBall, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
+    gameCombinations, ingameBalances, isDrawing, isAborted,
+    wsStatus, goldenBall, goldenMultiplierProgress, clearedStages, effectiveBalls, drawnNumbers, drawnSet,
     lastDrawn, isEffectiveGameEnded, effectiveDisplayStatus, gameStatusText,
     timeRemaining, nextGameTimer, localWinners, winnerMap, patternByName,
     playerWinEntries, adjustedPatternWinCount, allGameCombinationWinCount,
     completedCombinationsPerTicket, combinationCells, patternProximityMap,
     combinationProximityMap, sortedPatterns, groupedTickets, currencySymbol,
     ticketPrice, col, color, hasBanners, now, loadGame, isStaticFinalState,
+    prizeStatuses, drawMode, gameStages,
   } = state;
   const roomPatterns = gamePatterns;
+
+  // ── Social ao vivo: presença online, reações efêmeras (Fase 4) ────────────
+  const { onlineCount, reactions, sendReaction } = useRoomSocial({
+    roomId: room?.room_id ?? '',
+  });
 
   // UI puramente local do orquestrador (showPatterns migra para painel na Task 4)
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showPatterns, setShowPatterns] = useState(true);
   const density = 'comfortable' as const;
+
+  // ── Resumo global de prêmios pagos pela sala (todos vencedores) ──────────
+  const roomPrize = useMemo(() => {
+    const all = localWinners.flatMap(w => w.payouts);
+    const sums = sumPayoutsByCurrency(all);
+    if (sums.length === 0) return null;
+    const total = sums.map(s => `${s.total.toFixed(4)} ${s.symbol}`).join(' + ');
+    return { total, count: countWinners(localWinners) };
+  }, [localWinners]);
+
+  // ── Feed de eventos: vencedores + prizeStatuses — usa localWinners p/ cobrir
+  // jogos arquivados onde WS não re-emite eventos. Para jogos ao vivo localWinners = winners.
+  const feedWinners = useMemo(() =>
+    (localWinners ?? []).map(w => {
+      const ps = prizeStatuses?.[`${w.ticket_id}:${w.win_pattern}`];
+      return {
+        account: (w as any).account ?? '',
+        ticket_id: w.ticket_id,
+        pattern_name: w.win_pattern,
+        status: ps?.status ?? 'preparing',
+        tx_id: ps?.tx_id,
+        amount: ps?.amount,
+        currency: ps?.currency ?? '',
+      };
+    }),
+    [localWinners, prizeStatuses],
+  );
+
+  const explorerUrl = getEffectiveExplorerUrl();
+  // Agrupa winners por padrão/estágio
+  const groupedWinners = useMemo(() => {
+    const groups = new Map<string, typeof feedWinners>();
+    for (const w of feedWinners) {
+      const arr = groups.get(w.pattern_name) ?? [];
+      arr.push(w);
+      groups.set(w.pattern_name, arr);
+    }
+    return [...groups.entries()];
+  }, [feedWinners]);
 
   // ── Refs de layout ────────────────────────────────────────────────────────
   const stageRef    = useRef<HTMLElement>(null);
@@ -98,6 +146,7 @@ export default function GameRoom({
         timeRemaining={timeRemaining} isDrawing={isDrawing} isAborted={isAborted}
         ingameBalances={ingameBalances} wsStatus={wsStatus}
         isAdmin={isAdmin} theme={theme}
+        onlineCount={onlineCount}
         onLeave={onLeave} onGoToHistory={onGoToHistory} onGoToWallet={onGoToWallet}
         onGoToAdmin={onGoToAdmin} onToggleTheme={onToggleTheme} onLogout={onLogout}
         onLanguageChange={onLanguageChange}
@@ -105,14 +154,6 @@ export default function GameRoom({
 
       {/* ── Grid principal ──────────────────────────────────────────────────── */}
       <div className={`gr-main gr-${density}`}>
-
-        {/* ── Faixa de dados: pote, bônus patrocinado e bolas (Task 2) ─────── */}
-        <MatchStats
-          totalWagered={game?.total_wagered?.quantity ?? ''}
-          sponsorPool={game?.sponsor_pool ?? []}
-          drawnCount={drawnNumbers.length}
-          maxBalls={maxBalls}
-        />
 
         {/* ── Linha superior: stage + patterns lado a lado ───────────────────── */}
         <div className="gr-top-row">
@@ -139,6 +180,8 @@ export default function GameRoom({
               patternProximityMap={patternProximityMap} combinationProximityMap={combinationProximityMap}
               combinationCells={combinationCells} completedCombinationsPerTicket={completedCombinationsPerTicket}
               currencySymbol={currencySymbol} onClose={() => setShowPatterns(false)} panelRef={patternsRef}
+              drawMode={drawMode} gameStages={gameStages} clearedStages={clearedStages}
+              playerTickets={playerTickets} drawnSet={drawnSet}
             />
           )}
 
@@ -146,12 +189,77 @@ export default function GameRoom({
 
         {/* ── Banners (golden ball, stages, fim) + confete — extraídos em PrizePanels ── */}
         <PrizePanels
-          hasBanners={hasBanners} goldenBall={goldenBall} clearedStages={clearedStages}
+          hasBanners={hasBanners} goldenBall={goldenBall} goldenMultiplierProgress={goldenMultiplierProgress}
+          clearedStages={clearedStages}
           isEffectiveGameEnded={isEffectiveGameEnded} isStaticFinalState={isStaticFinalState}
           playerWinEntries={playerWinEntries} localWinners={localWinners} playerTickets={playerTickets}
           nextGame={nextGame} nextGameTimer={nextGameTimer} game={game} room={room} now={now}
           onLeave={onLeave} onGoToHistory={onGoToHistory}
         />
+
+        {/* ── Faixa de dados: pote, bônus patrocinado e bolas ──────────────── */}
+        <MatchStats
+          totalWagered={game?.total_wagered?.quantity ?? ''}
+          sponsorPool={game?.sponsor_pool ?? []}
+          drawnCount={drawnNumbers.length}
+          maxBalls={maxBalls}
+        />
+
+        {/* ── Painel de resultados globais (acima das cartelas) ─────────────── */}
+        {groupedWinners.length > 0 && (
+          <div className="gr-room-prizes" data-testid="gr-room-prizes">
+            <span className="gr-room-prizes-summary">
+              {t('game_room.room_prizes_summary', {
+                total: roomPrize?.total ?? '0',
+                count: roomPrize?.count ?? feedWinners.length,
+              })}
+            </span>
+            <div className="gr-room-prizes-groups" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              {groupedWinners.map(([patternName, entries]) => {
+                const stageMatch = patternName.match(/^stage_(\d+)$/);
+                const dispName = stageMatch
+                  ? t('game_room.stage_label', { stage: parseInt(stageMatch[1], 10) })
+                  : patternName;
+                return (
+                  <div key={patternName} className="gr-room-prizes-group">
+                    <span className="gr-room-prizes-group-title">{dispName}</span>
+                    {entries.map((w, idx) => (
+                      <div key={`${w.ticket_id}-${idx}`} className="gr-room-prizes-row">
+                        <span className="gr-room-prizes-ticket">{w.ticket_id}</span>
+                        <span className="gr-room-prizes-meta">
+                          <span className="gr-room-prizes-user">{w.account}</span>
+                          <span className="gr-room-prizes-sep">:</span>
+                          <span className="gr-room-prizes-amount">{w.amount ?? '—'} {w.currency}</span>
+                          {w.status === 'preparing' && (
+                            <span className="gr-room-prizes-status" title={t('game_room.prize_preparing')}>
+                              <span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', borderWidth: '1.5px' }} />
+                            </span>
+                          )}
+                          {w.status === 'confirming' && (
+                            <span className="gr-room-prizes-status" title={t('game_room.prize_confirming')}>
+                              <span className="cb-spinner" style={{ width: '0.6rem', height: '0.6rem', display: 'inline-block', borderWidth: '1.5px' }} />
+                            </span>
+                          )}
+                          {w.status === 'confirmed' && w.tx_id && (
+                            <a
+                              href={`${explorerUrl}/transaction/${w.tx_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="gr-room-prizes-link"
+                              title={t('game_room.prize_confirmed')}
+                            >
+                              🔗
+                            </a>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Cartelas ──────────────────────────────────────────────────────── */}
         <TicketsGrid
@@ -159,17 +267,21 @@ export default function GameRoom({
           gameStatus={game?.status} canBuyMore={game?.status === 'funding' && !!ticketPrice}
           winnerMap={winnerMap} patternByName={patternByName} drawnSet={drawnSet} lastDrawn={lastDrawn}
           roomPatterns={roomPatterns} completedCombinationsPerTicket={completedCombinationsPerTicket}
+          goldenBallNum={goldenBall?.ballNum ?? undefined}
+          effectiveMultiplier={goldenBall?.multiplier ?? undefined}
           onBuyMore={() => setShowBuyModal(true)}
+          localWinners={localWinners}
         />
 
       </div>
 
-      {/* ── Social: presença, reações flutuantes, feed e chat (Fase 4) ── */}
+      {/* ── Social: presença, reações flutuantes e chat ── */}
       <RoomSocial
         room={room}
         walletAddress={profile.wallet_address}
-        localWinners={localWinners}
-        clearedStages={clearedStages}
+        onlineCount={onlineCount}
+        reactions={reactions}
+        sendReaction={sendReaction}
       />
 
       {/* ── Modal de compra ────────────────────────────────────────────────── */}

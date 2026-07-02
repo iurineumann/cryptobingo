@@ -9,24 +9,26 @@ import { Session } from '@wharfkit/session';
 import { updateUserLocale } from '../../services/api';
 import { PaletteSelector } from '../ui/PaletteSelector';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
-import { Building2, ShieldCheck } from 'lucide-react';
+import { Building2, ShieldCheck, UserPlus } from 'lucide-react';
 import Logo from '../Logo';
 
 interface SponsorLayoutProps {
   profile:       MongoUserProfile;
   session:       Session;
   theme:         string;
+  permissions?:  string[];
   onToggleTheme: () => void;
   onLogout:      () => void;
 }
 
 const SPONSOR_NAV = [
-  { path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
-  { path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
+  { key: 'rooms', path: '/sponsor/rooms', label: 'sponsor.nav_rooms', icon: <Building2 className="size-4 shrink-0" /> },
+  { key: 'vault', path: '/sponsor/vault', label: 'sponsor.nav_vault', icon: <ShieldCheck className="size-4 shrink-0" /> },
+  { key: 'delegations', path: '/sponsor/delegations', label: 'sponsor.nav_delegations', icon: <UserPlus className="size-4 shrink-0" /> },
 ];
 
 export default function SponsorLayout({
-  profile, session, theme, onToggleTheme, onLogout,
+  profile, session, permissions = [], theme, onToggleTheme, onLogout,
 }: SponsorLayoutProps) {
   const { t, i18n } = useTranslation();
   const navigate     = useNavigate();
@@ -36,6 +38,15 @@ export default function SponsorLayout({
     i18n.changeLanguage(locale);
     try { await updateUserLocale(locale); } catch { /* silencioso */ }
   };
+
+  const visibleNav = SPONSOR_NAV.filter((item) => {
+    if (permissions.length === 0) return true;
+    const hasWildcard = permissions.some(p => p.endsWith('.*'));
+    if (item.key === 'rooms')       return hasWildcard || permissions.some(p => p.includes('.rooms.'));
+    if (item.key === 'vault')       return hasWildcard || permissions.some(p => p.includes('.vault.') || p.includes('.drops.'));
+    if (item.key === 'delegations') return hasWildcard || permissions.some(p => p.includes('.delegations.'));
+    return true;
+  });
 
   return (
     <div className="site-shell mode-admin" style={{ height: '100dvh' }}>
@@ -94,7 +105,7 @@ export default function SponsorLayout({
         <aside className="site-sidebar" aria-label={t('sponsor.nav_aria')}>
           <div className="site-sidebar-section">
             <span className="site-sidebar-title">{t('sponsor.nav_section')}</span>
-            {SPONSOR_NAV.map(item => (
+            {visibleNav.map(item => (
               <a
                 key={item.path}
                 href={item.path}
