@@ -3,7 +3,7 @@ import { createIdea } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface IdeaSubmitFormProps {
-    onSubmit: () => void;
+    readonly onSubmit: () => void;
 }
 
 interface FormData {

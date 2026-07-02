@@ -10,9 +10,9 @@ const statusStyles: Record<Idea['status'], string> = {
 };
 
 interface IdeaCardProps {
-    idea: Idea;
-    onVote: (id: number, type: 'upvote' | 'downvote') => void;
-    isVoting?: boolean;
+    readonly idea: Idea;
+    readonly onVote: (id: number, type: 'upvote' | 'downvote') => void;
+    readonly isVoting?: boolean;
 }
 
 export default function IdeaCard({ idea, onVote, isVoting }: IdeaCardProps) {

@@ -46,6 +46,12 @@ export default function IdeasPage() {
         setRefreshKey((k) => k + 1);
     }
 
+    function renderIdeas() {
+        if (loading) return <p className="text-secondary">Loading ideas...</p>;
+        if (error) return <p className="text-red-400">{error}</p>;
+        return <IdeaList ideas={ideas} onVote={handleVoteClick} loading={loading} />;
+    }
+
     return (
         <>
             <Header />
@@ -60,13 +66,7 @@ export default function IdeasPage() {
                     <IdeaSubmitForm onSubmit={handleSubmitSuccess} />
                 </div>
                 <section className="mt-16">
-                    {loading ? (
-                        <p className="text-secondary">Loading ideas...</p>
-                    ) : error ? (
-                        <p className="text-red-400">{error}</p>
-                    ) : (
-                        <IdeaList ideas={ideas} onVote={handleVoteClick} />
-                    )}
+                    {renderIdeas()}
                 </section>
             </main>
             {showVoteModal && voteIdeaId !== null && (

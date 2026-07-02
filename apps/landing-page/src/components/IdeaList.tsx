@@ -3,9 +3,9 @@ import IdeaCard from './IdeaCard';
 import type { Idea } from '@/lib/api';
 
 interface IdeaListProps {
-    ideas: Idea[];
-    onVote: (id: number, type: 'upvote' | 'downvote') => void;
-    loading?: boolean;
+    readonly ideas: Idea[];
+    readonly onVote: (id: number, type: 'upvote' | 'downvote') => void;
+    readonly loading?: boolean;
 }
 
 function Skeleton() {

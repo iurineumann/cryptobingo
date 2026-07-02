@@ -18,9 +18,9 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-surface-900/80 border-b border-surface-700/50">
       <div className="max-w-7xl mx-auto flex justify-between items-center h-16 px-4">
-        <a href="/" className="text-xl font-bold text-white">
-          CryptoBingo
-          <span className="text-accent-400 ml-0.5">●</span>
+        <a href="/" className="flex items-center gap-0.5 text-xl font-bold text-white">
+          <span>CryptoBingo</span>
+          <span className="text-accent-400">●</span>
         </a>
         <nav className="flex items-center gap-6">
           {navLinks.map((link) => {

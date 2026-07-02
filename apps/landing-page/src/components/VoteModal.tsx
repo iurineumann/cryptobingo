@@ -4,9 +4,9 @@ import { cn, validateEmail } from '@/lib/utils';
 import { requestVote, confirmVote } from '@/lib/api';
 
 interface VoteModalProps {
-    isOpen: boolean;
-    ideaId: number;
-    onClose: () => void;
+    readonly isOpen: boolean;
+    readonly ideaId: number;
+    readonly onClose: () => void;
 }
 
 type Step = 'email' | 'code' | 'confirmed';
@@ -78,12 +78,18 @@ export default function VoteModal({ isOpen, ideaId, onClose }: VoteModalProps) {
         onClose();
     }
 
+    // NOSONAR(S6819): native <dialog> breaks Tailwind backdrop-blur + CSS animations
     return (
         <div
             className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
             onClick={handleOverlayClick}
+            role="presentation"
         >
-            <div className="bg-surface-800 rounded-xl p-6 max-w-md w-full shadow-modal border border-surface-700/50 relative">
+            <div
+                className="bg-surface-800 rounded-xl p-6 max-w-md w-full shadow-modal border border-surface-700/50 relative"
+                role="dialog"
+                aria-modal="true"
+            >
                 <button
                     onClick={handleClose}
                     className="absolute top-4 right-4 text-tertiary hover:text-white transition"

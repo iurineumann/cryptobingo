@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { LogOut, Send } from 'lucide-react';
 import { getIdeas, adminUpdateIdeaStatus, adminSendNewsletter, type Idea } from '@/lib/api';
 import { clearAdminToken } from '@/lib/store';
@@ -11,6 +11,76 @@ const STATUS_LABELS: Record<Idea['status'], string> = {
     rejected: 'Rejected',
     implemented: 'Implemented',
 };
+
+function handleLogout() {
+    clearAdminToken();
+    globalThis.location.reload();
+}
+
+function getOriginalStatus(ideas: Idea[], id: number): Idea['status'] {
+    const found = ideas.find((x) => x.id === id);
+    return found!.status;
+}
+
+interface IdeasTableProps {
+    readonly ideas: Idea[];
+    readonly loading: boolean;
+    readonly onStatusChange: (id: number, status: Idea['status']) => void;
+}
+
+function IdeasTable({
+    ideas,
+    loading,
+    onStatusChange,
+}: IdeasTableProps) {
+    if (loading) {
+        return (
+            <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-secondary">
+                    Loading...
+                </td>
+            </tr>
+        );
+    }
+    if (ideas.length === 0) {
+        return (
+            <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-secondary">
+                    No ideas yet.
+                </td>
+            </tr>
+        );
+    }
+    return ideas.map((idea) => (
+        <tr
+            key={idea.id}
+            className="border-b border-surface-700/50 hover:bg-surface-750 transition"
+        >
+            <td className="px-4 py-3 text-secondary">{idea.id}</td>
+            <td className="px-4 py-3 text-white font-medium max-w-xs truncate">
+                {idea.title}
+            </td>
+            <td className="px-4 py-3 text-secondary">{idea.author_name}</td>
+            <td className="px-4 py-3 text-center text-success-400">{idea.upvotes}</td>
+            <td className="px-4 py-3 text-center text-danger-400">{idea.downvotes}</td>
+            <td className="px-4 py-3">
+                <select
+                    value={idea.status}
+                    onChange={(e) =>
+                        onStatusChange(idea.id, e.target.value as Idea['status'])
+                    }
+                    className="bg-surface-700 border border-surface-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand-500"
+                >
+                    {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                            {STATUS_LABELS[s]}
+                        </option>
+                    ))}
+                </select>
+            </td>
+        </tr>
+    ));
+}
 
 export default function AdminDashboard() {
     const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -29,10 +99,11 @@ export default function AdminDashboard() {
     }, []);
 
     const total = ideas.length;
-    const pending = ideas.filter((i) => i.status === 'pending').length;
-    const approved = ideas.filter((i) => i.status === 'approved' || i.status === 'implemented').length;
+    const pendingCount = ideas.filter((i) => i.status === 'pending').length;
+    const approvedCount = ideas.filter((i) => i.status === 'approved' || i.status === 'implemented').length;
 
     async function handleStatusChange(id: number, newStatus: Idea['status']) {
+        const origStatus = getOriginalStatus(ideas, id);
         setIdeas((prev) =>
             prev.map((i) => (i.id === id ? { ...i, status: newStatus } : i))
         );
@@ -40,7 +111,7 @@ export default function AdminDashboard() {
             await adminUpdateIdeaStatus(id, newStatus);
         } catch {
             setIdeas((prev) =>
-                prev.map((i) => (i.id === id ? { ...i, status: ideas.find((x) => x.id === id)!.status } : i))
+                prev.map((i) => (i.id === id ? { ...i, status: origStatus } : i))
             );
         }
     }
@@ -60,9 +131,18 @@ export default function AdminDashboard() {
         }
     }
 
-    function handleLogout() {
-        clearAdminToken();
-        window.location.reload();
+    const hasSent = sentCount !== null;
+
+    function renderNewsletterResult() {
+        if (sentCount === -1) {
+            return <p className="text-danger-400">Failed to send newsletter.</p>;
+        }
+        const plural = sentCount === 1 ? '' : 's';
+        return (
+            <p className="text-success-400 font-medium">
+                Newsletter sent to {sentCount} subscriber{plural}.
+            </p>
+        );
     }
 
     return (
@@ -84,11 +164,11 @@ export default function AdminDashboard() {
                     <p className="text-sm text-secondary mt-1">Total Ideas</p>
                 </div>
                 <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50">
-                    <p className="text-3xl font-bold text-accent-400">{pending}</p>
+                    <p className="text-3xl font-bold text-accent-400">{pendingCount}</p>
                     <p className="text-sm text-secondary mt-1">Pending</p>
                 </div>
                 <div className="bg-surface-800 rounded-xl p-5 border border-surface-700/50">
-                    <p className="text-3xl font-bold text-success-400">{approved}</p>
+                    <p className="text-3xl font-bold text-success-400">{approvedCount}</p>
                     <p className="text-sm text-secondary mt-1">Approved / Implemented</p>
                 </div>
             </div>
@@ -107,49 +187,11 @@ export default function AdminDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-secondary">
-                                        Loading...
-                                    </td>
-                                </tr>
-                            ) : ideas.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-secondary">
-                                        No ideas yet.
-                                    </td>
-                                </tr>
-                            ) : (
-                                ideas.map((idea) => (
-                                    <tr
-                                        key={idea.id}
-                                        className="border-b border-surface-700/50 hover:bg-surface-750 transition"
-                                    >
-                                        <td className="px-4 py-3 text-secondary">{idea.id}</td>
-                                        <td className="px-4 py-3 text-white font-medium max-w-xs truncate">
-                                            {idea.title}
-                                        </td>
-                                        <td className="px-4 py-3 text-secondary">{idea.author_name}</td>
-                                        <td className="px-4 py-3 text-center text-success-400">{idea.upvotes}</td>
-                                        <td className="px-4 py-3 text-center text-danger-400">{idea.downvotes}</td>
-                                        <td className="px-4 py-3">
-                                            <select
-                                                value={idea.status}
-                                                onChange={(e) =>
-                                                    handleStatusChange(idea.id, e.target.value as Idea['status'])
-                                                }
-                                                className="bg-surface-700 border border-surface-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand-500"
-                                            >
-                                                {STATUS_OPTIONS.map((s) => (
-                                                    <option key={s} value={s}>
-                                                        {STATUS_LABELS[s]}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                            <IdeasTable
+                                ideas={ideas}
+                                loading={loading}
+                                onStatusChange={handleStatusChange}
+                            />
                         </tbody>
                     </table>
                 </div>
@@ -157,15 +199,9 @@ export default function AdminDashboard() {
 
             <div className="bg-surface-800 rounded-xl p-6 border border-surface-700/50">
                 <h3 className="text-lg font-semibold text-white mb-4">Send Newsletter</h3>
-                {sentCount !== null ? (
+                {hasSent ? (
                     <div>
-                        {sentCount >= 0 ? (
-                            <p className="text-success-400 font-medium">
-                                Newsletter sent to {sentCount} subscriber{sentCount !== 1 ? 's' : ''}.
-                            </p>
-                        ) : (
-                            <p className="text-danger-400">Failed to send newsletter.</p>
-                        )}
+                        {renderNewsletterResult()}
                         <button
                             onClick={() => setSentCount(null)}
                             className="mt-4 text-sm text-brand-400 hover:text-brand-300 transition"
@@ -177,8 +213,9 @@ export default function AdminDashboard() {
                     <>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm text-secondary mb-1">Subject</label>
+                                <label htmlFor="newsletter-subject" className="block text-sm text-secondary mb-1">Subject</label>
                                 <input
+                                    id="newsletter-subject"
                                     type="text"
                                     value={newsletterSubject}
                                     onChange={(e) => setNewsletterSubject(e.target.value)}
@@ -187,8 +224,9 @@ export default function AdminDashboard() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-secondary mb-1">Body</label>
+                                <label htmlFor="newsletter-body" className="block text-sm text-secondary mb-1">Body</label>
                                 <textarea
+                                    id="newsletter-body"
                                     value={newsletterBody}
                                     onChange={(e) => setNewsletterBody(e.target.value)}
                                     placeholder="Write your newsletter content..."

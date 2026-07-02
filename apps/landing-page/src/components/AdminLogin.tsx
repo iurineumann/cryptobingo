@@ -1,13 +1,21 @@
 import { useState, FormEvent } from 'react';
-import { cn, validateEmail } from '@/lib/utils';
+import { validateEmail } from '@/lib/utils';
 import { adminLogin, adminConfirm } from '@/lib/api';
 import { setAdminToken } from '@/lib/store';
 
 interface AdminLoginProps {
-    onLogin: () => void;
+    readonly onLogin: () => void;
 }
 
 type Step = 'email' | 'code';
+
+function maskEmail(e: string): string {
+    const [local, domain] = e.split('@');
+    const masked = local.length <= 3
+        ? local.slice(0, 1) + '***'
+        : local.slice(0, 2) + '***' + local.slice(-1);
+    return `${masked}@${domain}`;
+}
 
 export default function AdminLogin({ onLogin }: AdminLoginProps) {
     const [step, setStep] = useState<Step>('email');
@@ -15,14 +23,6 @@ export default function AdminLogin({ onLogin }: AdminLoginProps) {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    function maskEmail(e: string): string {
-        const [local, domain] = e.split('@');
-        const masked = local.length <= 3
-            ? local.slice(0, 1) + '***'
-            : local.slice(0, 2) + '***' + local.slice(-1);
-        return `${masked}@${domain}`;
-    }
 
     async function handleSendCode(e: FormEvent) {
         e.preventDefault();
