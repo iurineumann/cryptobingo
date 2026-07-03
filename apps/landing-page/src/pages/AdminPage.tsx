@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Seo from '@/components/Seo';
 import Header from '@/components/Header';
 import AdminLogin from '@/components/AdminLogin';
 import AdminDashboard from '@/components/AdminDashboard';
@@ -14,6 +15,7 @@ export default function AdminPage() {
     if (!isAdminLoggedIn()) {
         return (
             <>
+                <Seo title="Admin" description="Painel administrativo do CryptoBingo." canonical="/admin" />
                 <Header />
                 <main className="mx-auto flex min-h-[60vh] max-w-md items-center px-4">
                     <AdminLogin onLogin={handleLogin} />
@@ -24,6 +26,7 @@ export default function AdminPage() {
 
     return (
         <>
+            <Seo title="Admin" description="Painel administrativo do CryptoBingo." canonical="/admin" />
             <Header />
             <AdminDashboard key={tick} />
         </>

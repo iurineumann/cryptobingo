@@ -1,0 +1,50 @@
+fragment PageParts on Page {
+  __typename
+  title
+  body
+  description
+  slug
+}
+
+fragment BlogParts on Blog {
+  __typename
+  title
+  description
+  date
+  cover
+  author
+  body
+  tags
+}
+
+fragment FaqParts on Faq {
+  __typename
+  question
+  answer
+  order
+  category
+}
+
+fragment SettingsParts on Settings {
+  __typename
+  hero {
+    __typename
+    title
+    subtitle
+    cta_text
+    cta_link
+  }
+  features {
+    __typename
+    title
+    description
+    icon
+  }
+  social {
+    __typename
+    telegram
+    discord
+    twitter
+    github
+  }
+}

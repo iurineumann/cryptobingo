@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { useGamesHistory } from '../hooks/useGamesHistory';
+import Seo from './Seo';
 import { X } from 'lucide-react';
 
 interface MyHistoryPageProps {
@@ -75,6 +76,7 @@ export default function MyHistoryPage({ session, onViewReplay }: MyHistoryPagePr
 
   return (
     <div className="hist-shell" data-testid="myhistory-page">
+      <Seo title="Histórico" description="Histórico completo das suas partidas de Bingo on-chain na CryptoBingo." />
       {/* ── Cabeçalho ── */}
       <div className="hist-header">
         <h2 className="hist-title" data-testid="myhistory-title">

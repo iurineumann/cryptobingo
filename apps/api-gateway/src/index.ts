@@ -131,6 +131,7 @@ import {
   deleteContentItem,
 } from "./controllers/contentController";
 import { listGamePrizes } from "./controllers/prizeController";
+import { analyticsEventHandler } from "./controllers/analyticsController";
 import {
   updateUserPermissions,
   listSponsorOrgs,
@@ -515,6 +516,11 @@ function registerRoutes(): void {
     createDelegation,
   );
 
+  // ── Swap Quote (ADR-021) — público, somente leitura ──────────────────
+  app.get('/api/v1/swap/pools',         playerLimiter, listSwapPools);
+  app.get('/api/v1/swap/quote',         playerLimiter, getSwapQuote);
+  app.get('/api/v1/swap/nft-discounts', playerLimiter, listNftDiscounts);
+
   app.delete(
     "/api/v1/admin/sponsor-orgs/:orgId/delegations/:wallet",
     adminLimiter,
@@ -698,6 +704,9 @@ function registerRoutes(): void {
     requirePerm("admin.content"),
     deleteContentItem,
   );
+
+  // ── Analytics Proxy (adblock bypass) ──────────────────────────────────
+  app.post("/api/v1/analytics/event", playerLimiter, analyticsEventHandler);
 
   // ── Prize Pipeline (ADR pendente) ─────────────────────────────────────
   app.get("/api/v1/games/:gameId/prizes", playerLimiter, listGamePrizes);

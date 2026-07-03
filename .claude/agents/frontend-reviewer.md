@@ -5,7 +5,6 @@ description: >
   design system, Wharfkit/on-chain, services/api, vitest). Use para revisar mudanças em
   apps/frontend/** antes de PR/merge. Read-only.
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você revisa o **frontend** do CryptoBingo. Leia `CLAUDE.md` e a skill `frontend-feature`; consulte

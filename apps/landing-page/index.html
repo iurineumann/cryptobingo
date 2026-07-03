@@ -3,12 +3,383 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#6d28d9" />
+        <meta name="theme-color" content="#0f172a" />
         <meta name="description" content="CryptoBingo — BINGO GameFi on WAX. Provably fair, on-chain bingo with crypto prizes." />
+
+        <!-- Primary Meta Tags -->
         <title>CryptoBingo — BINGO GameFi on WAX</title>
+        <link rel="canonical" href="https://www.cryptobingo.bet" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+        <!-- Open Graph / Facebook / LinkedIn / Discord / Telegram -->
+        <meta property="og:title" content="CryptoBingo — BINGO GameFi on WAX" />
+        <meta property="og:description" content="Provably fair, on-chain bingo on the WAX blockchain. Buy cards, win prizes, withdraw anytime." />
+        <meta property="og:image" content="https://www.cryptobingo.bet/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:url" content="https://www.cryptobingo.bet" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="CryptoBingo" />
+        <meta property="og:locale" content="en_US" />
+
+        <!-- Twitter / X -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="CryptoBingo — BINGO GameFi on WAX" />
+        <meta name="twitter:description" content="Provably fair, on-chain bingo on the WAX blockchain." />
+        <meta name="twitter:image" content="https://www.cryptobingo.bet/og-image.png" />
+        <meta name="twitter:site" content="@CryptoBingo_Bet" />
+
+        <!-- Google Consent Mode v2 — defaults (ANTES do GTM) -->
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('consent','default',{
+                'ad_storage':'denied',
+                'ad_user_data':'denied',
+                'ad_personalization':'denied',
+                'analytics_storage':'denied',
+                'functionality_storage':'denied',
+                'personalization_storage':'denied',
+                'security_storage':'granted',
+                'wait_for_update':500
+            });
+            gtag('set','ads_data_redaction',true);
+            gtag('set','url_passthrough',true);
+        </script>
+
+        <!-- Google Tag Manager (consent-aware — defaults=denied) -->
+        <script>
+            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','GTM-N88CZVJF');
+        </script>
+        <!-- End Google Tag Manager -->
+
+        <!-- CookieConsent CSS -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.css" crossorigin="anonymous" />
+        <!-- CookieConsent theme → CryptoBingo design system -->
+        <style>
+        :root {
+            --cc-bg: #0f0f1a;
+            --cc-primary-color: #f1f5f9;
+            --cc-secondary-color: #94a3b8;
+            --cc-btn-primary-bg: linear-gradient(135deg, #7c3aed, #a78bfa);
+            --cc-btn-primary-color: #ffffff;
+            --cc-btn-primary-hover-bg: linear-gradient(135deg, #6d28d9, #c4b5fd);
+            --cc-btn-primary-border-color: transparent;
+            --cc-btn-secondary-bg: #252541;
+            --cc-btn-secondary-color: #e2e8f0;
+            --cc-btn-secondary-hover-bg: #2d2d52;
+            --cc-btn-secondary-border-color: #2d2d52;
+            --cc-cookie-category-block-bg: #1a1a2e;
+            --cc-cookie-category-block-hover-bg: #1e1e35;
+            --cc-cookie-category-block-expanded-bg: #1a1a2e;
+            --cc-toggle-bg-on: #8b5cf6;
+            --cc-toggle-bg-off: #2d2d52;
+            --cc-toggle-bg-readonly: #1e1e35;
+            --cc-toggle-knob-bg: #f1f5f9;
+            --cc-toggle-knob-icon-color: #8b5cf6;
+            --cc-border-color: #2d2d52;
+            --cc-link-color: #a78bfa;
+            --cc-footer-bg: #0a0a0f;
+            --cc-footer-text-color: #64748b;
+            --cc-footer-link-color: #a78bfa;
+            --cc-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            --cc-separator-border-color: #1e1e35;
+        }
+
+        #cc-main .cm__modal,
+        #cc-main .pm__modal {
+            box-shadow: 0 0 40px -8px rgba(139,92,246,0.25), 0 20px 60px -12px rgba(0,0,0,0.5);
+            border: 1px solid rgba(45,45,82,0.6);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        #cc-main .cm__body,
+        #cc-main .pm__body {
+            border-radius: 16px;
+        }
+
+        #cc-main .cm__footer,
+        #cc-main .pm__footer {
+            border-top: 1px solid #1e1e35;
+        }
+
+        #cc-main .cc__btn {
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            border-radius: 10px;
+            padding: 0.75rem 1.25rem;
+            transition: all 200ms cubic-bezier(0.4,0,0.2,1);
+        }
+
+        #cc-main .cc__btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        #cc-main .cc__btn--primary {
+            box-shadow: 0 4px 14px rgba(124,58,237,0.3);
+        }
+
+        #cc-main .cc__btn--primary:hover {
+            box-shadow: 0 6px 20px rgba(124,58,237,0.45);
+        }
+
+        #cc-main .cc__btn--secondary {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        #cc-main .cc__link {
+            transition: color 200ms ease;
+        }
+
+        #cc-main .cc__link:hover {
+            color: #c4b5fd;
+            text-decoration: underline;
+        }
+
+        #cc-main .pm__section {
+            border-radius: 12px;
+        }
+
+        #cc-main .pm__section--expanded {
+            border-color: rgba(139,92,246,0.3);
+            box-shadow: inset 0 0 0 1px rgba(139,92,246,0.15);
+        }
+
+        #cc-main .cm__title {
+            font-family: 'Space Grotesk', 'Inter', sans-serif;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        #cc-main .pm__title {
+            font-family: 'Space Grotesk', 'Inter', sans-serif;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #cc-main .cc__btn { transition: none; }
+            #cc-main .cc__btn:hover { transform: none; }
+            #cc-main .cc__link { transition: none; }
+        }
+        </style>
+
+        <!-- CookieConsent JS + init LGPD-compliant -->
+        <script defer src="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.umd.js" crossorigin="anonymous"></script>
+        <script>
+        document.addEventListener('DOMContentLoaded',function(){
+
+            /* ── Helpers ─────────────────────────────────────────── */
+
+            function updateGtag(cookie){
+                if(typeof gtag==='undefined') return;
+                var cats=cookie.categories||[];
+                gtag('consent','update',{
+                    analytics_storage: cats.indexOf('analytics')>=0?'granted':'denied',
+                    ad_storage: cats.indexOf('marketing')>=0?'granted':'denied',
+                    ad_user_data: cats.indexOf('marketing')>=0?'granted':'denied',
+                    ad_personalization: cats.indexOf('marketing')>=0?'granted':'denied',
+                });
+            }
+
+            function logConsent(cookie){
+                try{
+                    localStorage.setItem('cb_consent',JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        categories: cookie.categories||[],
+                        consentId: (crypto.randomUUID&&crypto.randomUUID())||Date.now().toString(36),
+                        version: '2026.07'
+                    }));
+                }catch(e){}
+            }
+
+            function startClarity(){
+                if(window.clarity) return;
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window,document,'clarity','script','xge781i2so');
+            }
+
+            function stopClarity(){
+                if(typeof clarity!=='undefined') clarity('stop');
+            }
+
+            function handleConsent(cookie){
+                updateGtag(cookie);
+                logConsent(cookie);
+                var cats=cookie.categories||[];
+                cats.indexOf('analytics')>=0 ? startClarity() : stopClarity();
+            }
+
+            /* ── CookieConsent init ──────────────────────────────── */
+            if(typeof CookieConsent==='undefined') return;
+
+            CookieConsent.run({
+
+                autoclearCookies: true,
+
+                categories: {
+                    necessary: {
+                        enabled: true,
+                        readOnly: true,
+                        cookies: [
+                            { name: /^cb_/ },
+                            { name: /^connect\.sess$/ },
+                        ]
+                    },
+                    analytics: {
+                        cookies: [
+                            { name: /^_ga/ },
+                            { name: /^_gid/ },
+                            { name: /^_cl_/ },
+                            { name: /^_clsk/ },
+                        ]
+                    },
+                    marketing: {
+                        cookies: [
+                            { name: /^_gcl_/ },
+                            { name: /^_fbp/ },
+                        ]
+                    }
+                },
+
+                language: {
+                    default: 'pt',
+                    autoDetect: 'browser',
+                    translations: {
+                        pt: {
+                            consentModal: {
+                                title: '🍪 Usamos cookies',
+                                description: 'Utilizamos cookies para garantir o funcionamento do site, analisar o tráfego e, com seu consentimento, personalizar sua experiência. Consulte nossa <a href="/privacy" class="cc-link">Política de Privacidade</a>.',
+                                acceptAllBtn:  'Aceitar todos',
+                                acceptNecessaryBtn: 'Apenas necessários',
+                                showPreferencesBtn: 'Personalizar',
+                                footer: '<a href="/privacy">Política de Privacidade</a> · <a href="/privacy#direitos">Seus direitos LGPD</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'
+                            },
+                            preferencesModal: {
+                                title: 'Central de Preferências de Cookies',
+                                acceptAllBtn:  'Aceitar todos',
+                                acceptNecessaryBtn: 'Apenas necessários',
+                                savePreferencesBtn: 'Salvar preferências',
+                                closeIconLabel: 'Fechar',
+                                sections: [
+                                    { title: 'Uso de Cookies', description: 'Usamos cookies para melhorar sua experiência. Você pode escolher quais categorias deseja permitir. Para mais detalhes, veja nossa <a href="/privacy">Política de Privacidade</a>.' },
+                                    { title: 'Estritamente Necessários', description: 'Essenciais para o funcionamento básico do site. Não podem ser desativados.', linkedCategory: 'necessary', cookies: [
+                                        { name: 'cb_theme', description: 'Preferência de tema (claro/escuro)', domain: '.cryptobingo.bet' },
+                                        { name: 'connect.sess', description: 'Sessão de autenticação', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Analíticos', description: 'Coletam dados anônimos sobre o uso do site para melhorarmos nossos serviços. Inclui Google Analytics e Microsoft Clarity. Os dados podem ser transferidos para os EUA (Google, Microsoft).', linkedCategory: 'analytics', cookies: [
+                                        { name: '_ga', description: 'ID único do Google Analytics', domain: '.cryptobingo.bet' },
+                                        { name: '_ga_*', description: 'Sessão do Google Analytics', domain: '.cryptobingo.bet' },
+                                        { name: '_cl_*', description: 'Sessão do Microsoft Clarity', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Marketing', description: 'Permitem rastrear conversões e exibir anúncios relevantes. Utilizados apenas com seu consentimento explícito.', linkedCategory: 'marketing', cookies: [
+                                        { name: '_gcl_*', description: 'Conversões do Google Ads', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Seus direitos (LGPD)', description: 'Você pode revogar ou alterar seu consentimento a qualquer momento nas configurações do navegador ou clicando no link "Alterar preferências" no rodapé do site. Para exercer seus direitos de titular (acesso, correção, exclusão, portabilidade), entre em contato: <a href="mailto:dpo@cryptobingo.bet">dpo@cryptobingo.bet</a>.' }
+                                ]
+                            }
+                        },
+                        en: {
+                            consentModal: {
+                                title: '🍪 We use cookies',
+                                description: 'We use cookies to ensure site functionality, analyze traffic, and with your consent, personalize your experience. See our <a href="/privacy" class="cc-link">Privacy Policy</a>.',
+                                acceptAllBtn:  'Accept all',
+                                acceptNecessaryBtn: 'Only necessary',
+                                showPreferencesBtn: 'Customize',
+                                footer: '<a href="/privacy">Privacy Policy</a> · <a href="/privacy#rights">Your rights (LGPD)</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'
+                            },
+                            preferencesModal: {
+                                title: 'Cookie Preferences',
+                                acceptAllBtn:  'Accept all',
+                                acceptNecessaryBtn: 'Only necessary',
+                                savePreferencesBtn: 'Save preferences',
+                                closeIconLabel: 'Close',
+                                sections: [
+                                    { title: 'Cookie Usage', description: 'We use cookies to improve your experience. Choose which categories to allow. See our <a href="/privacy">Privacy Policy</a>.' },
+                                    { title: 'Strictly Necessary', description: 'Essential for basic site functionality. Cannot be disabled.', linkedCategory: 'necessary', cookies: [
+                                        { name: 'cb_theme', description: 'Theme preference (light/dark)', domain: '.cryptobingo.bet' },
+                                        { name: 'connect.sess', description: 'Authentication session', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Analytics', description: 'Collect anonymous usage data to improve our services. Includes Google Analytics and Microsoft Clarity. Data may be transferred to the US (Google, Microsoft).', linkedCategory: 'analytics', cookies: [
+                                        { name: '_ga', description: 'Google Analytics unique ID', domain: '.cryptobingo.bet' },
+                                        { name: '_ga_*', description: 'Google Analytics session', domain: '.cryptobingo.bet' },
+                                        { name: '_cl_*', description: 'Microsoft Clarity session', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Marketing', description: 'Track conversions and display relevant ads. Used only with your explicit consent.', linkedCategory: 'marketing', cookies: [
+                                        { name: '_gcl_*', description: 'Google Ads conversions', domain: '.cryptobingo.bet' }
+                                    ]},
+                                    { title: 'Your rights (LGPD)', description: 'You may revoke or change your consent at any time via browser settings or the "Change preferences" link in the footer. To exercise your data subject rights (access, correction, deletion, portability), contact: <a href="mailto:dpo@cryptobingo.bet">dpo@cryptobingo.bet</a>.' }
+                                ]
+                            }
+                        },
+                        zh: {
+                            consentModal: {
+                                title: '🍪 我们使用 Cookie',
+                                description: '我们使用 Cookie 来确保网站功能、分析流量，并在您同意的情况下个性化您的体验。请参阅我们的<a href="/privacy" class="cc-link">隐私政策</a>。',
+                                acceptAllBtn:  '接受全部',
+                                acceptNecessaryBtn: '仅必要',
+                                showPreferencesBtn: '自定义',
+                                footer: '<a href="/privacy">隐私政策</a> · <a href="/privacy#rights">您的权利 (LGPD)</a> · <a href="mailto:dpo@cryptobingo.bet">数据保护官</a>'
+                            },
+                            preferencesModal: {
+                                title: 'Cookie 偏好设置',
+                                acceptAllBtn:  '接受全部',
+                                acceptNecessaryBtn: '仅必要',
+                                savePreferencesBtn: '保存偏好',
+                                closeIconLabel: '关闭',
+                                sections: [
+                                    { title: 'Cookie 使用说明', description: '我们使用 Cookie 来改善您的体验。选择您允许的类别。请参阅我们的<a href="/privacy">隐私政策</a>。' },
+                                    { title: '绝对必要', description: '网站基本功能所必需。无法禁用。', linkedCategory: 'necessary' },
+                                    { title: '分析', description: '收集匿名使用数据以改进我们的服务。包括 Google Analytics 和 Microsoft Clarity。数据可能传输至美国（Google、Microsoft）。', linkedCategory: 'analytics' },
+                                    { title: '营销', description: '跟踪转化并展示相关广告。仅在您明确同意后使用。', linkedCategory: 'marketing' },
+                                    { title: '您的权利 (LGPD)', description: '您可随时通过浏览器设置或页脚的"更改偏好"链接撤销或更改同意。如需行使数据主体权利（访问、更正、删除、可携带性），请联系：<a href="mailto:dpo@cryptobingo.bet">dpo@cryptobingo.bet</a>。' }
+                                ]
+                            }
+                        }
+                    }
+                },
+
+                guiOptions: {
+                    consentModal: {
+                        layout: 'cloud',
+                        position: 'bottom center',
+                        equalWeightButtons: true,
+                        flipButtons: false
+                    },
+                    preferencesModal: {
+                        layout: 'box',
+                        equalWeightButtons: true,
+                        flipButtons: false
+                    }
+                },
+
+                onFirstConsent: handleConsent,
+                onConsent: handleConsent,
+                onChange: function({cookie}){ handleConsent(cookie); }
+
+            });
+        });
+        </script>
+        <!-- End CookieConsent -->
     </head>
     <body>
+        <!-- Google Tag Manager (noscript) -->
+        <noscript>
+            <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
+                height="0" width="0" style="display:none;visibility:hidden">
+            </iframe>
+        </noscript>
+        <!-- End Google Tag Manager (noscript) -->
+
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>

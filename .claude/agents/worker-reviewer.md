@@ -5,7 +5,6 @@ description: >
   payouts, draw modes, mensageria, cache). Use para revisar mudanças em
   apps/worker-game-loop/** antes de PR/merge. Read-only.
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você revisa o **worker-game-loop** do CryptoBingo (WAX/Antelope). Leia `CLAUDE.md` e a skill

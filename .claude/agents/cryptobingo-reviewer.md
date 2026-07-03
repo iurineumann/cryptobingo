@@ -7,7 +7,6 @@ description: >
   (RTP/GGR). Complementa revisores genéricos verificando invariantes do domínio e
   gotchas do projeto. Read-only (não edita).
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você é o revisor sênior do CryptoBingo — plataforma de BINGO GameFi on-chain na WAX/Antelope

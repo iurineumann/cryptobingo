@@ -7,6 +7,7 @@ import {
     fetchMyNfts, fetchAchievements, syncBurns,
     updateProfile, type NftAsset, type AchievementDef,
 } from '../services/api';
+import Seo from './Seo';
 import XpProgressBar from './XpProgressBar';
 
 /**
@@ -161,6 +162,7 @@ export default function PlayerProfilePage({ session, profile, onProfileUpdated }
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
+            <Seo title="Perfil" description="Seu perfil de jogador CryptoBingo: progresso, conquistas, NFTs e histórico." />
             <h2 className="text-xl font-bold text-[--cb-text-primary]">{t('profile_page.title')}</h2>
 
             {/* Tabs */}

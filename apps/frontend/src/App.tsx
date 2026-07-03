@@ -69,12 +69,14 @@ import AchievementModal from './components/AchievementModal';
 import LeaderboardPage  from './components/LeaderboardPage';
 import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
+import PrivacyPage      from './components/PrivacyPage';
 import PublicLayout     from './components/PublicLayout';
 import ContentPage      from './components/content/ContentPage';
 import TutorialsPage    from './pages/TutorialsPage';
 import HowItWorksPage   from './pages/HowItWorksPage';
 import SponsorsPage     from './pages/SponsorsPage';
 import UserSettingsPage from './components/UserSettingsPage';
+import { useAnalytics } from './hooks/useAnalytics';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -259,6 +261,7 @@ function AppRoot() {
     const { theme, toggleTheme }                               = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
+    useAnalytics();
 
     const [session,          setSession]          = useState<Session | null>(null);
     const [profile,          setProfile]          = useState<MongoUserProfile | null>(null);
@@ -628,6 +631,7 @@ function AppRoot() {
                 <Route path="/tutorials"    element={<TutorialsPage />} />
                 <Route path="/faq"          element={<FaqPage />} />
                 <Route path="/news"         element={<NewsPage />} />
+                <Route path="/privacy"      element={<PrivacyPage />} />
             </Route>
 
             {/* ── Rotas protegidas por autenticação ── */}
@@ -733,11 +737,21 @@ function AppRoot() {
     );
 }
 
+// ── Atualiza <html lang> dinamicamente (F0A.10) ──────────────────────────────
+
+import { Helmet } from 'react-helmet-async';
+
+function LangUpdater() {
+  const { i18n } = useTranslation();
+  return <Helmet htmlAttributes={{ lang: i18n.language }} />;
+}
+
 // ── APP (BrowserRouter wrapper — thin) ───────────────────────────────────────
 
 export default function App() {
     return (
         <BrowserRouter>
+            <LangUpdater />
             <AppRoot />
         </BrowserRouter>
     );
