@@ -58,7 +58,7 @@ export function useAnalytics() {
     const enriched = {
       ...params,
       send_to: GA4_MEASUREMENT_ID,
-      page_location: window.location.href,
+      page_location: globalThis.location.href,
       page_title: document.title,
       language: navigator.language,
       user_agent: navigator.userAgent.slice(0, 200),

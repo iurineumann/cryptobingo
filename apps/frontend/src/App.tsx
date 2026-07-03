@@ -71,7 +71,6 @@ import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
 import PrivacyPage      from './components/PrivacyPage';
 import PublicLayout     from './components/PublicLayout';
-import ContentPage      from './components/content/ContentPage';
 import TutorialsPage    from './pages/TutorialsPage';
 import HowItWorksPage   from './pages/HowItWorksPage';
 import SponsorsPage     from './pages/SponsorsPage';
