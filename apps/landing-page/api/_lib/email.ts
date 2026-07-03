@@ -1,4 +1,5 @@
 import { EmailClient } from '@azure/communication-email';
+import type { EmailMessage } from '@azure/communication-email';
 
 const conn = process.env.ACS_CONNECTION_STRING;
 const sender = process.env.ACS_SENDER ?? '';
@@ -13,9 +14,14 @@ export function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-export async function sendVoteCode(to: string, code: string, ideaTitle: string): Promise<void> {
+async function sendMessage(message: EmailMessage): Promise<void> {
   const client = getClient();
-  await client.beginSendAndWait({
+  const poller = await client.beginSend(message);
+  await poller.pollUntilDone();
+}
+
+export async function sendVoteCode(to: string, code: string, ideaTitle: string): Promise<void> {
+  await sendMessage({
     senderAddress: sender,
     content: {
       subject: 'Your CryptoBingo verification code',
@@ -36,8 +42,7 @@ export async function sendVoteCode(to: string, code: string, ideaTitle: string):
 }
 
 export async function sendAdminCode(to: string, code: string): Promise<void> {
-  const client = getClient();
-  await client.beginSendAndWait({
+  await sendMessage({
     senderAddress: sender,
     content: {
       subject: 'CryptoBingo admin login code',
@@ -58,8 +63,7 @@ export async function sendAdminCode(to: string, code: string): Promise<void> {
 }
 
 export async function sendWelcome(to: string): Promise<void> {
-  const client = getClient();
-  await client.beginSendAndWait({
+  await sendMessage({
     senderAddress: sender,
     content: {
       subject: 'Welcome to CryptoBingo!',
@@ -81,10 +85,14 @@ export async function sendNewsletter(
   subject: string,
   body: string
 ): Promise<void> {
-  const client = getClient();
-  await client.beginSendAndWait({
+  await sendMessage({
     senderAddress: sender,
     content: { subject, plainText: body },
     recipients: { to: [{ address: to }] },
   });
+}
+
+export async function logEmail(to: string, subject: string, type: string): Promise<void> {
+  const { query } = await import('./db.js');
+  await query(`INSERT INTO email_log (recipient, subject, type) VALUES ($1, $2, $3)`, [to, subject, type]);
 }

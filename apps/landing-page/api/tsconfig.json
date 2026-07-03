@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["*.ts", "_lib/*.ts", "ideas/*.ts", "votes/*.ts", "admin/*.ts", "index.ts"],
+  "exclude": ["node_modules"]
+}

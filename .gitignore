@@ -61,3 +61,6 @@ debug/
 .claude/worktrees/
 .opencode/
 debug.txt
+
+# React Router build artifacts
+.react-router/

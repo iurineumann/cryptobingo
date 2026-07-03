@@ -3,6 +3,7 @@ import pg from 'pg';
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 5,
+  ssl: { rejectUnauthorized: false },
 });
 
 export async function query<T = Record<string, unknown>>(

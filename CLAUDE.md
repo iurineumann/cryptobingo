@@ -29,6 +29,7 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
 ```
 apps/
   frontend/          React + Vite + TS (vitest). i18n pt/en/zh em src/locales/.
+  landing-page/      Landing page (SSG React Router v7) + API Functions (ADR-039).
   api-gateway/       Express + TS (jest). Controllers em src/controllers/. JWT + RBAC.
   worker-game-loop/  Resolução de jogos / payouts (jest). Wharfkit + RabbitMQ + Redis + PG.
   harness/           E2E on-chain real (jest via run-tests.js). Precisa do nodeos + oracle.
@@ -48,6 +49,46 @@ docs/adr/            Decisões arquiteturais (fonte de verdade de regras de neg�
 - **Frontend:** testes = `vitest run` (rode via `pnpm --filter @cryptobingo/frontend test`; `npx jest` NÃO existe lá).
 - **Worker/API:** `npx jest <arquivo>` ou `-t '<nome>'` para um teste só.
 - **Harness E2E:** `node run-tests.js` (pula se faltam env keys). Para um suite: ver seção Harness.
+
+## Landing Page API (ADR-039)
+
+API serverless da landing page (`apps/landing-page/api/`). Azure Function App standalone (Consumption, Node 22) + Aiven PostgreSQL.
+
+**Problemas conhecidos:**
+- **ESM não funciona** no Functions v4. Compilar TS com `module: "commonjs"` (CJS).
+- **pnpm symlinks** corrompem zip deploy. Usar `npm install` limpo em `/tmp/fa-prod`, zipar e deployar.
+- **Aiven SSL:** `sslmode=require` na URL sobrescreve pool config. Manter URL sem `sslmode`, configurar `ssl: { rejectUnauthorized: false }` no Pool.
+
+**Infra:**
+- Function App: `cryptobingo-landing-api` (Consumption, westus2)
+- Domínio: `landing-api.cryptobingo.bet` (Cloudflare proxy, SSL automático)
+- PostgreSQL: Aiven free tier (Aivencloud, Frankfurt)
+- Frontend usa `VITE_API_URL` env var (build time) p/ apontar p/ API
+
+**Deploy:**
+```bash
+# 1. Compilar
+cd apps/landing-page/api && npx tsc
+
+# 2. Montar pacote (npm install limpo)
+rm -rf /tmp/fa-prod && mkdir -p /tmp/fa-prod
+cd /tmp/fa-prod
+jq '{name,version,main,dependencies}' ../apps/landing-page/api/package.json > package.json
+npm install
+mkdir -p _lib ideas votes admin
+cp <api-dir>/{host.json,index.js,stats.js,subscribe.js} ./
+cp <api-dir>/_lib/*.js _lib/
+cp <api-dir>/ideas/*.js ideas/
+cp <api-dir>/votes/*.js votes/
+cp <api-dir>/admin/*.js admin/
+
+# 3. Deploy
+zip -r /tmp/fa-prod.zip .
+az webapp deployment source config-zip --name cryptobingo-landing-api \
+  --resource-group cryptobingo-testnet --src /tmp/fa-prod.zip
+```
+
+**CI:** GitHub Actions em `.github/workflows/deploy-landing.yml`. Seta `VITE_API_URL` p/ build.
 
 ## Contrato C++ (workflow CRÍTICO e não-óbvio)
 
