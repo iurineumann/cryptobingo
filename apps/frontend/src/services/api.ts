@@ -1169,3 +1169,34 @@ export async function fetchGamePrizeTransactions(gameId: string): Promise<PrizeT
     });
     return handleResponse<PrizeTxResponse>(res);
 }
+
+// ==========================================
+// DAILY REWARDS
+// ==========================================
+
+export interface DailyRewardStatus {
+    cycleStart: string;
+    currentDay: number;
+    claimedDays: number[];
+    canClaimToday: boolean;
+    rewards: Array<{ xp: number; badge?: string; ticket?: boolean }>;
+}
+
+export interface DailyRewardClaimResult {
+    day: number;
+    reward: { xp: number; badge?: string; ticket?: boolean };
+    streak: number;
+}
+
+export async function getCycleStatus(): Promise<DailyRewardStatus> {
+    const res = await fetch(`${API_BASE}/daily-rewards`, { headers: authHeaders() });
+    return handleResponse<DailyRewardStatus>(res);
+}
+
+export async function claimDailyReward(): Promise<DailyRewardClaimResult> {
+    const res = await fetch(`${API_BASE}/daily-rewards/claim`, {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+    return handleResponse<DailyRewardClaimResult>(res);
+}

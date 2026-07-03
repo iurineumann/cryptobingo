@@ -30,8 +30,10 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
 apps/
   frontend/          React + Vite + TS (vitest). i18n pt/en/zh em src/locales/.
   landing-page/      Landing page (SSG React Router v7) + API Functions (ADR-039).
+  swap-ui/           DEX público bingogameswp (React + Vite + TS). Swap, liquidez, analytics.
   api-gateway/       Express + TS (jest). Controllers em src/controllers/. JWT + RBAC.
   worker-game-loop/  Resolução de jogos / payouts (jest). Wharfkit + RabbitMQ + Redis + PG.
+  e2e-ui/            Testes E2E de UI (Cypress, ADR-017).
   harness/           E2E on-chain real (jest via run-tests.js). Precisa do nodeos + oracle.
 packages/
   blockchain-core/   rpcClient + helpers Wharfkit compartilhados.
@@ -46,7 +48,7 @@ docs/adr/            Decisões arquiteturais (fonte de verdade de regras de neg�
 - **Tudo:** `pnpm test` / `pnpm build` (Turbo). Por pacote: `pnpm --filter @cryptobingo/<nome> test`.
 - **Typecheck** (NÃO use `tsc --noEmit` solto — falha por rootDir no monorepo): use o build tsconfig:
   `npx tsc --project tsconfig.build.json --noEmit` (api/worker) · `npx tsc --noEmit` (frontend ok).
-- **Frontend:** testes = `vitest run` (rode via `pnpm --filter @cryptobingo/frontend test`; `npx jest` NÃO existe lá).
+- **Frontend/Swap:** testes = `vitest run` (rode via `pnpm --filter @cryptobingo/frontend test` ou `pnpm --filter @cryptobingo/swap-ui test`).
 - **Worker/API:** `npx jest <arquivo>` ou `-t '<nome>'` para um teste só.
 - **Harness E2E:** `node run-tests.js` (pula se faltam env keys). Para um suite: ver seção Harness.
 
@@ -180,11 +182,20 @@ Use a skill `e2e-ui-cypress` (procedimentos + gotchas) e o revisor `e2e-reviewer
 
 **PR para `develop`:**
 - Corpo estruturado com **`Closes #N`** (fecha a issue automaticamente no merge → board move para Done)
+- Use o template em `.github/PULL_REQUEST_TEMPLATE.md`
 - Pré-PR: typecheck + testes dos pacotes tocados verdes
-- **Pré-PR: SonarQube** — rode `/sonar-analyze` em cada arquivo TS/TSX modificado; corrija todos os
-  issues BLOCKER/CRITICAL/MAJOR antes de abrir PR; MINOR aceitável com justificativa no PR body;
-  NOSONAR só com comentário explicando o motivo (ex: CJS sem top-level await).
+- **SonarQube (obrigatório antes de cada commit):** rode `sonarqube_analyze_code_snippet` em cada
+  arquivo `.ts`/`.tsx` modificado; corrija BLOCKER/CRITICAL/MAJOR **antes do commit**; MINOR aceitável
+  com justificativa no PR body; NOSONAR só com comentário explicando o motivo (ex: CJS sem top-level await).
 - Toda mudança estrutural → ADR em `docs/adr/` antes do PR
+
+**Pós-merge (encerramento):**
+1. Verificar se `Closes #N` fechou a issue automaticamente (board → Done)
+2. Se não (PR incremental sem issue única), rodar `scripts/closeout.sh <issue> [pr]`
+3. Atualizar `.opencode/plans/` com status
+4. Verificar se ADR precisa ser criado/atualizado
+5. Atualizar CLAUDE.md se novo componente/flow relevante
+6. Adicionar ao memory/profile se feature duradoura
 
 **`master`** recebe apenas PRs de `develop` quando estável. Branch principal: `master`.
 
@@ -263,3 +274,34 @@ Dashboard Grafana: `infra/grafana/dashboards/worker-game-loop.json`.
 - `apps/frontend/src/hooks/useSlowReveal.ts:265-369`: dedup + composite key + hydratePrizeStatuses
 - `apps/frontend/src/components/gameroom/useGameRoomState.ts:280-298`: API fetch effect
 - `apps/frontend/src/components/ticketUtils.ts:176-225`: groupTicketsByCategory
+
+## Sistema de Conteúdo Unificado (ADR-037)
+
+API genérica de conteúdo editorial em `apps/api-gateway/src/controllers/contentController.ts`:
+- `GET /api/v1/content/:type` — lista pública (com cache Redis 2min)
+- `POST/PATCH/DELETE /api/v1/content/:type/:id` — CRUD admin com auto-translate
+- Content format: `text` (FAQ) ou `blocks` (BlockNote editor para news/tutorials/etc)
+- Locale overrides: revisão lado a lado no admin UI
+
+**Frontend:**
+- `ContentPage.tsx` — componente genérico que renderiza qualquer tipo de conteúdo
+- `BlockContent.tsx` — renderiza BlockNote blocks em modo leitura
+- `ContentAdmin.tsx` — CRUD com BlockNote editor, translation review UI
+- Tipos suportados: faq, howitworks, sponsors, tutorials, news
+
+## Gamificação (ADR-028 Fase 2)
+
+**Achievements (29):** worker engine (`achievementEngine.ts`), API (`GET /profile/achievements`), frontend modal (`AchievementModal.tsx`), locales pt/en/zh.
+Categorias: vitórias (first_win até win_100), combos, compras, partidas, streak, burns, golden_win, stage_win, tiers.
+
+**Streak (login diário):** `xpEngine.ensureDailyStreak()` — tracking de dias consecutivos, XP bonus (`streakCount * 2`), achievements `streak_7/14/30`. Reset se pular 1 dia.
+
+**XP/Level/Tier:** Fórmula Fibonacci (`PHI = 1.618034`), `BASE_XP = 906`, `MAX_LEVEL = 225`. 9 tiers (Cobre→Bronze→Prata→Ouro→Platina→Esmeralda→Safira→Rubi→Diamante). XP por: partida (+streak), win, combo, burn, compra.
+
+## Permission System (ADR-036)
+
+RBAC hierárquico: `admin.*` > `admin.content.*` > `admin.content.<type>.*`.
+- `permissionController.ts` — CRUD de permissões por usuário
+- `sponsorPermissionController.ts` — delegações com prevenção de escalação (delegations.manage proibido)
+- Modelos: `SponsorOrg`, `SponsorDelegation` (MongoDB)
+- Auditoria: `utils/audit.ts` registra toda mudança de permissão

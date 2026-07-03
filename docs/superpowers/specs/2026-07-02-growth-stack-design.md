@@ -87,48 +87,35 @@ Injetado via `<Seo>` no `<head>`:
 
 **BreadcrumbList** (páginas internas): Home → Categoria → Página.
 
-### 2.3 SSG com React Router v7
+### 2.3 Roteamento — CSR (Frontend) + SSG (Landing Page)
 
-React Router v7.18+ SSG nativo via `react-router.config.ts`:
+Dois apps com propósitos distintos:
 
-```ts
-export default {
-  ssg: {
-    paths: [
-      '/',
-      '/how-it-works',
-      '/sponsors',
-      '/tutorials',
-      '/faq',
-      '/news',
-      '/leaderboard',
-      '/blog',
-    ],
-    async paths() {
-      const posts = await getAllPostSlugs(); // TinaCMS slugs at build time
-      return posts.map(slug => `/blog/${slug}`);
-    },
-  },
-};
-```
+**Frontend (`apps/frontend/`)** — CSR com React Router v7:
+- Páginas públicas (`/how-it-works`, `/sponsors`, `/tutorials`, `/faq`, `/news`) renderizadas via `ContentPage` + API REST (`/api/v1/content/:type`)
+- Ranking (`/leaderboard`) via `LeaderboardPage.tsx` + API REST
+- Páginas SPA (`/lobby`, `/room/:roomId/:gameId`, `/replay/:gameId`, `/admin/*`, `/sponsor/*`, `/profile`, `/wallet`, `/settings`, `/history`)
+- Conteúdo dinâmico do MongoDB via API Gateway
 
-**Páginas SSG (HTML estático no build):**
+**Landing Page (`apps/landing-page/`)** — SSG com React Router v7:
+- Geração estática no build: `/` (landing), `/faq`, `/blog`, `/blog/:slug`
+- Blog posts via TinaCMS, slugs resolvidos em build time
+- Deploy separado (Azure Function App + SWA)
 
-| Rota | Conteúdo | Fonte |
-|---|---|---|
-| `/` | Landing | TinaCMS (hero) + clientLoader (salas ao vivo) |
-| `/how-it-works` | Como funciona | TinaCMS |
-| `/sponsors` | Sponsors info | TinaCMS |
-| `/tutorials` | Tutoriais | TinaCMS |
-| `/faq` | FAQ | TinaCMS |
-| `/news` | Notícias | TinaCMS |
-| `/leaderboard` | Snapshot estático | MongoDB (no build) |
-| `/blog` | Blog listing | TinaCMS |
-| `/blog/:slug` | Post individual | TinaCMS |
+| Rota | App | Renderização | Fonte |
+|---|---|---|---|
+| `/` (landing) | landing-page | SSG | TinaCMS |
+| `/faq` | landing-page | SSG | TinaCMS |
+| `/blog` | landing-page | SSG | TinaCMS |
+| `/blog/:slug` | landing-page | SSG | TinaCMS |
+| `/how-it-works` | frontend | CSR | ContentPage + API |
+| `/sponsors` | frontend | CSR | ContentPage + API |
+| `/tutorials` | frontend | CSR | ContentPage + API |
+| `/news` | frontend | CSR | ContentPage + API |
+| `/leaderboard` | frontend | CSR | LeaderboardPage + API |
+| `/lobby`, `/room/*`, etc | frontend | CSR | Direct API |
 
-**Dados dinâmicos no SSG:** `loader()` retorna conteúdo estático (TinaCMS). `clientLoader()` executa no cliente e busca dados ao vivo (salas, rankings). Componente mostra skeleton enquanto carrega.
-
-**Páginas SPA (continuam CSR):** `/lobby`, `/room/:roomId/:gameId`, `/replay/:gameId`, `/admin/*`, `/sponsor/rooms`, `/sponsor/vault`, `/sponsor/delegations`, `/profile`, `/wallet`, `/settings`, `/history`
+**TinaCMS admin:** servido via TinaCloud (`app.tina.io`), NÃO como rota do app.
 
 ### 2.4 Sitemap + Robots + llms.txt
 
@@ -247,22 +234,32 @@ Script no `index.html`. Projeto ID a configurar no dashboard Clarity.
 
 ## 5. Track D — Gamificação
 
-### 5.1 Streaks (Daily Login)
+### 5.1 Achievements ✅ (Implementado)
 
-| Propriedade | Valor |
+| Engine | `achievementEngine.ts` (worker-game-loop) |
 |---|---|
-| Engine | Redis (já existe no projeto) |
-| Chave | `streak:{userId}` |
+| Total | 29 achievements |
+| API | `GET /api/v1/profile/achievements` |
+| Frontend | `AchievementModal.tsx` + badges no perfil |
+| Locales | pt_BR / en_US / zh_CN |
+
+Categorias: vitórias (`first_win` até `win_100`), combos, compras, partidas, streak, burns, golden_win, stage_win, tiers. Worker avalia achievements em eventos de jogo (buyin, game_end, win, streak_update) e persiste no MongoDB.
+
+### 5.2 Streaks (Daily Login) ✅ (Implementado)
+
+| Engine | `xpEngine.ensureDailyStreak()` (worker-game-loop) |
+|---|---|
+| Chave | MongoDB + Redis |
 | Contagem | Dias consecutivos com login |
 | Reset | 1 dia sem login = streak zerada |
-| Tiers | 3 / 7 / 14 / 30 / 60 / 90 dias |
-| Recompensa | XP multiplicado por tier (1×, 2×, 3×, 5×, 10×, 20×) |
+| Bônus XP | `streakCount × 2` |
+| Achievements | `streak_7`, `streak_14`, `streak_30` |
 | Evento GA4 | `streak_day` |
 | Frontend | Toast no login + badge no perfil |
 
-### 5.2 Daily Rewards
+### 5.3 Daily Rewards ❌ (Não implementado)
 
-| Engine | MongoDB (collection `daily_rewards`) |
+| Engine | MongoDB (collection `daily_rewards`) — a criar |
 |---|---|
 | Ciclo | 7 dias, reseta semanalmente |
 
@@ -276,9 +273,9 @@ Script no `index.html`. Projeto ID a configurar no dashboard Clarity.
 | 6 | 150 XP |
 | 7 | 250 XP + 1 free ticket |
 
-### 5.3 Referral Program
+### 5.4 Referral Program ❌ (Não implementado)
 
-| Engine | MongoDB (collection `referrals`) |
+| Engine | MongoDB (collection `referrals`) — a criar |
 |---|---|
 | Link único | `/ref/:userId` |
 | Bônus referrer | 10% XP da 1ª compra do indicado |
@@ -286,9 +283,9 @@ Script no `index.html`. Projeto ID a configurar no dashboard Clarity.
 | Tiers | 5/10/25/50/100 indicações → badges progressivos |
 | Evento GA4 | `referral_signup`, `referral_buyin` |
 
-### 5.4 Beta Test Rewards
+### 5.5 Beta Test Rewards ❌ (Não implementado)
 
-| Engine | MongoDB (collection `beta_contributors`) |
+| Engine | MongoDB (collection `beta_contributors`) — a criar |
 
 | Tier | Critério | Recompensa no Launch |
 |---|---|---|
@@ -299,7 +296,17 @@ Script no `index.html`. Projeto ID a configurar no dashboard Clarity.
 
 **Nota:** Repositório privado — não há contribuição externa de código. Diamante é para contribuições não-código (tutoriais, docs, organização).
 
-**Implementação:** Script de airdrop no launch lê a collection e executa distribuição.
+**Implementação futura:** Script de airdrop no launch lê a collection e executa distribuição.
+
+### 5.6 XP/Level/Tier ✅ (Implementado)
+
+| Engine | `xpEngine.ts` (worker-game-loop) |
+|---|---|
+| Fórmula | Fibonacci (`PHI = 1.618034`), `BASE_XP = 906` |
+| Level máximo | 225 |
+| Tiers | 9 (Cobre → Bronze → Prata → Ouro → Platina → Esmeralda → Safira → Rubi → Diamante) |
+
+XP adquirido por: partida (+ bônus streak), win, combo, burn, compra. Níveis seguem progressão Fibonacci para curva de aprendizado suave no early-game e desafiadora no end-game.
 
 ## 6. Track E — Blog/Conteúdo (TinaCMS)
 
@@ -393,25 +400,26 @@ export default defineConfig({
 
 ### 6.4 Administração
 
-- Rota `/cms` no game app (não conflita com `/admin` do jogo)
-- TinaCMS admin UI gerada no build, servida como SPA
+- **Não há rota `/cms` no app** — TinaCMS admin é servido via TinaCloud (`app.tina.io`)
 - Autenticação via Tina Cloud (GitHub OAuth)
-- Acesso restrito a users autorizados
+- Acesso restrito a users autorizados via Tina Cloud
 
 ### 6.5 Fluxo de Publicação
 
 ```
-Editor → /cms → Edita conteúdo → Salva (commit no GitHub)
-  → GitHub Actions detecta push → Build SSG → Deploy SWA
+Editor → app.tina.io → Edita conteúdo → Salva (commit no GitHub → PR ou push direto)
+  → Build SSG (landing-page) → Deploy SWA
   → Conteúdo publicado em produção
 ```
 
 ## 7. CI/CD
 
-O workflow atual (`build-push.yml`) precisa de ajustes mínimos:
-- Adicionar step `pnpm tina build` antes do deploy
-- Garantir que conteúdo TinaCMS seja baixado no checkout (incluir `content/` no build)
-- Deploy do `/admin` (TinaCMS UI) junto com o app
+Workflows existentes (`.github/workflows/`):
+- `build-push.yml` — build docker + deploy testnet (api-gateway, worker, frontend, swap-ui)
+- `ci.yml` — unit tests, Cypress T1/T2, Harness E2E
+- `deploy-landing.yml` — deploy landing API (Function App)
+
+Conteúdo TinaCMS é submodule (`content/`), não precisa de build extra. Tina admin não requer deploy próprio.
 
 ## 8. DNS + Segurança (Cloudflare)
 
@@ -423,11 +431,11 @@ O workflow atual (`build-push.yml`) precisa de ajustes mínimos:
 - ✅ MX: route1/2/3.mx.cloudflare.net (Email Routing)
 - ✅ Page Rule: `cryptobingo.bet/*` 301 → `www.cryptobingo.bet/$1`
 
-### 8.2 Pendente
+### 8.2 Configurado
 
-- CAA record: `0 issue "letsencrypt.org"`, `0 issue "comodoca.com"`
-- HSTS: enabled, max-age=31536000, includeSubdomains, preload
-- Após 2-4 semanas: DMARC `p=none` → `p=quarantine`
+- ✅ CAA record: `0 issue "letsencrypt.org"`, `0 issue "comodoca.com"`
+- ✅ HSTS: enabled, max-age=31536000, includeSubdomains, preload
+- ⏳ DMARC: `p=none` → `p=quarantine` (após 2-4 semanas)
 
 ## 9. Azure SWA Free Tier Capacity
 
@@ -445,12 +453,31 @@ Blog em `/blog` (subpath) não requer domínio extra.
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| TinaCMS incompatível c/ RRv7 SSG | Bloqueante | POC antes. Fallback: Decap CMS |
 | GA4 server proxy latência | Baixo | Fire-and-forget, sem await |
 | Streaks Redis perde dados | Baixo | Backup MongoDB |
 | Rebuild necessário p/ publicar conteúdo | Médio | Aceitável. Fluxo PR/deploy automático |
 
-## 11. Métricas de Sucesso
+## 11. Features Implementadas Fora do Escopo Original
+
+### 11.1 Prize Pipeline (ADR-038)
+Cadeia de 3 eventos WebSocket (`winner_found`, `prize_tx_sent`, `prize_confirmed`) + persistência MongoDB + API REST (`GET /api/v1/games/:gameId/prizes`). Worker dispara `winner_found` antes de `processAllGameWinners`.
+
+### 11.2 Content CRUD (ADR-037)
+API genérica de conteúdo editorial: `GET /api/v1/content/:type` (público, cache Redis 2min), `POST/PATCH/DELETE` (admin com auto-translate). `ContentPage.tsx` + `BlockContent.tsx` + `ContentAdmin.tsx` (BlockNote editor). Tipos: faq, howitworks, sponsors, tutorials, news.
+
+### 11.3 Permission System / RBAC (ADR-036)
+RBAC hierárquico (`admin.*` > `admin.content.*` > `admin.content.<type>.*`). CRUD de permissões por usuário, delegações sponsor com prevenção de escalação. Auditoria em toda mudança de permissão.
+
+### 11.4 Landing API Migration (ADR-039)
+API serverless da landing page em Azure Function App (Consumption, Node 22) + Aiven PostgreSQL. Domínio: `landing-api.cryptobingo.bet` (Cloudflare proxy). Deploy via zip.
+
+### 11.5 Admin UI Components
+13 componentes de admin UI: ContentAdmin (BlockNote), NftAdmin, PermissionAdmin, SponsorPermissionAdmin, AchievementAdmin, VaultAdmin, etc.
+
+### 11.6 PlayerShell Nav Expandida
+Dropdown "Explorar" com links secundários + XP bar no header.
+
+## 12. Métricas de Sucesso
 
 | KPI | Meta | Prazo | Medição |
 |---|---|---|---|
