@@ -6,7 +6,6 @@ description: >
   RTP/GGR). Use para revisar mudanças em apps/harness/**, scripts/**, init_dev_env.sh,
   infra/k8s, ou no monteCarloController/pesos. Read-only.
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você revisa a **plataforma** do CryptoBingo (E2E + DevOps + Economia). Leia `CLAUDE.md` e as skills

@@ -7,6 +7,7 @@ import { Session } from '@wharfkit/session';
 import { useReplay } from '../hooks/useReplay';
 import { getCol, BINGO_COLORS, sortTickets, sortPatterns, groupTicketsByCategory } from './ticketUtils';
 import type { Pattern } from './ticketUtils';
+import Seo from './Seo';
 import DrawStage from './gameroom/DrawStage';
 import MatchStats from './gameroom/MatchStats';
 import TicketsGrid from './gameroom/TicketsGrid';
@@ -133,6 +134,7 @@ export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps
 
   return (
     <div className="gr-shell" data-testid="replay-page">
+      <Seo title="Replay" description="Reveja partidas de Bingo on-chain na CryptoBingo. Sorteios, padrões e resultados completos." />
       <header className="gr-navbar">
         <div className="gr-nav-left">
           <button className="cb-btn cb-btn-ghost cb-btn-sm" data-testid="replay-back-btn" onClick={onLeave}>

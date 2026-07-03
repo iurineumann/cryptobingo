@@ -10,8 +10,8 @@ const navLinks: NavLink[] = [
   { type: 'internal', label: 'Ideas', href: '/ideas' },
   { type: 'external', label: 'Testnet', href: 'https://test.cryptobingo.bet' },
   { type: 'external', label: 'GitHub', href: 'https://github.com/iurineumann/cryptobingo' },
-  { type: 'disabled', label: 'Telegram' },
-  { type: 'disabled', label: 'Discord' },
+  { type: 'external', label: 'Telegram', href: 'https://t.me/cryptobingo_bet' },
+  { type: 'external', label: 'X/Twitter', href: 'https://x.com/CryptoBingo_Bet' },
 ];
 
 export default function Header() {

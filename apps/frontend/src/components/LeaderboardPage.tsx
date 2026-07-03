@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchLeaderboard, fetchLeaderboardXp, fetchRoomLeaderboard } from '../services/api';
 import type { LeaderboardEntry, LeaderboardXpEntry } from '@cryptobingo/shared-types';
+import Seo from './Seo';
+import { organizationSchema } from '../lib/jsonld';
 import { Medal } from 'lucide-react';
 
 interface Props {
@@ -59,6 +61,12 @@ export default function LeaderboardPage({ roomId }: Props) {
             data-testid="leaderboard-page"
             style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem 1rem' }}
         >
+            <Seo
+                title="Leaderboard"
+                description="Ranking global dos melhores jogadores de Bingo on-chain da CryptoBingo. Veja quem está ganhando mais prêmios na WAX."
+                canonical="/leaderboard"
+                jsonLd={[organizationSchema()]}
+            />
             <h1
                 data-testid="leaderboard-title"
                 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--cb-text-primary)' }}

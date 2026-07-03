@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchContentByType } from '../services/api';
 import type { ContentItem } from '@cryptobingo/shared-types';
+import Seo from './Seo';
+import { faqPageSchema } from '../lib/jsonld';
 
 export default function FaqPage() {
     const { t, i18n } = useTranslation();
@@ -27,11 +29,27 @@ export default function FaqPage() {
 
     const locale = i18n.language as 'en-US' | 'zh-CN' | string;
 
+    const faqSchema = useMemo(() => {
+        const qa = items.map(item => {
+            const override = item.locale_overrides?.[locale as 'en-US' | 'zh-CN'];
+            const question = (override?.content ?? item.metadata?.question ?? item.title) as string;
+            const answer   = (override?.content ?? item.content) as string;
+            return { question, answer };
+        }).filter(q => q.question && q.answer);
+        return qa.length > 0 ? [faqPageSchema(qa)] : undefined;
+    }, [items, locale]);
+
     return (
         <div
             data-testid="faq-page"
             className="content-page"
         >
+            <Seo
+                title="FAQ"
+                description="Perguntas frequentes sobre CryptoBingo: como funciona, prêmios, blockchain WAX, carteira e muito mais."
+                canonical="/faq"
+                jsonLd={faqSchema}
+            />
             <h1
                 data-testid="faq-title"
                 className="content-page-title"

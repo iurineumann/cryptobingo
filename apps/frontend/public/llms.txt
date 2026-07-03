@@ -1,0 +1,12 @@
+# CryptoBingo — AI Guide
+> Bingo on-chain, provably fair na blockchain WAX.
+
+## Docs
+- About: https://cryptobingo.bet/how-it-works
+- FAQ: https://cryptobingo.bet/faq
+- Blog: https://cryptobingo.bet/blog
+
+## Social
+- Telegram: https://t.me/cryptobingo_bet
+- Discord: https://discord.gg/EYYhdRWUnm
+- X: https://x.com/CryptoBingo_Bet

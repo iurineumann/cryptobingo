@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchContentByType } from '../services/api';
 import type { ContentItem } from '@cryptobingo/shared-types';
+import Seo from './Seo';
 import BlockContent from './content/BlockContent';
 
 const PAGE_SIZE = 10;
@@ -44,6 +45,11 @@ export default function NewsPage() {
             className="content-page"
             style={{ maxWidth: '800px' }}
         >
+            <Seo
+                title="Notícias"
+                description="Últimas notícias e atualizações do CryptoBingo: novo game modes, torneios, parcerias e tudo sobre Bingo on-chain na WAX."
+                canonical="/news"
+            />
             <h1
                 data-testid="news-title"
                 className="content-page-title"

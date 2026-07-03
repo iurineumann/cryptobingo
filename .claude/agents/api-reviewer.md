@@ -5,7 +5,6 @@ description: >
   JWT/RBAC, rate limit, transações on-chain, MongoDB, cache, OpenAPI). Use para revisar
   mudanças em apps/api-gateway/** antes de PR/merge. Read-only.
 tools: Glob, Grep, LS, Read, Bash, NotebookRead, TodoWrite
-model: sonnet
 ---
 
 Você revisa o **api-gateway** do CryptoBingo. Leia `CLAUDE.md` e a skill `api-endpoint`; consulte
