@@ -19,6 +19,8 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
 - **Segurança é bloqueante:** authz/secrets/injeção/bypass on-chain → aponte e corrija; sem atalho.
 - **ADR-driven:** decisão estrutural → ADR em `docs/adr/`; specs (`openapi`/`asyncapi`) e este
   CLAUDE.md acompanham a mudança.
+- **TDD é obrigatório:** test-first (RED→GREEN→refactor) para toda implementação nova. Um teste
+  por vez, código mínimo para passar. Nuca escrever implementação sem teste vermelho primeiro.
 - **Git flow + testes verdes** antes do PR; PT-BR em código/commits/docs; honestidade sobre o que
   foi verificado vs. o que falta.
 - **Camada → skill + revisor:** ao tocar uma camada, use a **skill** dela e delegue a revisão pré-PR
