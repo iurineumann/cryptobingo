@@ -8,8 +8,8 @@ info:
   version: 2.0.0
 
 servers:
-  - url: http://localhost:8083/api/v1
-    description: Desenvolvimento Local (api-gateway porta 8083)
+  - url: http://localhost:3000/api/v1
+    description: Desenvolvimento Local (api-gateway porta 3000)
 
 tags:
   - name: Auth
@@ -24,6 +24,7 @@ tags:
   - name: Sponsors
   - name: Leaderboard
   - name: News
+  - name: Content
   - name: Prizes
 
 paths:
@@ -1282,6 +1283,126 @@ paths:
         '404':
           description: Publicação não encontrada
 
+  # ══════════════════════════════════════════
+  # CONTENT (ADR-037)
+  # ══════════════════════════════════════════
+  /content/{type}:
+    get:
+      summary: Listar conteúdo por tipo
+      description: Retorna conteúdo ativo de um tipo (faq, howitworks, sponsors, tutorials, news). Cache Redis 2min.
+      tags: [Content]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [faq, howitworks, sponsors, tutorials, news]
+          description: Tipo de conteúdo
+      responses:
+        '200':
+          description: Lista de itens de conteúdo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContentItem'
+                  total:
+                    type: integer
+                  type:
+                    type: string
+    post:
+      summary: Criar item de conteúdo (admin)
+      tags: [Content, Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentInput'
+      responses:
+        '201':
+          description: Item criado
+
+  /content/{type}/{id}:
+    get:
+      summary: Obter item de conteúdo por ID
+      tags: [Content]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item de conteúdo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItem'
+    patch:
+      summary: Atualizar item de conteúdo (admin)
+      tags: [Content, Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentInput'
+      responses:
+        '200':
+          description: Item atualizado
+    delete:
+      summary: Remover item de conteúdo (admin, soft delete)
+      tags: [Content, Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item removido
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1829,7 +1950,64 @@ components:
         currency:
           type: string
           description: Símbolo da moeda (ex. "WAX").
-        status:
-          type: string
-          enum: [confirmed]
-          description: Status da transação.
+         status:
+           type: string
+           enum: [confirmed]
+           description: Status da transação.
+
+     ContentItem:
+       type: object
+       properties:
+         _id:
+           type: string
+         type:
+           type: string
+         title:
+           type: string
+         slug:
+           type: string
+         content:
+           type: string
+           description: Texto ou JSON de blocks (BlockNote)
+         content_format:
+           type: string
+           enum: [text, blocks]
+         metadata:
+           type: object
+         image_url:
+           type: string
+         sort_order:
+           type: integer
+         pinned:
+           type: boolean
+         active:
+           type: boolean
+         locale_overrides:
+           type: object
+         created_at:
+           type: string
+           format: date-time
+         updated_at:
+           type: string
+           format: date-time
+     ContentInput:
+       type: object
+       required: [title, content]
+       properties:
+         title:
+           type: string
+         slug:
+           type: string
+         content:
+           type: string
+         content_format:
+           type: string
+           enum: [text, blocks]
+         metadata:
+           type: object
+         image_url:
+           type: string
+         sort_order:
+           type: integer
+         pinned:
+           type: boolean

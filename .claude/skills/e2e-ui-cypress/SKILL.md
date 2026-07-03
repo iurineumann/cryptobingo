@@ -93,6 +93,14 @@ arquivo.**
 - **`turbo` task `e2e`** é `cache:false` e **não** entra no `pnpm test` default (é disparada
   explicitamente / no job de CI próprio).
 
+## SonarQube (obrigatório antes de cada commit)
+
+- Rode `sonarqube_analyze_code_snippet` em cada `.ts`/`.tsx` modificado
+- Corrija BLOCKER/CRITICAL/MAJOR — zero tolerância antes do commit
+- MINOR aceitável com justificativa inline
+- NOSONAR só com comentário explicando o motivo
+- Varredura só após testes verdes
+
 ## Checklist
 
 - [ ] Onboarding lido (CLAUDE.md → MASTER-PROMPT → SPEC §4/§5 → ADRs → skill → arquivos).

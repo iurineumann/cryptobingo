@@ -54,6 +54,10 @@ import {
   suggestCombos,
 } from "./controllers/monteCarloController";
 import {
+  getDailyRewards,
+  claimDailyRewardHandler,
+} from "./controllers/dailyRewardsController";
+import {
   getRtpStatistics,
   getGamesHistory,
   syncGameToLedger,
@@ -710,6 +714,15 @@ function registerRoutes(): void {
 
   // ── Prize Pipeline (ADR pendente) ─────────────────────────────────────
   app.get("/api/v1/games/:gameId/prizes", playerLimiter, listGamePrizes);
+
+  // ── Daily Rewards (F2) ───────────────────────────────────────────────
+  app.get("/api/v1/daily-rewards", playerLimiter, requireAuth, getDailyRewards);
+  app.post(
+    "/api/v1/daily-rewards/claim",
+    playerLimiter,
+    requireAuth,
+    claimDailyRewardHandler,
+  );
 
   // ── 404 catch-all ─────────────────────────────────────────────────────────
   app.use((_req, res) => {

@@ -41,6 +41,14 @@ actions de liquidação ao contrato. Testes: `npx jest <arquivo>` (em `apps/work
   pago pela cartela** (ADR-010), com fallback para `game.ticket_price`.
 - `gametype.combinations` é `binary_extension` on-chain → pode vir ausente (trate como vazio).
 
+## SonarQube (obrigatório antes de cada commit)
+
+- Rode `sonarqube_analyze_code_snippet` em cada `.ts`/`.tsx` modificado
+- Corrija BLOCKER/CRITICAL/MAJOR — zero tolerância antes do commit
+- MINOR aceitável com justificativa inline
+- NOSONAR só com comentário explicando o motivo
+- Varredura só após testes verdes
+
 ## Adicionar/alterar um draw mode (ADR-012/013/014)
 
 1. **Contrato:** valide o novo `draw_mode` em `addgametype`; ajuste `claim*`/`closegame` se precisar

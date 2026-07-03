@@ -49,6 +49,7 @@ const UserProfileSchema = new Schema({
         level:        { type: Number, default: 1 },
         sub_level:    { type: Number, default: 1 },
         games_played: { type: Number, default: 0 },
+        free_tickets: { type: Number, default: 0 },
     },
 }, { timestamps: true });
 
