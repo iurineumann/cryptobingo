@@ -6,6 +6,7 @@ declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
+    _analyticsConsented?: boolean;
   }
 }
 
@@ -68,14 +69,15 @@ export function useAnalytics() {
   }, [adblock]);
 
   useEffect(() => {
-    if (prevPath.current !== location.pathname) {
+    if (prevPath.current !== location.pathname && window._analyticsConsented) {
       prevPath.current = location.pathname;
-      trackEvent('page_view', {
+      window.dataLayer?.push({
+        event: 'page_view',
         page_path: location.pathname,
-        page_search: location.search,
+        page_title: document.title,
       });
     }
-  }, [location, trackEvent]);
+  }, [location]);
 
   return { trackEvent };
 }
