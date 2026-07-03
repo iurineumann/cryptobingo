@@ -47,6 +47,14 @@ kill $OPID
 ```
 Env keys: `.waxdev.env` (EOSIO_KEY, JOGADOR1_KEY, BINGO_GAME_KEY...) + worker `.env` (MICROSERVICE_KEY).
 
+## SonarQube (obrigatório antes de cada commit)
+
+- Rode `sonarqube_analyze_code_snippet` em cada `.ts`/`.tsx` modificado
+- Corrija BLOCKER/CRITICAL/MAJOR — zero tolerância antes do commit
+- MINOR aceitável com justificativa inline
+- NOSONAR só com comentário explicando o motivo
+- Varredura só após testes verdes
+
 ## Escrever um novo suite
 
 Espelhe um `describe` existente (ex.: Standard/MULTI_MATCH/COMBINAÇÕES). Fluxo típico:

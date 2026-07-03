@@ -15,6 +15,7 @@ export interface Progression {
     combos_count?: number;
     tickets_bought?: number;
     burns_count?: number;
+    free_tickets?: number;
 }
 
 export interface PlayerProgressionDocument extends Document {
@@ -41,6 +42,7 @@ const PlayerProgressionSchema = new Schema({
         combos_count: { type: Number, default: 0 },
         tickets_bought: { type: Number, default: 0 },
         burns_count:  { type: Number, default: 0 },
+        free_tickets: { type: Number, default: 0 },
     },
     daily_streak: {
         last_date: { type: String, default: '' },

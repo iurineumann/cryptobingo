@@ -1,0 +1,9 @@
+import './subscribe.js';
+import './stats.js';
+import './ideas/index.js';
+import './ideas/vote.js';
+import './votes/confirm.js';
+import './admin/login.js';
+import './admin/confirm.js';
+import './admin/newsletter.js';
+import './admin/ideas.js';

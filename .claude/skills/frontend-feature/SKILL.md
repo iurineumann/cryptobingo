@@ -39,6 +39,14 @@ Pacote `@cryptobingo/frontend` (React + Vite + TS). Testes: **vitest** —
 - Admin: cadastro/edição de gametypes e combinações em `components/admin/GametypesAdmin.tsx`
   (salvar combinações sincroniza on-chain via API).
 
+## SonarQube (obrigatório antes de cada commit)
+
+- Rode `sonarqube_analyze_code_snippet` em cada `.ts`/`.tsx` modificado
+- Corrija BLOCKER/CRITICAL/MAJOR — zero tolerância antes do commit
+- MINOR aceitável com justificativa inline
+- NOSONAR só com comentário explicando o motivo
+- Varredura só após testes verdes
+
 ## Checklist
 
 - [ ] Strings via `t(...)` com chaves em pt/en/zh.

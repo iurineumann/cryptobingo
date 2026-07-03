@@ -1076,6 +1076,14 @@
     "success_delete": "代币已删除。",
     "native_badge": "原生"
   },
+  "daily_rewards": {
+    "title": "每日奖励",
+    "subtitle": "每天回来领取奖励！",
+    "day": "第{{day}}天",
+    "claim": "领取",
+    "week_warrior": "周勇士",
+    "reward_ticket": "1张免费卡"
+  },
   "settings": {
     "title": "设置",
     "rpc_title": "WAX RPC节点",

@@ -1076,6 +1076,14 @@
     "success_delete": "Token removido.",
     "native_badge": "nativo"
   },
+  "daily_rewards": {
+    "title": "Recompensas Diárias",
+    "subtitle": "Volte todos os dias para ganhar prêmios!",
+    "day": "Dia {{day}}",
+    "claim": "Resgatar",
+    "week_warrior": "Semana Guerreira",
+    "reward_ticket": "1 Cartela Grátis"
+  },
   "settings": {
     "title": "Configurações",
     "rpc_title": "Nó RPC da WAX",

@@ -1,9 +1,9 @@
 // tina/config.ts
 import { defineConfig } from "tinacms";
 var config_default = defineConfig({
-  branch: process.env.GITHUB_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || "feature/growth-stack",
+  branch: process.env.GITHUB_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || "master",
   clientId: process.env.NEXT_PUBLIC_TINA_CLIENT_ID || "fad4e9bf-472d-4ef4-b7ab-e07400e86c76",
-  token: process.env.TINA_TOKEN || "90fd06780913f3f08896304673279852152ff9d1",
+  token: process.env.TINA_TOKEN || "b02a801394e9e9a6c6a2dfa904067fd5c86ee83d",
   build: {
     outputFolder: "cms",
     publicFolder: "public"
@@ -141,7 +141,11 @@ var config_default = defineConfig({
             label: "Hero",
             fields: [
               { type: "string", name: "title" },
-              { type: "string", name: "subtitle", ui: { component: "textarea" } },
+              {
+                type: "string",
+                name: "subtitle",
+                ui: { component: "textarea" }
+              },
               { type: "string", name: "cta_text", label: "Bot\xE3o CTA" },
               { type: "string", name: "cta_link", label: "Link CTA" }
             ]
@@ -153,7 +157,11 @@ var config_default = defineConfig({
             list: true,
             fields: [
               { type: "string", name: "title" },
-              { type: "string", name: "description", ui: { component: "textarea" } },
+              {
+                type: "string",
+                name: "description",
+                ui: { component: "textarea" }
+              },
               { type: "string", name: "icon" }
             ]
           },
@@ -171,6 +179,14 @@ var config_default = defineConfig({
         ]
       }
     ]
+  },
+  search: {
+    tina: {
+      indexerToken: "201fce25e220225ab7fc7965aee4eb3ba4206b09",
+      stopwordLanguages: ["eng"]
+    },
+    indexBatchSize: 100,
+    maxSearchIndexFieldLength: 100
   }
 });
 export {

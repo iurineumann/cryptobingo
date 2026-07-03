@@ -2,10 +2,18 @@
   "name": "cryptobingo-landing-api",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "@azure/functions": "^4.8.0",
     "@azure/communication-email": "^1.0.0",
     "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0"
   }
 }
