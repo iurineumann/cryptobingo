@@ -27,6 +27,7 @@
     "admin": "Administration",
     "profile": "Profile",
     "logout": "Disconnect",
+    "referral": "Invite",
     "my_history": "History",
     "explore": "Explore",
     "how_it_works": "How It Works",
@@ -1097,5 +1098,20 @@
     "save_error": "Error saving preferences.",
     "custom_rpc_placeholder": "Custom URL...",
     "custom_explorer_placeholder": "Custom URL..."
+  },
+  "referral": {
+    "title": "Referral Program",
+    "description": "Invite friends and earn rewards together!",
+    "your_code": "Your referral code",
+    "copy_code": "Copy to clipboard",
+    "generate_code": "Generate my code",
+    "total_referred": "Invited",
+    "tickets_earned": "Tickets",
+    "current_tier": "Tier",
+    "next_tier": "Next tier",
+    "missing_referrals": "{{count}} more referrals needed",
+    "apply_title": "Have a referral code?",
+    "apply_placeholder": "Enter code...",
+    "apply_btn": "Apply"
   }
 }

@@ -58,6 +58,11 @@ import {
   claimDailyRewardHandler,
 } from "./controllers/dailyRewardsController";
 import {
+  getReferralStatus,
+  generateReferralCode,
+  applyReferralCode,
+} from "./controllers/referralController";
+import {
   getRtpStatistics,
   getGamesHistory,
   syncGameToLedger,
@@ -723,6 +728,11 @@ function registerRoutes(): void {
     requireAuth,
     claimDailyRewardHandler,
   );
+
+  // ── Referral (F2) ────────────────────────────────────────────────────────
+  app.get("/api/v1/referral/status", playerLimiter, requireAuth, getReferralStatus);
+  app.post("/api/v1/referral/generate", playerLimiter, requireAuth, generateReferralCode);
+  app.post("/api/v1/referral/apply", playerLimiter, requireAuth, applyReferralCode);
 
   // ── 404 catch-all ─────────────────────────────────────────────────────────
   app.use((_req, res) => {

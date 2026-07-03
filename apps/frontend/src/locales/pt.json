@@ -27,6 +27,7 @@
     "admin": "Administração",
     "profile": "Perfil",
     "logout": "Desconectar",
+    "referral": "Indicar",
     "my_history": "Histórico",
     "explore": "Explorar",
     "how_it_works": "Como Funciona",
@@ -1097,5 +1098,20 @@
     "save_error": "Erro ao salvar preferências.",
     "custom_rpc_placeholder": "URL personalizada...",
     "custom_explorer_placeholder": "URL personalizada..."
+  },
+  "referral": {
+    "title": "Programa de Indicação",
+    "description": "Convide amigos e ganhe recompensas juntos!",
+    "your_code": "Seu código de indicação",
+    "copy_code": "Copiar para área de transferência",
+    "generate_code": "Gerar meu código",
+    "total_referred": "Convidados",
+    "tickets_earned": "Ingressos",
+    "current_tier": "Nível",
+    "next_tier": "Próximo nível",
+    "missing_referrals": "{{count}} indicações restantes",
+    "apply_title": "Tem um código de indicação?",
+    "apply_placeholder": "Digite o código...",
+    "apply_btn": "Aplicar"
   }
 }

@@ -58,6 +58,7 @@ import RoomHistoryPanel  from './components/RoomHistoryPanel';
 import MyHistoryPage     from './components/MyHistoryPage';
 import WalletPage           from './components/WalletPage';
 import PlayerProfilePage   from './components/PlayerProfilePage';
+import ReferralPage        from './components/ReferralPage';
 import AdminLayout         from './components/admin/AdminLayout';
 import SponsorLayout    from './components/sponsor/SponsorLayout';
 import SponsorRooms     from './components/sponsor/SponsorRooms';
@@ -397,6 +398,7 @@ function AppRoot() {
         { id: 'lobby',      path: '/lobby',   label: t('nav.lobby')      ?? 'Salas'    },
         { id: 'my_history', path: '/history', label: t('nav.my_history') ?? 'Histórico' },
         { id: 'wallet',     path: '/wallet',  label: t('nav.wallet')     ?? 'Carteira' },
+        { id: 'referral',   path: '/referral', label: t('nav.referral')  ?? 'Indicar'  },
         { id: 'profile',    path: '/profile', label: t('nav.profile')    ?? 'Perfil'   },
     ];
 
@@ -657,8 +659,9 @@ function AppRoot() {
                             onViewReplay={(gameId) => navigate(`/replay/${gameId}`, { state: { returnTo: '/history' } })}
                         />
                     } />
-                    <Route path="/wallet"  element={<WalletPage session={session!} />} />
-                    <Route path="/profile" element={
+                    <Route path="/wallet"    element={<WalletPage session={session!} />} />
+                    <Route path="/referral"  element={<ReferralPage />} />
+                    <Route path="/profile"   element={
                         <PlayerProfilePage
                             session={session!}
                             profile={profile!}

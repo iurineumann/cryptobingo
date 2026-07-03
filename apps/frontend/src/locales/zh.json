@@ -27,6 +27,7 @@
     "admin": "管理",
     "profile": "个人资料",
     "logout": "断开连接",
+    "referral": "邀请",
     "my_history": "历史记录",
     "explore": "探索",
     "how_it_works": "如何运作",
@@ -1097,5 +1098,20 @@
     "save_error": "保存偏好设置时出错。",
     "custom_rpc_placeholder": "自定义URL...",
     "custom_explorer_placeholder": "自定义URL..."
+  },
+  "referral": {
+    "title": "推荐计划",
+    "description": "邀请朋友一起赚取奖励！",
+    "your_code": "您的推荐码",
+    "copy_code": "复制到剪贴板",
+    "generate_code": "生成我的代码",
+    "total_referred": "已邀请",
+    "tickets_earned": "门票",
+    "current_tier": "等级",
+    "next_tier": "下一等级",
+    "missing_referrals": "还需{{count}}个推荐",
+    "apply_title": "有推荐码？",
+    "apply_placeholder": "输入代码...",
+    "apply_btn": "应用"
   }
 }

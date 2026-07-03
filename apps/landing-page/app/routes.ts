@@ -7,4 +7,5 @@ export default [
   { path: '/blog/:slug', file: '../src/pages/BlogPost.tsx', id: 'blog-post' },
   { path: '/ideas', file: '../src/pages/IdeasPage.tsx', id: 'ideas' },
   { path: '/admin', file: '../src/pages/AdminPage.tsx', id: 'admin' },
+  { path: '/ref/:code', file: '../src/pages/ReferralRedirect.tsx', id: 'referral-redirect' },
 ] satisfies RouteConfig;

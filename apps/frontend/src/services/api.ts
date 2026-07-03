@@ -1200,3 +1200,44 @@ export async function claimDailyReward(): Promise<DailyRewardClaimResult> {
     });
     return handleResponse<DailyRewardClaimResult>(res);
 }
+
+// ==========================================
+// REFERRAL (F2)
+// ==========================================
+
+export interface ReferralStatus {
+    code: string;
+    totalReferred: number;
+    xpEarned: number;
+    ticketsEarned: number;
+    referred: string[];
+    tier: string | null;
+    nextTier: { min: number; badge: string; remaining: number } | null;
+}
+
+export interface ApplyReferralResult {
+    message: string;
+    referrer: string;
+}
+
+export async function getReferralStatus(): Promise<ReferralStatus> {
+    const res = await fetch(`${API_BASE}/referral/status`, { headers: authHeaders() });
+    return handleResponse<ReferralStatus>(res);
+}
+
+export async function generateReferralCode(): Promise<{ code: string }> {
+    const res = await fetch(`${API_BASE}/referral/generate`, {
+        method: 'POST',
+        headers: authHeaders(),
+    });
+    return handleResponse<{ code: string }>(res);
+}
+
+export async function applyReferralCode(code: string): Promise<ApplyReferralResult> {
+    const res = await fetch(`${API_BASE}/referral/apply`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ code }),
+    });
+    return handleResponse<ApplyReferralResult>(res);
+}
