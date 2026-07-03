@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { trackEvent } from '~/services/analytics';
 
 interface ShareWinButtonProps {
@@ -7,12 +8,9 @@ interface ShareWinButtonProps {
   gameUrl: string;
 }
 
-function getShareText(amount: number): string {
-  return `Acabei de ganhar R$${amount} no @CryptoBingo! 🎰💰`;
-}
-
 export function ShareWinButton({ amount, gameId, gameUrl }: ShareWinButtonProps) {
-  const shareText = getShareText(amount);
+  const { t } = useTranslation();
+  const shareText = t('share_win.text', { amount: String(amount) });
 
   const handleTwitter = useCallback(() => {
     trackEvent('share_win_click', { platform: 'twitter', game_id: gameId, prize_amount: amount });
@@ -57,28 +55,28 @@ export function ShareWinButton({ amount, gameId, gameUrl }: ShareWinButtonProps)
         onClick={handleTwitter}
         className="cb-btn cb-btn-sm"
       >
-        X
+        {t('share_win.twitter_label')}
       </button>
       <button
         data-testid="share-win-btn-telegram"
         onClick={handleTelegram}
         className="cb-btn cb-btn-sm"
       >
-        Telegram
+        {t('share_win.telegram_label')}
       </button>
       <button
         data-testid="share-win-btn-discord"
         onClick={handleDiscord}
         className="cb-btn cb-btn-sm"
       >
-        Discord
+        {t('share_win.discord_label')}
       </button>
       <button
         data-testid="share-win-btn-copy"
         onClick={handleCopy}
         className="cb-btn cb-btn-sm"
       >
-        Copy
+        {t('share_win.copy_label')}
       </button>
     </div>
   );

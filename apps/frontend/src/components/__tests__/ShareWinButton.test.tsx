@@ -55,11 +55,11 @@ describe('ShareWinButton', () => {
     expect(clipboardSpy.writeText).toHaveBeenCalledWith(mockGameUrl);
   });
 
-  it('copia texto formatado no botao discord', async () => {
+  it('copia texto + url no botao discord', async () => {
     render(<ShareWinButton {...defaultProps} />);
     await userEvent.click(screen.getByTestId('share-win-btn-discord'));
     expect(clipboardSpy.writeText).toHaveBeenCalledWith(
-      expect.stringContaining('CryptoBingo'),
+      expect.stringContaining(mockGameUrl),
     );
   });
 });

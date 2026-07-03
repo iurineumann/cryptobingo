@@ -1084,6 +1084,15 @@
     "week_warrior": "Week Warrior",
     "reward_ticket": "1 Free Ticket"
   },
+  "share_win": {
+    "text": "I just won {{amount}} on @CryptoBingo! 🎰💰",
+    "section_title": "Share your win",
+    "twitter_label": "X",
+    "telegram_label": "Telegram",
+    "discord_label": "Discord",
+    "copy_label": "Copy link",
+    "copy_success": "Link copied!"
+  },
   "settings": {
     "title": "Settings",
     "rpc_title": "WAX RPC Node",
