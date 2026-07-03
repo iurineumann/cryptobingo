@@ -206,7 +206,7 @@ export default function GameRoom({
 
         {/* ── Banners (golden ball, stages, fim) + confete — extraídos em PrizePanels ── */}
         <PrizePanels
-          hasBanners={hasBanners} goldenBall={goldenBall} goldenMultiplierProgress={goldenMultiplierProgress}
+          gameId={gameId} hasBanners={hasBanners} goldenBall={goldenBall} goldenMultiplierProgress={goldenMultiplierProgress}
           clearedStages={clearedStages}
           isEffectiveGameEnded={isEffectiveGameEnded} isStaticFinalState={isStaticFinalState}
           playerWinEntries={playerWinEntries} localWinners={localWinners} playerTickets={playerTickets}
