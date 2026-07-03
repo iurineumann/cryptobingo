@@ -13,8 +13,8 @@ export function trackEvent(name: string, params?: Record<string, unknown>): void
         body: JSON.stringify({ name, params }),
         keepalive: true,
       }).catch(() => {});
-    } else if (typeof (globalThis as any).gtag === 'function') {
-      (globalThis as any).gtag('event', name, params);
+    } else if (typeof window.gtag === 'function') {
+      window.gtag('event', name, params);
     }
   } catch {
     // silencioso — nunca quebrar UX por analytics
