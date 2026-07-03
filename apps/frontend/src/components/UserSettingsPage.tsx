@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Check, Save } from 'lucide-react';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import { updateUserPreferences } from '../services/api';
+import Seo from './Seo';
 import { RPC_PRESETS, setSelectedRpcUrl, getSelectedRpcUrl } from '../utils/rpcStore';
 import { EXPLORER_PRESETS, setSelectedExplorerUrl, getSelectedExplorerUrl } from '../utils/explorerStore';
 
@@ -75,6 +76,7 @@ export default function UserSettingsPage({ profile, onPreferencesUpdated }: Prop
 
     return (
         <div className="settings-page" data-testid="settings-page">
+            <Seo title="Configurações" description="Personalize sua experiência no CryptoBingo: RPC, explorer, som e preferências." />
             <h1 className="settings-title">{t('settings.title') ?? 'Configurações'}</h1>
 
             {/* RPC URL */}

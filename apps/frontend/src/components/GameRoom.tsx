@@ -11,6 +11,7 @@ import { Session } from '@wharfkit/session';
 import type { MongoUserProfile } from '@cryptobingo/shared-types';
 import BuyTicketModal from './BuyTicketModal';
 import RoomSocial from './gameroom/RoomSocial';
+import Seo from './Seo';
 
 import GameRoomHeader from './gameroom/GameRoomHeader';
 import DrawStage from './gameroom/DrawStage';
@@ -108,6 +109,21 @@ export default function GameRoom({
 
   const explorerUrl = getEffectiveExplorerUrl();
   // Agrupa winners por padrão/estágio
+
+  // ── Analytics: win event (F0C.7) ──────────────────────────────────────────
+  const winTracked = useRef(false);
+  useEffect(() => {
+    if (winnerMap.size > 0 && isEffectiveGameEnded && !winTracked.current) {
+      winTracked.current = true;
+      const totalPrize = [...winnerMap.values()].reduce((s, w) => s + (w.totalPrize ?? 0), 0);
+      window.dataLayer?.push({
+        event: 'win',
+        win_game_id: gameId,
+        win_amount: totalPrize,
+        win_tickets: winnerMap.size,
+      });
+    }
+  }, [winnerMap, isEffectiveGameEnded, gameId]);
   const groupedWinners = useMemo(() => {
     const groups = new Map<string, typeof feedWinners>();
     for (const w of feedWinners) {
@@ -138,6 +154,7 @@ export default function GameRoom({
 
   return (
     <div className="gr-shell">
+      <Seo title="Sala de Jogo" description="Partida ao vivo de Bingo on-chain na CryptoBingo. Acompanhe os sorteios e veja os resultados em tempo real." />
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <GameRoomHeader

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Seo from '@/components/Seo';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import StatsBar from '@/components/StatsBar';
@@ -54,6 +55,7 @@ export default function IdeasPage() {
 
     return (
         <>
+            <Seo title="Fórum de Ideias" description="Compartilhe ideias para o CryptoBingo e vote em propostas da comunidade. As ideias mais populares viram realidade." canonical="/ideas" />
             <Header />
             <StatsBar />
             <main className="mx-auto max-w-6xl px-4 py-16">

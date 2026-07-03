@@ -1,14 +1,24 @@
+interface FooterProps {
+  social?: {
+    telegram: string;
+    discord: string;
+    twitter: string;
+    github: string;
+  };
+}
+
+const defaultSocial = {
+  telegram: 'https://t.me/cryptobingo_bet',
+  discord: 'https://discord.gg/EYYhdRWUnm',
+  twitter: 'https://x.com/CryptoBingo_Bet',
+  github: 'https://github.com/iurineumann/cryptobingo',
+};
+
 const productLinks = [
   { label: 'Testnet', href: 'https://test.cryptobingo.bet' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Ideas', href: '/ideas' },
   { label: 'Roadmap', href: '#' },
-] as const;
-
-const communityLinks = [
-  { label: 'GitHub', href: 'https://github.com/iurineumann/cryptobingo' },
-  { label: 'Telegram', href: 'https://t.me/cryptobingo_bet' },
-  { label: 'Discord', href: 'https://discord.gg/EYYhdRWUnm' },
-  { label: 'X/Twitter', href: 'https://x.com/CryptoBingo_Bet' },
 ] as const;
 
 const legalLinks = [
@@ -16,7 +26,9 @@ const legalLinks = [
   { label: 'Privacy', href: '#' },
 ] as const;
 
-export default function Footer() {
+export default function Footer({ social }: FooterProps) {
+  const s = social || defaultSocial;
+
   const renderLink = (link: { label: string; href: string; disabled?: boolean }) => {
     if (link.disabled) {
       return (
@@ -63,7 +75,10 @@ export default function Footer() {
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">Community</h4>
             <div className="flex flex-col gap-2">
-              {communityLinks.map(renderLink)}
+              <a href={s.github} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">GitHub</a>
+              <a href={s.telegram} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">Telegram</a>
+              <a href={s.discord} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">Discord</a>
+              <a href={s.twitter} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">X/Twitter</a>
             </div>
           </div>
           <div>

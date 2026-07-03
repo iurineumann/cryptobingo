@@ -12,6 +12,7 @@ import { Name, Session }                 from '@wharfkit/session';
 import { UInt64 }                        from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchRooms, type EnrichedRoom } from '../services/api';
+import Seo                               from './Seo';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
 import RoomHistoryPanel                  from './RoomHistoryPanel';
@@ -628,7 +629,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
     return (
         <section className="page-lobby" aria-label="Lobby de Jogos">
-
+            <Seo
+                title="Salas de Jogo"
+                description="Compre cartelas e jogue Bingo on-chain na CryptoBingo. Salas ao vivo com prêmios em WAX e sorteios verificáveis."
+            />
             {/* ── Header ── */}
             <div className="lobby-header">
                 <div className="lobby-header-left">

@@ -131,6 +131,7 @@ import {
   deleteContentItem,
 } from "./controllers/contentController";
 import { listGamePrizes } from "./controllers/prizeController";
+import { analyticsEventHandler } from "./controllers/analyticsController";
 import {
   updateUserPermissions,
   listSponsorOrgs,
@@ -703,6 +704,9 @@ function registerRoutes(): void {
     requirePerm("admin.content"),
     deleteContentItem,
   );
+
+  // ── Analytics Proxy (adblock bypass) ──────────────────────────────────
+  app.post("/api/v1/analytics/event", playerLimiter, analyticsEventHandler);
 
   // ── Prize Pipeline (ADR pendente) ─────────────────────────────────────
   app.get("/api/v1/games/:gameId/prizes", playerLimiter, listGamePrizes);

@@ -201,6 +201,16 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
             setLastPurchase(purchaseResult);
             console.log(`✅ [Purchase] Total: ${allTickets.length} cartela(s). Última TX: ${lastTxId}`);
 
+            window.dataLayer?.push({
+              event: 'buyin',
+              buyin_tickets: allTickets.length,
+              buyin_game_id: gameId,
+              buyin_value: groups.reduce((s, g) => {
+                const qty = parseFloat(g.price.quantity.split(' ')[0] ?? '0');
+                return s + qty * g.tickets.length;
+              }, 0),
+            });
+
             return purchaseResult;
 
         } catch (err) {

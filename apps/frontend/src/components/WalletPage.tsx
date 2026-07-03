@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import type { BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchSupportedTokens, type SystemToken } from '../services/api';
+import Seo from './Seo';
 
 interface Props { session: Session }
 
@@ -158,6 +159,7 @@ export default function WalletPage({ session }: Props) {
 
     return (
         <div className="max-w-xl mx-auto space-y-6" data-testid="wallet-page">
+            <Seo title="Carteira" description="Gerencie seus tokens WAX na CryptoBingo: depósitos, saques e saldos." />
             <h2 className="text-xl font-bold text-[--cb-text-primary]" data-testid="wallet-title">{t('wallet_page.title')}</h2>
 
             {/* ── Saldos off-contract ───────────────────────────────── */}
