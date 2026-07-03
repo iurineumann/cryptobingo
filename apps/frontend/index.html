@@ -51,16 +51,16 @@
       })();
     </script>
 
-    <!-- Google Consent Mode v2 — defaults (ANTES do GTM) -->
+    <!-- Google Consent Mode v2 — default negado global (ANTES do GTM) -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('consent','default',{
+        'analytics_storage':'denied',
         'ad_storage':'denied',
         'ad_user_data':'denied',
         'ad_personalization':'denied',
-        'analytics_storage':'denied',
-        'functionality_storage':'denied',
+        'functionality_storage':'granted',
         'personalization_storage':'denied',
         'security_storage':'granted',
         'wait_for_update':500
@@ -186,22 +186,36 @@
     <script>
     document.addEventListener('DOMContentLoaded',function(){
 
+      function getCats(cats){
+        if(Array.isArray(cats)){
+          return {
+            analytics: cats.indexOf('analytics') !== -1,
+            marketing: cats.indexOf('marketing') !== -1,
+            ads: cats.indexOf('ads') !== -1
+          };
+        }
+        return cats||{};
+      }
+
       function updateGtag(cookie){
-        if(typeof gtag==='undefined') return;
-        var cats=cookie.categories||[];
+        var cats=getCats(cookie.categories);
         gtag('consent','update',{
-          analytics_storage: cats.indexOf('analytics')>=0?'granted':'denied',
-          ad_storage: cats.indexOf('marketing')>=0?'granted':'denied',
-          ad_user_data: cats.indexOf('marketing')>=0?'granted':'denied',
-          ad_personalization: cats.indexOf('marketing')>=0?'granted':'denied',
+          'analytics_storage': cats.analytics?'granted':'denied',
+          'ad_storage': cats.ads?'granted':'denied',
+          'ad_user_data': cats.ads?'granted':'denied',
+          'ad_personalization': cats.ads?'granted':'denied',
+          'functionality_storage': 'granted',
+          'personalization_storage': cats.marketing?'granted':'denied',
+          'security_storage': 'granted'
         });
       }
 
       function logConsent(cookie){
         try{
+          var cats=getCats(cookie.categories);
           localStorage.setItem('cb_consent',JSON.stringify({
             timestamp: new Date().toISOString(),
-            categories: cookie.categories||[],
+            categories: Object.keys(cats).filter(function(k){return cats[k];}),
             consentId: (crypto.randomUUID&&crypto.randomUUID())||Date.now().toString(36),
             version: '2026.07'
           }));
@@ -224,8 +238,16 @@
       function handleConsent(cookie){
         updateGtag(cookie);
         logConsent(cookie);
-        var cats=cookie.categories||[];
-        cats.indexOf('analytics')>=0 ? startClarity() : stopClarity();
+        var cats=getCats(cookie.categories);
+        window._analyticsConsented = cats.analytics;
+        cats.analytics ? startClarity() : stopClarity();
+        if(cats.analytics||cats.marketing){
+          window.dataLayer.push({
+            event: 'page_view',
+            page_path: window.location.pathname,
+            page_title: document.title
+          });
+        }
       }
 
       if(typeof CookieConsent==='undefined') return;
@@ -370,8 +392,8 @@
           }
         },
 
-        onFirstConsent: handleConsent,
-        onConsent: handleConsent,
+        onFirstConsent: function({cookie}){ handleConsent(cookie); },
+        onConsent: function({cookie}){ handleConsent(cookie); },
         onChange: function({cookie}){ handleConsent(cookie); }
 
       });
