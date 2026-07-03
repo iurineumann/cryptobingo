@@ -72,12 +72,12 @@ import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
 import PrivacyPage      from './components/PrivacyPage';
 import PublicLayout     from './components/PublicLayout';
-import ContentPage      from './components/content/ContentPage';
 import TutorialsPage    from './pages/TutorialsPage';
 import HowItWorksPage   from './pages/HowItWorksPage';
 import SponsorsPage     from './pages/SponsorsPage';
 import UserSettingsPage from './components/UserSettingsPage';
 import { useAnalytics } from './hooks/useAnalytics';
+import { trackEvent } from '~/services/analytics';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -340,6 +340,7 @@ function AppRoot() {
             if (!authenticated) throw new Error(t('auth.auth_failed') ?? 'Falha na autenticação');
             setSession(newSession);
             await loadProfile();
+            trackEvent('login', { method: 'wharfkit' });
             navigate('/lobby');
         } catch (err) {
             setError(err instanceof Error ? err.message : t('errors.generic') ?? 'Erro');

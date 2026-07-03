@@ -7,7 +7,7 @@
 //
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
@@ -26,6 +26,7 @@ import {
   type CombinationRuleInput, type ExtendedRule,
 } from '../ticketUtils';
 import { fetchPublicGametypeMetadata, fetchGamePrizeTransactions } from '../../services/api';
+import { trackEvent } from '~/services/analytics';
 
 function parseHexMatrix(hex: string): number[] {
   const bytes: number[] = [];
@@ -702,6 +703,14 @@ export function useGameRoomState(
     const interval = setInterval(loadGame, 15_000);
     return () => clearInterval(interval);
   }, [loadGame]);
+
+  const hasTrackedRoomEnter = useRef(false);
+  useEffect(() => {
+    if (game && !loadingGame && gameId && !hasTrackedRoomEnter.current) {
+      hasTrackedRoomEnter.current = true;
+      trackEvent('room_enter', { game_id: gameId });
+    }
+  }, [game, loadingGame, gameId]);
 
   // ── Derivações visuais ────────────────────────────────────────────────────
   const col   = lastDrawn != null ? getCol(lastDrawn) : 'N';
