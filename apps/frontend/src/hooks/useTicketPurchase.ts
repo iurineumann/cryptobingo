@@ -14,6 +14,7 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { generateSignedTickets, type SignedTicket } from '../services/api';
+import { trackEvent } from '~/services/analytics';
 
 const CONTRACT_ACCOUNT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const SWAP_ACCOUNT     = import.meta.env.VITE_SWAP_CONTRACT    ?? 'bingogameswp';
@@ -201,11 +202,10 @@ export function useTicketPurchase(): UseTicketPurchaseReturn {
             setLastPurchase(purchaseResult);
             console.log(`✅ [Purchase] Total: ${allTickets.length} cartela(s). Última TX: ${lastTxId}`);
 
-            window.dataLayer?.push({
-              event: 'buyin',
-              buyin_tickets: allTickets.length,
-              buyin_game_id: gameId,
-              buyin_value: groups.reduce((s, g) => {
+            trackEvent('buyin', {
+              tickets: allTickets.length,
+              game_id: gameId,
+              value: groups.reduce((s, g) => {
                 const qty = parseFloat(g.price.quantity.split(' ')[0] ?? '0');
                 return s + qty * g.tickets.length;
               }, 0),

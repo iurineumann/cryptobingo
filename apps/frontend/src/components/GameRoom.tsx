@@ -23,6 +23,7 @@ import TicketsGrid from './gameroom/TicketsGrid';
 import MatchStats from './gameroom/MatchStats';
 import { sumPayoutsByCurrency, countWinners } from './gameroom/prizeFormat';
 import { getEffectiveExplorerUrl } from '../utils/explorerStore';
+import { trackEvent } from '~/services/analytics';
 
 // ==========================================
 // TIPOS
@@ -116,11 +117,10 @@ export default function GameRoom({
     if (winnerMap.size > 0 && isEffectiveGameEnded && !winTracked.current) {
       winTracked.current = true;
       const totalPrize = [...winnerMap.values()].reduce((s, w) => s + (w.totalPrize ?? 0), 0);
-      window.dataLayer?.push({
-        event: 'win',
-        win_game_id: gameId,
-        win_amount: totalPrize,
-        win_tickets: winnerMap.size,
+      trackEvent('win', {
+        game_id: gameId,
+        amount: totalPrize,
+        tickets: winnerMap.size,
       });
     }
   }, [winnerMap, isEffectiveGameEnded, gameId]);
