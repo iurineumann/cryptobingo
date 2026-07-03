@@ -158,6 +158,11 @@ sequenceDiagram
 | **Worker Game Loop** | `apps/worker-game-loop/` | Node + Wharfkit + Jest | Orquestração FSM, evaluator bitmask, payouts, prize persistence, RabbitMQ consumer. Redis inverted index. |
 | **Broadcaster** | `apps/worker-game-loop/` (mesmo processo) | Socket.io + Redis Pub/Sub | Eventos WS em tempo real (ball_drawn, winner_found, prize_tx_sent, prize_confirmed). |
 | **Harness E2E** | `apps/harness/` | Jest + Wharfkit | Testes on-chain contra nodeos real + oracle daemon. |
+| **Landing Page** | `apps/landing-page/` | React Router v7 (SSG) + Vite | Landing page pública com SEO. API Functions em `api/`. |
+| **Landing API** | `apps/landing-page/api/` | Azure Functions v4 (CJS) + Aiven PG | API serverless: stats, subscribe, ideas, votes. |
+| **swap-ui (DEX)** | `apps/swap-ui/` | React + Vite + TS | DEX público BINGOGAMESWP: swap, liquidez, analytics. |
+| **E2E UI** | `apps/e2e-ui/` | Cypress | Testes E2E visuais, Tier 1 (intercept) e Tier 2 (real). |
+| **Chat** | `apps/chat/` | Serviço segregado | Chat em tempo real por sala. |
 
 ### 4.2. Persistência e Mensageria
 
@@ -294,6 +299,30 @@ Métricas do worker em `infra/grafana/dashboards/worker-game-loop.json`:
 }
 ```
 
+### Coleção: `content` (ADR-037)
+
+Índice composto: `{ type, slug }` — único.
+
+```json
+{
+  "_id": "ObjectId",
+  "type": "faq | howitworks | sponsors | tutorials | news",
+  "slug": "como-jogar",
+  "title": "Como Jogar",
+  "format": "text | blocks",
+  "content": "Conteúdo markdown ou BlockNote JSON",
+  "locales": {
+    "pt": { "title": "...", "content": "..." },
+    "en": { "title": "...", "content": "..." },
+    "zh": { "title": "...", "content": "..." }
+  },
+  "order": 1,
+  "published": true,
+  "created_at": "ISODate",
+  "updated_at": "ISODate"
+}
+```
+
 ### Coleção: `nfts_cache`
 
 ```json
@@ -322,4 +351,169 @@ Métricas do worker em `infra/grafana/dashboards/worker-game-loop.json`:
 | `docs/adr/ADR-014-game-orchestration.md` | Orquestração FSM |
 | `docs/asyncapi.yaml` | Eventos WS (prize_tx_sent, prize_confirmed) |
 | `docs/openapi.yaml` | API REST (GET /games/:gameId/prizes) |
-| `docs/SPEC.md` | Especificação mestre (§1.8 Prize Pipeline) |
+| `docs/SPEC.md` | Especificação mestre (§1.8 Prize Pipeline, §7–14) |
+| `docs/adr/ADR-037-content-crud.md` | Sistema de Conteúdo Unificado |
+| `docs/adr/ADR-036-permission-system.md` | RBAC hierárquico |
+| `docs/adr/ADR-028-gamification.md` | Gamificação (achievements, XP/level, tiers) |
+| `docs/adr/ADR-039-landing-api.md` | Landing API (Azure Functions + Aiven PG) |
+
+---
+
+## 7. Sistema de Conteúdo Unificado (ADR-037)
+
+### 7.1. API
+
+`apps/api-gateway/src/controllers/contentController.ts` — CRUD genérico por tipo de conteúdo:
+
+```mermaid
+sequenceDiagram
+    participant Admin as 👤 Admin
+    participant API as 🌐 API Gateway
+    participant Redis as 🗄️ Redis
+    participant Mongo as 🗄️ MongoDB
+
+    Admin->>API: POST /content/faq {title, content, locale}
+    API->>Mongo: Insert + auto-translate pt/en/zh
+    API->>Redis: DEL cache:content:faq
+    API-->>Admin: 201 Created
+
+    Note over Admin, Mongo: Leitura pública (cache 2min)
+    Player->>API: GET /content/tutorials
+    API->>Redis: Cache hit? → return | miss → Mongo
+    API-->>Player: ContentItem[]
+```
+
+### 7.2. Frontend
+
+| Componente | Caminho | Função |
+|------------|---------|--------|
+| `ContentPage.tsx` | `apps/frontend/src/pages/` | Renderiza conteúdo por tipo (rota `/tutorials`, `/how-it-works`, `/faq`) |
+| `BlockContent.tsx` | `apps/frontend/src/components/` | Renderiza BlockNote blocks em modo leitura |
+| `ContentAdmin.tsx` | `apps/frontend/src/admin/` | CRUD com BlockNote editor, translation review UI |
+
+---
+
+## 8. Sistema de Permissões / RBAC (ADR-036)
+
+### 8.1. Hierarquia
+
+Wildcard-based: `admin.*` > `admin.content.*` > `admin.content.<type>.*`.
+
+### 8.2. Controllers
+
+| Controller | Função |
+|------------|--------|
+| `permissionController.ts` | CRUD de permissões por usuário |
+| `sponsorPermissionController.ts` | Delegações sponsor com prevenção de escalação |
+
+### 8.3. Modelos MongoDB
+
+- `SponsorOrg` — organizações sponsor com membros e papéis
+- `SponsorDelegation` — delegações de ações entre contas
+
+### 8.4. Auditoria
+
+`utils/audit.ts` — toda mudança de permissão registrada com actor, timestamp e diff.
+
+---
+
+## 9. Gamificação (ADR-028)
+
+### 9.1. Arquitetura
+
+```mermaid
+graph LR
+    Worker[⚙️ Worker] -->|achievementEngine.ts| Mongo[(🗄️ MongoDB)]
+    Worker -->|xpEngine.ts| Mongo
+    API[🌐 API Gateway] -->|GET /profile/achievements| Mongo
+    Frontend[📱 Frontend] -->|AchievementModal.tsx| API
+    Frontend -->|XP Bar| API
+```
+
+### 9.2. Componentes
+
+| Componente | Stack | Função |
+|------------|-------|--------|
+| `achievementEngine.ts` | Worker | Detecta e desbloqueia achievements (29) |
+| `xpEngine.ts` | Worker | Calcula XP, levels, tiers, daily streak |
+| `AchievementModal.tsx` | Frontend | Modal de achievements do jogador |
+| `GET /profile/achievements` | API | Lista achievements + progresso |
+| `GET /profile/xp` | API | XP atual, level, tier, streak |
+
+### 9.3. Categorias de Achievement
+
+`first_win` · `win_10/50/100` · combos · compras · partidas · `streak_7/14/30` · burns · golden_win · stage_win · tiers
+
+### 9.4. XP / Level
+
+Fórmula Fibonacci (`PHI = 1.618034`, `BASE_XP = 906`, `MAX_LEVEL = 225`). 9 tiers: Cobre → Bronze → Prata → Ouro → Platina → Esmeralda → Safira → Rubi → Diamante.
+
+### 9.5. Streak
+
+`xpEngine.ensureDailyStreak()` — tracking dias consecutivos. Bônus = `streakCount × 2`. Reset se pular 1 dia.
+
+---
+
+## 10. Landing API (ADR-039 — Azure Functions)
+
+### 10.1. Stack
+
+| Componente | Detalhe |
+|------------|---------|
+| Runtime | Azure Functions v4 (Consumption, Node 22) |
+| Código | `apps/landing-page/api/` |
+| Banco | Aiven PostgreSQL (free tier, Frankfurt) |
+| Domínio | `landing-api.cryptobingo.bet` (Cloudflare proxy) |
+
+### 10.2. Endpoints
+
+`GET /api/stats` · `POST /api/subscribe` · `POST /api/ideas` · `POST /api/votes` · Admin CRUD
+
+### 10.3. Problemas Conhecidos
+
+- **ESM não funciona** no Functions v4 — CJS obrigatório
+- **pnpm symlinks** corrompem deploy — npm install limpo no `/tmp/fa-prod`
+- **Aiven SSL:** configurar `ssl: { rejectUnauthorized: false }` no Pool (não `sslmode=require` na URL)
+
+---
+
+## 11. swap-ui — DEX BingoGameSWP
+
+`apps/swap-ui/` — React + Vite + TS. DEX público para o token BINGOGAMESWP.
+
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| Swap | Troca entre tokens (WAX ↔ BINGOGAMESWP) |
+| Liquidez | Add/remove liquidez em pools |
+| Analytics | Volume, TVL, preço histórico |
+
+Deploy: Azure Static Web Apps, domínio `test-swap.cryptobingo.bet`. CI/CD incluso na matriz GHCR.
+
+---
+
+## 12. Chat em Tempo Real
+
+Serviço segregado em `apps/chat/`. Componente frontend `RoomChat.tsx`.
+
+### Eventos WS
+
+| Evento | Direção | Descrição |
+|--------|---------|-----------|
+| `chat:message` | S→C | Mensagem de texto |
+| `chat:sponsor_drop` | S→C | Notificação de drop |
+| `send_chat_message` | C→S | Envio de mensagem |
+
+Persistência: MongoDB `chat_messages` com TTL 7 dias.
+
+---
+
+## 13. E2E de UI (Cypress — ADR-017)
+
+`apps/e2e-ui/` — testes visuais em 2 tiers:
+
+| Tier | Estratégia | Gatilho |
+|------|-----------|---------|
+| **Tier 1** | `cy.intercept` + fixtures (sem WAX) | PR-gate |
+| **Tier 2** | Stack completo (`docker compose` + `init_dev_env.sh`) | Nightly/manual |
+
+Auth via `cy.devLogin(role)`. Seletores exclusivamente por `data-testid`. Modelo em camadas: **Tier 1 → PR** · **Tier 2 → stack real**.

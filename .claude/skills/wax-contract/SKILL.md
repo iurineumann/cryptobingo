@@ -92,6 +92,14 @@ Depois rode o harness (ver skill/seção Harness do CLAUDE.md) com o oracle daem
 - Action nova "não existe" → esqueceu de corrigir o `bingo.abi` à mão (passo 4) ou não fez deploy.
 - Deploy "unsatisfied authorization" → wallet sem a chave de `bingogamectr@active`.
 
+## SonarQube (obrigatório antes de cada commit)
+
+- Rode `sonarqube_analyze_code_snippet` em cada `.ts`/`.tsx` modificado (contrato C++ não escaneável — apenas TS nos scripts auxiliares)
+- Corrija BLOCKER/CRITICAL/MAJOR — zero tolerância antes do commit
+- MINOR aceitável com justificativa inline
+- NOSONAR só com comentário explicando o motivo
+- Varredura só após testes verdes
+
 ## Git
 
 Commit do contrato inclui: `bingo.hpp`, `bingo.cpp`, `bingo.abi`, `bingo.wasm` (+ `bingo_generated.abi`).

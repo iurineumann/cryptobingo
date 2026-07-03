@@ -1076,6 +1076,14 @@
     "success_delete": "Token removed.",
     "native_badge": "native"
   },
+  "daily_rewards": {
+    "title": "Daily Rewards",
+    "subtitle": "Come back every day to earn prizes!",
+    "day": "Day {{day}}",
+    "claim": "Claim",
+    "week_warrior": "Week Warrior",
+    "reward_ticket": "1 Free Ticket"
+  },
   "settings": {
     "title": "Settings",
     "rpc_title": "WAX RPC Node",

@@ -443,3 +443,233 @@ O ledger PostgreSQL (`games_history` + `transactions_ledger`) registra toda movi
 * `GET /api/v1/statistics/games` — histórico individual de jogos.
 * `GET /api/v1/statistics/games/batch` — stats por game_id (público).
 * `POST /api/v1/admin/ledger/sync` — sincronização retroativa de jogo on-chain.
+
+---
+
+## 7. Sistema de Conteúdo Unificado (ADR-037)
+
+### 7.1. API Genérica de Conteúdo Editorial
+
+API REST em `apps/api-gateway/src/controllers/contentController.ts`:
+
+| Método | Rota | Descrição | Auth |
+|--------|------|-----------|------|
+| `GET` | `/api/v1/content/:type` | Lista pública (cache Redis 2min) | — |
+| `POST` | `/api/v1/content/:type` | Criar item | Admin |
+| `PATCH` | `/api/v1/content/:type/:id` | Atualizar item com auto-translate | Admin |
+| `DELETE` | `/api/v1/content/:type/:id` | Remover item | Admin |
+
+### 7.2. Formatos de Conteúdo
+
+| Formato | Uso | Armazenamento |
+|---------|-----|---------------|
+| `text` | FAQ (perguntas curtas) | MongoDB `content` collection |
+| `blocks` | BlockNote editor (news, tutorials, how-it-works) | BlockNote JSON blocks |
+
+### 7.3. Locale Overrides
+
+Cada conteúdo tem campo `locales: { pt, en, zh }`. Admin UI permite revisão lado a lado com tradução automática.
+
+### 7.4. Frontend
+
+| Componente | Arquivo | Função |
+|------------|---------|--------|
+| `ContentPage.tsx` | `apps/frontend/src/pages/` | Renderiza qualquer tipo de conteúdo |
+| `BlockContent.tsx` | `apps/frontend/src/components/` | Renderiza BlockNote blocks em modo leitura |
+| `ContentAdmin.tsx` | `apps/frontend/src/admin/` | CRUD com BlockNote editor + translation review |
+
+Tipos suportados: `faq`, `howitworks`, `sponsors`, `tutorials`, `news`.
+
+---
+
+## 8. Sistema de Permissões (RBAC — ADR-036)
+
+### 8.1. Hierarquia
+
+Padrão hierárquico com wildcard: `admin.*` > `admin.content.*` > `admin.content.<type>.*`.
+
+### 8.2. Controllers
+
+| Controller | Arquivo | Função |
+|------------|---------|--------|
+| `permissionController.ts` | `apps/api-gateway/src/controllers/` | CRUD de permissões por usuário |
+| `sponsorPermissionController.ts` | `apps/api-gateway/src/controllers/` | Delegações com prevenção de escalação (`delegations.manage` proibido) |
+
+### 8.3. Modelos MongoDB
+
+| Coleção | Uso |
+|---------|-----|
+| `SponsorOrg` | Organizações sponsor |
+| `SponsorDelegation` | Delegações de permissão entre contas |
+
+### 8.4. Auditoria
+
+`utils/audit.ts` registra toda mudança de permissão com timestamp, actor e diff.
+
+---
+
+## 9. Gamificação (ADR-028)
+
+### 9.1. Achievements (29)
+
+Worker engine em `achievementEngine.ts`, API em `GET /profile/achievements`, frontend `AchievementModal.tsx`, locales pt/en/zh.
+
+| Categoria | Exemplos |
+|-----------|----------|
+| Vitórias | `first_win`, `win_10`, `win_50`, `win_100` |
+| Combos | Completar N combinações |
+| Compras | N cartelas compradas |
+| Partidas | N partidas jogadas |
+| Streak | Dias consecutivos de login |
+| Burns | Queimar N tokens |
+| Golden Win | Vencer com golden ball |
+| Stage Win | Vencer estágio multi-match |
+| Tiers | Alcançar tier específico |
+
+### 9.2. Streak (Login Diário)
+
+`xpEngine.ensureDailyStreak()` — tracking dias consecutivos. Bônus XP = `streakCount × 2`. Achievements: `streak_7`, `streak_14`, `streak_30`. Reset se pular 1 dia.
+
+### 9.3. XP / Level / Tier
+
+| Parâmetro | Valor |
+|-----------|-------|
+| Fórmula | Fibonacci (`PHI = 1.618034`) |
+| `BASE_XP` | 906 |
+| `MAX_LEVEL` | 225 |
+| Tiers (9) | Cobre → Bronze → Prata → Ouro → Platina → Esmeralda → Safira → Rubi → Diamante |
+
+**Fontes de XP:** partida (+ bônus streak), win, combo, burn, compra.
+
+---
+
+## 10. Landing API (ADR-039)
+
+### 10.1. Stack
+
+Azure Function App standalone (Consumption Plan, Node 22) + Aiven PostgreSQL. Código em `apps/landing-page/api/`.
+
+| Componente | Stack |
+|------------|-------|
+| Runtime | Azure Functions v4 (CJS — ESM não funciona no Functions v4) |
+| Banco | Aiven PostgreSQL (free tier, Frankfurt) |
+| Domínio | `landing-api.cryptobingo.bet` (Cloudflare proxy, SSL automático) |
+
+### 10.2. Endpoints
+
+| Rota | Descrição |
+|------|-----------|
+| `GET /api/stats` | Estatísticas públicas |
+| `GET /api/subscribe` | Inscrição newsletter |
+| `POST /api/ideas` | Envio de ideias |
+| `POST /api/votes` | Votação |
+
+### 10.3. Problemas Conhecidos
+
+- **ESM:** Functions v4 não suporta ESM. Compilar `module: "commonjs"`.
+- **pnpm symlinks:** Corrompem zip deploy. Usar `npm install` limpo em `/tmp/fa-prod`.
+- **Aiven SSL:** `sslmode=require` sobrescreve pool config. Manter URL sem `sslmode`, configurar `ssl: { rejectUnauthorized: false }` no Pool.
+
+### 10.4. Deploy Manual
+
+```bash
+# 1. Compilar
+cd apps/landing-page/api && npx tsc
+
+# 2. Montar pacote (npm install limpo)
+rm -rf /tmp/fa-prod && mkdir -p /tmp/fa-prod
+cd /tmp/fa-prod
+jq '{name,version,main,dependencies}' ../apps/landing-page/api/package.json > package.json
+npm install
+mkdir -p _lib ideas votes admin
+cp <api-dir>/{host.json,index.js,stats.js,subscribe.js} ./
+cp <api-dir>/_lib/*.js _lib/
+cp <api-dir>/ideas/*.js ideas/
+cp <api-dir>/votes/*.js votes/
+cp <api-dir>/admin/*.js admin/
+
+# 3. Deploy
+zip -r /tmp/fa-prod.zip .
+az webapp deployment source config-zip --name cryptobingo-landing-api \
+  --resource-group cryptobingo-testnet --src /tmp/fa-prod.zip
+```
+
+---
+
+## 11. swap-ui — DEX BingoGameSWP
+
+### 11.1. Stack
+
+`apps/swap-ui/` — React + Vite + TS. DEX público para o token `BINGOGAMESWP`.
+
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| Swap | Troca entre tokens |
+| Liquidez | Add/remove liquidez |
+| Analytics | Volume, TVL, preço |
+
+### 11.2. Deploy
+
+Azure Static Web Apps. Domínio: `test-swap.cryptobingo.bet`. Incluído na matriz de build CI/CD (GHCR tag `testnet-{sha}`).
+
+---
+
+## 12. Chat em Tempo Real
+
+### 12.1. Componentes
+
+| Pacote | Função |
+|--------|--------|
+| `apps/chat/` | Serviço de chat (segregado do worker) |
+| `RoomChat.tsx` | Componente frontend de chat por sala |
+
+### 12.2. Eventos WS
+
+| Evento | Direção | Descrição |
+|--------|---------|-----------|
+| `chat:message` | S→C | Mensagem de texto |
+| `chat:sponsor_drop` | S→C | Notificação de drop |
+| `send_chat_message` | C→S | Envio de mensagem |
+
+### 12.3. Persistência
+
+Coleção MongoDB `chat_messages` com índice TTL de 7 dias.
+
+---
+
+## 13. Admin UI
+
+Componentes administrativos em `apps/frontend/src/admin/`:
+
+| Componente | Função |
+|-----------|--------|
+| `ContentAdmin.tsx` | CRUD conteúdo editorial (BlockNote) |
+| `GametypesAdmin.tsx` | Gerenciar game types + calibração pesos |
+| `NftAdmin.tsx` | Gerenciar configurações NFT/templates |
+| `RoomsAdmin.tsx` | Gerenciar salas |
+| `CampaignsAdmin.tsx` | Campanhas B2B |
+| `DropVaultAdmin.tsx` | Gerenciar drop vault |
+| `PatternsAdmin.tsx` | Padrões de vitória |
+| `UsersAdmin.tsx` | Gerenciar usuários/permissões |
+| `PermissionsAdmin.tsx` | RBAC |
+| `StatisticsAdmin.tsx` | Dashboard de estatísticas/RTP |
+| `LeaderboardAdmin.tsx` | Leaderboard manual |
+| `AchievementsAdmin.tsx` | Gerenciar achievements |
+| `TiersAdmin.tsx` | Configuração de tiers/XP |
+
+---
+
+## 14. Deploy — Azure (Free Tier Containers)
+
+Infraestrutura migrada de vcluster para Azure free tier:
+
+| Serviço | Azure Resource | Tier |
+|---------|---------------|------|
+| api-gateway | Container App | Consumption |
+| worker-game-loop | Container App | Consumption |
+| frontend | Static Web Apps | Free |
+| swap-ui | Static Web Apps | Free |
+| landing-api | Function App | Consumption |
+| PostgreSQL (landing) | Aiven | Free |
+| MongoDB | MongoDB Atlas (M0) | Free |
+| Redis | Azure Cache for Redis | Basic
