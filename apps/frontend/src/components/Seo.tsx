@@ -16,7 +16,7 @@ const DEFAULT_OG = `${BASE_URL}/brand/og-image.svg`;
 
 function renderJsonLd(data: Record<string, unknown>[]) {
   return data.map((item, i) => (
-    <script key={i} type="application/ld+json">
+    <script key={`ld-${(item as Record<string, string>)['@type'] || String(i)}`} type="application/ld+json">
       {JSON.stringify(item)}
     </script>
   ));

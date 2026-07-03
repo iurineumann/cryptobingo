@@ -87,7 +87,6 @@ export function DailyRewardsModal({ open, onClose }: DailyRewardsModalProps) {
     };
 
     return (
-        <>
         <div
             className="cb-modal-overlay"
             data-testid="daily-rewards-modal"
@@ -100,7 +99,7 @@ export function DailyRewardsModal({ open, onClose }: DailyRewardsModalProps) {
                 role="dialog" // NOSONAR — <dialog> nativo incompatível com CSS do modal
                 aria-modal="true"
                 aria-label={t('daily_rewards.title')}
-                onClick={e => e.stopPropagation()} // NOSONAR — stopPropagation necessário para modal
+                onClick={e => e.stopPropagation()}
                 onKeyDown={handleOverlayKeyDown}
             >
                 <button className="cb-modal-close" onClick={onClose} data-testid="daily-rewards-close" aria-label={t('common.close')}>&times;</button>
@@ -113,6 +112,5 @@ export function DailyRewardsModal({ open, onClose }: DailyRewardsModalProps) {
                 {renderBody()}
             </div>
         </div>
-        </>
     );
 }
