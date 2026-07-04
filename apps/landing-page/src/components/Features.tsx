@@ -13,6 +13,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   trophy: Award,
   users: UserCheck,
   check: ShieldCheck,
+  coins: Coins,
 };
 
 interface FeaturesProps {

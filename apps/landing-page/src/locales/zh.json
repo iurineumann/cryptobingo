@@ -172,6 +172,10 @@
     "coming_soon": "教程即将推出！",
     "back": "返回教程"
   },
+  "page_not_found": "页面未找到",
+  "whitepaper": {
+    "coming_soon": "白皮书即将推出！"
+  },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",
     "home_desc": "在WAX区块链上玩去中心化BINGO。可验证公平，真实奖品，85%回报率。购买彩票，赢取加密货币和NFT。",
@@ -185,6 +189,7 @@
     "press_kit_desc": "品牌资产、截图和指南",
     "tokenomics_title": "代币经济 — CryptoBingo",
     "tokenomics_desc": "经济模型、RTP 85%、代币分配和国库",
+    "page_not_found": "页面未找到 — CryptoBingo",
     "whitepaper_title": "白皮书 — CryptoBingo",
     "whitepaper_desc": "技术白皮书 — 架构、RNG、RTP和经济模型"
   }

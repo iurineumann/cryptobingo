@@ -172,6 +172,10 @@
     "coming_soon": "Tutoriais em breve!",
     "back": "Voltar para tutoriais"
   },
+  "page_not_found": "Página não encontrada",
+  "whitepaper": {
+    "coming_soon": "Whitepaper em breve!"
+  },
   "seo": {
     "home_title": "CryptoBingo — BINGO GameFi On-Chain na WAX",
     "home_desc": "Jogue BINGO descentralizado na blockchain WAX. Provavelmente justo, prêmios reais, 85% RTP. Compre cartelas, ganhe cripto e NFTs.",
@@ -185,6 +189,7 @@
     "press_kit_desc": "Assets da marca, screenshots e diretrizes",
     "tokenomics_title": "Tokenomics — CryptoBingo",
     "tokenomics_desc": "Modelo econômico, RTP 85%, distribuição de tokens e tesouro",
+    "page_not_found": "Página Não Encontrada — CryptoBingo",
     "whitepaper_title": "Whitepaper — CryptoBingo",
     "whitepaper_desc": "Whitepaper técnico — arquitetura, RNG, RTP e modelo econômico"
   }
