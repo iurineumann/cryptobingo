@@ -132,6 +132,9 @@ import {
   getLeaderboardXp,
 } from "./controllers/leaderboardController";
 import { createCorsOptions, getAllowedOrigins } from "./cors";
+import { requestIdMiddleware } from "./middleware/requestId";
+import { logger } from "./middleware/logger";
+import pinoHttp from "pino-http";
 
 import {
   listContent,
@@ -218,6 +221,10 @@ async function bootstrap(): Promise<void> {
 function registerMiddleware(): void {
   // Métricas Prometheus — antes de todos os handlers para capturar 100% das requisições
   app.use(metricsMiddleware);
+
+  // Request ID + Logger estruturado (pino) — antes de tudo para capturar req/res completas
+  app.use(requestIdMiddleware);
+  app.use(pinoHttp({ logger, quietReqLogger: true }));
 
   // Helmet — headers de segurança HTTP
   // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
