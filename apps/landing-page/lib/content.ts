@@ -108,7 +108,7 @@ export function loadBlogPosts(locale: string = 'pt'): BlogPost[] {
       author: data.author || '',
       cover: data.cover || '',
       tags: data.tags || [],
-      body: content.trim(),
+      body: String(marked.parse(content.trim())),
     } satisfies BlogPost;
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }

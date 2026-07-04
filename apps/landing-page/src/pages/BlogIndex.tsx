@@ -5,6 +5,7 @@ import type { BlogPost as BlogPostType } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 export async function loader({ params }: { params: { locale?: string } }): Promise<{ posts: BlogPostType[] }> {
   const locale = params.locale || 'en';
@@ -16,6 +17,7 @@ export default function BlogIndex() {
   const { posts } = useLoaderData<typeof loader>();
   const { locale } = useParams();
   const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
@@ -30,6 +32,7 @@ export default function BlogIndex() {
             <Link
               key={post.slug}
               to={`/${lang}/blog/${post.slug}`}
+              onClick={() => trackEvent('blog_click', { post_slug: post.slug, post_title: post.title })}
               className="block bg-surface-800 rounded-xl p-6 border border-surface-700/50 hover:border-surface-500 transition-all"
             >
               <h2 className="text-xl font-semibold text-white mb-2">{post.title}</h2>

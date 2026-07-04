@@ -5,6 +5,7 @@ import type { FAQItem } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 export async function loader({ params }: { params: { locale?: string } }): Promise<{ items: FAQItem[] }> {
   const locale = params.locale || 'en';
@@ -16,6 +17,7 @@ export default function FaqPage() {
   const { items } = useLoaderData<typeof loader>();
   const { locale } = useParams();
   const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
@@ -32,6 +34,10 @@ export default function FaqPage() {
           {items.map((item) => (
             <details
               key={item.slug}
+              onToggle={(e) => {
+                const action = (e.target as HTMLDetailsElement).open ? 'open' : 'close';
+                trackEvent('faq_toggle', { question_slug: item.slug, action });
+              }}
               className="group bg-surface-800 rounded-xl border border-surface-700/50 overflow-hidden"
             >
               <summary className="flex items-center justify-between p-5 cursor-pointer hover:bg-surface-750 transition-colors list-none">

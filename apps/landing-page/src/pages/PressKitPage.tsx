@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 const brandColors = [
   { label: 'Primary', hex: '#8B5CF6' },
@@ -15,6 +16,7 @@ export default function PressKitPage() {
   const { t } = useTranslation();
   const { locale } = useParams();
   const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
@@ -77,18 +79,21 @@ export default function PressKitPage() {
           <div className="flex flex-wrap gap-4">
             <button
               data-testid="download-logo"
+              onClick={() => trackEvent('press_kit_download', { item: 'logo' })}
               className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-medium transition-colors cursor-pointer"
             >
               {t('press_kit.download_logo')}
             </button>
             <button
               data-testid="download-icon"
+              onClick={() => trackEvent('press_kit_download', { item: 'icon' })}
               className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium transition-colors cursor-pointer"
             >
               {t('press_kit.download_icon')}
             </button>
             <button
               data-testid="download-screenshots"
+              onClick={() => trackEvent('press_kit_download', { item: 'screenshots' })}
               className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors cursor-pointer"
             >
               {t('press_kit.download_screenshots')}

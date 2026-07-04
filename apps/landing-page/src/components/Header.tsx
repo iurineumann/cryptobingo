@@ -4,6 +4,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NextDrawTimer from '@/components/NextDrawTimer';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 type NavLinkItem =
   | { type: 'internal'; label: string; href: string }
@@ -31,6 +32,7 @@ export default function Header() {
   const drawerRef = useRef<HTMLDivElement>(null);
 
   const currentLocale = useSegmentLocale(location.pathname) || 'en';
+  const { trackEvent } = useAnalytics(currentLocale);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -62,6 +64,7 @@ export default function Header() {
   }, [location.pathname]);
 
   function switchLocale(code: string) {
+    trackEvent('locale_switch', { from_locale: currentLocale, to_locale: code, source: 'header' });
     i18n.changeLanguage(code);
     setLangOpen(false);
     const path = location.pathname.replace(/^\/(en|pt|zh)/, `/${code}`);
@@ -71,6 +74,7 @@ export default function Header() {
   const navLinks: NavLinkItem[] = [
     { type: 'external', label: t('nav.testnet'), href: 'https://test.cryptobingo.bet' },
     { type: 'internal', label: t('nav.ideas'), href: '/ideas' },
+    { type: 'internal', label: t('nav.tutorials'), href: `/${currentLocale}/tutorials` },
     { type: 'external', label: t('nav.github'), href: 'https://github.com/iurineumann/cryptobingo' },
     { type: 'external', label: t('nav.telegram'), href: 'https://t.me/cryptobingo_bet' },
     { type: 'external', label: t('nav.twitter'), href: 'https://x.com/CryptoBingo_Bet' },
@@ -86,12 +90,13 @@ export default function Header() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6" data-testid="desktop-nav">
-          {navLinks.map((link) => {
+            {navLinks.map((link) => {
             if (link.type === 'internal') {
               return (
                 <NavLink
                   key={link.label}
                   to={link.href}
+                  onClick={() => trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: link.type })}
                   className={({ isActive }) =>
                     cn(
                       'text-sm text-slate-400 hover:text-white transition-colors',
@@ -119,6 +124,7 @@ export default function Header() {
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: link.type })}
                 className="text-sm text-slate-400 hover:text-white transition-colors"
               >
                 {link.label}
@@ -155,6 +161,7 @@ export default function Header() {
             target="_blank"
             rel="noopener noreferrer"
             data-testid="mobile-cta"
+            onClick={() => trackEvent('cta_click', { cta_location: 'header' })}
             className="bg-accent-400 text-surface-900 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-accent-300 transition whitespace-nowrap"
           >
             {t('hero.cta_text')}
@@ -186,7 +193,10 @@ export default function Header() {
                   <NavLink
                     key={link.label}
                     to={link.href}
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => {
+                      trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: link.type });
+                      setMobileOpen(false);
+                    }}
                     className={({ isActive }) =>
                       cn(
                         'text-base text-slate-400 hover:text-white transition-colors py-2',
@@ -214,6 +224,9 @@ export default function Header() {
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => {
+                    trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: link.type });
+                  }}
                   className="text-base text-slate-400 hover:text-white transition-colors py-2"
                 >
                   {link.label}
@@ -250,6 +263,7 @@ export default function Header() {
               target="_blank"
               rel="noopener noreferrer"
               data-testid="mobile-cta-drawer"
+              onClick={() => trackEvent('cta_click', { cta_location: 'drawer' })}
               className="mt-4 bg-accent-400 text-surface-900 font-semibold text-center px-6 py-3 rounded-xl hover:bg-accent-300 transition"
             >
               {t('hero.cta_text')}

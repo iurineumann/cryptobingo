@@ -5,6 +5,7 @@ import type { TutorialItem } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 export async function loader({ params }: { params: { locale?: string } }): Promise<{ items: TutorialItem[] }> {
   const locale = params.locale || 'en';
@@ -16,6 +17,7 @@ export default function TutorialsIndex() {
   const { items } = useLoaderData<typeof loader>();
   const { locale } = useParams();
   const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
@@ -33,6 +35,7 @@ export default function TutorialsIndex() {
               <Link
                 key={item.slug}
                 to={`/${lang}/tutorials/${item.slug}`}
+                onClick={() => trackEvent('tutorial_click', { tutorial_slug: item.slug })}
                 className="block p-6 bg-surface-800 rounded-xl border border-surface-700/50 hover:border-accent-500/30 transition-all"
               >
                 <h2 className="text-xl font-semibold text-white mb-2">{item.title}</h2>
