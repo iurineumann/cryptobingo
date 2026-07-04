@@ -171,6 +171,11 @@
   "blog": {
     "back": "← Back to Blog"
   },
+  "tutorial": {
+    "step": "Step {{current}} of {{total}}",
+    "previous": "← Previous",
+    "next": "Next →"
+  },
   "tutorials": {
     "coming_soon": "Tutorials coming soon!",
     "back": "Back to tutorials"

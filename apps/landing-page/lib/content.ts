@@ -123,6 +123,7 @@ interface TutorialItem {
   description: string;
   body: string;
   slug: string;
+  order: number;
 }
 
 export function loadTutorials(locale: string = 'en'): TutorialItem[] {
@@ -139,8 +140,9 @@ export function loadTutorials(locale: string = 'en'): TutorialItem[] {
       title: data.title || '',
       description: data.description || '',
       body: content.trim(),
+      order: data.order || 99,
     } satisfies TutorialItem;
-  });
+  }).sort((a, b) => a.order - b.order);
 }
 
 export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialItem | null {
@@ -153,6 +155,7 @@ export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialI
     title: data.title || '',
     description: data.description || '',
     body: marked.parse(content.trim()),
+    order: data.order || 99,
   };
 }
 

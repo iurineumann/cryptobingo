@@ -171,6 +171,11 @@
   "blog": {
     "back": "← 返回博客"
   },
+  "tutorial": {
+    "step": "第 {{current}} 步，共 {{total}} 步",
+    "previous": "← 上一步",
+    "next": "下一步 →"
+  },
   "tutorials": {
     "coming_soon": "教程即将推出！",
     "back": "返回教程"
