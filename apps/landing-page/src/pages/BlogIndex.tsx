@@ -5,11 +5,29 @@ import type { BlogPost as BlogPostType } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { TagFilter } from '@/components/TagFilter';
+import { Pagination } from '@/components/Pagination';
 import { useAnalytics } from '@/hooks/useAnalytics';
 
-export async function loader({ params }: { params: { locale?: string } }): Promise<{ posts: BlogPostType[] }> {
+export async function loader({ params, request }: { params: { locale?: string }; request: Request }): Promise<{
+  posts: BlogPostType[];
+  totalPages: number;
+  currentPage: number;
+  activeTag: string | null;
+  allTags: string[];
+}> {
   const locale = params.locale || 'en';
-  return { posts: loadBlogPosts(locale) };
+  const url = new URL(request.url);
+  const tag = url.searchParams.get('tag');
+  const page = parseInt(url.searchParams.get('page') || '1', 10);
+  const posts = loadBlogPosts(locale);
+  const filtered = tag ? posts.filter(p => p.tags?.includes(tag)) : posts;
+  const pageSize = 12;
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const allTags = [...new Set(posts.flatMap(p => p.tags || []))];
+  return { posts: paged, totalPages, currentPage: page, activeTag: tag, allTags };
 }
 
 function formatDate(dateStr: string, locale: string): string {
@@ -20,7 +38,7 @@ function formatDate(dateStr: string, locale: string): string {
 
 export default function BlogIndex() {
   const { t } = useTranslation();
-  const { posts } = useLoaderData<typeof loader>();
+  const { posts, totalPages, currentPage, activeTag, allTags } = useLoaderData<typeof loader>();
   const { locale } = useParams();
   const lang = locale || 'en';
   const { trackEvent } = useAnalytics(lang);
@@ -30,9 +48,20 @@ export default function BlogIndex() {
       <Seo title={t('seo.blog_title')} description={t('seo.blog_desc')} canonical={`/${lang}/blog`} />
       <Header />
       <main id="main-content" className="max-w-6xl mx-auto px-4 py-20">
+        <Breadcrumbs
+          segments={[
+            { label: t('nav.home'), href: `/${lang}` },
+            { label: t('nav.blog') },
+          ]}
+        />
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
           {t('seo.blog_title')}
         </h1>
+
+        {allTags.length > 0 && (
+          <TagFilter tags={allTags} activeTag={activeTag} basePath={`/${lang}/blog`} />
+        )}
+
         <div data-testid="blog-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {posts.map((post) => (
             <Link
@@ -79,6 +108,8 @@ export default function BlogIndex() {
             </Link>
           ))}
         </div>
+
+        <Pagination current={currentPage} total={totalPages} basePath={`/${lang}/blog`} />
       </main>
       <Footer />
     </>

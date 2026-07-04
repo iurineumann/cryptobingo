@@ -4,14 +4,17 @@ import BlogPost from '../BlogPost';
 
 vi.mock('react-router-dom', () => ({
   useLoaderData: () => ({
-    title: 'Test Post',
-    description: 'Test description',
-    date: '2024-01-01',
-    author: 'Author Name',
-    cover: '/cover.jpg',
-    tags: ['tag1', 'tag2'],
-    body: '<p>Hello world</p>',
-    slug: 'test-post',
+    post: {
+      title: 'Test Post',
+      description: 'Test description',
+      date: '2024-01-01',
+      author: 'Author Name',
+      cover: '/cover.jpg',
+      tags: ['tag1', 'tag2'],
+      body: '<p>Hello world</p>',
+      slug: 'test-post',
+    },
+    relatedPosts: [],
   }),
   useParams: () => ({ slug: 'test', locale: 'en' }),
 }));

@@ -221,4 +221,44 @@ export function getAllPageSlugs(locale: string): string[] {
     .filter(slug => VALID_PAGE_SLUGS.has(slug));
 }
 
+export interface RelatedPost {
+  title: string;
+  slug: string;
+  cover?: string;
+}
+
+function jaccardSimilarity(a: string[], b: string[]): number {
+  if (!a.length || !b.length) return 0;
+  const intersection = a.filter(x => b.includes(x)).length;
+  const union = new Set([...a, ...b]).size;
+  return intersection / union;
+}
+
+export function computeRelatedPosts(
+  slug: string,
+  locale: string,
+  type: 'blog' | 'tutorial' = 'blog'
+): RelatedPost[] {
+  const loadFn = type === 'blog' ? loadBlogPosts : loadTutorials;
+  const allPosts = loadFn(locale);
+  const current = allPosts.find((p: any) => p.slug === slug);
+  if (!current) return [];
+
+  if ((current as any).related?.length) {
+    return allPosts
+      .filter((p: any) => (current as any).related.includes(p.slug))
+      .map((p: any) => ({ title: p.title, slug: p.slug, cover: p.cover }));
+  }
+
+  return allPosts
+    .filter((p: any) => p.slug !== slug)
+    .map((p: any) => ({
+      post: p,
+      score: jaccardSimilarity(p.tags || [], current.tags || []),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(r => ({ title: r.post.title, slug: r.post.slug, cover: r.post.cover }));
+}
+
 export type { BlogPost, FAQItem, HomeSettings, PageContent, TutorialItem };

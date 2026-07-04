@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { useLoaderData, useParams } from 'react-router-dom';
-import { loadTutorialPost, loadTutorials } from '../../lib/content';
-import type { TutorialItem } from '../../lib/content';
+import { loadTutorialPost, loadTutorials, computeRelatedPosts } from '../../lib/content';
+import type { TutorialItem, RelatedPost } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
 import { ContentHeader } from '@/components/ContentHeader';
 import { ContentBody } from '@/components/ContentBody';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { RelatedContent } from '@/components/RelatedContent';
 
 export async function loader({ params }: { params: { locale?: string; slug: string } }): Promise<{
   tutorial: TutorialItem;
@@ -14,6 +16,7 @@ export async function loader({ params }: { params: { locale?: string; slug: stri
   next: TutorialItem | null;
   total: number;
   current: number;
+  relatedTutorials: RelatedPost[];
 } | null> {
   const locale = params.locale || 'en';
   const tutorial = loadTutorialPost(params.slug, locale);
@@ -23,8 +26,9 @@ export async function loader({ params }: { params: { locale?: string; slug: stri
   const idx = all.findIndex(t => t.slug === params.slug);
   const previous = idx > 0 ? all[idx - 1] : null;
   const next = idx < all.length - 1 ? all[idx + 1] : null;
+  const relatedTutorials = computeRelatedPosts(params.slug, locale, 'tutorial');
 
-  return { tutorial, previous, next, total: all.length, current: idx + 1 };
+  return { tutorial, previous, next, total: all.length, current: idx + 1, relatedTutorials };
 }
 
 export default function TutorialPost() {
@@ -51,13 +55,20 @@ export default function TutorialPost() {
     );
   }
 
-  const { tutorial, previous, next, total, current } = data;
+  const { tutorial, previous, next, total, current, relatedTutorials } = data;
 
   return (
     <>
       <Seo title={tutorial.title} description={tutorial.description} canonical={`/${lang}/tutorials/${slug}`} />
       <Header />
       <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
+        <Breadcrumbs
+          segments={[
+            { label: t('nav.home'), href: `/${lang}` },
+            { label: t('nav.tutorials'), href: `/${lang}/tutorials` },
+            { label: tutorial.title },
+          ]}
+        />
         <article>
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
@@ -111,6 +122,8 @@ export default function TutorialPost() {
             </div>
           </nav>
         </article>
+
+        <RelatedContent items={relatedTutorials} type="tutorial" locale={lang} />
       </main>
       <Footer />
     </>

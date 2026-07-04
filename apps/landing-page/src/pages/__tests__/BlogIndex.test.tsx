@@ -25,6 +25,10 @@ vi.mock('react-router-dom', () => ({
         author: 'Admin',
       },
     ],
+    totalPages: 1,
+    currentPage: 1,
+    activeTag: null,
+    allTags: ['launch', 'wax'],
   }),
   Link: ({ children, to, onClick }: { children: React.ReactNode; to: string; onClick?: React.MouseEventHandler }) => (
     <a href={to} onClick={onClick}>{children}</a>
@@ -60,8 +64,9 @@ describe('BlogIndex', () => {
 
   it('should render tag chips', () => {
     render(<BlogIndex />);
-    expect(screen.getByText('launch')).toBeInTheDocument();
-    expect(screen.getByText('wax')).toBeInTheDocument();
+    const grid = screen.getByTestId('blog-grid');
+    expect(grid).toHaveTextContent('launch');
+    expect(grid).toHaveTextContent('wax');
   });
 
   it('should render metadata line with date and author', () => {

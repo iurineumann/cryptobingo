@@ -15,6 +15,7 @@ vi.mock('react-router-dom', () => ({
     next: null,
     total: 1,
     current: 1,
+    relatedTutorials: [],
   }),
   useParams: () => ({ slug: 'test-tutorial', locale: 'en' }),
 }));
