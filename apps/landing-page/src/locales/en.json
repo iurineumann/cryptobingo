@@ -168,6 +168,9 @@
     "rtp": "Current RTP",
     "loading": "Live stats — testnet active"
   },
+  "blog": {
+    "back": "← Back to Blog"
+  },
   "tutorials": {
     "coming_soon": "Tutorials coming soon!",
     "back": "Back to tutorials"

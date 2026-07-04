@@ -168,6 +168,9 @@
     "rtp": "当前RTP",
     "loading": "实时统计 — 测试网已激活"
   },
+  "blog": {
+    "back": "← 返回博客"
+  },
   "tutorials": {
     "coming_soon": "教程即将推出！",
     "back": "返回教程"
