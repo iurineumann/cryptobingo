@@ -7,19 +7,20 @@ export function useSectionVisibility(
   locale?: string,
 ): void {
   const firedSections = useRef(new Set<string>());
+  const sectionRefsRef = useRef(sectionRefs);
+  sectionRefsRef.current = sectionRefs;
+  const sectionNamesRef = useRef(sectionNames);
+  sectionNamesRef.current = sectionNames;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
-
-          const idx = sectionRefs.findIndex((ref) => ref.current === entry.target);
+          const idx = sectionRefsRef.current.findIndex((ref) => ref.current === entry.target);
           if (idx === -1) continue;
-
-          const name = sectionNames[idx];
+          const name = sectionNamesRef.current[idx];
           if (firedSections.current.has(name)) continue;
-
           firedSections.current.add(name);
           trackEvent('section_visibility', { section: name, action: 'view', locale });
         }
@@ -27,10 +28,10 @@ export function useSectionVisibility(
       { threshold: 0.3 },
     );
 
-    for (const ref of sectionRefs) {
+    for (const ref of sectionRefsRef.current) {
       if (ref.current) observer.observe(ref.current);
     }
 
     return () => observer.disconnect();
-  }, [trackEvent, sectionRefs, sectionNames, locale]);
+  }, [trackEvent, locale]);
 }
