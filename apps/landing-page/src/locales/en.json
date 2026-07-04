@@ -92,6 +92,12 @@
   "redirect": {
     "redirecting": "Redirecting..."
   },
+  "stats": {
+    "games_played": "Games Played",
+    "prizes_paid": "Prizes Paid",
+    "active_players": "Active Players",
+    "rtp": "Current RTP"
+  },
   "seo": {
     "home_title": "CryptoBingo — On-Chain BINGO GameFi on WAX",
     "home_desc": "Play decentralized BINGO on WAX blockchain. Provably fair, real prizes, 85% RTP. Buy tickets, win crypto and NFTs.",

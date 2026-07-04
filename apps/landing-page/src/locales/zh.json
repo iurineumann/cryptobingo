@@ -92,6 +92,12 @@
   "redirect": {
     "redirecting": "重定向中..."
   },
+  "stats": {
+    "games_played": "已进行游戏",
+    "prizes_paid": "已支付奖品",
+    "active_players": "活跃玩家",
+    "rtp": "当前RTP"
+  },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",
     "home_desc": "在WAX区块链上玩去中心化BINGO。可验证公平，真实奖品，85%回报率。购买彩票，赢取加密货币和NFT。",
