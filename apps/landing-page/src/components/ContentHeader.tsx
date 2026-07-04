@@ -1,7 +1,7 @@
 import { ContentHeaderProps } from '../types/content';
 
 export function ContentHeader({
-  title, description, cover, author, date, tags, readTime,
+  title, description, cover, author, date, tags, readTime, readTimeLabel,
 }: ContentHeaderProps) {
   return (
     <header className="mb-8">
@@ -30,7 +30,7 @@ export function ContentHeader({
           </>
         )}
         <span aria-hidden="true">·</span>
-        <span>{readTime} min de leitura</span>
+        <span>{readTimeLabel ?? `${readTime} min de leitura`}</span>
       </div>
       {tags && tags.length > 0 && (
         <div className="flex flex-wrap gap-2">

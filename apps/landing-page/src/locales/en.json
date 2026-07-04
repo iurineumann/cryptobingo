@@ -168,6 +168,9 @@
     "rtp": "Current RTP",
     "loading": "Live stats — testnet active"
   },
+  "content": {
+    "readTime": "{{count}} min read"
+  },
   "blog": {
     "back": "← Back to Blog"
   },

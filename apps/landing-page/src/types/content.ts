@@ -6,4 +6,5 @@ export interface ContentHeaderProps {
   date?: string;
   tags?: string[];
   readTime: number;
+  readTimeLabel?: string;
 }

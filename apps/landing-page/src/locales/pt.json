@@ -168,6 +168,9 @@
     "rtp": "RTP Atual",
     "loading": "Estatísticas reais — testnet ativa"
   },
+  "content": {
+    "readTime": "{{count}} min de leitura"
+  },
   "blog": {
     "back": "← Voltar para Blog"
   },

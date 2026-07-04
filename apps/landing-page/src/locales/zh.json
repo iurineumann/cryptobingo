@@ -168,6 +168,9 @@
     "rtp": "当前RTP",
     "loading": "实时统计 — 测试网已激活"
   },
+  "content": {
+    "readTime": "{{count}} 分钟阅读"
+  },
   "blog": {
     "back": "← 返回博客"
   },
