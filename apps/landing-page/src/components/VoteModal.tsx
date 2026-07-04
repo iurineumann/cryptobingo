@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect, useRef } from 'react';
 import { X, CircleCheck, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn, validateEmail } from '@/lib/utils';
 import { requestVote, confirmVote } from '@/lib/api';
@@ -18,6 +18,36 @@ export default function VoteModal({ isOpen, ideaId, onClose }: VoteModalProps) {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            previousFocusRef.current = document.activeElement as HTMLElement;
+            const firstInput = dialogRef.current?.querySelector<HTMLElement>('input, button, [tabindex]:not([tabindex="-1"])');
+            firstInput?.focus();
+        } else if (previousFocusRef.current) {
+            previousFocusRef.current.focus();
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        function handleKey(e: KeyboardEvent) {
+            if (e.key === 'Escape') { reset(); onClose(); return; }
+            if (e.key !== 'Tab' || !dialogRef.current) return;
+            const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [isOpen, onClose]);
 
     if (!isOpen) return null;
 
@@ -86,9 +116,12 @@ export default function VoteModal({ isOpen, ideaId, onClose }: VoteModalProps) {
             role="presentation"
         >
             <div
-                className="bg-surface-800 rounded-xl p-6 max-w-md w-full shadow-modal border border-surface-700/50 relative"
+                ref={dialogRef}
+                tabIndex={-1}
+                className="bg-surface-800 rounded-xl p-6 max-w-md w-full shadow-modal border border-surface-700/50 relative outline-none"
                 role="dialog"
                 aria-modal="true"
+                aria-label="Vote modal"
             >
                 <button
                     onClick={handleClose}
