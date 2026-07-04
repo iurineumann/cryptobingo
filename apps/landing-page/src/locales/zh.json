@@ -172,6 +172,24 @@
     "coming_soon": "教程即将推出！",
     "back": "返回教程"
   },
+  "wallet": {
+    "title": "连接您的钱包",
+    "desc": "连接您的WAX钱包即可游戏、赢奖和提现 — 全链上，全可验证。",
+    "value_secure_title": "安全可靠",
+    "value_secure_desc": "所有交易均在钱包中签名。每次开奖均在链上验证。",
+    "value_instant_title": "即开即玩",
+    "value_instant_desc": "无需存款，无需等待。直接用您的WAX余额购买彩票。",
+    "value_withdraw_title": "自动提现",
+    "value_withdraw_desc": "奖金直接发送到您的钱包，无需手动领取。",
+    "step1": "安装Anchor或WAX Cloud Wallet",
+    "step2": "连接到CryptoBingo",
+    "step3": "购买彩票并开始游戏"
+  },
+  "activity_feed": {
+    "title": "最新获胜",
+    "item_prize": "{{prize}} WUF",
+    "pending": "等待中..."
+  },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",
     "home_desc": "在WAX区块链上玩去中心化BINGO。可验证公平，真实奖品，85%回报率。购买彩票，赢取加密货币和NFT。",

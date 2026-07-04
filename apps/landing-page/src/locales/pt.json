@@ -172,6 +172,24 @@
     "coming_soon": "Tutoriais em breve!",
     "back": "Voltar para tutoriais"
   },
+  "wallet": {
+    "title": "Conecte sua Carteira",
+    "desc": "Conecte sua carteira WAX para jogar, ganhar e sacar — tudo on-chain, tudo verificável.",
+    "value_secure_title": "Seguro & Verificável",
+    "value_secure_desc": "Todas as transações assinadas na sua carteira. Cada sorteio verificado on-chain.",
+    "value_instant_title": "Jogue Instantaneamente",
+    "value_instant_desc": "Sem depósitos, sem espera. Compre cartelas diretamente com seu saldo WAX.",
+    "value_withdraw_title": "Saques Automáticos",
+    "value_withdraw_desc": "Prêmios enviados direto para sua carteira. Sem necessidade de resgate manual.",
+    "step1": "Instale Anchor ou WAX Cloud Wallet",
+    "step2": "Conecte-se ao CryptoBingo",
+    "step3": "Compre cartelas e jogue"
+  },
+  "activity_feed": {
+    "title": "Últimas Vitórias",
+    "item_prize": "{{prize}} WUF",
+    "pending": "Pendente..."
+  },
   "seo": {
     "home_title": "CryptoBingo — BINGO GameFi On-Chain na WAX",
     "home_desc": "Jogue BINGO descentralizado na blockchain WAX. Provavelmente justo, prêmios reais, 85% RTP. Compre cartelas, ganhe cripto e NFTs.",

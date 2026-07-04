@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "bundle:report": "node scripts/bundle-report.mjs",
+    "lighthouse": "node scripts/lighthouse-audit.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -43,6 +45,8 @@
     "@types/react-helmet-async": "^1.0.3",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^29.1.1",
+    "lighthouse": "^13.4.0",
+    "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",

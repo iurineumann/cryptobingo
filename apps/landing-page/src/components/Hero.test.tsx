@@ -39,4 +39,14 @@ describe('Hero', () => {
     expect(cta).toHaveAttribute('target', '_blank');
     expect(cta).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('renders game screenshot image section', () => {
+    render(<Hero />);
+    expect(screen.getByTestId('hero-image')).toBeInTheDocument();
+  });
+
+  it('renders play overlay button', () => {
+    render(<Hero />);
+    expect(screen.getByTestId('hero-play-overlay')).toBeInTheDocument();
+  });
 });

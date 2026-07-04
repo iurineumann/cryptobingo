@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Gamepad2, Coins, Users, Percent } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getGameStats } from '@/lib/api';
@@ -17,10 +17,11 @@ function formatCompact(n: number): string {
 
 export default function StatsBar() {
     const { t } = useTranslation();
+    const ref = useRef<HTMLDivElement>(null);
     const [statsData, setStatsData] = useState<GameStat[] | null>(null);
     const [animCounts, setAnimCounts] = useState<number[]>([0, 0, 0, 0]);
+    const [hasAnimated, setHasAnimated] = useState(false);
 
-    // Tenta API real, fallback para mock se falhar
     useEffect(() => {
         getGameStats()
             .then((data) => {
@@ -44,25 +45,50 @@ export default function StatsBar() {
     ];
 
     useEffect(() => {
-        const targets = displayStats.map(s => s.value ?? 0);
-        const duration = 1200;
-        const steps = 30;
-        let step = 0;
+        if (!ref.current || hasAnimated) return;
 
-        const timer = setInterval(() => {
-            step++;
-            setAnimCounts(targets.map(t => Math.min(Math.floor((t / steps) * step), t)));
-            if (step >= steps) clearInterval(timer);
-        }, duration / steps);
+        const node = ref.current;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setHasAnimated(true);
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.3 }
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [statsData, hasAnimated]);
 
-        return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statsData]);
+    useEffect(() => {
+        if (!hasAnimated) return;
+
+        const targets = displayStats.map((s) => s.value ?? 0);
+        const duration = 2000;
+        let start: number | null = null;
+
+        function step(ts: number) {
+            if (!start) start = ts;
+            const elapsed = ts - start;
+            const progress = Math.min(elapsed / duration, 1);
+
+            setAnimCounts(targets.map((t) => Math.floor(t * progress)));
+
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            } else {
+                setAnimCounts(targets);
+            }
+        }
+
+        requestAnimationFrame(step);
+    }, [hasAnimated, statsData]);
 
     const hasData = displayStats[0].value !== null;
 
     return (
-        <section className="py-12 bg-brand-700">
+        <section ref={ref} className="py-12 bg-brand-700">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                     {displayStats.map((s, i) => {

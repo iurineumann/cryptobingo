@@ -172,6 +172,24 @@
     "coming_soon": "Tutorials coming soon!",
     "back": "Back to tutorials"
   },
+  "wallet": {
+    "title": "Connect Your Wallet",
+    "desc": "Connect your WAX wallet to play, win, and withdraw — all on-chain, all verifiable.",
+    "value_secure_title": "Secure & Verifiable",
+    "value_secure_desc": "All transactions signed in your wallet. Every draw verified on-chain.",
+    "value_instant_title": "Instant Play",
+    "value_instant_desc": "No deposits, no waiting. Buy tickets directly with your WAX balance.",
+    "value_withdraw_title": "Auto Withdrawals",
+    "value_withdraw_desc": "Winnings sent straight to your wallet. No manual claims needed.",
+    "step1": "Install Anchor or WAX Cloud Wallet",
+    "step2": "Connect to CryptoBingo",
+    "step3": "Buy tickets and play"
+  },
+  "activity_feed": {
+    "title": "Latest Wins",
+    "item_prize": "{{prize}} WUF",
+    "pending": "Pending..."
+  },
   "seo": {
     "home_title": "CryptoBingo — On-Chain BINGO GameFi on WAX",
     "home_desc": "Play decentralized BINGO on WAX blockchain. Provably fair, real prizes, 85% RTP. Buy tickets, win crypto and NFTs.",
