@@ -12,9 +12,9 @@ interface HeroProps {
 export default function Hero({ hero }: HeroProps) {
   const { t } = useTranslation();
   const h = hero || {
-    title: 'Provably Fair BINGO on the Blockchain',
-    subtitle: 'CryptoBingo brings the classic game of BINGO to Web3. Every draw is verifiable, every prize is real, and every game is fair.',
-    cta_text: 'Play Now',
+    title: t('hero.title'),
+    subtitle: t('hero.subtitle'),
+    cta_text: t('hero.cta_text'),
     cta_link: 'https://test.cryptobingo.bet',
   };
 
@@ -25,27 +25,34 @@ export default function Hero({ hero }: HeroProps) {
         <div className="absolute top-1/3 right-1/4 w-[300px] h-[300px] rounded-full bg-accent-500/5 blur-3xl" />
       </div>
       <div className="relative max-w-7xl mx-auto px-4 py-20">
-        <span className="inline-block rounded-full bg-brand-500/10 text-brand-300 text-xs px-3 py-1 mb-4">
-          {t('hero.badge')}
-        </span>
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="inline-block rounded-full bg-brand-500/10 text-brand-300 text-xs px-3 py-1">
+            {t('hero.badge')}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/10 text-accent-300 text-xs font-semibold px-3 py-1">
+            RTP 85%
+          </span>
+        </div>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-white max-w-4xl">
           {h.title}
         </h1>
         <p className="mt-4 text-lg sm:text-xl text-slate-400 max-w-2xl">
           {h.subtitle}
         </p>
-        <div className="mt-8 flex flex-wrap gap-4">
+        <div className="mt-8 flex flex-col sm:flex-row items-start gap-3">
           <a
             href={h.cta_link}
             target="_blank"
             rel="noopener noreferrer"
+            data-testid="hero-cta"
             className="inline-flex items-center bg-accent-400 text-surface-900 font-semibold px-6 py-3 rounded-xl hover:bg-accent-300 transition shadow-glow-accent"
           >
             {h.cta_text}
           </a>
           <a
             href="#features"
-            className="inline-flex items-center border border-surface-500 text-white px-6 py-3 rounded-xl hover:bg-surface-800 transition"
+            data-testid="hero-learn-more"
+            className="text-sm text-slate-400 hover:text-white transition-colors"
           >
             {t('hero.learn_more')}
           </a>
