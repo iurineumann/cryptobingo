@@ -172,9 +172,23 @@
     "coming_soon": "教程即将推出！",
     "back": "返回教程"
   },
-  "page_not_found": "页面未找到",
-  "whitepaper": {
-    "coming_soon": "白皮书即将推出！"
+  "wallet": {
+    "title": "连接您的钱包",
+    "desc": "连接您的WAX钱包即可游戏、赢奖和提现 — 全链上，全可验证。",
+    "value_secure_title": "安全可靠",
+    "value_secure_desc": "所有交易均在钱包中签名。每次开奖均在链上验证。",
+    "value_instant_title": "即开即玩",
+    "value_instant_desc": "无需存款，无需等待。直接用您的WAX余额购买彩票。",
+    "value_withdraw_title": "自动提现",
+    "value_withdraw_desc": "奖金直接发送到您的钱包，无需手动领取。",
+    "step1": "安装Anchor或WAX Cloud Wallet",
+    "step2": "连接到CryptoBingo",
+    "step3": "购买彩票并开始游戏"
+  },
+  "activity_feed": {
+    "title": "最新获胜",
+    "item_prize": "{{prize}} WUF",
+    "pending": "等待中..."
   },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",
@@ -189,7 +203,6 @@
     "press_kit_desc": "品牌资产、截图和指南",
     "tokenomics_title": "代币经济 — CryptoBingo",
     "tokenomics_desc": "经济模型、RTP 85%、代币分配和国库",
-    "page_not_found": "页面未找到 — CryptoBingo",
     "whitepaper_title": "白皮书 — CryptoBingo",
     "whitepaper_desc": "技术白皮书 — 架构、RNG、RTP和经济模型"
   }

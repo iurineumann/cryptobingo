@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import Header from '../Header';
 
 const mockChangeLanguage = vi.fn();
@@ -18,7 +18,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/components/NextDrawTimer', () => ({
-  default: () => <span data-testid="next-draw-timer" />,
+  default: ({ compact }: { compact?: boolean }) => <span data-testid="next-draw-timer" data-compact={compact ? 'true' : ''} />,
 }));
 
 describe('Header', () => {
@@ -30,7 +30,8 @@ describe('Header', () => {
 
   it('should push nav_click on desktop nav link click', () => {
     render(<Header />);
-    const ideasLink = screen.getByText('nav.ideas');
+    const desktopNav = screen.getByTestId('desktop-nav');
+    const ideasLink = within(desktopNav).getByText('nav.ideas');
     fireEvent.click(ideasLink);
     expect(window.dataLayer).toContainEqual(
       expect.objectContaining({ event: 'nav_click', link_text: 'nav.ideas' })
@@ -49,7 +50,8 @@ describe('Header', () => {
   it('should push cta_click on mobile drawer CTA', () => {
     render(<Header />);
     fireEvent.click(screen.getByTestId('mobile-menu-toggle'));
-    const cta = screen.getByTestId('mobile-cta-drawer');
+    const drawer = screen.getByTestId('mobile-drawer');
+    const cta = within(drawer).getByTestId('mobile-cta-drawer');
     fireEvent.click(cta);
     expect(window.dataLayer).toContainEqual(
       expect.objectContaining({ event: 'cta_click', cta_location: 'drawer' })
@@ -58,12 +60,18 @@ describe('Header', () => {
 
   it('should push locale_switch on lang button click', () => {
     render(<Header />);
-    const langBtn = screen.getByText('EN');
+    const desktopNav = screen.getByTestId('desktop-nav');
+    const langBtn = within(desktopNav).getByText('EN');
     fireEvent.click(langBtn);
-    const ptBtn = screen.getByText('PT');
+    const ptBtn = within(desktopNav).getByText('PT');
     fireEvent.click(ptBtn);
     expect(window.dataLayer).toContainEqual(
       expect.objectContaining({ event: 'locale_switch', from_locale: 'en', to_locale: 'pt', source: 'header' })
     );
+  });
+
+  it('renders urgency timer badge below nav', () => {
+    render(<Header />);
+    expect(screen.getByTestId('urgency-timer')).toBeInTheDocument();
   });
 });

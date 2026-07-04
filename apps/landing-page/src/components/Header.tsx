@@ -179,12 +179,31 @@ export default function Header() {
         </button>
       </div>
 
+      <div data-testid="urgency-timer" className="bg-brand-950/60 border-b border-brand-800/30 text-center py-1.5 px-4">
+        <NextDrawTimer compact />
+      </div>
+
       {/* Mobile drawer */}
-      {mobileOpen && (
+      <div
+        ref={drawerRef}
+        data-testid="mobile-drawer"
+        className={cn(
+          'md:hidden fixed inset-0 top-16 z-40 transition-all duration-300',
+          mobileOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        )}
+      >
         <div
-          ref={drawerRef}
-          data-testid="mobile-drawer"
-          className="md:hidden fixed inset-0 top-16 z-40 bg-surface-950/95 backdrop-blur-sm"
+          className={cn(
+            'absolute inset-0 bg-surface-950/80 backdrop-blur-sm transition-opacity duration-300',
+            mobileOpen ? 'opacity-100' : 'opacity-0'
+          )}
+          onClick={() => setMobileOpen(false)}
+        />
+        <div
+          className={cn(
+            'absolute right-0 top-0 h-full w-72 bg-surface-900 border-l border-surface-700/50 shadow-2xl transition-transform duration-300 ease-out',
+            mobileOpen ? 'translate-x-0' : 'translate-x-full'
+          )}
         >
           <nav className="flex flex-col gap-4 p-6">
             {navLinks.map((link) => {
@@ -270,7 +289,7 @@ export default function Header() {
             </a>
           </nav>
         </div>
-      )}
+      </div>
     </header>
   );
 }
