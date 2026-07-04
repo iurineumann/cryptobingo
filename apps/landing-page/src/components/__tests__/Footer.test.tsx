@@ -36,4 +36,18 @@ describe('Footer analytics', () => {
       })
     );
   });
+
+  it('should push nav_click on internal link', () => {
+    render(<Footer />);
+    const faqLink = screen.getByText('nav.faq');
+    fireEvent.click(faqLink);
+    expect(window.dataLayer).toContainEqual(
+      expect.objectContaining({
+        event: 'nav_click',
+        link_text: 'nav.faq',
+        link_href: '/en/faq',
+        link_type: 'internal',
+      })
+    );
+  });
 });

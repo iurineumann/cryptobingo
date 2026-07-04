@@ -56,7 +56,13 @@ export default function Footer({ social }: FooterProps) {
       <a
         key={link.label}
         href={link.href}
-        onClick={() => trackEvent('external_link_click', { link_text: link.label, link_url: link.href })}
+        onClick={() => {
+          if (isExternal) {
+            trackEvent('external_link_click', { link_text: link.label, link_url: link.href });
+          } else {
+            trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: 'internal' });
+          }
+        }}
         {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         className="text-sm text-slate-400 hover:text-white transition-colors"
       >

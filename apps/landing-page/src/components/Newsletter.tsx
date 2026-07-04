@@ -25,13 +25,16 @@ export default function Newsletter() {
             await subscribe(email);
             setStatus('success');
             setMessage(t('newsletter.thanks'));
-            trackEvent('newsletter_subscribe');
+            trackEvent('newsletter_subscribe', { method: 'api' });
         } catch (err) {
             setStatus('error');
             setMessage(
                 err instanceof Error ? err.message : t('newsletter.error')
             );
-            trackEvent('newsletter_error');
+            trackEvent('newsletter_error', {
+              error_type: err instanceof Error ? err.name : 'unknown',
+              error_message: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 

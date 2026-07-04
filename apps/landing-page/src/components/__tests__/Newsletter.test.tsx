@@ -24,7 +24,7 @@ describe('Newsletter analytics', () => {
         await user.click(screen.getByRole('button', { name: /newsletter.submit/i }));
         await screen.findByTestId('newsletter-success');
         expect(window.dataLayer).toContainEqual(
-            expect.objectContaining({ event: 'newsletter_subscribe' })
+            expect.objectContaining({ event: 'newsletter_subscribe', method: 'api' })
         );
     });
 
@@ -36,7 +36,7 @@ describe('Newsletter analytics', () => {
         await user.click(screen.getByRole('button', { name: /newsletter.submit/i }));
         await screen.findByRole('alert');
         expect(window.dataLayer).toContainEqual(
-            expect.objectContaining({ event: 'newsletter_error' })
+            expect.objectContaining({ event: 'newsletter_error', error_type: 'Error', error_message: 'Already subscribed' })
         );
     });
 });
