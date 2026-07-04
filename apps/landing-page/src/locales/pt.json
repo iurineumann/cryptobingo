@@ -44,6 +44,8 @@
   "roadmap": {
     "title": "Roadmap",
     "description": "Nossa jornada para levar o BINGO à blockchain",
+    "progress_label": "{{pct}}% Concluído",
+    "milestones": "marcos",
     "items": [
       {
         "date": "Julho 2026",
@@ -69,6 +71,8 @@
     "submit": "Inscrever",
     "sending": "Enviando...",
     "thanks": "Inscrito! Verifique sua caixa de entrada.",
+    "reward": "🎉 Você ganhou 50 XP + 1 ticket grátis por se inscrever!",
+    "cta": "Começar a Jogar",
     "error": "Algo deu errado.",
     "invalid_email": "Insira um endereço de email válido."
   },
@@ -89,6 +93,49 @@
   "faq": {
     "title": "FAQ",
     "description": "Perguntas frequentes sobre o CryptoBingo"
+  },
+  "press_kit": {
+    "title": "Press Kit",
+    "description": "Ativos de marca, capturas de tela e diretrizes para cobertura da imprensa",
+    "brand_title": "Ativos da Marca",
+    "brand_desc": "Baixe os ativos da marca CryptoBingo para uso midiático e promocional",
+    "download_logo": "Baixar Logo (.zip)",
+    "download_icon": "Baixar Ícone (.zip)",
+    "download_screenshots": "Baixar Screenshots (.zip)",
+    "guidelines_title": "Diretrizes da Marca",
+    "guidelines_desc": "Diretrizes para uso dos ativos da marca CryptoBingo",
+    "do_title": "Faça",
+    "do_1": "Use o logotipo CryptoBingo em suas cores originais",
+    "do_2": "Mantenha espaço livre ao redor do logotipo",
+    "do_3": "Use o wordmark com o símbolo de ponto",
+    "dont_title": "Não Faça",
+    "dont_1": "Altere as cores ou proporções do logotipo",
+    "dont_2": "Adicione efeitos, sombras ou contornos",
+    "dont_3": "Coloque em fundos de baixo contraste",
+    "media_title": "Contato para Imprensa",
+    "media_desc": "Para consultas da imprensa, entrevistas e parcerias midiáticas:",
+    "media_email": "press@cryptobingo.bet",
+    "screenshots_title": "Capturas de Tela & Mídia"
+  },
+  "tokenomics": {
+    "title": "Tokenomics",
+    "description": "Modelo econômico CryptoBingo — RTP 85%, tesouraria transparente, recompensas sustentáveis",
+    "rtp_label": "Retorno ao Jogador",
+    "rtp_value": "85%",
+    "ggr_label": "Receita Bruta de Jogos",
+    "ggr_value": "15%",
+    "supply_title": "Distribuição de Tokens",
+    "utility_title": "Utilidade do Token",
+    "staking_title": "Recompensas de Staking",
+    "staking_desc": "Faça stake de tokens WUF para ganhar uma parte da receita da plataforma",
+    "buyback_title": "Recompra & Queima",
+    "buyback_desc": "Uma parte do GGR é usada para recomprar e queimar WUF, reduzindo a oferta",
+    "governance_title": "Governança",
+    "governance_desc": "Detentores de WUF votam em parâmetros do jogo, pesos e alocações do tesouro",
+    "liquidity_title": "Pool de Liquidez",
+    "liquidity_desc": "Listado nas principais DEXs da WAX com liquidez bloqueada",
+    "swap_cta": "Comprar WUF no Swap",
+    "swap_url": "https://test.cryptobingo.bet/swap"
   },
   "redirect": {
     "redirecting": "Redirecionando..."
@@ -128,6 +175,12 @@
     "blog_title": "Blog — CryptoBingo",
     "blog_desc": "Notícias, atualizações e artigos sobre o CryptoBingo Bingo GameFi na WAX.",
     "tutorials_title": "Tutoriais — CryptoBingo",
-    "tutorials_desc": "Aprenda a jogar, criar carteiras e usar o CryptoBingo."
+    "tutorials_desc": "Aprenda a jogar, criar carteiras e usar o CryptoBingo.",
+    "press_kit_title": "Press Kit — CryptoBingo",
+    "press_kit_desc": "Assets da marca, screenshots e diretrizes",
+    "tokenomics_title": "Tokenomics — CryptoBingo",
+    "tokenomics_desc": "Modelo econômico, RTP 85%, distribuição de tokens e tesouro",
+    "whitepaper_title": "Whitepaper — CryptoBingo",
+    "whitepaper_desc": "Whitepaper técnico — arquitetura, RNG, RTP e modelo econômico"
   }
 }

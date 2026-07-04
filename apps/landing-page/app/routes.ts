@@ -12,6 +12,8 @@ export default [
     route('ideas', '../src/pages/IdeasPage.tsx', { id: 'ideas' }),
     route('admin', '../src/pages/AdminPage.tsx', { id: 'admin' }),
     route('whitepaper', '../src/pages/WhitepaperPage.tsx', { id: 'whitepaper' }),
+    route('press-kit', '../src/pages/PressKitPage.tsx', { id: 'press-kit' }),
+    route('tokenomics', '../src/pages/TokenomicsPage.tsx', { id: 'tokenomics' }),
     route('tutorials', '../src/pages/TutorialsIndex.tsx', { id: 'tutorials' }),
     route('tutorials/:slug', '../src/pages/TutorialPost.tsx', { id: 'tutorial-post' }),
     route(':slug', '../src/pages/PageView.tsx', { id: 'page-view' }),

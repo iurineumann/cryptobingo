@@ -44,6 +44,8 @@
   "roadmap": {
     "title": "路线图",
     "description": "将BINGO带入区块链的旅程",
+    "progress_label": "已完成{{pct}}%",
+    "milestones": "里程碑",
     "items": [
       {
         "date": "2026年7月",
@@ -69,6 +71,8 @@
     "submit": "订阅",
     "sending": "发送中...",
     "thanks": "订阅成功！请查看您的收件箱。",
+    "reward": "🎉 您获得了 50 XP + 1 张免费门票！",
+    "cta": "开始游戏",
     "error": "出了点问题。",
     "invalid_email": "请输入有效的邮箱地址。"
   },
@@ -89,6 +93,49 @@
   "faq": {
     "title": "常见问题",
     "description": "关于CryptoBingo的常见问题"
+  },
+  "press_kit": {
+    "title": "媒体资料包",
+    "description": "品牌资产、截图和媒体报道指南",
+    "brand_title": "品牌资产",
+    "brand_desc": "下载CryptoBingo品牌资产用于媒体和推广用途",
+    "download_logo": "下载标志 (.zip)",
+    "download_icon": "下载图标 (.zip)",
+    "download_screenshots": "下载截图 (.zip)",
+    "guidelines_title": "品牌指南",
+    "guidelines_desc": "使用CryptoBingo品牌资产的指南",
+    "do_title": "正确做法",
+    "do_1": "使用原始颜色的CryptoBingo标志",
+    "do_2": "在标志周围保持清晰空间",
+    "do_3": "使用带点符号的文字商标",
+    "dont_title": "错误做法",
+    "dont_1": "更改标志颜色或比例",
+    "dont_2": "添加效果、阴影或轮廓",
+    "dont_3": "放置在低对比度背景上",
+    "media_title": "媒体联系",
+    "media_desc": "媒体咨询、采访请求和媒体合作：",
+    "media_email": "press@cryptobingo.bet",
+    "screenshots_title": "截图与媒体"
+  },
+  "tokenomics": {
+    "title": "代币经济",
+    "description": "CryptoBingo经济模型 — 85%回报率，透明资金库，可持续奖励",
+    "rtp_label": "玩家回报率",
+    "rtp_value": "85%",
+    "ggr_label": "博彩总收入",
+    "ggr_value": "15%",
+    "supply_title": "代币分配",
+    "utility_title": "代币用途",
+    "staking_title": "质押奖励",
+    "staking_desc": "质押WUF代币，赚取平台收入分成",
+    "buyback_title": "回购与销毁",
+    "buyback_desc": "部分GGR用于回购和销毁WUF，减少供应量",
+    "governance_title": "治理",
+    "governance_desc": "WUF持有者投票决定游戏参数、权重和资金库分配",
+    "liquidity_title": "流动性池",
+    "liquidity_desc": "在主流WAX DEX上市，流动性锁定",
+    "swap_cta": "在Swap购买WUF",
+    "swap_url": "https://test.cryptobingo.bet/swap"
   },
   "redirect": {
     "redirecting": "重定向中..."
@@ -128,6 +175,12 @@
     "blog_title": "博客 — CryptoBingo",
     "blog_desc": "关于CryptoBingo Bingo GameFi在WAX上的新闻、更新和文章。",
     "tutorials_title": "教程 — CryptoBingo",
-    "tutorials_desc": "学习如何游玩、创建钱包和使用CryptoBingo。"
+    "tutorials_desc": "学习如何游玩、创建钱包和使用CryptoBingo。",
+    "press_kit_title": "媒体资料 — CryptoBingo",
+    "press_kit_desc": "品牌资产、截图和指南",
+    "tokenomics_title": "代币经济 — CryptoBingo",
+    "tokenomics_desc": "经济模型、RTP 85%、代币分配和国库",
+    "whitepaper_title": "白皮书 — CryptoBingo",
+    "whitepaper_desc": "技术白皮书 — 架构、RNG、RTP和经济模型"
   }
 }

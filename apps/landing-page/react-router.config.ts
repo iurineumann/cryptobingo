@@ -35,6 +35,8 @@ function prerenderPaths(): string[] {
     `/${locale}/blog`,
     `/${locale}/ideas`,
     `/${locale}/admin`,
+    `/${locale}/press-kit`,
+    `/${locale}/tokenomics`,
     ...getBlogSlugs(locale).map(slug => `/${locale}/blog/${slug}`),
     ...getPageSlugs(locale).map(slug => `/${locale}/${slug}`),
   ]);

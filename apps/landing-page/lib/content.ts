@@ -116,6 +116,7 @@ interface PageContent {
 const VALID_PAGE_SLUGS = new Set([
   'terms', 'privacy', 'risk-disclaimer', 'responsible-gaming',
   'aml', 'dispute-resolution', 'proof-of-fairness', 'bug-bounty', 'game-rules',
+  'whitepaper',
 ]);
 
 export function loadPageContent(slug: string, locale: string = 'en'): PageContent | null {

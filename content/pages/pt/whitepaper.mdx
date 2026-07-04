@@ -1,0 +1,115 @@
+---
+title: "Whitepaper CryptoBingo"
+description: "Whitepaper técnico — arquitetura, RNG, RTP e modelo econômico"
+---
+
+## Resumo
+
+CryptoBingo é um protocolo descentralizado de BINGO GameFi implantado na blockchain WAX/Antelope. Este whitepaper descreve a arquitetura do sistema, mecanismo de aleatoriedade criptográfica, pipeline de prêmios, modelo econômico e considerações de segurança.
+
+## 1. Arquitetura
+
+### 1.1 Camada de Contrato Inteligente
+
+A lógica central do jogo roda em um contrato inteligente on-chain (`bingogamectr`) escrito em C++ usando o framework Antelope CDT. O contrato gerencia:
+
+- Ciclo de vida do jogo: criar, financiar, travar, sortear, liquidar, fechar
+- Emissão e rastreamento de tickets
+- Correspondência de padrões e cálculo de prêmios
+- Gestão do tesouro e varreduras de GGR
+
+### 1.2 Serviços Off-Chain
+
+- **Worker Game Loop**: Serviço Node.js que resolve sorteios, computa vencedores e executa pagamentos via filas RabbitMQ
+- **API Gateway**: API REST para o frontend, autenticada por JWT, com escopo RBAC
+- **Oracle Daemon**: Serviço de assinatura RSA-SHA256 para aleatoriedade provadamente justa
+
+### 1.3 Camada de Dados
+
+- **Blockchain WAX**: Fonte da verdade para estado do jogo, saldos e liquidações
+- **MongoDB**: Metadados off-chain (configuração de jogo, perfis de usuário, histórico de prêmios)
+- **Redis**: Camada de cache para estado ativo do jogo e gerenciamento de sessão
+
+## 2. Geração de Números Aleatórios
+
+### 2.1 Esquema de Compromisso
+
+Cada sorteio segue um padrão commit-reveal:
+
+1. Worker solicita semente aleatória do oracle
+2. Oracle gera semente `S`, computa `H = SHA-256(S)`, armazena `(request_id, H)` on-chain
+3. Sorteio executa usando números derivados de `H`
+4. Oracle revela `S` on-chain
+5. Qualquer um verifica `SHA-256(S) == H`
+
+### 2.2 Oracle RSA-SHA256
+
+O oracle usa pares de chave RSA-2048. Cada compromisso é assinado com a chave privada do oracle. A chave pública está embutida no contrato para verificação de assinatura.
+
+## 3. Pipeline de Prêmios
+
+### 3.1 Cálculo de Prêmios
+
+Prêmios seguem a fórmula:
+
+```
+prêmio = preço_ticket × multiplicador_base × (peso / 100) × multiplicador_golden
+```
+
+Onde:
+- `peso` é o peso do padrão/combinação em centésimos (100 = 1,0×)
+- `multiplicador_base` é específico do tipo de jogo
+- `multiplicador_golden` aplica-se quando a bola golden está ativa (2,0×)
+
+### 3.2 Regra do Peso Máximo (ADR-005)
+
+Por ADR-005, quando uma cartela completa múltiplos padrões, apenas o peso mais alto (ou multiplicador de combinação) é pago. Isso previne inflação de prêmios por padrões empilhados.
+
+### 3.3 Fluxo de Pagamento
+
+Prêmios fluem através de três ações on-chain:
+- `claimwin` — prêmios de padrão padrão
+- `claimcombo` — prêmios de padrão de combinação
+- `claimstage` — prêmios de estágio multi-match
+
+Cada ação é chamada pelo worker com autoridade `bingogamesvc@active` e validada contra configurações de tipo de jogo armazenadas.
+
+## 4. Modelo Econômico
+
+### 4.1 RTP e GGR
+
+- **RTP Alvo**: 85%
+- **GGR (Receita Bruta de Jogos)**: 15%
+- GGR é varrido periodicamente para o contrato do tesouro via `sweepggr`
+
+### 4.2 Calibragem de Pesos
+
+Os pesos dos padrões são calibrados via simulação Monte Carlo para atingir o RTP alvo de 85%. Pesos são armazenados em centésimos (máx 255 = 2,55×) e ajustados por tipo de jogo.
+
+### 4.3 Tesouro
+
+O contrato do tesouro acumula GGR e suporta:
+- Recompra e queima de tokens
+- Provisão de liquidez
+- Financiamento de desenvolvimento
+- Recompensas da comunidade
+
+## 5. Segurança
+
+- Todas as ações do contrato são permissionadas (ADR-026)
+- Rotação de chave do oracle suportada
+- Disjuntor: `pauseroom` interrompe criação de jogos
+- Reivindicações de prêmio com limite de taxa
+- Verificação formal das funções matemáticas centrais
+
+## 6. Governança
+
+A governança futura transicionará para um modelo DAO onde detentores do token WUF votam em:
+- Parâmetros de tipo de jogo
+- Ajustes de peso
+- Alocações do tesouro
+- Atualizações do protocolo
+
+---
+
+*Versão 1.0 — Última atualização junho 2026*
