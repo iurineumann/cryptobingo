@@ -21,6 +21,8 @@ import { Signature, Checksum256, Transaction, Serializer } from '@wharfkit/antel
 import { pgPool }                                    from '../database';
 import { rpcClient }                                 from '@cryptobingo/blockchain-core';
 import { revokeToken }                               from '../middleware/auth';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 // ==========================================
 // CONFIGURAÇÃO
@@ -90,7 +92,7 @@ export async function requestChallenge(req: Request, res: Response): Promise<voi
             message:    `Assine este nonce com a permissão "active" ou "owner" da carteira ${sanitizedWallet}.`,
         });
     } catch (error) {
-        console.error('[Auth] Erro ao gerar challenge:', error);
+        logger.error({ err: error, tag: 'Auth' }, 'Erro ao gerar challenge');
         res.status(500).json({ error: 'Erro interno ao gerar challenge.' });
     }
 }
@@ -162,7 +164,7 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
                 );
                 recoveredPubKey = sig.recoverDigest(fullDigest).toString();
             } catch (txErr) {
-                console.error('[Auth] Erro ao reconstruir transação:', txErr);
+                logger.error({ err: txErr, tag: 'Auth' }, 'Erro ao reconstruir transação');
                 res.status(401).json({ error: 'transactionPayload inválido.' });
                 return;
             }
@@ -195,16 +197,16 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
                 );
 
                 if (!matchedPerm) {
-                    console.warn(`[Auth] Chave não autorizada on-chain: ${wallet} / ${public_key}`);
+                    logger.warn({ tag: 'Auth' }, `Chave não autorizada on-chain: ${wallet} / ${public_key}`);
                     res.status(401).json({ error: 'Chave pública não autorizada para esta conta.' });
                     return;
                 }
 
-                console.log(`[Auth] Chave verificada via permissão "${matchedPerm.permission}": ${wallet}`);
+                logger.info({ tag: 'Auth' }, `Chave verificada via permissão "${matchedPerm.permission}": ${wallet}`);
             } catch (rpcErr) {
                 // Falha no nó RPC — não bloqueia o login (fail-open com log)
                 // Em produção alta-segurança: mudar para fail-closed
-                console.error('[Auth] Erro ao verificar chave on-chain (fail-open):', rpcErr);
+                logger.error({ err: rpcErr, tag: 'Auth' }, 'Erro ao verificar chave on-chain (fail-open)');
             }
         }
 
@@ -223,8 +225,7 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
             { expiresIn: JWT_EXPIRES_IN }
         );
 
-        console.log(
-            `✅ [Auth] Login: ${wallet} | ` +
+        logger.info({ tag: 'Auth' }, `Login: ${wallet} | ` +
             `modo: ${transactionPayload ? 'produção' : 'dev'} | ` +
             `onchain: ${VERIFY_KEY_ONCHAIN}`
         );
@@ -232,7 +233,7 @@ export async function verifyChallenge(req: Request, res: Response): Promise<void
         res.status(200).json({ token });
 
     } catch (error) {
-        console.error('[Auth] Erro ao verificar challenge:', error);
+        logger.error({ err: error, tag: 'Auth' }, 'Erro ao verificar challenge');
         res.status(500).json({ error: 'Erro interno ao verificar assinatura.' });
     }
 }
@@ -260,9 +261,9 @@ export async function logout(req: Request, res: Response): Promise<void> {
         const exp     = payload?.exp ?? Math.floor(Date.now() / 1000) + JWT_EXPIRES_SECONDS;
 
         await revokeToken(jti, exp);
-        console.log(`🔒 [Auth] Logout: ${req.user?.wallet} (jti: ${jti})`);
+        logger.info({ tag: 'Auth' }, `Logout: ${req.user?.wallet} (jti: ${jti})`);
     } catch (err) {
-        console.error('[Auth] Erro ao revogar token no logout:', err);
+        logger.error({ err: err, tag: 'Auth' }, 'Erro ao revogar token no logout');
         // Não bloqueia o logout mesmo se a revogação falhar
     }
 

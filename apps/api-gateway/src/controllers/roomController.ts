@@ -5,6 +5,8 @@ import { rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import RoomMetadataModel from '../models/RoomMetadata';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -50,7 +52,7 @@ export async function listRooms(_req: Request, res: Response): Promise<void> {
 
         res.status(200).json({ rooms: enriched });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao listar salas:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao listar salas');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -78,7 +80,7 @@ export async function getRoom(req: Request, res: Response): Promise<void> {
         const metadata = await RoomMetadataModel.findOne({ room_id: roomId }).lean();
         res.status(200).json({ ...room, metadata: metadata ?? null });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao buscar sala:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao buscar sala');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -152,14 +154,14 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
             { upsert: true }
         );
 
-        console.log(`✅ [RoomCtrl] Sala ${room_id} criada. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'RoomCtrl' }, `Sala ${room_id} criada. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Sala ${room_id} criada com sucesso.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[RoomCtrl] Erro ao criar sala:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao criar sala');
         res.status(500).json({ error: `Erro ao criar sala: ${msg}` });
     }
 }
@@ -195,7 +197,7 @@ export async function upsertRoomMetadata(req: Request, res: Response): Promise<v
         res.status(200).json(updated);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[RoomCtrl] Erro ao atualizar metadados:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao atualizar metadados');
         res.status(500).json({ error: `Erro ao atualizar metadados: ${msg}` });
     }
 }
@@ -345,7 +347,7 @@ export async function listSponsorRooms(req: Request, res: Response): Promise<voi
 
         res.status(200).json({ rooms: enriched });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao listar salas do sponsor:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao listar salas do sponsor');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -418,7 +420,7 @@ export async function getRoomTreasury(req: Request, res: Response): Promise<void
         }
         res.status(200).json({ treasury: response.rows[0] });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao buscar treasury:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao buscar treasury');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }

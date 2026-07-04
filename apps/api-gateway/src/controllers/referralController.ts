@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { Request, Response } from "express";
 import { Referral } from "../models/Referral";
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
@@ -72,7 +74,7 @@ export async function getReferralStatus(req: Request, res: Response) {
       nextTier: getNextTier(totalReferred),
     });
   } catch (err) {
-    console.error("[Referral] Erro ao buscar status:", err);
+    logger.error({ err, tag: 'Referral' }, "Erro ao buscar status");
     return res.status(500).json({ error: "Erro interno." });
   }
 }
@@ -95,7 +97,7 @@ export async function generateReferralCode(req: Request, res: Response) {
     doc = await Referral.create({ wallet, referralCode: code, referred: [], rewards: { xpAwarded: 0, ticketsAwarded: 0 } });
     return res.status(201).json({ code: doc.referralCode });
   } catch (err) {
-    console.error("[Referral] Erro ao gerar código:", err);
+    logger.error({ err, tag: 'Referral' }, "Erro ao gerar código");
     return res.status(500).json({ error: "Erro interno." });
   }
 }
@@ -122,7 +124,7 @@ export async function applyReferralCode(req: Request, res: Response) {
 
     return res.status(200).json({ message: "Código aplicado com sucesso!", referrer: referrer.wallet });
   } catch (err) {
-    console.error("[Referral] Erro ao aplicar código:", err);
+    logger.error({ err, tag: 'Referral' }, "Erro ao aplicar código");
     return res.status(500).json({ error: "Erro interno." });
   }
 }

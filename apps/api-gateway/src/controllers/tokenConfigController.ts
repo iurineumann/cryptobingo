@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
 import { isValidObjectId } from 'mongoose';
 import SystemToken from '../models/SystemToken';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 export const listTokens = async (_req: Request, res: Response): Promise<void> => {
     try {
         const tokens = await SystemToken.find({ enabled: true }).sort({ label: 1 }).lean();
         res.status(200).json({ tokens });
     } catch (err) {
-        console.error('[TokenConfig] Erro ao listar tokens:', err);
+        logger.error({ err: err, tag: 'TokenConfig' }, 'Erro ao listar tokens');
         res.status(500).json({ error: 'Erro interno ao listar tokens.' });
     }
 };
@@ -30,7 +32,7 @@ export const createToken = async (req: Request, res: Response): Promise<void> =>
             res.status(409).json({ error: 'Token (contract + symbol) já cadastrado.' });
             return;
         }
-        console.error('[TokenConfig] Erro ao criar token:', err);
+        logger.error({ err: err, tag: 'TokenConfig' }, 'Erro ao criar token');
         res.status(500).json({ error: 'Erro interno ao criar token.' });
     }
 };
@@ -43,7 +45,7 @@ export const deleteToken = async (req: Request, res: Response): Promise<void> =>
         if (!result) { res.status(404).json({ error: 'Token não encontrado.' }); return; }
         res.status(200).json({ ok: true });
     } catch (err) {
-        console.error('[TokenConfig] Erro ao remover token:', err);
+        logger.error({ err: err, tag: 'TokenConfig' }, 'Erro ao remover token');
         res.status(500).json({ error: 'Erro interno ao remover token.' });
     }
 };
