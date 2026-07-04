@@ -12,6 +12,9 @@ function slugify(text: string): string {
 const legalRenderer = new Renderer();
 legalRenderer.heading = function ({ text, depth }: { text: string; depth: number; tokens: unknown[] }) {
     const id = slugify(text);
+    if (depth === 2) {
+        return `<h${depth} id="${id}">${text}<a href="#${id}" class="anchor-link" aria-hidden="true">#</a></h${depth}>`;
+    }
     return `<h${depth} id="${id}">${text}</h${depth}>`;
 };
 marked.use({ renderer: legalRenderer });

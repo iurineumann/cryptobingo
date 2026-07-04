@@ -169,7 +169,11 @@
     "loading": "实时统计 — 测试网已激活"
   },
   "content": {
-    "readTime": "{{count}} 分钟阅读"
+    "readTime": "{{count}} 分钟阅读",
+    "relatedPosts": "相关文章",
+    "relatedTutorials": "相关教程",
+    "previous": "← 上一步",
+    "next": "下一步 →"
   },
   "blog": {
     "back": "← 返回博客"

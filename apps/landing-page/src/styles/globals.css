@@ -114,6 +114,7 @@ body {
     padding-top: 1.5rem;
     border-top: 1px solid rgb(30 30 46 / 1);
     position: relative;
+    scroll-margin-top: 100px;
 }
 
 .legal-doc-body h2::before {
@@ -126,6 +127,19 @@ body {
     border-top: none;
     margin-top: 0;
     padding-top: 0;
+}
+
+.legal-doc-body h2 .anchor-link {
+  opacity: 0;
+  margin-left: 0.5rem;
+  color: var(--color-brand-400);
+  font-weight: 300;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.legal-doc-body h2:hover .anchor-link {
+  opacity: 1;
 }
 
 @media print {

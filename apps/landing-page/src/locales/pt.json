@@ -169,7 +169,11 @@
     "loading": "Estatísticas reais — testnet ativa"
   },
   "content": {
-    "readTime": "{{count}} min de leitura"
+    "readTime": "{{count}} min de leitura",
+    "relatedPosts": "Artigos Relacionados",
+    "relatedTutorials": "Tutoriais Relacionados",
+    "previous": "← Anterior",
+    "next": "Próximo →"
   },
   "blog": {
     "back": "← Voltar para Blog"

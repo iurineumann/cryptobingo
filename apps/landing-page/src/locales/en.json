@@ -169,7 +169,11 @@
     "loading": "Live stats — testnet active"
   },
   "content": {
-    "readTime": "{{count}} min read"
+    "readTime": "{{count}} min read",
+    "relatedPosts": "Related Posts",
+    "relatedTutorials": "Related Tutorials",
+    "previous": "← Previous",
+    "next": "Next →"
   },
   "blog": {
     "back": "← Back to Blog"
