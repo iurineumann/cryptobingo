@@ -27,7 +27,7 @@ export default function PageView() {
       <>
         <Seo title={t('seo.page_not_found')} description="" canonical={`/${lang}/${slug}`} />
         <Header />
-        <main className="max-w-3xl mx-auto px-4 py-20">
+        <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">{t('page_not_found')}</h1>
         </main>
         <Footer />
@@ -39,7 +39,7 @@ export default function PageView() {
     <>
       <Seo title={page.title} description={page.description} canonical={`/${lang}/${slug}`} />
       <Header />
-      <main className="max-w-3xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">{page.title}</h1>
         <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: page.body }} />
       </main>

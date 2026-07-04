@@ -13,7 +13,7 @@ export default function TutorialPost() {
     <>
       <Seo title={t('seo.tutorials_title')} description="" canonical={`/${lang}/tutorials/${slug}`} />
       <Header />
-      <main className="max-w-3xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">{slug}</h1>
         <p className="text-slate-400">{t('tutorials.coming_soon')}</p>
       </main>

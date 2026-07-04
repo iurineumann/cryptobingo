@@ -165,7 +165,15 @@ export default function Root() {
           <Meta />
           <Links />
         </head>
-        <body>
+         <body>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-accent-400 focus:text-surface-900 focus:px-4 focus:py-2 focus:rounded-xl focus:text-sm focus:font-semibold focus:outline-none"
+            data-testid="skip-link"
+          >
+            Pular para conteúdo
+          </a>
+          <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="a11y-live-region" />
           <noscript>
             <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
               height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}>

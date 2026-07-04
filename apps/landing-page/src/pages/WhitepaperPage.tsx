@@ -13,7 +13,7 @@ export default function WhitepaperPage() {
     <>
       <Seo title={t('seo.whitepaper_title')} description={t('seo.whitepaper_desc')} canonical={`/${lang}/whitepaper`} />
       <Header />
-      <main className="max-w-4xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-4xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
           {t('seo.whitepaper_title')}
         </h1>

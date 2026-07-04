@@ -20,7 +20,7 @@ export default function AdminPage() {
             <>
 <Seo title="Admin" description="Painel administrativo do CryptoBingo." canonical={`/${lang}/admin`} />
                 <Header />
-                <main className="mx-auto flex min-h-[60vh] max-w-md items-center px-4">
+                <main id="main-content" className="mx-auto flex min-h-[60vh] max-w-md items-center px-4">
                     <AdminLogin onLogin={handleLogin} />
                 </main>
             </>

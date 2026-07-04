@@ -21,7 +21,7 @@ export default function BlogPost() {
     return (
       <>
         <Header />
-        <main className="max-w-3xl mx-auto px-4 py-20">
+        <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
           <h1 className="text-3xl font-bold text-white">Post not found</h1>
         </main>
         <Footer />
@@ -33,7 +33,7 @@ export default function BlogPost() {
     <>
       <Seo title={post.title} description={post.description} canonical={`/${lang}/blog/${slug}`} />
       <Header />
-      <main className="max-w-3xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
         <article>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">{post.title}</h1>
           <p className="text-slate-400 mb-8">{post.description}</p>

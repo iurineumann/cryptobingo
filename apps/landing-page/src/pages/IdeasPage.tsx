@@ -61,7 +61,7 @@ export default function IdeasPage() {
             <Seo title="Fórum de Ideias" description="Compartilhe ideias para o CryptoBingo e vote em propostas da comunidade. As ideias mais populares viram realidade." canonical={`/${lang}/ideas`} />
             <Header />
             <StatsBar />
-            <main className="mx-auto max-w-6xl px-4 py-16">
+            <main id="main-content" className="mx-auto max-w-6xl px-4 py-16">
                 <h1 className="text-4xl font-bold text-primary">Ideas Forum</h1>
                 <p className="mt-3 max-w-2xl text-lg text-secondary">
                     Share your ideas for CryptoBingo and vote on proposals from the

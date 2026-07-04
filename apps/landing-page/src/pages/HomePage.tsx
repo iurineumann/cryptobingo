@@ -28,12 +28,14 @@ export default function HomePage() {
     <>
       <Seo title={t('seo.home_title')} description={t('seo.home_desc')} canonical={`/${lang}`} />
       <Header />
-      <Hero hero={settings.hero} />
-      <TrustBar />
-      <HowItWorks />
-      <Features features={settings.features} />
-      <Roadmap />
-      <StatsBar />
+      <main id="main-content">
+        <Hero hero={settings.hero} />
+        <TrustBar />
+        <HowItWorks />
+        <Features features={settings.features} />
+        <Roadmap />
+        <StatsBar />
+      </main>
       <Newsletter />
       <Footer social={settings.social} />
     </>

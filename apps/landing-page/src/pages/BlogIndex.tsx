@@ -21,7 +21,7 @@ export default function BlogIndex() {
     <>
       <Seo title={t('seo.blog_title')} description={t('seo.blog_desc')} canonical={`/${lang}/blog`} />
       <Header />
-      <main className="max-w-4xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-4xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
           {t('seo.blog_title')}
         </h1>

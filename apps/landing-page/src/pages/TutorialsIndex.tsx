@@ -13,7 +13,7 @@ export default function TutorialsIndex() {
     <>
       <Seo title={t('seo.tutorials_title')} description={t('seo.tutorials_desc')} canonical={`/${lang}/tutorials`} />
       <Header />
-      <main className="max-w-4xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-4xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
           {t('seo.tutorials_title')}
         </h1>

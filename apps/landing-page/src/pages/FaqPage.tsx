@@ -21,7 +21,7 @@ export default function FaqPage() {
     <>
       <Seo title={t('faq.title')} description={t('faq.description')} canonical={`/${lang}/faq`} />
       <Header />
-      <main className="max-w-3xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
           {t('faq.title')}
         </h1>
