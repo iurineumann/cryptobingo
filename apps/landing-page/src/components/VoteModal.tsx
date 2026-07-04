@@ -24,7 +24,8 @@ export default function VoteModal({ isOpen, ideaId, onClose }: VoteModalProps) {
     useEffect(() => {
         if (isOpen) {
             previousFocusRef.current = document.activeElement as HTMLElement;
-            setTimeout(() => dialogRef.current?.focus(), 50);
+            const firstInput = dialogRef.current?.querySelector<HTMLElement>('input, button, [tabindex]:not([tabindex="-1"])');
+            firstInput?.focus();
         } else if (previousFocusRef.current) {
             previousFocusRef.current.focus();
         }

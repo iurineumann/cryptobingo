@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import NextDrawTimer from '@/components/NextDrawTimer';
 
 type NavLinkItem =
   | { type: 'internal'; label: string; href: string }
@@ -148,6 +149,7 @@ export default function Header() {
               </div>
             )}
           </div>
+          <NextDrawTimer compact />
           <a
             href="https://test.cryptobingo.bet"
             target="_blank"
@@ -219,8 +221,13 @@ export default function Header() {
               );
             })}
 
+            {/* Timer mobile */}
+            <div className="pt-4 border-t border-surface-700">
+              <NextDrawTimer compact />
+            </div>
+
             {/* Locale switcher mobile */}
-            <div className="flex gap-2 pt-4 border-t border-surface-700">
+            <div className="flex gap-2 pt-4">
               {locales.map((loc) => (
                 <button
                   key={loc.code}
