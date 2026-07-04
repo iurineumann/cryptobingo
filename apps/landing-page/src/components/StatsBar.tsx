@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Gamepad2, Coins, Users, Percent } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getStats, type Stats } from '@/lib/api';
+import { getGameStats } from '@/lib/api';
 
-// TODO Fase 2: substituir mock por dados reais da API /api/v1/stats (jogos, premios, players, RTP)
-// Enquanto a API de jogo nao existe, usamos dados mockados que refletem crescimento projetado.
 interface GameStat {
     icon: typeof Gamepad2;
     labelKey: string;
-    value: number;
+    value: number | null;
 }
 
 function formatCompact(n: number): string {
@@ -19,38 +17,33 @@ function formatCompact(n: number): string {
 
 export default function StatsBar() {
     const { t } = useTranslation();
-    const [stats, setStats] = useState<Stats | null>(null);
-    const [error, setError] = useState(false);
+    const [statsData, setStatsData] = useState<GameStat[] | null>(null);
     const [animCounts, setAnimCounts] = useState<number[]>([0, 0, 0, 0]);
 
-    // Tenta API real, fallback para mock se falhar
     useEffect(() => {
-        getStats()
-            .then(setStats)
-            .catch(() => setError(true));
+        getGameStats()
+            .then((data) => {
+                setStatsData([
+                    { icon: Gamepad2, labelKey: 'stats.games_played', value: data.total_games },
+                    { icon: Coins, labelKey: 'stats.prizes_paid', value: data.total_prizes },
+                    { icon: Users, labelKey: 'stats.active_players', value: data.total_players },
+                    { icon: Percent, labelKey: 'stats.rtp', value: Math.round(data.avg_rtp_pct) },
+                ]);
+            })
+            .catch(() => {
+                setStatsData(null);
+            });
     }, []);
 
-    // Dados projetados (mock) — substituir por API real quando disponivel
-    const projectedStats: GameStat[] = [
-        { icon: Gamepad2, labelKey: 'stats.games_played', value: 12847 },
-        { icon: Coins, labelKey: 'stats.prizes_paid', value: 84231 },
-        { icon: Users, labelKey: 'stats.active_players', value: 4231 },
-        { icon: Percent, labelKey: 'stats.rtp', value: 85 },
+    const displayStats = statsData ?? [
+        { icon: Gamepad2, labelKey: 'stats.games_played', value: null },
+        { icon: Coins, labelKey: 'stats.prizes_paid', value: null },
+        { icon: Users, labelKey: 'stats.active_players', value: null },
+        { icon: Percent, labelKey: 'stats.rtp', value: null },
     ];
 
-    // Usa dados reais das ideias como fallback semantico (mostra que tem atividade)
-    const displayStats = !error && stats
-        ? [
-            { icon: Gamepad2, labelKey: 'stats.games_played', value: stats.total_ideas * 100 },
-            { icon: Coins, labelKey: 'stats.prizes_paid', value: stats.total_votes * 50 },
-            { icon: Users, labelKey: 'stats.active_players', value: stats.total_subscribers + stats.total_ideas },
-            { icon: Percent, labelKey: 'stats.rtp', value: 85 },
-        ]
-        : projectedStats;
-
-    // Efeito counting-up na entrada do viewport
     useEffect(() => {
-        const targets = displayStats.map(s => s.value);
+        const targets = displayStats.map(s => s.value ?? 0);
         const duration = 1200;
         const steps = 30;
         let step = 0;
@@ -63,7 +56,9 @@ export default function StatsBar() {
 
         return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [statsData]);
+
+    const hasData = displayStats[0].value !== null;
 
     return (
         <section className="py-12 bg-brand-700">
@@ -79,9 +74,11 @@ export default function StatsBar() {
                             >
                                 <Icon className="text-white/70 mb-2" size={24} />
                                 <span className="text-2xl font-bold text-white">
-                                    {s.labelKey === 'stats.rtp'
-                                        ? `${animCounts[i]}%`
-                                        : formatCompact(animCounts[i])}
+                                    {hasData
+                                        ? (s.labelKey === 'stats.rtp'
+                                            ? `${animCounts[i]}%`
+                                            : formatCompact(animCounts[i]))
+                                        : '—'}
                                 </span>
                                 <span className="text-sm text-brand-200">
                                     {t(s.labelKey)}
@@ -90,6 +87,11 @@ export default function StatsBar() {
                         );
                     })}
                 </div>
+                {!hasData && (
+                    <p className="mt-6 text-center text-sm text-brand-300">
+                        {t('stats.loading')}
+                    </p>
+                )}
             </div>
         </section>
     );

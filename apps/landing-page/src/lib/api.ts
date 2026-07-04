@@ -57,8 +57,21 @@ export interface AdminConfirmResponse {
     expires_at: string;
 }
 
+export interface GameStats {
+    total_games: number;
+    total_prizes: number;
+    total_players: number;
+    avg_rtp_pct: number;
+    currency: string;
+    generated_at: string;
+}
+
 export async function getStats(): Promise<Stats> {
     return apiRequest<Stats>('/stats');
+}
+
+export async function getGameStats(): Promise<GameStats> {
+    return apiRequest<GameStats>('/stats/game');
 }
 
 export async function getIdeas(sort?: string): Promise<Idea[]> {

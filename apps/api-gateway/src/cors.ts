@@ -3,6 +3,8 @@ import { CorsOptions } from "cors";
 const DEFAULT_ALLOWED_ORIGINS: string[] = [
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://cryptobingo.bet",
+  "https://www.cryptobingo.bet",
   "https://test.cryptobingo.bet",
   "https://test-api.cryptobingo.bet",
   "https://test-swap.cryptobingo.bet",

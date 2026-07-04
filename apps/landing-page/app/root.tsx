@@ -9,6 +9,7 @@ declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
+    _analyticsConsented?: boolean;
   }
 }
 
@@ -16,11 +17,11 @@ const GTM_SCRIPTS = `
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('consent','default',{
+  'analytics_storage':'denied',
   'ad_storage':'denied',
   'ad_user_data':'denied',
   'ad_personalization':'denied',
-  'analytics_storage':'denied',
-  'functionality_storage':'denied',
+  'functionality_storage':'granted',
   'personalization_storage':'denied',
   'security_storage':'granted',
   'wait_for_update':500
@@ -40,15 +41,27 @@ const CONSENT_STYLES = `
 `;
 
 const CONSENT_SCRIPT = `
-function getCats(c){return c&&typeof c==='object'?c:{}}
+function getCats(cats){
+  if(Array.isArray(cats)){
+    return {
+      analytics: cats.indexOf('analytics') !== -1,
+      marketing: cats.indexOf('marketing') !== -1,
+      ads: cats.indexOf('ads') !== -1
+    };
+  }
+  return cats||{};
+}
 function updateGtag(cookie){
   if(typeof gtag==='undefined') return;
   var cats=getCats(cookie.categories);
   gtag('consent','update',{
-    analytics_storage:cats.analytics?'granted':'denied',
-    ad_storage:cats.marketing?'granted':'denied',
-    ad_user_data:cats.marketing?'granted':'denied',
-    ad_personalization:cats.marketing?'granted':'denied'
+    analytics_storage: cats.analytics?'granted':'denied',
+    ad_storage: cats.ads?'granted':'denied',
+    ad_user_data: cats.ads?'granted':'denied',
+    ad_personalization: cats.ads?'granted':'denied',
+    functionality_storage: 'granted',
+    personalization_storage: cats.marketing?'granted':'denied',
+    security_storage: 'granted'
   });
 }
 function logConsent(cookie){
@@ -77,6 +90,7 @@ function handleConsent(cookie){
   updateGtag(cookie);
   logConsent(cookie);
   var cats=getCats(cookie.categories);
+  window._analyticsConsented = cats.analytics;
   cats.analytics ? startClarity() : stopClarity();
   if(cats.analytics||cats.marketing){
     window.dataLayer.push({
@@ -104,9 +118,9 @@ document.addEventListener('DOMContentLoaded',function(){
         }
       },
     guiOptions:{consentModal:{layout:'cloud',position:'bottom center',equalWeightButtons:true,flipButtons:false},preferencesModal:{layout:'box',equalWeightButtons:true,flipButtons:false}},
-    onFirstConsent:handleConsent,
-    onConsent:handleConsent,
-    onChange:function(cc){handleConsent(cc.cookie);}
+    onFirstConsent:function({cookie}){handleConsent(cookie);},
+    onConsent:function({cookie}){handleConsent(cookie);},
+    onChange:function({cookie}){handleConsent(cookie);}
   });
 });
 `;
@@ -165,9 +179,12 @@ function alternateLinks(pathname: string) {
 function RouteTracker() {
   const location = useLocation();
   useEffect(() => {
-    const path = window.location.pathname;
-    const title = document.title;
-    window.dataLayer?.push({ event: 'page_view', page_path: path, page_title: title });
+    if(!window._analyticsConsented) return;
+    window.dataLayer?.push({
+      event: 'page_view',
+      page_path: window.location.pathname,
+      page_title: document.title,
+    });
   }, [location]);
   return null;
 }

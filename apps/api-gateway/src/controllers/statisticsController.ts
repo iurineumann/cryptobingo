@@ -3,7 +3,7 @@
 // Ref: COMPLIANCE.md §2.2, openapi.yaml /statistics/rtp
 
 import { Request, Response } from 'express';
-import { getRtpReport, getRecentGames, upsertGameHistory, getGameStatsBatch } from '../database/ledger';
+import { getRtpReport, getRecentGames, upsertGameHistory, getGameStatsBatch, getPlatformSummary } from '../database/ledger';
 import { UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
@@ -87,6 +87,25 @@ export async function getGameStatsBatchHandler(req: Request, res: Response): Pro
     } catch (err) {
         console.error('[Statistics] Erro ao buscar batch de stats:', err);
         res.status(500).json({ error: 'Erro ao buscar estatísticas de jogos.' });
+    }
+}
+
+// ==========================================
+// GET /api/v1/statistics/summary
+// ==========================================
+
+/**
+ * Resumo agregado da plataforma — público.
+ * Retorna total_games, total_prizes, total_players, avg_rtp_pct.
+ * Usado pela landing page (StatsBar) e dashboards públicos.
+ */
+export async function getPlatformSummaryHandler(req: Request, res: Response): Promise<void> {
+    try {
+        const summary = await getPlatformSummary();
+        res.status(200).json(summary);
+    } catch (err) {
+        console.error('[Statistics] Erro ao gerar resumo da plataforma:', err);
+        res.status(500).json({ error: 'Erro ao gerar resumo da plataforma.' });
     }
 }
 

@@ -54,7 +54,7 @@ export default function Hero({ hero }: HeroProps) {
           <a
             href="#features"
             data-testid="hero-learn-more"
-            className="text-sm text-slate-400 hover:text-white transition-colors"
+            className="inline-flex items-center border border-accent-400/40 text-accent-300 font-semibold px-6 py-3 rounded-xl hover:bg-accent-500/10 hover:border-accent-400 transition-all"
           >
             {t('hero.learn_more')}
           </a>

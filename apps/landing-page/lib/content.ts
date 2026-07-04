@@ -107,6 +107,44 @@ export function loadBlogPost(slug: string, locale: string = 'pt'): BlogPost | nu
   return posts.find(p => p.slug === slug) || null;
 }
 
+interface TutorialItem {
+  title: string;
+  description: string;
+  body: string;
+  slug: string;
+}
+
+export function loadTutorials(locale: string = 'en'): TutorialItem[] {
+  const tutorialDir = path.join(contentDir, 'tutorial', locale);
+  if (!fs.existsSync(tutorialDir)) return [];
+
+  const files = fs.readdirSync(tutorialDir).filter(f => f.endsWith('.mdx'));
+
+  return files.map(file => {
+    const raw = fs.readFileSync(path.join(tutorialDir, file), 'utf-8');
+    const { data, content } = matter(raw);
+    return {
+      slug: file.replace(/\.mdx$/, ''),
+      title: data.title || '',
+      description: data.description || '',
+      body: content.trim(),
+    } satisfies TutorialItem;
+  });
+}
+
+export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialItem | null {
+  const filePath = path.join(contentDir, 'tutorial', locale, `${slug}.mdx`);
+  if (!fs.existsSync(filePath)) return null;
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const { data, content } = matter(raw);
+  return {
+    slug,
+    title: data.title || '',
+    description: data.description || '',
+    body: marked.parse(content.trim()),
+  };
+}
+
 interface PageContent {
   title: string;
   description: string;
@@ -144,4 +182,4 @@ export function getAllPageSlugs(locale: string): string[] {
     .filter(slug => VALID_PAGE_SLUGS.has(slug));
 }
 
-export type { BlogPost, FAQItem, HomeSettings, PageContent };
+export type { BlogPost, FAQItem, HomeSettings, PageContent, TutorialItem };
