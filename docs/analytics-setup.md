@@ -106,3 +106,11 @@ Criar como **eventos personalizados** (não precisam ser pré-declarados, mas re
 
 - [GA4 DebugView](https://support.google.com/analytics/answer/7201382)
 - [GA4 Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4)
+
+## Observabilidade Stack
+
+O CryptoBingo adota stack de observabilidade em 4 camadas (Pino, Sentry, Grafana Alerting,
+OpenTelemetry). Ver:
+
+- `docs/adr/ADR-043-observabilidade.md` — ADR com decisões e trade-offs
+- `docs/observability-stack.md` — guia de configuração e manutenção
