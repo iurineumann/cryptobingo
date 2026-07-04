@@ -2,8 +2,17 @@ import { Fragment, useEffect } from 'react';
 import { HelmetProvider, Helmet } from 'react-helmet-async';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import * as Sentry from '@sentry/react';
 import '../src/i18n/config';
 import '../src/styles/globals.css';
+
+if (typeof window !== 'undefined') {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0,
+  });
+}
 
 declare global {
   interface Window {
