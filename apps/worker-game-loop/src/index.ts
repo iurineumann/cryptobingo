@@ -10,20 +10,21 @@ import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
 import { startBurnSyncCron }   from './services/burnCron';
+import { logger } from './services/logger';
 
-console.log('=============================================');
-console.log('🤖 CryptoBingo: Game Loop Worker Iniciando...');
-console.log('=============================================');
+logger.info('=============================================');
+logger.info({ tag: 'Bootstrap' }, 'CryptoBingo: Game Loop Worker Iniciando...');
+logger.info('=============================================');
 
 async function bootstrap(): Promise<void> {
     // ── Guarda de configuração crítica ────────────────────────────────────────
     if (!process.env.MICROSERVICE_PRIVATE_KEY) {
-        console.error('❌ ERRO CRÍTICO: MICROSERVICE_PRIVATE_KEY não definida no .env');
+        logger.error('ERRO CRÍTICO: MICROSERVICE_PRIVATE_KEY não definida no .env');
         process.exit(1);
     }
 
     if (!process.env.JWT_SECRET) {
-        console.warn('⚠️  JWT_SECRET não definida. Auth WebSocket desabilitada (apenas DEV).');
+        logger.warn('JWT_SECRET não definida. Auth WebSocket desabilitada (apenas DEV).');
     }
 
     // ── 1. Servidor de métricas Prometheus (porta METRICS_PORT / 9091) ────────
@@ -32,7 +33,7 @@ async function bootstrap(): Promise<void> {
 
     // ── 2. MongoDB (Chat persistence) ─────────────────────────────────────────
     await mongoose.connect(process.env.MONGO_URL as string);
-    console.log('✅ [MongoDB] Conectado (chat).');
+    logger.info({ tag: 'MongoDB' }, 'Conectado (chat).')
 
     // ── 3. Redis (Inverted Index) ─────────────────────────────────────────────
     await connectRedis();
@@ -58,7 +59,7 @@ async function bootstrap(): Promise<void> {
     // Recupera jogos em DRAWING com balls completas (crash após oracle responder)
     // e jogos LOCKED que precisam de sorteio (não cobertos pelo auto-advance inicial)
     recoverStuckGames().catch(err =>
-        console.error('[Bootstrap] Erro no recovery scan:', err)
+        logger.error({ err, tag: 'Bootstrap' }, 'Erro no recovery scan:')
     );
 
     // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
@@ -71,6 +72,6 @@ async function bootstrap(): Promise<void> {
 
 // NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro
 bootstrap().catch((err) => {
-    console.error('❌ [Bootstrap] Falha crítica:', err);
+    logger.error({ err, tag: 'Bootstrap' }, 'Falha crítica:')
     process.exit(1);
 });

@@ -22,6 +22,7 @@ import { redisClient }      from './redis';
 import { rpcClient, parseHexBytes }        from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }                     from '@wharfkit/antelope';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+import { logger } from './logger';
 
 function normalizeTickets(rows: Record<string, any>[]): BlockchainTicketRecord[] {
     for (const row of rows) {
@@ -98,7 +99,7 @@ function matrixToBitMap(matrix: number[]): Map<number, number> {
  * Complexidade: O(tickets × 24) no build, O(1) por bola na avaliação.
  */
 export async function buildInvertedIndex(gameId: string): Promise<void> {
-    console.log(`📇 [InvertedIndex] Construindo índice para jogo ${gameId}...`);
+    logger.info({ tag: 'InvertedIndex' }, `Construindo índice para jogo ${gameId}...`)
 
     let lowerBound: string | undefined;
     let hasMore     = true;
@@ -157,7 +158,7 @@ export async function buildInvertedIndex(gameId: string): Promise<void> {
     }
     await expirePipeline.exec();
 
-    console.log(
+    logger.info(
         `✅ [InvertedIndex] Índice construído: ${totalTickets} cartelas, ` +
         `${totalTickets * 24} entradas no Redis (jogo ${gameId})`
     );
@@ -172,7 +173,7 @@ export async function getTicketsForBall(gameId: string, ball: number): Promise<B
         const raw = await redisClient.lRange(ballKey(gameId, ball), 0, -1);
         return raw.map((s: string) => JSON.parse(s) as BallEntry);
     } catch (err) {
-        console.warn(`[InvertedIndex] Fallback RPC para bola ${ball} (jogo ${gameId}):`, err);
+        logger.warn({ tag: 'InvertedIndex' }, `Fallback RPC para bola ${ball} (jogo ${gameId}):`)
         return []; // Caller deve fazer fallback para varredura RPC
     }
 }
@@ -202,8 +203,8 @@ export async function deleteIndex(gameId: string): Promise<void> {
             pipeline.del(ballKey(gameId, ball));
         }
         await pipeline.exec();
-        console.log(`🗑️  [InvertedIndex] Índice removido para jogo ${gameId}`);
+        logger.info({ tag: 'InvertedIndex' }, `Índice removido para jogo ${gameId}`)
     } catch (err) {
-        console.warn(`[InvertedIndex] Erro ao remover índice do jogo ${gameId}:`, err);
+        logger.warn({ tag: 'InvertedIndex' }, `Erro ao remover índice do jogo ${gameId}:`)
     }
 }

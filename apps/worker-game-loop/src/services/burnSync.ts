@@ -13,6 +13,7 @@
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { executeRecordBurn } from './blockchain';
 import { awardBurnXP } from './xpEngine';
+import { logger } from './logger';
 
 const ATOMIC_ACCOUNT = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
 
@@ -60,7 +61,7 @@ export async function syncBurns(owner: string, candidates: BurnCandidate[]): Pro
             // "Burn ja registrado" → idempotente; demais erros logam e seguem
             const msg = String(e?.message ?? e);
             if (!/ja registrado/i.test(msg)) {
-                console.warn(`⚠️ [burnSync] recordburn falhou para asset ${c.assetId}: ${msg}`);
+                logger.warn({ tag: 'burnSync' }, `recordburn falhou para asset ${c.assetId}: ${msg}`)
             }
         }
     }

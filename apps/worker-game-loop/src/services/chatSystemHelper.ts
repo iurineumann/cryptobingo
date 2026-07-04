@@ -5,6 +5,7 @@
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }         from '@wharfkit/antelope';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+import { logger } from './logger';
 
 const API_GATEWAY_URL    = process.env.API_GATEWAY_URL    || 'http://localhost:8083';
 const INTERNAL_API_KEY   = process.env.INTERNAL_API_KEY   || '';
@@ -30,7 +31,7 @@ async function sendChatSystemMessage(
     });
 
     if (!res.ok) {
-        console.warn(`[ChatSystem] HTTP ${res.status} ao enviar mensagem para sala ${roomId}`);
+        logger.warn({ tag: 'ChatSystem' }, `HTTP ${res.status} ao enviar mensagem para sala ${roomId}`)
     }
 }
 
@@ -86,7 +87,7 @@ export async function sendGameLockedMessage(gameId: string): Promise<void> {
         const payload = JSON.stringify({ code: 'GAME_LOCKED', tickets, players });
         await sendChatSystemMessage(game.room_id, payload, 'system_status');
     } catch (err) {
-        console.warn(`[ChatSystem] Erro ao enviar mensagem de lock (jogo ${gameId}):`, err);
+        logger.warn({ tag: 'ChatSystem' }, `Erro ao enviar mensagem de lock (jogo ${gameId}):`)
     }
 }
 
@@ -98,7 +99,7 @@ export async function sendDrawStartedMessage(roomId: string): Promise<void> {
         const payload = JSON.stringify({ code: 'DRAW_STARTED' });
         await sendChatSystemMessage(roomId, payload, 'system_draw');
     } catch (err) {
-        console.warn(`[ChatSystem] Erro ao enviar mensagem de sorteio (sala ${roomId}):`, err);
+        logger.warn({ tag: 'ChatSystem' }, `Erro ao enviar mensagem de sorteio (sala ${roomId}):`)
     }
 }
 
@@ -110,6 +111,6 @@ export async function sendGameSummaryMessage(roomId: string, totalWinners: numbe
         const payload = JSON.stringify({ code: 'GAME_SUMMARY', winners: totalWinners });
         await sendChatSystemMessage(roomId, payload, 'system_draw');
     } catch (err) {
-        console.warn(`[ChatSystem] Erro ao enviar resumo (sala ${roomId}):`, err);
+        logger.warn({ tag: 'ChatSystem' }, `Erro ao enviar resumo (sala ${roomId}):`)
     }
 }

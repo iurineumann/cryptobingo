@@ -14,6 +14,7 @@ import { redisClient } from './redis';
 import { rpcClient }   from '@cryptobingo/blockchain-core';
 import { UInt64 }      from '@wharfkit/antelope';
 import type { BlockchainGametype, BlockchainPattern } from '@cryptobingo/shared-types';
+import { logger } from './logger';
 
 const CONTRACT_ACCOUNT    = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const PATTERN_CACHE_TTL   = 3_600; // 1 hora
@@ -120,7 +121,7 @@ async function setInCache(gametypeId: string, patterns: PatternEntry[]): Promise
             EX: PATTERN_CACHE_TTL,
         });
     } catch (err) {
-        console.warn(`[PatternCache] Erro ao cachear gametype ${gametypeId}:`, err);
+        logger.warn({ tag: 'PatternCache' }, `Erro ao cachear gametype ${gametypeId}:`)
     }
 }
 
@@ -133,11 +134,11 @@ async function setInCache(gametypeId: string, patterns: PatternEntry[]): Promise
 export async function fetchPatternsWithCache(gametypeId: string): Promise<PatternEntry[]> {
     const cached = await getFromCache(gametypeId);
     if (cached) {
-        console.log(`[PatternCache] Cache hit para gametype ${gametypeId} (${cached.length} padrões)`);
+        logger.info({ tag: 'PatternCache' }, `Cache hit para gametype ${gametypeId} (${cached.length} padrões)`)
         return cached;
     }
 
-    console.log(`[PatternCache] Cache miss para gametype ${gametypeId} — buscando on-chain...`);
+    logger.info({ tag: 'PatternCache' }, `Cache miss para gametype ${gametypeId} — buscando on-chain...`)
     const patterns = await fetchPatternsFromChain(gametypeId);
     await setInCache(gametypeId, patterns);
     return patterns;
@@ -150,8 +151,8 @@ export async function clearPatternCache(gametypeId: string): Promise<void> {
     try {
         if (!redisClient.isOpen) return;
         await redisClient.del(cacheKey(gametypeId));
-        console.log(`[PatternCache] Cache invalidado para gametype ${gametypeId}`);
+        logger.info({ tag: 'PatternCache' }, `Cache invalidado para gametype ${gametypeId}`)
     } catch (err) {
-        console.warn(`[PatternCache] Erro ao limpar cache do gametype ${gametypeId}:`, err);
+        logger.warn({ tag: 'PatternCache' }, `Erro ao limpar cache do gametype ${gametypeId}:`)
     }
 }

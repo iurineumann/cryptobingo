@@ -1,6 +1,7 @@
 import { createClient } from 'redis';
 import type { RedisClientType } from 'redis';
 import { redisConnected, setRedisConnected } from './connectionState';
+import { logger } from './logger';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -8,13 +9,13 @@ export const redisClient: RedisClientType = createClient({ url: REDIS_URL }) as 
 
 redisClient.on('error', (err: Error) => {
     if (redisConnected) {
-        console.error('❌ [Worker Redis] Conexão perdida:', err.message);
+        logger.error({ err, tag: 'Worker Redis' }, 'Conexão perdida:')
     }
     setRedisConnected(false);
 });
 
 redisClient.on('connect', () => {
-    console.log('✅ [Worker Redis] Conectado com sucesso (Inverted Index).');
+    logger.info({ tag: 'Worker Redis' }, 'Conectado com sucesso (Inverted Index).')
 });
 
 redisClient.on('ready', () => {
@@ -29,6 +30,6 @@ export async function connectRedis(): Promise<void> {
     try {
         await redisClient.connect();
     } catch {
-        console.warn('⚠️ [Worker Redis] Falha na conexão inicial (retry automático em background).');
+        logger.warn({ tag: 'Worker Redis' }, 'Falha na conexão inicial (retry automático em background).')
     }
 }

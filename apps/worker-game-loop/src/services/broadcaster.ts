@@ -6,6 +6,7 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import { logger } from './logger';
 import {
     wsConnectionsActive,
     slowRevealBallsTotal,
@@ -49,7 +50,7 @@ function decrementIp(ip: string): void {
 // Limpeza periódica do mapa de IPs (prevenção de memory leak)
 setInterval(() => {
     if (ipConnectionMap.size > 0) {
-        console.log(`[WS] IP connection map: ${ipConnectionMap.size} entries active`);
+        logger.info({ tag: 'WS' }, `IP connection map: ${ipConnectionMap.size} entries active`)
     }
 }, 60_000);
 
@@ -107,7 +108,7 @@ export const io = new Server(httpServer, {
 io.use((socket: Socket, next) => {
     const ip = socket.handshake.address;
     if (!incrementIp(ip)) {
-        console.warn(`🚫 [WS] Rate limit excedido para IP ${ip} — conexão rejeitada.`);
+        logger.warn({ tag: 'WS' }, `Rate limit excedido para IP ${ip} — conexão rejeitada.`)
         return next(new Error('RATE_LIMITED: Muitas conexões simultâneas deste IP.'));
     }
     next();
@@ -122,7 +123,7 @@ io.use((socket: Socket, next) => {
 
 io.use((socket: Socket, next) => {
     if (!JWT_SECRET) {
-        console.warn('⚠️  [WS] JWT_SECRET ausente — autenticação desabilitada (apenas DEV).');
+        logger.warn({ tag: 'WS' }, 'JWT_SECRET ausente — autenticação desabilitada (apenas DEV).')
         return next();
     }
 
@@ -145,7 +146,7 @@ io.use((socket: Socket, next) => {
 io.on('connection', (socket: Socket) => {
     const wallet = (socket as any).wallet ?? 'anonymous';
     wsConnectionsActive.inc();
-    console.log(`🔌 [WS] Conectado: ${socket.id} (${wallet})`);
+    logger.info({ tag: 'WS' }, `Conectado: ${socket.id} (${wallet})`)
 
     // ── subscribe: cliente entra na room de um jogo ───────────────────────────
     socket.on('subscribe', (data: { game_id: number }) => {
@@ -157,7 +158,7 @@ io.on('connection', (socket: Socket) => {
 
         const room = `game:${gameId}`;
         socket.join(room);
-        console.log(`📡 [WS] ${wallet} entrou na room ${room}`);
+        logger.info({ tag: 'WS' }, `${wallet} entrou na room ${room}`)
 
         // Envia estado atual imediatamente se o reveal já está em andamento
         const session = activeSessions.get(gameId);
@@ -172,9 +173,7 @@ io.on('connection', (socket: Socket) => {
                     timestamp: new Date().toISOString(),
                 })),
             });
-            console.log(
-                `📨 [WS] Estado atual (${emittedBalls.length} bolas) enviado para ${wallet} (jogo ${gameId})`
-            );
+            logger.info({ tag: 'WS' }, `Estado atual (${emittedBalls.length} bolas) enviado para ${wallet} (jogo ${gameId})`);
         }
     });
 
@@ -204,7 +203,7 @@ io.on('connection', (socket: Socket) => {
                 from_order: lastOrder + 1,
                 balls:      missedBalls,
             });
-            console.log(
+            logger.info(
                 `🔄 [WS] Reconciliação: ${missedBalls.length} bola(s) reenviadas ` +
                 `para ${wallet} (jogo ${gameId}, a partir do order ${lastOrder + 1})`
             );
@@ -214,7 +213,7 @@ io.on('connection', (socket: Socket) => {
     socket.on('disconnect', (reason) => {
         wsConnectionsActive.dec();
         decrementIp(socket.handshake.address);
-        console.log(`🔌 [WS] Desconectado: ${socket.id} (${wallet}) — ${reason}`);
+        logger.info({ tag: 'WS' }, `Desconectado: ${socket.id} (${wallet}) — ${reason}`)
     });
 });
 
@@ -259,7 +258,7 @@ chatNamespace.on('connection', (socket: Socket) => {
 
             chatNamespace.to(roomId).emit('chat:message', msg);
         } catch (err) {
-            console.error('[Chat] Erro ao salvar mensagem:', err);
+            logger.error({ err, tag: 'Chat' }, 'Erro ao salvar mensagem:')
         }
     });
 
@@ -287,7 +286,7 @@ chatNamespace.on('connection', (socket: Socket) => {
  */
 export function startSlowReveal(gameId: string, balls: number[], totalBalls?: number): Promise<void> {
     if (!balls || balls.length === 0) {
-        console.warn(`⚠️  [WS] Lote vazio para jogo ${gameId}. Resolvendo imediatamente.`);
+        logger.warn({ tag: 'WS' }, `Lote vazio para jogo ${gameId}. Resolvendo imediatamente.`)
         return Promise.resolve();
     }
 
@@ -319,7 +318,7 @@ export function startSlowReveal(gameId: string, balls: number[], totalBalls?: nu
         if (!existing) slowRevealSessionsActive.inc();
 
         const room = `game:${gameId}`;
-        console.log(
+        logger.info(
             `🎱 [WS] Reveal jogo ${gameId}: bolas ${startIdx + 1}–${allBalls.length} ` +
             `(${balls.length} novas, ${REVEAL_INTERVAL_MS}ms/bola)`
         );
@@ -331,7 +330,7 @@ export function startSlowReveal(gameId: string, balls: number[], totalBalls?: nu
                 clearInterval(session.timer!);
                 session.timer = null;
                 // Não remove da sessão — orquestrador pode adicionar mais lotes
-                console.log(`✅ [WS] Lote concluído (jogo ${gameId}, até bola ${idx}).`);
+                logger.info({ tag: 'WS' }, `Lote concluído (jogo ${gameId}, até bola ${idx}).`)
                 resolve();
                 return;
             }
@@ -354,7 +353,7 @@ export function startSlowReveal(gameId: string, balls: number[], totalBalls?: nu
                     game_id: parseInt(gameId, 10),
                     payload: { winning_ball: number, winners: session.winners },
                 });
-                console.log(`🏆 [WS] ${session.winners.length} vencedor(es) — jogo ${gameId} bola #${order}`);
+                logger.info({ tag: 'WS' }, `${session.winners.length} vencedor(es) — jogo ${gameId} bola #${order}`)
                 session.winners = [];
             }
 
@@ -373,7 +372,7 @@ export function endRevealSession(gameId: string): void {
         if (session.timer) clearInterval(session.timer);
         activeSessions.delete(gameId);
         slowRevealSessionsActive.dec();
-        console.log(`🧹 [WS] Sessão de reveal encerrada (jogo ${gameId}).`);
+        logger.info({ tag: 'WS' }, `Sessão de reveal encerrada (jogo ${gameId}).`)
     }
 }
 
@@ -391,7 +390,7 @@ export function notifyGoldenBall(
         game_id: parseInt(gameId, 10),
         payload: { ball_num: ballNum, multiplier },
     });
-    console.log(`🌟 [WS] golden_ball ${ballNum} (×${multiplier}) — jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `golden_ball ${ballNum} (×${multiplier}) — jogo ${gameId}`)
 }
 
 /**
@@ -408,7 +407,7 @@ export function notifyGoldenMultiplierProgress(
         game_id: parseInt(gameId, 10),
         payload: { multiplier, is_final: isFinal },
     });
-    console.log(`🎰 [WS] golden_multiplier_progress ×${multiplier}${isFinal ? ' (FINAL)' : ''} — jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `golden_multiplier_progress ×${multiplier}${isFinal ? ' (FINAL)' : ''} — jogo ${gameId}`)
 }
 
 /**
@@ -430,7 +429,7 @@ export function notifyStageCleared(
         game_id: parseInt(gameId, 10),
         payload: { stage, winners, winning_ball: winningBall },
     });
-    console.log(`🎯 [WS] stage_cleared estágio ${stage} (${winners.length} vencedor(es), bola ${winningBall}) — jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `stage_cleared estágio ${stage} (${winners.length} vencedor(es), bola ${winningBall}) — jogo ${gameId}`)
 }
 
 /**
@@ -447,7 +446,7 @@ export function notifyGameEnded(
         game_id: parseInt(gameId, 10),
         payload: { draw_mode: drawMode, total_winners: totalWinners },
     });
-    console.log(`🏁 [WS] game_ended (modo: ${drawMode}, vencedores: ${totalWinners}) — jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `game_ended (modo: ${drawMode}, vencedores: ${totalWinners}) — jogo ${gameId}`)
 }
 
 /**
@@ -459,9 +458,7 @@ export function notifyWinners(gameId: string, winners: WinnerPayload[]): void {
     const session = activeSessions.get(gameId);
     if (session) {
         session.winners = winners;
-        console.log(
-            `🏆 [WS] ${winners.length} vencedor(es) enfileirados para emissão no jogo ${gameId}`
-        );
+        logger.info({ tag: 'WS' }, `${winners.length} vencedor(es) enfileirados para emissão no jogo ${gameId}`);
     } else {
         // Reveal já encerrou — emite diretamente
         io.to(`game:${gameId}`).emit('winner_found', {
@@ -469,9 +466,7 @@ export function notifyWinners(gameId: string, winners: WinnerPayload[]): void {
             game_id: parseInt(gameId, 10),
             payload: { winning_ball: null, winners },
         });
-        console.log(
-            `🏆 [WS] Jogo ${gameId} — vencedores emitidos diretamente (reveal já encerrado)`
-        );
+        logger.info({ tag: 'WS' }, `Jogo ${gameId} — vencedores emitidos diretamente (reveal já encerrado)`);
     }
 }
 
@@ -509,7 +504,7 @@ export function notifyGameLocked(gameId: string): void {
         game_id:   parseInt(gameId, 10),
         timestamp: new Date().toISOString(),
     });
-    console.log(`🔒 [WS] game_locked emitido para jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `game_locked emitido para jogo ${gameId}`)
 }
 
 /**
@@ -533,7 +528,7 @@ export function notifyGameAborted(
         game_id: parseInt(gameId, 10),
         payload: { reason },
     });
-    console.log(`❌ [WS] game_aborted (${reason}) emitido para jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `game_aborted (${reason}) emitido para jogo ${gameId}`)
 }
 
 // ==========================================
@@ -546,6 +541,6 @@ export function notifyGameAborted(
  */
 export function startBroadcaster(): void {
     httpServer.listen(WS_PORT, () => {
-        console.log(`✅ [WS] Broadcaster Socket.io escutando na porta ${WS_PORT}`);
+        logger.info({ tag: 'WS' }, `Broadcaster Socket.io escutando na porta ${WS_PORT}`)
     });
 }

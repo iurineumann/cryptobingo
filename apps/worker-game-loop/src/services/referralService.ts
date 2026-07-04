@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { PlayerProgression } from '../models/playerProgression';
+import { logger } from './logger';
 
 interface IReferral extends Document {
     wallet: string;
@@ -101,7 +102,7 @@ export async function processReferralBuyin(referralCode: string, refereeWallet: 
         );
     }
 
-    console.log(`[Referral] ${referrer.wallet} indicou ${refereeWallet}: +${xpReward}XP +${ticketReward}ticket`);
+    logger.info({ tag: 'Referral' }, `${referrer.wallet} indicou ${refereeWallet}: +${xpReward}XP +${ticketReward}ticket`)
 }
 
 export async function getReferralStats(wallet: string): Promise<{

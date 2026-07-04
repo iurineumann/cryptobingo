@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import { microserviceSession } from './blockchain';
 import { io as wsIo } from './broadcaster';
 import { redisClient } from './redis';
+import { logger } from './logger';
 
 const chatNs = () => wsIo.of('/chat');
 
@@ -172,7 +173,7 @@ async function executeDrop(
     roomId: string,
     winner: string,
 ): Promise<void> {
-    console.log(`[DropWorker] Executando drop — alloc #${alloc.alloc_id}, vencedor: ${winner}`);
+    logger.info({ tag: 'DropWorker' }, `Executando drop — alloc #${alloc.alloc_id}, vencedor: ${winner}`)
 
     const quantity = alloc.asset_type === 'token'
         ? { quantity: alloc.quantity_per_drop.quantity, contract: alloc.token_contract }
@@ -188,7 +189,7 @@ async function executeDrop(
             }],
         }, { broadcast: true });
 
-        console.log(`✅ Drop executado — alloc #${alloc.alloc_id} → ${winner}. TX: ${result.response?.transaction_id}`);
+        logger.info(`Drop executado — alloc #${alloc.alloc_id} → ${winner}. TX: ${result.response?.transaction_id}`);
 
         const eventPayload: Record<string, unknown> = {
             type:       alloc.asset_type,
@@ -208,36 +209,36 @@ async function executeDrop(
         chatNs().to(roomId).emit('chat:sponsor_drop', eventPayload);
 
     } catch (err) {
-        console.error(`[DropWorker] Erro ao executar drop alloc #${alloc.alloc_id}:`, err);
+        logger.error({ err, tag: 'DropWorker' }, `Erro ao executar drop alloc #${alloc.alloc_id}:`)
     }
 }
 
 export async function processRoomDrops(gameId: string, roomId: string): Promise<void> { // NOSONAR — orquestração de drops com seleção aleatória ponderada, NFT/token dispatch e lock distribuído; complexidade inerente ao ADR-007
-    console.log(`\n🎁 [DropWorker] Processando drops — sala ${roomId}, jogo ${gameId}`);
+    logger.info({ tag: 'DropWorker' }, `Processando drops — sala ${roomId}, jogo ${gameId}`);
 
     const acquired = await acquireDropLock(gameId);
     if (!acquired) {
-        console.log(`[DropWorker] Jogo ${gameId} já está sendo processado (lock Redis). Pulando.`);
+        logger.info({ tag: 'DropWorker' }, `Jogo ${gameId} já está sendo processado (lock Redis). Pulando.`)
         return;
     }
 
     const roomDropChanceBps = await fetchRoomDropChance(roomId);
     if (randomInt(10000) >= roomDropChanceBps) {
-        console.log(`[DropWorker] Fase 0: sala ${roomId} falhou no pré-check (${roomDropChanceBps} bps).`);
+        logger.info({ tag: 'DropWorker' }, `Fase 0: sala ${roomId} falhou no pré-check (${roomDropChanceBps} bps).`)
         return;
     }
-    console.log(`[DropWorker] Fase 0: sala ${roomId} passou no pré-check (${roomDropChanceBps} bps).`);
+    logger.info({ tag: 'DropWorker' }, `Fase 0: sala ${roomId} passou no pré-check (${roomDropChanceBps} bps).`)
 
     const allocations = await fetchActiveAllocations(roomId);
     if (allocations.length === 0) {
-        console.log(`[DropWorker] Sala ${roomId}: sem alocações ativas.`);
+        logger.info({ tag: 'DropWorker' }, `Sala ${roomId}: sem alocações ativas.`)
         return;
     }
 
     const nftAllocs   = allocations.filter(a => a.asset_type === 'nft');
     const tokenAllocs = allocations.filter(a => a.asset_type === 'token');
 
-    console.log(`[DropWorker] Alocações: ${nftAllocs.length} NFT(s), ${tokenAllocs.length} token(s).`);
+    logger.info({ tag: 'DropWorker' }, `Alocações: ${nftAllocs.length} NFT(s), ${tokenAllocs.length} token(s).`)
 
     let electedNft: DropAllocationRow | null = null;
 
@@ -247,13 +248,13 @@ export async function processRoomDrops(gameId: string, roomId: string): Promise<
         for (const alloc of sorted) {
             if (randomInt(10000) < alloc.drop_chance_bps) {
                 electedNft = alloc;
-                console.log(`[DropWorker] Fase 1A: NFT eleita — alloc #${alloc.alloc_id} (${alloc.drop_chance_bps} bps)`);
+                logger.info({ tag: 'DropWorker' }, `Fase 1A: NFT eleita — alloc #${alloc.alloc_id} (${alloc.drop_chance_bps} bps)`)
                 break;
             }
         }
 
         if (!electedNft) {
-            console.log(`[DropWorker] Fase 1A: nenhuma NFT eleita (${nftAllocs.length} testada(s)).`);
+            logger.info({ tag: 'DropWorker' }, `Fase 1A: nenhuma NFT eleita (${nftAllocs.length} testada(s)).`)
         }
     }
 
@@ -273,23 +274,23 @@ export async function processRoomDrops(gameId: string, roomId: string): Promise<
             for (const alloc of allocs) {
                 const dep = await fetchDeposit(alloc.deposit_id);
                 if (!dep || !hasSufficientBalance(dep, alloc)) {
-                    console.log(`[DropWorker] Fase 1B: token ${symbol} alloc #${alloc.alloc_id} — saldo insuficiente.`);
+                    logger.info({ tag: 'DropWorker' }, `Fase 1B: token ${symbol} alloc #${alloc.alloc_id} — saldo insuficiente.`)
                     continue;
                 }
 
                 if (randomInt(10000) < alloc.drop_chance_bps) {
                     electedTokens.push(alloc);
-                    console.log(`[DropWorker] Fase 1B: token eleito — alloc #${alloc.alloc_id} (${symbol}, ${alloc.drop_chance_bps} bps)`);
+                    logger.info({ tag: 'DropWorker' }, `Fase 1B: token eleito — alloc #${alloc.alloc_id} (${symbol}, ${alloc.drop_chance_bps} bps)`)
                     break;
                 }
             }
         }
 
-        console.log(`[DropWorker] Fase 1B: ${electedTokens.length} token(s) eleito(s) de ${bySymbol.size} símbolo(s).`);
+        logger.info({ tag: 'DropWorker' }, `Fase 1B: ${electedTokens.length} token(s) eleito(s) de ${bySymbol.size} símbolo(s).`)
     }
 
     if (!electedNft && electedTokens.length === 0) {
-        console.log(`[DropWorker] Nenhum ativo eleito para drops no jogo ${gameId}.`);
+        logger.info({ tag: 'DropWorker' }, `Nenhum ativo eleito para drops no jogo ${gameId}.`)
         return;
     }
 
@@ -300,7 +301,7 @@ export async function processRoomDrops(gameId: string, roomId: string): Promise<
         if (winner) {
             await executeDrop(electedNft, gameId, roomId, winner);
         } else {
-            console.log(`[DropWorker] Fase 2: nenhum jogador selecionado para NFT alloc #${electedNft.alloc_id}.`);
+            logger.info({ tag: 'DropWorker' }, `Fase 2: nenhum jogador selecionado para NFT alloc #${electedNft.alloc_id}.`)
         }
     }
 
@@ -309,9 +310,9 @@ export async function processRoomDrops(gameId: string, roomId: string): Promise<
         if (winner) {
             await executeDrop(alloc, gameId, roomId, winner);
         } else {
-            console.log(`[DropWorker] Fase 2: nenhum jogador selecionado para token alloc #${alloc.alloc_id}.`);
+            logger.info({ tag: 'DropWorker' }, `Fase 2: nenhum jogador selecionado para token alloc #${alloc.alloc_id}.`)
         }
     }
 
-    console.log(`✅ [DropWorker] Drops processados para sala ${roomId}, jogo ${gameId}.`);
+    logger.info({ tag: 'DropWorker' }, `Drops processados para sala ${roomId}, jogo ${gameId}.`)
 }
