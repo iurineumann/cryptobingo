@@ -90,3 +90,33 @@ body {
   0%, 100% { box-shadow: 0 0 20px -4px rgb(245 158 11 / 0.7), 0 0 40px -8px rgb(245 158 11 / 0.3); }
   50% { box-shadow: 0 0 30px -2px rgb(245 158 11 / 0.9), 0 0 60px -4px rgb(245 158 11 / 0.5); }
 }
+
+.legal-doc-body h2 {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgb(30 30 46 / 1);
+    position: relative;
+}
+
+.legal-doc-body h2::before {
+    content: '\00a7 ';
+    color: var(--color-brand-400);
+    font-weight: 300;
+}
+
+.legal-doc-body > h2:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+@media print {
+    .legal-doc-page aside,
+    .legal-doc-page details,
+    .legal-doc-page nav {
+        display: none !important;
+    }
+    .legal-doc-body h2 {
+        break-after: avoid;
+    }
+}

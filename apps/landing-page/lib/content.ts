@@ -1,9 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
-import { marked } from 'marked';
+import { marked, Renderer, lexer } from 'marked';
 
 const contentDir = path.resolve(process.cwd(), 'content');
+
+function slugify(text: string): string {
+    return text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+const legalRenderer = new Renderer();
+legalRenderer.heading = function ({ text, depth }: { text: string; depth: number; tokens: unknown[] }) {
+    const id = slugify(text);
+    return `<h${depth} id="${id}">${text}</h${depth}>`;
+};
+marked.use({ renderer: legalRenderer });
 
 interface FAQItem {
   question: string;
@@ -145,10 +156,17 @@ export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialI
   };
 }
 
+interface PageHeading {
+  text: string;
+  id: string;
+}
+
 interface PageContent {
   title: string;
   description: string;
   body: string;
+  headings: PageHeading[];
+  lastUpdated: string;
 }
 
 const VALID_PAGE_SLUGS = new Set([
@@ -166,10 +184,25 @@ export function loadPageContent(slug: string, locale: string = 'en'): PageConten
   const raw = fs.readFileSync(filePath, 'utf-8');
   const { data, content } = matter(raw);
   const body = marked.parse(content.trim());
+
+  const tokens = lexer(content);
+  const headings = tokens
+    .filter((t): t is { type: 'heading'; depth: number; text: string; tokens: unknown[] } =>
+      t.type === 'heading' && t.depth === 2)
+    .map(t => ({
+      text: t.text,
+      id: slugify(t.text),
+    }));
+
+  const stat = fs.statSync(filePath);
+  const lastUpdated = stat.mtime.toISOString().split('T')[0];
+
   return {
     title: data.title || slug,
     description: data.description || '',
     body,
+    headings,
+    lastUpdated,
   };
 }
 
