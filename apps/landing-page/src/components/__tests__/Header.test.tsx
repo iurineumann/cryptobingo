@@ -6,7 +6,7 @@ const mockChangeLanguage = vi.fn();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string) => key === 'nav.ideas' ? 'Ideias' : key,
     i18n: { changeLanguage: mockChangeLanguage },
   }),
 }));
@@ -31,10 +31,10 @@ describe('Header', () => {
   it('should push nav_click on desktop nav link click', () => {
     render(<Header />);
     const desktopNav = screen.getByTestId('desktop-nav');
-    const ideasLink = within(desktopNav).getByText('nav.ideas');
+    const ideasLink = within(desktopNav).getByRole('link', { name: /ideias/i });
     fireEvent.click(ideasLink);
     expect(window.dataLayer).toContainEqual(
-      expect.objectContaining({ event: 'nav_click', link_text: 'nav.ideas' })
+      expect.objectContaining({ event: 'nav_click', link_text: 'Ideias' })
     );
   });
 
@@ -68,6 +68,13 @@ describe('Header', () => {
     expect(window.dataLayer).toContainEqual(
       expect.objectContaining({ event: 'locale_switch', from_locale: 'en', to_locale: 'pt', source: 'header' })
     );
+  });
+
+  it('ideas link uses locale prefix', () => {
+    render(<Header />);
+    const desktopNav = screen.getByTestId('desktop-nav');
+    const link = within(desktopNav).getByRole('link', { name: /ideias/i });
+    expect(link.getAttribute('href')).toMatch(/^\/\w{2}\/ideas$/);
   });
 
   it('renders urgency timer badge below nav', () => {
