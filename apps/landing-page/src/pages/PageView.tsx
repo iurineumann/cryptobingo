@@ -23,13 +23,15 @@ export default function PageView() {
     const ids = page.headings.map(h => h.id);
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
-          }
+        const intersecting = entries.filter(e => e.isIntersecting);
+        if (intersecting.length > 0) {
+          const topmost = intersecting.reduce((best, e) =>
+            e.boundingClientRect.top < best.boundingClientRect.top ? e : best
+          );
+          setActiveId(topmost.target.id);
         }
       },
-      { rootMargin: '-80px 0px -60% 0px' }
+      { rootMargin: '-80px 0px -40% 0px' }
     );
     ids.forEach(id => {
       const el = document.getElementById(id);

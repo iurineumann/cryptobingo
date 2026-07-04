@@ -37,11 +37,7 @@ export default function BlogPost() {
         <article>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">{post.title}</h1>
           <p className="text-slate-400 mb-8">{post.description}</p>
-          <div className="prose prose-invert max-w-none">
-            {post.body.split('\n').map((p, i) => (
-              <p key={i} className="mb-4 text-slate-300 leading-relaxed">{p}</p>
-            ))}
-          </div>
+          <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: post.body }} />
         </article>
       </main>
       <Footer />

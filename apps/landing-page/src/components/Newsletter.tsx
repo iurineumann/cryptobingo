@@ -2,9 +2,11 @@ import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { validateEmail } from '@/lib/utils';
 import { subscribe } from '@/lib/api';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 export default function Newsletter() {
     const { t, i18n } = useTranslation();
+    const { trackEvent } = useAnalytics(i18n.language);
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState<
         'idle' | 'loading' | 'success' | 'error'
@@ -23,11 +25,16 @@ export default function Newsletter() {
             await subscribe(email);
             setStatus('success');
             setMessage(t('newsletter.thanks'));
+            trackEvent('newsletter_subscribe', { method: 'api' });
         } catch (err) {
             setStatus('error');
             setMessage(
                 err instanceof Error ? err.message : t('newsletter.error')
             );
+            trackEvent('newsletter_error', {
+              error_type: err instanceof Error ? err.name : 'unknown',
+              error_message: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 

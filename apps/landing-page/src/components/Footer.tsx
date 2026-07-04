@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 interface FooterProps {
   social?: {
@@ -21,6 +22,7 @@ export default function Footer({ social }: FooterProps) {
   const { t } = useTranslation();
   const { locale } = useParams();
   const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
   const s = social || defaultSocial;
 
   const productLinks = [
@@ -28,6 +30,7 @@ export default function Footer({ social }: FooterProps) {
     { label: t('nav.faq'), href: `/${lang}/faq` },
     { label: t('nav.ideas'), href: '/ideas' },
     { label: t('nav.blog'), href: `/${lang}/blog` },
+    { label: t('nav.tutorials'), href: `/${lang}/tutorials` },
   ] as const;
 
   const legalLinks = [
@@ -53,6 +56,13 @@ export default function Footer({ social }: FooterProps) {
       <a
         key={link.label}
         href={link.href}
+        onClick={() => {
+          if (isExternal) {
+            trackEvent('external_link_click', { link_text: link.label, link_url: link.href });
+          } else {
+            trackEvent('nav_click', { link_text: link.label, link_href: link.href, link_type: 'internal' });
+          }
+        }}
         {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         className="text-sm text-slate-400 hover:text-white transition-colors"
       >
@@ -83,10 +93,10 @@ export default function Footer({ social }: FooterProps) {
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">{t('footer.community')}</h4>
             <div className="flex flex-col gap-2">
-              <a href={s.github} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.github')}</a>
-              <a href={s.telegram} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.telegram')}</a>
-              <a href={s.discord} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.discord')}</a>
-              <a href={s.twitter} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.twitter')}</a>
+              <a href={s.github} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent('external_link_click', { link_text: t('nav.github'), link_url: s.github })} className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.github')}</a>
+              <a href={s.telegram} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent('external_link_click', { link_text: t('nav.telegram'), link_url: s.telegram })} className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.telegram')}</a>
+              <a href={s.discord} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent('external_link_click', { link_text: t('nav.discord'), link_url: s.discord })} className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.discord')}</a>
+              <a href={s.twitter} target="_blank" rel="noopener noreferrer" onClick={() => trackEvent('external_link_click', { link_text: t('nav.twitter'), link_url: s.twitter })} className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.twitter')}</a>
             </div>
           </div>
           <div>
