@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck, Cpu, Coins } from 'lucide-react';
+import { ShieldCheck, Award, UserCheck, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FeatureItem {
@@ -10,13 +10,36 @@ interface FeatureItem {
 
 const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   shield: ShieldCheck,
-  trophy: Cpu,
-  users: Cpu,
+  trophy: Award,
+  users: UserCheck,
   check: ShieldCheck,
 };
 
 interface FeaturesProps {
   features?: FeatureItem[];
+}
+
+function FeatureCard({ item, featured }: { item: FeatureItem; featured?: boolean }) {
+  const Icon = iconMap[item.icon] || ShieldCheck;
+  return (
+    <div
+      data-testid={`feature-card${featured ? '-featured' : ''}`}
+      className={cn(
+        'bg-surface-800 rounded-xl p-6 border transition-all',
+        featured
+          ? 'md:col-span-2 border-brand-500/30 ring-1 ring-brand-500/20 bg-brand-500/5 hover:shadow-card-hover'
+          : 'border-surface-700/50 hover:border-surface-500 hover:-translate-y-0.5 hover:shadow-card-hover'
+      )}
+    >
+      <Icon className="text-brand-400" size={featured ? 28 : 24} />
+      <h3 className="text-lg font-semibold text-white mt-4 mb-2">
+        {item.title}
+      </h3>
+      <p className="text-sm text-secondary leading-relaxed">
+        {item.description}
+      </p>
+    </div>
+  );
 }
 
 export default function Features({ features }: FeaturesProps) {
@@ -51,27 +74,17 @@ export default function Features({ features }: FeaturesProps) {
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-12">
           {t('features.section_title')}
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {items.map((f) => {
-            const Icon = iconMap[f.icon] || ShieldCheck;
-            return (
-              <div
-                key={f.title}
-                className={cn(
-                  'bg-surface-800 rounded-xl p-6 border border-surface-700/50',
-                  'hover:border-surface-500 transition-all hover:-translate-y-0.5 hover:shadow-card-hover'
-                )}
-              >
-                <Icon className="text-brand-400" size={24} />
-                <h3 className="text-lg font-semibold text-white mt-4 mb-2">
-                  {f.title}
-                </h3>
-                <p className="text-sm text-secondary leading-relaxed">
-                  {f.description}
-                </p>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 gap-6">
+          {items[0] && (
+            <FeatureCard item={items[0]} featured />
+          )}
+          {items.length > 1 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {items.slice(1).map((f) => (
+                <FeatureCard key={f.title} item={f} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
