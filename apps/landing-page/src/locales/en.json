@@ -1,0 +1,98 @@
+{
+  "locale": {
+    "en": "English",
+    "pt": "Português",
+    "zh": "中文"
+  },
+  "nav": {
+    "ideas": "Ideas",
+    "testnet": "Testnet",
+    "faq": "FAQ",
+    "blog": "Blog",
+    "tutorials": "Tutorials",
+    "github": "GitHub",
+    "telegram": "Telegram",
+    "twitter": "X/Twitter"
+  },
+  "hero": {
+    "badge": "BINGO GameFi on WAX",
+    "learn_more": "Learn More"
+  },
+  "features": {
+    "section_tag": "Why CryptoBingo",
+    "section_title": "Built for Trust, Designed for Fun",
+    "items": [
+      {
+        "title": "Provably Fair",
+        "description": "Every draw is verified on-chain using cryptographic randomness."
+      },
+      {
+        "title": "Built on WAX",
+        "description": "Lightning-fast transactions, zero gas fees, carbon-neutral blockchain."
+      },
+      {
+        "title": "Real Prizes",
+        "description": "Win crypto tokens and NFT rewards. 85% return-to-player."
+      }
+    ]
+  },
+  "roadmap": {
+    "title": "Roadmap",
+    "description": "Our journey to bring BINGO to the blockchain",
+    "items": [
+      {
+        "date": "July 2026",
+        "title": "MVP Testnet",
+        "description": "Core game mechanics live on WAX testnet. Single game mode, basic UI, community testing."
+      },
+      {
+        "date": "August 2026",
+        "title": "Open Beta",
+        "description": "Expanded game modes, NFT integration, mobile-responsive UI, ideas forum."
+      },
+      {
+        "date": "September 2026",
+        "title": "Mainnet Launch",
+        "description": "Full feature set, sponsor marketplace, advanced analytics, governance."
+      }
+    ]
+  },
+  "newsletter": {
+    "title": "Stay Updated",
+    "description": "Get the latest news, game updates, and community events.",
+    "placeholder": "Enter your email",
+    "submit": "Subscribe",
+    "sending": "Sending...",
+    "thanks": "You're subscribed! Check your inbox.",
+    "error": "Something went wrong.",
+    "invalid_email": "Please enter a valid email address."
+  },
+  "footer": {
+    "tagline": "BINGO GameFi on WAX blockchain",
+    "product": "Product",
+    "community": "Community",
+    "legal": "Legal",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "risk_disclaimer": "Risk Disclaimer",
+    "responsible_gaming": "Responsible Gaming",
+    "aml": "AML Policy",
+    "dispute": "Dispute Resolution",
+    "game_rules": "Game Rules",
+    "copyright": "© 2026 CryptoBingo. All rights reserved."
+  },
+  "faq": {
+    "title": "FAQ",
+    "description": "Frequently asked questions about CryptoBingo"
+  },
+  "seo": {
+    "home_title": "CryptoBingo — On-Chain BINGO GameFi on WAX",
+    "home_desc": "Play decentralized BINGO on WAX blockchain. Provably fair, real prizes, 85% RTP. Buy tickets, win crypto and NFTs.",
+    "faq_title": "FAQ — CryptoBingo",
+    "faq_desc": "Frequently asked questions about CryptoBingo Bingo GameFi on WAX blockchain.",
+    "blog_title": "Blog — CryptoBingo",
+    "blog_desc": "News, updates, and articles about CryptoBingo Bingo GameFi on WAX.",
+    "tutorials_title": "Tutorials — CryptoBingo",
+    "tutorials_desc": "Learn how to play, create wallets, and use CryptoBingo."
+  }
+}

@@ -177,22 +177,27 @@
 
             /* ── Helpers ─────────────────────────────────────────── */
 
+            function getCats(cats){
+                return cats&&typeof cats==='object'?cats:{};
+            }
+
             function updateGtag(cookie){
                 if(typeof gtag==='undefined') return;
-                var cats=cookie.categories||[];
+                var cats=getCats(cookie.categories);
                 gtag('consent','update',{
-                    analytics_storage: cats.indexOf('analytics')>=0?'granted':'denied',
-                    ad_storage: cats.indexOf('marketing')>=0?'granted':'denied',
-                    ad_user_data: cats.indexOf('marketing')>=0?'granted':'denied',
-                    ad_personalization: cats.indexOf('marketing')>=0?'granted':'denied',
+                    analytics_storage: cats.analytics?'granted':'denied',
+                    ad_storage: cats.marketing?'granted':'denied',
+                    ad_user_data: cats.marketing?'granted':'denied',
+                    ad_personalization: cats.marketing?'granted':'denied',
                 });
             }
 
             function logConsent(cookie){
                 try{
+                    var cats=getCats(cookie.categories);
                     localStorage.setItem('cb_consent',JSON.stringify({
                         timestamp: new Date().toISOString(),
-                        categories: cookie.categories||[],
+                        categories: Object.keys(cats).filter(function(k){return cats[k];}),
                         consentId: (crypto.randomUUID&&crypto.randomUUID())||Date.now().toString(36),
                         version: '2026.07'
                     }));

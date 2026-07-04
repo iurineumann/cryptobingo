@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import Seo from '@/components/Seo';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -9,6 +10,8 @@ import VoteModal from '@/components/VoteModal';
 import { getIdeas, type Idea } from '@/lib/api';
 
 export default function IdeasPage() {
+    const { locale } = useParams();
+    const lang = locale || 'en';
     const [ideas, setIdeas] = useState<Idea[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export default function IdeasPage() {
 
     return (
         <>
-            <Seo title="Fórum de Ideias" description="Compartilhe ideias para o CryptoBingo e vote em propostas da comunidade. As ideias mais populares viram realidade." canonical="/ideas" />
+            <Seo title="Fórum de Ideias" description="Compartilhe ideias para o CryptoBingo e vote em propostas da comunidade. As ideias mais populares viram realidade." canonical={`/${lang}/ideas`} />
             <Header />
             <StatsBar />
             <main className="mx-auto max-w-6xl px-4 py-16">

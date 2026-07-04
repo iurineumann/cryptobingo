@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Cpu, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,39 +15,41 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   check: ShieldCheck,
 };
 
-const defaultFeatures: FeatureItem[] = [
-  {
-    icon: 'shield',
-    title: 'Provably Fair',
-    description: 'Every draw is verified on-chain using cryptographic randomness.',
-  },
-  {
-    icon: 'trophy',
-    title: 'Built on WAX',
-    description: 'Lightning-fast transactions, zero gas fees, carbon-neutral blockchain.',
-  },
-  {
-    icon: 'users',
-    title: 'Real Prizes',
-    description: 'Win crypto tokens and NFT rewards. 85% return-to-player.',
-  },
-];
-
 interface FeaturesProps {
   features?: FeatureItem[];
 }
 
 export default function Features({ features }: FeaturesProps) {
+  const { t } = useTranslation();
+
+  const defaultFeatures: FeatureItem[] = [
+    {
+      icon: 'shield',
+      title: t('features.items.0.title'),
+      description: t('features.items.0.description'),
+    },
+    {
+      icon: 'trophy',
+      title: t('features.items.1.title'),
+      description: t('features.items.1.description'),
+    },
+    {
+      icon: 'users',
+      title: t('features.items.2.title'),
+      description: t('features.items.2.description'),
+    },
+  ];
+
   const items = features?.length ? features : defaultFeatures;
 
   return (
     <section id="features" className="py-20 bg-surface-900">
       <div className="max-w-7xl mx-auto px-4">
         <p className="text-sm text-brand-400 font-semibold mb-2">
-          Why CryptoBingo
+          {t('features.section_tag')}
         </p>
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-12">
-          Built for Trust, Designed for Fun
+          {t('features.section_title')}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {items.map((f) => {

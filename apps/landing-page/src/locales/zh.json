@@ -1,0 +1,98 @@
+{
+  "locale": {
+    "en": "English",
+    "pt": "Português",
+    "zh": "中文"
+  },
+  "nav": {
+    "ideas": "创意",
+    "testnet": "测试网",
+    "faq": "常见问题",
+    "blog": "博客",
+    "tutorials": "教程",
+    "github": "GitHub",
+    "telegram": "Telegram",
+    "twitter": "X/Twitter"
+  },
+  "hero": {
+    "badge": "WAX上的BINGO GameFi",
+    "learn_more": "了解更多"
+  },
+  "features": {
+    "section_tag": "为什么选择CryptoBingo",
+    "section_title": "为信任而建，为乐趣而设计",
+    "items": [
+      {
+        "title": "可验证公平",
+        "description": "每次开奖都使用加密随机性在链上验证。"
+      },
+      {
+        "title": "基于WAX构建",
+        "description": "闪电般快速的交易，零gas费用，碳中和区块链。"
+      },
+      {
+        "title": "真实奖品",
+        "description": "赢取加密货币代币和NFT奖励。85%的玩家回报率。"
+      }
+    ]
+  },
+  "roadmap": {
+    "title": "路线图",
+    "description": "将BINGO带入区块链的旅程",
+    "items": [
+      {
+        "date": "2026年7月",
+        "title": "MVP测试网",
+        "description": "核心游戏机制在WAX测试网上运行。单人模式，基本UI，社区测试。"
+      },
+      {
+        "date": "2026年8月",
+        "title": "公开测试",
+        "description": "扩展游戏模式，NFT集成，响应式UI，创意论坛。"
+      },
+      {
+        "date": "2026年9月",
+        "title": "主网上线",
+        "description": "完整功能集，赞助商市场，高级分析，治理。"
+      }
+    ]
+  },
+  "newsletter": {
+    "title": "保持更新",
+    "description": "获取最新新闻、游戏更新和社区活动。",
+    "placeholder": "输入您的邮箱",
+    "submit": "订阅",
+    "sending": "发送中...",
+    "thanks": "订阅成功！请查看您的收件箱。",
+    "error": "出了点问题。",
+    "invalid_email": "请输入有效的邮箱地址。"
+  },
+  "footer": {
+    "tagline": "WAX区块链上的BINGO GameFi",
+    "product": "产品",
+    "community": "社区",
+    "legal": "法律",
+    "terms": "服务条款",
+    "privacy": "隐私政策",
+    "risk_disclaimer": "风险声明",
+    "responsible_gaming": "负责任博彩",
+    "aml": "反洗钱政策",
+    "dispute": "争议解决",
+    "game_rules": "游戏规则",
+    "copyright": "© 2026 CryptoBingo. 保留所有权利。"
+  },
+  "faq": {
+    "title": "常见问题",
+    "description": "关于CryptoBingo的常见问题"
+  },
+  "seo": {
+    "home_title": "CryptoBingo — WAX链上BINGO GameFi",
+    "home_desc": "在WAX区块链上玩去中心化BINGO。可验证公平，真实奖品，85%回报率。购买彩票，赢取加密货币和NFT。",
+    "faq_title": "常见问题 — CryptoBingo",
+    "faq_desc": "关于CryptoBingo Bingo GameFi在WAX区块链上的常见问题。",
+    "blog_title": "博客 — CryptoBingo",
+    "blog_desc": "关于CryptoBingo Bingo GameFi在WAX上的新闻、更新和文章。",
+    "tutorials_title": "教程 — CryptoBingo",
+    "tutorials_desc": "学习如何游玩、创建钱包和使用CryptoBingo。"
+  }
+}

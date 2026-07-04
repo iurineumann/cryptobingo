@@ -1,8 +1,10 @@
 import { FormEvent, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { validateEmail } from '@/lib/utils';
 import { subscribe } from '@/lib/api';
 
 export default function Newsletter() {
+    const { t } = useTranslation();
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState<
         'idle' | 'loading' | 'success' | 'error'
@@ -13,18 +15,18 @@ export default function Newsletter() {
         e.preventDefault();
         if (!validateEmail(email)) {
             setStatus('error');
-            setMessage('Please enter a valid email address.');
+            setMessage(t('newsletter.invalid_email'));
             return;
         }
         setStatus('loading');
         try {
             await subscribe(email);
             setStatus('success');
-            setMessage("You're subscribed! Check your inbox.");
+            setMessage(t('newsletter.thanks'));
         } catch (err) {
             setStatus('error');
             setMessage(
-                err instanceof Error ? err.message : 'Something went wrong.'
+                err instanceof Error ? err.message : t('newsletter.error')
             );
         }
     }
@@ -33,10 +35,10 @@ export default function Newsletter() {
         <section className="py-20 bg-surface-900">
             <div className="max-w-xl mx-auto px-4 text-center">
                 <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-                    Stay Updated
+                    {t('newsletter.title')}
                 </h2>
                 <p className="text-secondary mb-8">
-                    Get the latest news, game updates, and community events.
+                    {t('newsletter.description')}
                 </p>
                 {status === 'success' ? (
                     <p className="text-success-400 font-medium">
@@ -49,7 +51,7 @@ export default function Newsletter() {
                     >
                         <input
                             type="email"
-                            placeholder="Enter your email"
+                            placeholder={t('newsletter.placeholder')}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             className="flex-1 px-4 py-3 rounded-xl bg-surface-800 border border-surface-600 text-white placeholder:text-tertiary focus:outline-none focus:border-brand-500"
@@ -59,7 +61,7 @@ export default function Newsletter() {
                             disabled={status === 'loading'}
                             className="bg-accent-400 text-surface-900 font-semibold px-6 py-3 rounded-xl hover:bg-accent-300 transition disabled:opacity-50 whitespace-nowrap"
                         >
-                            {status === 'loading' ? 'Sending...' : 'Subscribe'}
+                            {status === 'loading' ? t('newsletter.sending') : t('newsletter.submit')}
                         </button>
                     </form>
                 )}

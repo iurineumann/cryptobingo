@@ -1,5 +1,5 @@
-import { useLoaderData } from 'react-router-dom';
-import type { Route } from '../app/+types/home';
+import { useTranslation } from 'react-i18next';
+import { useLoaderData, useParams } from 'react-router-dom';
 import { loadSettings } from '../../lib/content';
 import type { HomeSettings } from '../../lib/content';
 import Seo from '@/components/Seo';
@@ -11,16 +11,20 @@ import StatsBar from '@/components/StatsBar';
 import Newsletter from '@/components/Newsletter';
 import Footer from '@/components/Footer';
 
-export async function loader(): Promise<HomeSettings> {
-  return loadSettings();
+export async function loader({ params }: { params: { locale?: string } }): Promise<HomeSettings> {
+  const locale = params.locale || 'en';
+  return loadSettings(locale);
 }
 
 export default function HomePage() {
+  const { t } = useTranslation();
+  const { locale } = useParams();
+  const lang = locale || 'en';
   const settings = useLoaderData<typeof loader>();
 
   return (
     <>
-      <Seo title="Bingo On-Chain na WAX" description="Jogue Bingo descentralizado na blockchain WAX. Prêmios em WAX e NFTs, transparência on-chain e comunidade." canonical="" />
+      <Seo title={t('seo.home_title')} description={t('seo.home_desc')} canonical={`/${lang}`} />
       <Header />
       <Hero hero={settings.hero} />
       <Features features={settings.features} />
