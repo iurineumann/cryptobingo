@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import mongoose, { Schema, Document } from 'mongoose';
 import { UserProfile } from '../models/UserProfile';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const REWARDS: { xp: number; badge?: string; ticket?: boolean }[] = [
     { xp: 50 },
@@ -61,7 +63,7 @@ export async function getDailyRewards(req: Request, res: Response): Promise<void
         const canClaimToday = !claimedDays.includes(currentDay);
         res.status(200).json({ cycleStart, currentDay, claimedDays, canClaimToday, rewards: REWARDS });
     } catch (err) {
-        console.error('[DailyRewards] Erro ao buscar status:', err);
+        logger.error({ err: err, tag: 'DailyRewards' }, 'Erro ao buscar status');
         res.status(500).json({ error: 'Erro ao buscar recompensas diárias.' });
     }
 }
@@ -107,7 +109,7 @@ export async function claimDailyRewardHandler(req: Request, res: Response): Prom
         const streak = totalDocs.reduce((acc, d) => acc + d.claimedDays.length, 0);
         res.status(200).json({ day: currentDay, reward, streak });
     } catch (err: any) {
-        console.error('[DailyRewards] Erro ao resgatar:', err);
+        logger.error({ err: err, tag: 'DailyRewards' }, 'Erro ao resgatar');
         res.status(500).json({ error: 'Erro ao resgatar recompensa diária.' });
     }
 }

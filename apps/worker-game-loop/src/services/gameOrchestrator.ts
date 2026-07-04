@@ -41,6 +41,7 @@ import { executeCloseGame }                                          from './blo
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
 import { sendGameSummaryMessage }                                    from './chatSystemHelper';
+import { logger } from './logger';
 import {
     gameResolutionTotal,
     gameResolutionDuration,
@@ -259,7 +260,7 @@ async function orchestrateMultiMatch(
  * após o reveal completo e todos os pagamentos.
  */
 export async function orchestrateGame(gameId: string): Promise<void> {
-    console.log(`\n🎬 [Orquestrador] Iniciando orquestração do jogo ${gameId}...`);
+    logger.info({ tag: 'Orquestrador' }, `Iniciando orquestração do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
     if (!game) throw new Error(`[Orquestrador] Jogo ${gameId} não encontrado.`);
@@ -288,7 +289,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
         }
     }
 
-    console.log(`🔍 [Orquestrador] Modo: ${drawMode} | Bolas: ${maxBalls} | Gametype: ${gametypeId}`);
+    logger.info({ tag: 'Orquestrador' }, `Modo: ${drawMode} | Bolas: ${maxBalls} | Gametype: ${gametypeId}`)
 
     const drawnBalls = game.drawn_balls;
     let totalWinners = 0;
@@ -316,7 +317,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
                 break;
 
             default:
-                console.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`);
+                logger.warn({ tag: 'Orquestrador' }, `draw_mode desconhecido: ${drawMode}. Usando standard.`)
                 totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
         }
 
@@ -345,8 +346,8 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
     // Cria próxima partida da sala (ADR-010) — APÓS o reveal completo
     await onGameResolved(gameId).catch(err =>
-        console.error(`[Orquestrador] onGameResolved error (jogo ${gameId}):`, err)
+        logger.error({ err, tag: 'Orquestrador' }, `onGameResolved error (jogo ${gameId}):`)
     );
 
-    console.log(`✅ [Orquestrador] Jogo ${gameId} totalmente resolvido (modo: ${drawMode}, ${totalWinners} vencedor(es)).`);
+    logger.info({ tag: 'Orquestrador' }, `Jogo ${gameId} totalmente resolvido (modo: ${drawMode}, ${totalWinners} vencedor(es)).`)
 }

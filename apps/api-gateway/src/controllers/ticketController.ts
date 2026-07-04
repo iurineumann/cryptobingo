@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import { Name, PrivateKey, Checksum256 } from '@wharfkit/antelope';
 import { fetchGame } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 // ==========================================
 // CONFIGURAÇÃO
@@ -191,8 +193,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
     }
 
     if (accountName !== req.user!.wallet) {
-        console.warn(
-            `[TicketGen] account "${accountName}" difere do JWT wallet "${req.user!.wallet}"`
+        logger.warn({ tag: 'TicketGen' }, `account "${accountName}" difere do JWT wallet "${req.user!.wallet}"`
         );
     }
 
@@ -218,7 +219,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
 
     const MICROSERVICE_PRIVATE_KEY = process.env.MICROSERVICE_PRIVATE_KEY;
     if (!MICROSERVICE_PRIVATE_KEY) {
-        console.error('❌ [TicketGen] MICROSERVICE_PRIVATE_KEY não definida no .env!');
+        logger.error({ tag: 'TicketGen' }, 'MICROSERVICE_PRIVATE_KEY não definida no .env!');
         res.status(500).json({ error: 'Configuração interna ausente. Contate o suporte.' });
         return;
     }
@@ -230,7 +231,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
     try {
         game = await fetchGame(gameId);
     } catch (err) {
-        console.error(`[TicketGen] Erro RPC ao buscar jogo ${gameId}:`, err);
+        logger.error({ err: err, tag: 'TicketGen' }, `Erro RPC ao buscar jogo ${gameId}:`);
         res.status(503).json({
             error: 'Nó blockchain indisponível. Tente novamente em instantes.',
         });
@@ -256,7 +257,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
     try {
         privateKey = PrivateKey.from(MICROSERVICE_PRIVATE_KEY);
     } catch {
-        console.error('[TicketGen] MICROSERVICE_PRIVATE_KEY com formato inválido.');
+        logger.error({ tag: 'TicketGen' }, 'MICROSERVICE_PRIVATE_KEY com formato inválido.');
         res.status(500).json({ error: 'Chave do microserviço inválida.' });
         return;
     }
@@ -274,7 +275,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
         try {
             matrix = generateBingoMatrix();
         } catch (err) {
-            console.error('[TicketGen] Erro ao gerar matriz:', err);
+            logger.error({ err: err, tag: 'TicketGen' }, 'Erro ao gerar matriz');
             res.status(500).json({ error: 'Erro interno na geração de cartelas.' });
             return;
         }
@@ -290,12 +291,12 @@ export async function generateTickets(req: Request, res: Response): Promise<void
         } catch (redisErr) {
             // Fail-open controlado: Redis indisponível não bloqueia o fluxo.
             // O Smart Contract garante unicidade via ticket_id único.
-            console.warn('[TicketGen] Redis indisponível para dedupe — prosseguindo:', redisErr);
+            logger.warn({ err: redisErr, tag: 'TicketGen' }, 'Redis indisponível para dedupe — prosseguindo');
             isUnique = true;
         }
 
         if (!isUnique) {
-            console.warn(`[TicketGen] Colisão de matriz detectada (jogo ${gameId}), regerando...`);
+            logger.warn({ tag: 'TicketGen' }, `Colisão de matriz detectada (jogo ${gameId}), regerando...`);
             continue;
         }
 
@@ -313,8 +314,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
 
     if (tickets.length < count) {
         // Situação improvável: colisões excessivas ou Redis sobrecarregado
-        console.error(
-            `[TicketGen] Falha parcial: geradas ${tickets.length}/${count} cartelas ` +
+        logger.error({ tag: 'TicketGen' }, `Falha parcial: geradas ${tickets.length}/${count} cartelas ` +
             `após ${attempts} tentativas (jogo ${gameId}, conta ${accountName})`
         );
         res.status(500).json({
@@ -325,8 +325,7 @@ export async function generateTickets(req: Request, res: Response): Promise<void
         return;
     }
 
-    console.log(
-        `✅ [TicketGen] ${tickets.length} cartela(s) gerada(s) — ` +
+    logger.info({ tag: 'TicketGen' }, `${tickets.length} cartela(s) gerada(s) — ` +
         `conta: ${accountName}, jogo: ${gameId}, tentativas: ${attempts}`
     );
 

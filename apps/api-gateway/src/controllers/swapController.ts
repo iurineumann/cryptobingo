@@ -10,6 +10,8 @@ import { randomUUID } from 'crypto';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const SWAP_CONTRACT   = process.env.SWAP_CONTRACT  || 'bingogameswp';
 const RPC_ENDPOINT    = process.env.RPC_URL  || 'http://127.0.0.1:8888';
@@ -157,7 +159,7 @@ export async function listNftDiscounts(req: Request, res: Response): Promise<voi
         const discounts = await fetchNftDiscounts();
         res.json({ discounts });
     } catch (err) {
-        console.error('[swapController] listNftDiscounts:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'listNftDiscounts');
         res.status(502).json({ error: 'Falha ao ler nftdiscounts do bingogameswp' });
     }
 }
@@ -192,7 +194,7 @@ export async function listSwapPools(req: Request, res: Response): Promise<void> 
 
         res.json({ pools: summaries });
     } catch (err) {
-        console.error('[swapController] listSwapPools:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'listSwapPools');
         res.status(502).json({ error: 'Falha ao ler pools do bingogameswp' });
     }
 }
@@ -343,7 +345,7 @@ export async function getSwapQuote(req: Request, res: Response): Promise<void> {
 
         res.json(quote);
     } catch (err) {
-        console.error('[swapController] getSwapQuote:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'getSwapQuote');
         res.status(502).json({ error: 'Falha ao calcular cotação' });
     }
 }

@@ -7,6 +7,8 @@ import { getRtpReport, getRecentGames, upsertGameHistory, getGameStatsBatch, get
 import { UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
@@ -27,7 +29,7 @@ export async function getRtpStatistics(req: Request, res: Response): Promise<voi
         const report = await getRtpReport(days, currency);
         res.status(200).json(report);
     } catch (err) {
-        console.error('[Statistics] Erro ao gerar relatório RTP:', err);
+        logger.error({ err: err, tag: 'Statistics' }, 'Erro ao gerar relatório RTP');
         res.status(500).json({ error: 'Erro ao gerar relatório de compliance.' });
     }
 }
@@ -45,7 +47,7 @@ export async function getGamesHistory(req: Request, res: Response): Promise<void
         const games = await getRecentGames(limit);
         res.status(200).json({ games, count: games.length });
     } catch (err) {
-        console.error('[Statistics] Erro ao listar histórico de jogos:', err);
+        logger.error({ err: err, tag: 'Statistics' }, 'Erro ao listar histórico de jogos');
         res.status(500).json({ error: 'Erro ao buscar histórico de jogos.' });
     }
 }
@@ -85,7 +87,7 @@ export async function getGameStatsBatchHandler(req: Request, res: Response): Pro
         }
         res.status(200).json({ stats });
     } catch (err) {
-        console.error('[Statistics] Erro ao buscar batch de stats:', err);
+        logger.error({ err: err, tag: 'Statistics' }, 'Erro ao buscar batch de stats');
         res.status(500).json({ error: 'Erro ao buscar estatísticas de jogos.' });
     }
 }
@@ -104,7 +106,7 @@ export async function getPlatformSummaryHandler(req: Request, res: Response): Pr
         const summary = await getPlatformSummary();
         res.status(200).json(summary);
     } catch (err) {
-        console.error('[Statistics] Erro ao gerar resumo da plataforma:', err);
+        logger.error({ err: err, tag: 'Statistics' }, 'Erro ao gerar resumo da plataforma');
         res.status(500).json({ error: 'Erro ao gerar resumo da plataforma.' });
     }
 }
@@ -172,11 +174,11 @@ export async function syncGameToLedger(req: Request, res: Response): Promise<voi
             resolved_at:   game.end_time ? new Date(game.end_time * 1000) : undefined,
         });
 
-        console.log(`✅ [Ledger] Jogo ${gameId} sincronizado.`);
+        logger.info({ tag: 'Ledger' }, `Jogo ${gameId} sincronizado.`);
         res.status(200).json({ message: `Jogo ${gameId} sincronizado com sucesso.`, game_id: gameId });
 
     } catch (err) {
-        console.error('[Ledger] Erro ao sincronizar jogo:', err);
+        logger.error({ err: err, tag: 'Ledger' }, 'Erro ao sincronizar jogo');
         res.status(500).json({ error: 'Erro ao sincronizar jogo com o ledger.' });
     }
 }

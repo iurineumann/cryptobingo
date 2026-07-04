@@ -4,6 +4,8 @@ import { SponsorOrg } from '../models/SponsorOrg';
 import { Signature, Checksum256 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { logAudit } from '../utils/audit';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -66,7 +68,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
                 wallet_address,
                 role: isSystem ? 'contract_admin' : 'player',
             } as any);
-            console.log(`✨ [Profile] Novo perfil criado para: ${wallet_address}` +
+            logger.info({ tag: 'Profile' }, `Novo perfil criado para: ${wallet_address}` +
                 (isSystem ? ' (contract_admin)' : ''));
 
             if (isSystem) {
@@ -83,7 +85,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
                    && profile.role !== 'contract_admin') {
             profile.role = 'contract_admin';
             await profile.save();
-            console.log(`⬆️ [Profile] Perfil ${wallet_address} atualizado para contract_admin`);
+            logger.info({ tag: 'Profile' }, `Perfil ${wallet_address} atualizado para contract_admin`);
         }
 
         // Enriquecimento de progressão (ADR-028 2D)
@@ -110,7 +112,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
             },
         });
     } catch (error) {
-        console.error(`[Profile] Erro ao buscar perfil de ${wallet_address}:`, error);
+        logger.error({ err: error, tag: 'Profile' }, `Erro ao buscar perfil de ${wallet_address}:`);
         res.status(500).json({ error: 'Erro interno ao buscar perfil.' });
     }
 };
@@ -160,7 +162,7 @@ async function verifyProfileSignature(
 
         return activeKeys.includes(recovered);
     } catch (err) {
-        console.error('[Profile] verifyProfileSignature erro interno:', err);
+        logger.error({ err: err, tag: 'Profile' }, 'verifyProfileSignature erro interno');
         return false;
     }
 }
@@ -254,7 +256,7 @@ export const updatePreferences = async (req: Request, res: Response): Promise<vo
 
         res.status(200).json(updatedProfile);
     } catch (error) {
-        console.error(`[Profile] Erro ao atualizar perfil de ${wallet_address}:`, error);
+        logger.error({ err: error, tag: 'Profile' }, `Erro ao atualizar perfil de ${wallet_address}:`);
         res.status(500).json({ error: 'Erro interno ao atualizar preferências.' });
     }
 };
@@ -321,7 +323,7 @@ export const getAchievements = async (req: Request, res: Response): Promise<void
 
         res.status(200).json({ achievements });
     } catch (error) {
-        console.error(`[Achievements] Erro ao buscar conquistas de ${wallet_address}:`, error);
+        logger.error({ err: error, tag: 'Achievements' }, `Erro ao buscar conquistas de ${wallet_address}:`);
         res.status(500).json({ error: 'Erro interno ao buscar conquistas.' });
     }
 };
@@ -352,7 +354,7 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
             pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
-        console.error('[Profile] Erro ao listar usuários:', error);
+        logger.error({ err: error, tag: 'Profile' }, 'Erro ao listar usuários');
         res.status(500).json({ error: 'Erro interno ao listar usuários.' });
     }
 };
@@ -451,14 +453,14 @@ export const assignRole = async (req: Request, res: Response): Promise<void> => 
             userAgent: req.headers?.['user-agent'] as string,
         });
 
-        console.log(`[RBAC] ${req.user?.wallet} atribuiu role ${role} para ${wallet} perms=${JSON.stringify(permissions)}`);
+        logger.info({ tag: 'RBAC' }, `${req.user?.wallet} atribuiu role ${role} para ${wallet} perms=${JSON.stringify(permissions)}`);
         res.status(200).json({
             wallet: profile.wallet_address,
             role: profile.role,
             permissions,
         });
     } catch (error) {
-        console.error('[RBAC] Erro ao atribuir role:', error);
+        logger.error({ err: error, tag: 'RBAC' }, 'Erro ao atribuir role');
         res.status(500).json({ error: 'Erro interno ao atribuir role.' });
     }
 };

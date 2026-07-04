@@ -5,6 +5,7 @@
 import { Session }                from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import dotenv                     from 'dotenv';
+import { logger } from './logger';
 
 dotenv.config();
 
@@ -64,7 +65,7 @@ export async function executeSetAssetData(
     newMutableData: Array<{ first: string; second: [string, any] }>,
 ): Promise<string | undefined> {
     const atomicAccount = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
-    console.log(`✏️ [Blockchain] setassetdata → ${owner} asset ${assetId} (${newMutableData.length} campos)`);
+    logger.info({ tag: 'Blockchain' }, `setassetdata → ${owner} asset ${assetId} (${newMutableData.length} campos)`)
     const result = await microserviceSession.transact({
         actions: [{
             account:       atomicAccount,
@@ -79,7 +80,7 @@ export async function executeSetAssetData(
         }],
     }, { broadcast: true });
     const txId = result.response?.transaction_id;
-    console.log(`✅ Mutable data atualizado. TX: ${txId}`);
+    logger.info(`Mutable data atualizado. TX: ${txId}`);
     return txId;
 }
 
@@ -93,38 +94,38 @@ export async function executeRecordBurn(
     templateId: number | string,
     collection: string,
 ): Promise<string | undefined> {
-    console.log(`🔥 [Blockchain] recordburn → ${owner} queimou asset ${assetId} (tpl ${templateId})`);
+    logger.info({ tag: 'Blockchain' }, `recordburn → ${owner} queimou asset ${assetId} (tpl ${templateId})`)
     const txId = await transact('recordburn', {
         owner,
         asset_id:    assetId,
         template_id: templateId,
         collection,
     });
-    console.log(`✅ Burn registrado. TX: ${txId}`);
+    logger.info(`Burn registrado. TX: ${txId}`);
     return txId;
 }
 
 /** CREATED → FUNDING: abre as vendas. */
 export async function executeFundGame(gameId: string): Promise<string | undefined> {
-    console.log(`🟢 [Blockchain] fundgame → jogo ${gameId}`);
+    logger.info({ tag: 'Blockchain' }, `fundgame → jogo ${gameId}`)
     const txId = await transact('fundgame', { game_id: gameId });
-    console.log(`✅ Jogo ${gameId} aberto para vendas. TX: ${txId}`);
+    logger.info(`Jogo ${gameId} aberto para vendas. TX: ${txId}`);
     return txId;
 }
 
 /** FUNDING → LOCKED: fecha as vendas. */
 export async function executeLockGame(gameId: string): Promise<string | undefined> {
-    console.log(`🔒 [Blockchain] lockgame → jogo ${gameId}`);
+    logger.info({ tag: 'Blockchain' }, `lockgame → jogo ${gameId}`)
     const txId = await transact('lockgame', { game_id: gameId });
-    console.log(`✅ Jogo ${gameId} travado. TX: ${txId}`);
+    logger.info(`Jogo ${gameId} travado. TX: ${txId}`);
     return txId;
 }
 
 /** LOCKED → DRAWING: aciona o oráculo. */
 export async function executeStartDraw(gameId: string): Promise<string | undefined> {
-    console.log(`🎲 [Blockchain] startdraw → jogo ${gameId}`);
+    logger.info({ tag: 'Blockchain' }, `startdraw → jogo ${gameId}`)
     const txId = await transact('startdraw', { game_id: gameId });
-    console.log(`✅ Sorteio iniciado (aguardando oráculo). TX: ${txId}`);
+    logger.info(`Sorteio iniciado (aguardando oráculo). TX: ${txId}`);
     return txId;
 }
 
@@ -143,12 +144,7 @@ export async function executeClaimWin(
     goldenMultiplier: number = 0,
     boostNftIds:      string[] = [],
 ): Promise<string | undefined> {
-    console.log(
-        `🏆 [Blockchain] claimwin → jogo ${gameId}, cartela #${ticketId}, ` +
-        `${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}` +
-        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '') +
-        (boostNftIds.length ? ` 🚀boost[${boostNftIds.join(',')}]` : '')
-    );
+    logger.info({ tag: 'Blockchain' }, `claimwin → jogo ${gameId}, cartela #${ticketId}, ${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}${goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : ''}${boostNftIds.length ? ` 🚀boost[${boostNftIds.join(',')}]` : ''}`);
     // ADR-028 §7: boost_nft_ids é binary_extension (uint64[]$). Sempre enviado
     // explicitamente (mesmo vazio) — wharfkit não omite binary_extension de array.
     const txId = await transact('claimwin', {
@@ -159,7 +155,7 @@ export async function executeClaimWin(
         golden_multiplier: goldenMultiplier,
         boost_nft_ids:     boostNftIds,
     });
-    console.log(`✅ Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
+    logger.info(`Prêmio liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
 
@@ -178,11 +174,7 @@ export async function executeClaimCombo(
     comboId:          number,
     goldenMultiplier: number = 0,
 ): Promise<string | undefined> {
-    console.log(
-        `🔗 [Blockchain] claimcombo → jogo ${gameId}, cartela #${ticketId}, ` +
-        `combo #${comboId}, ${ballCount} bolas` +
-        (goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : '')
-    );
+    logger.info({ tag: 'Blockchain' }, `claimcombo → jogo ${gameId}, cartela #${ticketId}, combo #${comboId}, ${ballCount} bolas${goldenMultiplier > 1 ? ` 🌟×${goldenMultiplier}` : ''}`);
     const txId = await transact('claimcombo', {
         game_id:           gameId,
         ticket_id:         ticketId,
@@ -190,7 +182,7 @@ export async function executeClaimCombo(
         combo_id:          comboId,
         golden_multiplier: goldenMultiplier,
     });
-    console.log(`✅ Combinação #${comboId} liquidada para cartela #${ticketId}. TX: ${txId}`);
+    logger.info(`Combinação #${comboId} liquidada para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
 
@@ -206,10 +198,7 @@ export async function executeClaimStage(
     ballCount:      number,
     winPatternMask: bigint,
 ): Promise<string | undefined> {
-    console.log(
-        `🎯 [Blockchain] claimstage → jogo ${gameId}, cartela #${ticketId}, ` +
-        `estágio ${stage}, ${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}`
-    );
+    logger.info({ tag: 'Blockchain' }, `claimstage → jogo ${gameId}, cartela #${ticketId}, estágio ${stage}, ${ballCount} bolas, padrão 0x${winPatternMask.toString(16)}`);
     const txId = await transact('claimstage', {
         game_id:          gameId,
         ticket_id:        ticketId,
@@ -217,7 +206,7 @@ export async function executeClaimStage(
         ball_count:       ballCount,
         win_pattern_mask: winPatternMask.toString(),
     });
-    console.log(`✅ Estágio ${stage} liquidado para cartela #${ticketId}. TX: ${txId}`);
+    logger.info(`Estágio ${stage} liquidado para cartela #${ticketId}. TX: ${txId}`);
     return txId;
 }
 
@@ -226,9 +215,9 @@ export async function executeClaimStage(
  * ADR-012: substitui a lógica anterior onde claimwin arquivava diretamente.
  */
 export async function executeCloseGame(gameId: string): Promise<string | undefined> {
-    console.log(`📦 [Blockchain] closegame → jogo ${gameId}`);
+    logger.info({ tag: 'Blockchain' }, `closegame → jogo ${gameId}`)
     const txId = await transact('closegame', { game_id: gameId });
-    console.log(`✅ Jogo ${gameId} arquivado. TX: ${txId}`);
+    logger.info(`Jogo ${gameId} arquivado. TX: ${txId}`);
     return txId;
 }
 
@@ -238,9 +227,9 @@ export async function executeCloseGame(gameId: string): Promise<string | undefin
  * Ref: SPEC.md §5.2, COMPLIANCE.md §4
  */
 export async function executeAbortGame(gameId: string, reason: string): Promise<string | undefined> {
-    console.log(`❌ [Blockchain] abortgame → jogo ${gameId} (motivo: ${reason})`);
+    logger.info({ tag: 'Blockchain' }, `abortgame → jogo ${gameId} (motivo: ${reason})`)
     const txId = await transact('abortgame', { game_id: gameId, reason });
-    console.log(`✅ Jogo ${gameId} abortado. TX: ${txId}`);
+    logger.info(`Jogo ${gameId} abortado. TX: ${txId}`);
     return txId;
 }
 
@@ -254,9 +243,9 @@ export async function executeRefundTicket(
     gameId:   string,
     ticketId: string,
 ): Promise<string | undefined> {
-    console.log(`💸 [Blockchain] refundticket → jogo ${gameId}, cartela #${ticketId}`);
+    logger.info({ tag: 'Blockchain' }, `refundticket → jogo ${gameId}, cartela #${ticketId}`)
     const txId = await transact('refundticket', { game_id: gameId, ticket_id: ticketId });
-    console.log(`✅ Cartela #${ticketId} estornada. TX: ${txId}`);
+    logger.info(`Cartela #${ticketId} estornada. TX: ${txId}`);
     return txId;
 }
 
@@ -270,8 +259,8 @@ export async function executeClearGame(
     gameId:   string,
     maxRows:  number = 50,
 ): Promise<string | undefined> {
-    console.log(`🧹 [Blockchain] cleargame → jogo ${gameId} (max_rows: ${maxRows})`);
+    logger.info({ tag: 'Blockchain' }, `cleargame → jogo ${gameId} (max_rows: ${maxRows})`)
     const txId = await transact('cleargame', { game_id: gameId, max_rows: maxRows });
-    console.log(`✅ Lote de RAM liberado para jogo ${gameId}. TX: ${txId}`);
+    logger.info(`Lote de RAM liberado para jogo ${gameId}. TX: ${txId}`);
     return txId;
 }

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { pgPool } from '../database';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 export async function getPlayerWinnings(req: Request, res: Response): Promise<void> {
     const { gameId } = req.params;
@@ -26,7 +28,7 @@ export async function getPlayerWinnings(req: Request, res: Response): Promise<vo
             totalWon: parseFloat(result.rows[0].total) || 0,
         });
     } catch (err) {
-        console.error('[Winnings] Query error:', err);
+        logger.error({ err: err, tag: 'Winnings' }, 'Query error');
         res.status(500).json({ error: 'Failed to query winnings' });
     }
 }
@@ -60,7 +62,7 @@ export async function getPlayerWinningsBatch(req: Request, res: Response): Promi
         }
         res.json({ winnings: winningsMap });
     } catch (err) {
-        console.error('[Winnings] Batch query error:', err);
+        logger.error({ err: err, tag: 'Winnings' }, 'Batch query error');
         res.status(500).json({ error: 'Failed to query winnings' });
     }
 }

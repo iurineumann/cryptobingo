@@ -1,12 +1,18 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
+import dotenv from 'dotenv';
+dotenv.config();
+
+if (process.env.OTEL_ENABLED === 'true') {
+  require('./services/tracing');
+}
+
 import { createServer } from "node:http";
 import { Server as SocketIoServer } from "socket.io";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import dotenv from "dotenv";
 import { connectMongo, connectPostgres } from "./database";
 import { connectRedis } from "./database/redis";
 import { requireAuth } from "./middleware/auth";
@@ -132,6 +138,9 @@ import {
   getLeaderboardXp,
 } from "./controllers/leaderboardController";
 import { createCorsOptions, getAllowedOrigins } from "./cors";
+import { requestIdMiddleware } from "./middleware/requestId";
+import { logger } from "./middleware/logger";
+import pinoHttp from "pino-http";
 
 import {
   listContent,
@@ -156,8 +165,6 @@ import {
   createMyDelegation,
   removeMyDelegation,
 } from "./controllers/sponsorPermissionController";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -218,6 +225,10 @@ async function bootstrap(): Promise<void> {
 function registerMiddleware(): void {
   // Métricas Prometheus — antes de todos os handlers para capturar 100% das requisições
   app.use(metricsMiddleware);
+
+  // Request ID + Logger estruturado (pino) — antes de tudo para capturar req/res completas
+  app.use(requestIdMiddleware);
+  app.use(pinoHttp({ logger, quietReqLogger: true }));
 
   // Helmet — headers de segurança HTTP
   // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)

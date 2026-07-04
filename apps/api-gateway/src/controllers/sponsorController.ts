@@ -8,6 +8,8 @@ import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { UInt64 }                from '@wharfkit/antelope';
 import { rpcClient }             from '@cryptobingo/blockchain-core';
 import type { BlockchainCampaign } from '@cryptobingo/shared-types';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -43,7 +45,7 @@ export async function listCampaigns(_req: Request, res: Response): Promise<void>
         });
         res.status(200).json({ campaigns: response.rows as BlockchainCampaign[] });
     } catch (err) {
-        console.error('[SponsorCtrl] Erro ao listar campanhas:', err);
+        logger.error({ err: err, tag: 'SponsorCtrl' }, 'Erro ao listar campanhas');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -70,7 +72,7 @@ export async function getCampaign(req: Request, res: Response): Promise<void> {
         }
         res.status(200).json(response.rows[0] as BlockchainCampaign);
     } catch (err) {
-        console.error('[SponsorCtrl] Erro ao buscar campanha:', err);
+        logger.error({ err: err, tag: 'SponsorCtrl' }, 'Erro ao buscar campanha');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -101,14 +103,14 @@ export async function linkCampaignToGame(req: Request, res: Response): Promise<v
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [SponsorCtrl] Campanha ${campaignId} vinculada ao jogo ${game_id}. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'SponsorCtrl' }, `Campanha ${campaignId} vinculada ao jogo ${game_id}. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Campanha ${campaignId} vinculada ao jogo ${game_id}.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[SponsorCtrl] Erro ao vincular campanha:', err);
+        logger.error({ err: err, tag: 'SponsorCtrl' }, 'Erro ao vincular campanha');
         res.status(500).json({ error: `Erro ao vincular campanha: ${msg}` });
     }
 }
@@ -133,14 +135,14 @@ export async function closeCampaign(req: Request, res: Response): Promise<void> 
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [SponsorCtrl] Campanha ${campaignId} encerrada. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'SponsorCtrl' }, `Campanha ${campaignId} encerrada. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Campanha ${campaignId} encerrada com sucesso.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[SponsorCtrl] Erro ao encerrar campanha:', err);
+        logger.error({ err: err, tag: 'SponsorCtrl' }, 'Erro ao encerrar campanha');
         res.status(500).json({ error: `Erro ao encerrar campanha: ${msg}` });
     }
 }

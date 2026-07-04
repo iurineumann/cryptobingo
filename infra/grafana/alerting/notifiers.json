@@ -1,0 +1,12 @@
+[
+  {
+    "uid": "slack-cryptobingo",
+    "name": "Slack CryptoBingo",
+    "type": "slack",
+    "isDefault": true,
+    "settings": {
+      "url": "${SLACK_WEBHOOK_URL}",
+      "recipient": "#alerts"
+    }
+  }
+]

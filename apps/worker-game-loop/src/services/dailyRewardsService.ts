@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { PlayerProgression } from '../models/playerProgression';
 import { xpAwardedTotal, xpAmountTotal } from './metrics';
+import { logger } from './logger';
 
 const REWARDS: { xp: number; badge?: string; ticket?: boolean }[] = [
     { xp: 50 },
@@ -117,7 +118,7 @@ async function awardXp(wallet: string, amount: number): Promise<void> {
         xpAwardedTotal.inc({ type: 'daily_reward' });
         xpAmountTotal.inc({ type: 'daily_reward' }, amount);
     } catch (err) {
-        console.error(`[DailyReward] Erro ao conceder XP para ${wallet}:`, err);
+        logger.error({ err, tag: 'DailyReward' }, `Erro ao conceder XP para ${wallet}:`)
     }
 }
 
@@ -128,7 +129,7 @@ async function awardBadgeAchievement(wallet: string, badge: string): Promise<voi
             { $push: { achievements: { id: `daily_${badge}`, unlocked_at: new Date() } } },
         );
     } catch (err) {
-        console.error(`[DailyReward] Erro ao conceder badge ${badge} para ${wallet}:`, err);
+        logger.error({ err, tag: 'DailyReward' }, `Erro ao conceder badge ${badge} para ${wallet}:`)
     }
 }
 
@@ -140,6 +141,6 @@ async function awardFreeTicket(wallet: string): Promise<void> {
             { upsert: true },
         );
     } catch (err) {
-        console.error(`[DailyReward] Erro ao conceder free ticket para ${wallet}:`, err);
+        logger.error({ err, tag: 'DailyReward' }, `Erro ao conceder free ticket para ${wallet}:`)
     }
 }

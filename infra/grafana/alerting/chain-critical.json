@@ -1,0 +1,93 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "chain-critical",
+      "folder": "CryptoBingo",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "chain-block-stalled",
+          "title": "Blockchain sem novos blocos",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "chain_head_block_time_seconds",
+                "intervalMs": 60000,
+                "maxDataPoints": 100
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "math",
+                "expression": "time() - $A > 120"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "conditions": [
+                  {
+                    "evaluator": { "type": "gt", "params": [0] },
+                    "query": { "params": ["B"] },
+                    "reducer": { "type": "last" },
+                    "operator": { "type": "and" }
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "1m",
+          "annotations": {
+            "summary": "Blockchain stalled",
+            "description": "Nenhum novo bloco produzido nos ultimos 120 segundos"
+          },
+          "labels": { "severity": "critical", "team": "platform" }
+        },
+        {
+          "uid": "chain-tx-fail-rate",
+          "title": "Taxa de falha de transacao > 20%",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "rate(chain_tx_failed_total[15m]) / (rate(chain_tx_total[15m]) + rate(chain_tx_failed_total[15m])) * 100"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "conditions": [
+                  {
+                    "evaluator": { "type": "gt", "params": [20] },
+                    "query": { "params": ["A"] },
+                    "reducer": { "type": "last" },
+                    "operator": { "type": "and" }
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "10m",
+          "annotations": {
+            "summary": "Tx fail rate > 20%",
+            "description": "Falhas de transacao na blockchain acima de 20% nos ultimos 15 min"
+          },
+          "labels": { "severity": "warning", "team": "platform" }
+        }
+      ]
+    }
+  ]
+}

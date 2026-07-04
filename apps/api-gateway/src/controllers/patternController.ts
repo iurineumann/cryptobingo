@@ -14,6 +14,8 @@ import { UInt64 }            from '@wharfkit/antelope';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT  = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY  = process.env.MICROSERVICE_PRIVATE_KEY!;
@@ -70,7 +72,7 @@ export async function listPatterns(_req: Request, res: Response): Promise<void> 
         });
         res.status(200).json({ patterns: response.rows as BlockchainPattern[] });
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao listar patterns:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao listar patterns');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -109,7 +111,7 @@ export async function upsertPattern(req: Request, res: Response): Promise<void> 
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [PatternCtrl] Padrão ${pattern_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Padrão ${pattern_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Padrão "${name}" registrado com sucesso.`,
             pattern_id,
@@ -117,7 +119,7 @@ export async function upsertPattern(req: Request, res: Response): Promise<void> 
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao upsert pattern:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao upsert pattern');
         res.status(500).json({ error: `Erro ao registrar padrão: ${msg}` });
     }
 }
@@ -140,14 +142,14 @@ export async function deletePattern(req: Request, res: Response): Promise<void> 
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [PatternCtrl] Padrão ${patternId} removido. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Padrão ${patternId} removido. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Padrão ${patternId} removido com sucesso.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao deletar pattern:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao deletar pattern');
         res.status(500).json({ error: `Erro ao remover padrão: ${msg}` });
     }
 }
@@ -171,7 +173,7 @@ export async function listGametypes(_req: Request, res: Response): Promise<void>
         });
         res.status(200).json({ gametypes: response.rows as BlockchainGametype[] });
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao listar gametypes:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao listar gametypes');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -235,7 +237,7 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
         }, { broadcast: true });
 
         await redisClient.del(`pattern:gametype:${gametype_id}`);
-        console.log(`✅ [PatternCtrl] Gametype ${gametype_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Gametype ${gametype_id} (${name}) upsertado. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Gametype "${name}" registrado com sucesso.`,
             gametype_id,
@@ -243,7 +245,7 @@ export async function upsertGametype(req: Request, res: Response): Promise<void>
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao upsert gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao upsert gametype');
         res.status(500).json({ error: `Erro ao registrar gametype: ${msg}` });
     }
 }
@@ -266,14 +268,14 @@ export async function deleteGametype(req: Request, res: Response): Promise<void>
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [PatternCtrl] Gametype ${gametypeId} removido. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Gametype ${gametypeId} removido. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Gametype ${gametypeId} removido com sucesso.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao deletar gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao deletar gametype');
         res.status(500).json({ error: `Erro ao remover gametype: ${msg}` });
     }
 }
@@ -333,7 +335,7 @@ export async function updateGametype(req: Request, res: Response): Promise<void>
             await redisClient.del(`pattern:gametype:${gametypeId}`);
         }
 
-        console.log(`✅ [PatternCtrl] Gametype ${gametypeId} (${name}) atualizado. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Gametype ${gametypeId} (${name}) atualizado. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Gametype "${name}" atualizado com sucesso.`,
             gametype_id:    gametypeId,
@@ -341,7 +343,7 @@ export async function updateGametype(req: Request, res: Response): Promise<void>
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao atualizar gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao atualizar gametype');
         res.status(500).json({ error: `Erro ao atualizar gametype: ${msg}` });
     }
 }
@@ -393,14 +395,14 @@ export async function saveStages(req: Request, res: Response): Promise<void> {
             await redisClient.del(`pattern:gametype:${gametypeId}`);
         }
 
-        console.log(`✅ [PatternCtrl] Stages do gametype ${gametypeId} atualizados. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'PatternCtrl' }, `Stages do gametype ${gametypeId} atualizados. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        'Estágios atualizados com sucesso.',
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[PatternCtrl] Erro ao salvar stages:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao salvar stages');
         res.status(500).json({ error: `Erro ao salvar estágios: ${msg}` });
     }
 }
@@ -424,7 +426,7 @@ export async function getGametypeMetadata(req: Request, res: Response): Promise<
         }
         res.status(200).json(metadata);
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao buscar metadados do gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao buscar metadados do gametype');
         res.status(500).json({ error: 'Erro ao buscar metadados.' });
     }
 }
@@ -458,7 +460,7 @@ export async function getGametypeMetadataPublic(req: Request, res: Response): Pr
             stages,
         });
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao buscar metadados públicos do gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao buscar metadados públicos do gametype');
         res.status(500).json({ error: 'Erro ao buscar metadados.' });
     }
 }
@@ -539,7 +541,7 @@ export async function getGametypePatternsPublic(req: Request, res: Response): Pr
 
         res.status(200).json(payload);
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao buscar padrões do gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao buscar padrões do gametype');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -589,7 +591,7 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
             { upsert: true, returnDocument: 'after' },
         ).lean();
 
-        console.log(`✅ [PatternCtrl] Metadados do gametype ${gametypeId} upsertados.`);
+        logger.info({ tag: 'PatternCtrl' }, `Metadados do gametype ${gametypeId} upsertados.`);
 
         // ADR-016: sincroniza as combinações on-chain (fonte de verdade do peso).
         // Se falhar, há DRIFT (Mongo salvo, chain não) — surface erro p/ retry via "Editar combinações".
@@ -597,14 +599,14 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
             const onchain = combosWithId.map((c, i) => ({ combo_id: i, weight: Math.round(Number(c.weight)) }));
             try {
                 const txId = await pushSetCombosOnChain(gametypeId, onchain);
-                console.log(`🔗 [PatternCtrl] setcombos on-chain do gametype ${gametypeId}. TX: ${txId}`);
+                logger.info({ tag: 'PatternCtrl' }, `setcombos on-chain do gametype ${gametypeId}. TX: ${txId}`);
                 // Invalida o cache do worker para refletir os novos pesos
                 if (redisClient.isOpen) {
                     await redisClient.del(`pattern:gametype:${gametypeId}`);
                 }
             } catch (chainErr) {
                 const msg = chainErr instanceof Error ? chainErr.message : String(chainErr);
-                console.error('[PatternCtrl] Falha ao sincronizar combinações on-chain:', chainErr);
+                logger.error({ err: chainErr, tag: 'PatternCtrl' }, 'Falha ao sincronizar combinações on-chain');
                 res.status(502).json({
                     error:  'Metadados salvos, mas a sincronização das combinações on-chain falhou. Tente novamente.',
                     detail: msg,
@@ -615,7 +617,7 @@ export async function upsertGametypeMetadata(req: Request, res: Response): Promi
 
         res.status(200).json(metadata);
     } catch (err) {
-        console.error('[PatternCtrl] Erro ao upsert metadados do gametype:', err);
+        logger.error({ err: err, tag: 'PatternCtrl' }, 'Erro ao upsert metadados do gametype');
         res.status(500).json({ error: 'Erro ao salvar metadados.' });
     }
 }

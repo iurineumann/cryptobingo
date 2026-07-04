@@ -3,6 +3,8 @@ import { UserProfile } from '../models/UserProfile';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
 import { logAudit } from '../utils/audit';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -31,7 +33,7 @@ export async function updateUserPermissions(req: Request, res: Response) {
 
     res.json({ wallet_address: updated.wallet_address, permissions: (updated as any).permissions });
   } catch (err) {
-    console.error('[PermissionController] updateUserPermissions:', err);
+    logger.error({ err: err, tag: 'PermissionController' }, 'updateUserPermissions');
     res.status(500).json({ error: 'Erro ao atualizar permissões' });
   }
 }
@@ -130,7 +132,7 @@ export async function createSponsorOrg(req: Request, res: Response) {
 
     res.status(201).json({ orgId, owner_wallet: wallet, name: name?.trim() || `Org de ${owner_wallet}`, permissionsAutoAssigned });
   } catch (err) {
-    console.error('[PermissionController] createSponsorOrg:', err);
+    logger.error({ err: err, tag: 'PermissionController' }, 'createSponsorOrg');
     res.status(500).json({ error: 'Erro ao criar organização sponsor.' });
   }
 }
