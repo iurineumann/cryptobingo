@@ -1,12 +1,18 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
+import dotenv from 'dotenv';
+dotenv.config();
+
+if (process.env.OTEL_ENABLED === 'true') {
+  require('./services/tracing');
+}
+
 import { createServer } from "node:http";
 import { Server as SocketIoServer } from "socket.io";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import dotenv from "dotenv";
 import { connectMongo, connectPostgres } from "./database";
 import { connectRedis } from "./database/redis";
 import { requireAuth } from "./middleware/auth";
@@ -159,8 +165,6 @@ import {
   createMyDelegation,
   removeMyDelegation,
 } from "./controllers/sponsorPermissionController";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
