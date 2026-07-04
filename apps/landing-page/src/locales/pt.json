@@ -12,7 +12,8 @@
     "tutorials": "Tutoriais",
     "github": "GitHub",
     "telegram": "Telegram",
-    "twitter": "X/Twitter"
+    "twitter": "X/Twitter",
+    "discord": "Discord"
   },
   "hero": {
     "badge": "BINGO GameFi na WAX",
@@ -84,6 +85,9 @@
   "faq": {
     "title": "FAQ",
     "description": "Perguntas frequentes sobre o CryptoBingo"
+  },
+  "redirect": {
+    "redirecting": "Redirecionando..."
   },
   "seo": {
     "home_title": "CryptoBingo — BINGO GameFi On-Chain na WAX",

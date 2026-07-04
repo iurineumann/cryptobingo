@@ -1,0 +1,27 @@
+task_id: "task-contextos-fase-a"
+title: "CB-ContextOS Infrastructure Setup"
+summary: "Create ContextOS adaptation for CryptoBingo — compaction mitigation"
+domain: "infrastructure"
+object_type: "methodology"
+object_name: "contextos-agent-teams"
+scope: "L1"
+durability: "durable"
+confidence: 0.95
+active_files:
+  - ".opencode/plans/2026-07-04-contextos-agent-teams.md"
+  - "opencode.json"
+constraints:
+  - "ABI mantido à mão — nunca confiar no generated ABI"
+  - "binary_extension para migração de tabela"
+  - "max_weight por cartela (ADR-005)"
+  - "PT-BR em código/comentários/commits"
+next_steps:
+  - "Create .contextos/ directory structure"
+  - "Write SESSION_GUARD.md"
+  - "Write current-task.yaml"
+  - "Write situation.md"
+  - "Write memory/core.md"
+  - "Write journal/2026-07-04.md"
+  - "Write contextos-guard.mjs plugin"
+  - "Register plugin in opencode.json"
+updated_at: "2026-07-04"

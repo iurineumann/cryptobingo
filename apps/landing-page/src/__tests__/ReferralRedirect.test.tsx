@@ -3,6 +3,10 @@ import { render, screen } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import ReferralRedirect from '../pages/ReferralRedirect';
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 describe('ReferralRedirect', () => {
     const origLocation = window.location;
 
@@ -20,7 +24,7 @@ describe('ReferralRedirect', () => {
 
         render(<Stub initialEntries={['/ref/ABC123']} />);
 
-        expect(screen.getByText('Redirecionando...')).toBeDefined();
+        expect(screen.getByText('redirect.redirecting')).toBeDefined();
         expect(window.location.replace).toHaveBeenCalledWith('https://app.cryptobingo.bet/?ref=ABC123');
     });
 });

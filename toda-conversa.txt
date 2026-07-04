@@ -1,0 +1,1073 @@
+então vamos iniciar algo novo, uma vez que agora temos o tinacms integrado, com repositório próprio para os contents, e inclusive já está conectado a tinacloud, vamos popular nosso conteúdo para a landing. temos muito material a adicionar lá, visto que todos os contents ainda estão vazios. além disso, eles devem ser multi language (i18n). acho que podemos começar com tutoriais, buscando primeiro na internet mesmo e adaptando para nosso site, começando por exemplo, sobre como criar uma carteira na blockchain wax, que é uma coisa gratuita.
++ Thought: 1.6s
+Boa ideia. Vou explorar a estrutura atual de conteúdo TinaCMS pra entender o formato antes de planejar.
+Read apps/landing-page 
+Glob "apps/landing-page/content/**/*" (9 matches)
+Glob "apps/landing-page/tina/**/*" (13 matches)
++ Thought: 365ms
+Read apps/landing-page/tina/config.ts 
+Read apps/landing-page/content/pages/README.mdx 
+Read apps/landing-page/content/settings/home.json 
++ Thought: 631ms
+Read apps/landing-page/content/faq/o-que-e-cryptobingo.md 
+Read apps/landing-page/content/faq/como-comprar-cartelas.md 
+Read apps/landing-page/content/blog/testnet-lancamento.md 
+Read apps/landing-page/content/blog/rng-explicado.md 
+Glob "apps/landing-page/src/**/*tutorial*" 
+Glob "apps/landing-page/src/**/*Tutorial*" 
+Grep "tutorial" in apps/landing-page/src 
++ Thought: 2.0s
+Grep "tina|content|faq|blog|i18n|locale" in apps/landing-page/src 
+Grep "i18n|locale|ContentPage|ContentBlock|BlogPage|FaqPage" in apps/landing-page/app 
+Read apps/landing-page/app 
+Read apps/landing-page/app/routes.ts 
+Read apps/landing-page/app/routes 
++ Thought: 540ms
+Read apps/landing-page/src 
+Glob "apps/landing-page/src/pages/*" (7 matches)
+Glob "apps/landing-page/src/components/*" (16 matches)
++ Thought: 483ms
+Read apps/landing-page/src/pages/FaqPage.tsx 
+Read apps/landing-page/src/pages/BlogPost.tsx 
+Read apps/landing-page/src/pages/BlogIndex.tsx 
++ Thought: 618ms
+Read apps/landing-page/src/lib 
+Glob "apps/landing-page/lib/*" (1 match)
+Read apps/landing-page/lib/content.ts 
++ Thought: 860ms
+$ cd /home/iuri/Projetos/cryptobingo/apps/landing-page/content && git remote -v 2>/dev/null; echo "---"; git log --oneline -5 2>/dev/null
+origin	https://github.com/iurineumann/cryptobingo-tina.git (fetch)
+origin	https://github.com/iurineumann/cryptobingo-tina.git (push)
+---
+f03c4c2 feat: conteudo inicial TinaCMS (blog, faq, settings)
+Read apps/landing-page/content/faq/conhecimentos.md 
+Read apps/landing-page/content/faq/premios.md 
++ Thought: 9.4s
+Grep "i18n|i18next|react-i18next|locale|lang" in apps/landing-page/src 
+Read apps/landing-page/src/App.tsx 
+Read apps/landing-page/app/root.tsx 
++ Thought: 31.9s
+Entendi o cenário. Deixa eu verificar o repositório de conteúdo e o ADR-037 pra alinhar a abordagem i18n.
+Glob "docs/adr/*037*" (1 match)
+Read apps/landing-page/app/root.tsx [offset=121, limit=5]
+$ ls /home/iuri/Projetos/cryptobingo/apps/landing-page/content/
+blog
+faq
+pages
+settings
+Read apps/landing-page/package.json 
++ Thought: 341ms
+Read docs/adr/ADR-037-sistema-conteudo-unificado.md 
++ Thought: 6.5s
+Agora tenho o cenário completo. Aqui vai o plano:
+Diagnóstico
+Sistema atual:
+Landing page é SSG (React Router v7) com conteúdo via TinaCMS → repositório cryptobingo-tina no GitHub → TinaCloud
+lib/content.ts lê arquivos .md/.mdx do content/ em build-time
+Coleções existentes: page, blog, faq, settings — sem tutorial
+Zero i18n na landing page — tudo pt-BR, hardcoded lang="pt-BR"
+ADR-037 prevê sistema de conteúdo via MongoDB + API, mas landing page SSG usa TinaCMS (não API). Tutorial seguirá padrão TinaCMS.
+Conteúdo atual: 5 FAQ, 2 blog posts, 1 page placeholder — maior parte vazio.
+Proposta — 3 abordagens para i18n
+A) 3 coleções Tina (pt/en/zh) + locale prefix nas rotas
+content/tutorials/pt/criar-carteira-wax.md
+content/tutorials/en/create-wax-wallet.md
+content/tutorials/zh/create-wax-wallet.md
+3 coleções Tina: tutorial_pt, tutorial_en, tutorial_zh
+Rotas: /tutoriais/:slug, /en/tutorials/:slug, /zh/tutorials/:slug
+Loader loadTutorials(locale) filtra por diretório
+Troca <html lang> dinamicamente via loader data
+Prós: Clean, escala bem, TinaCMS organizado
+Contras: 3 coleções = mais boilerplate
+B) Coleção única + locale field + locale prefix em rotas
+content/tutorials/criar-carteira-wax.md      # locale: pt
+content/tutorials/create-wax-wallet.md        # locale: en
+content/tutorials/create-wax-wallet-zh.md     # locale: zh
+Coleção Tina única tutorial com campo locale
+Filename único por slug + locale
+Prós: 1 coleção só
+Contras: TinaCMS mistura tudo, filenames confusos
+C) Coleção única + locale field + cookie/browser detect
+content/tutorials/criar-carteira-wax.md      # locale: pt
+content/tutorials/create-wax-wallet.md        # locale: en  
+Mesma estrutura B, mas sem prefixo de rota
+Idioma definido por cookie/user preference
+Prós: Rotas simples (/tutoriais/:slug sempre)
+Contras: Sem URL sharable por idioma
+Plano sugerido (Abordagem A)
+Fase 1 — Setup Tina + Loader
+Adicionar 3 coleções tutorial_pt/_en/_zh no tina/config.ts
+Estender lib/content.ts com loadTutorials(locale) e loadTutorial(slug, locale)
+Criar diretórios content/tutorials/{pt,en,zh}/ + .gitkeep
+Fase 2 — Páginas + Rotas
+Criar src/pages/TutorialsIndex.tsx (lista) + TutorialPost.tsx (conteúdo)
+Adicionar rotas em app/routes.ts: /tutoriais, /tutoriais/:slug, /en/tutorials, /en/tutorials/:slug, /zh/tutorials/:slug
+Adicionar link "Tutoriais" no Header
+Adicionar locale switcher no Header/Footer
+Fase 3 — Conteúdo
+Pesquisar/adaptar conteúdo "Como criar carteira WAX" (original, sem plágio)
+Escrever em pt, en, zh
+Publicar via TinaCloud
+Fase 4 — Futuro (fora do escopo agora)
+Migrar FAQ/blog para i18n seguindo mesmo padrão
+Tutoriais adicionais (como comprar WAX, como jogar, etc.)
+# Questions
+Qual abordagem de i18n preferir para os tutoriais?
+A) 3 coleções Tina + locale prefix (Recomendado)
+Começamos só com o tutorial de carteira WAX ou já preparamos estrutura para múltiplos tutoriais?
+vamos mudar os outros que temos, para o tina também, ao invés de mongodb. temos que analisar como fazermos para o ssr incluir dinamicamente todo o conteudo que temos no repositório de conteudos. temos que tornar o landing i18n. está errado em estar e pt-br, sua linguagem padrão deve ser ingles.
++ Thought: 13.0s
+# Questions
+Entendi! Escopo maior: migrar TODO conteúdo do MongoDB para TinaCMS + i18n completo na landing + EN como padrão. Vou preparar o plano detalhado. Antes, confirme:
+Sim, tudo isso: migração + i18n + EN padrão
++ Thought: 469ms
+Deixa eu verificar o conteúdo existente no MongoDB vs local pra entender escopo da migração.
+Read apps/api-gateway/src/controllers/contentController.ts [limit=50]
+Grep "content|Content" in apps/api-gateway/src 
+$ cd /home/iuri/Projetos/cryptobingo && find apps/landing-page/content -type f | sort
+apps/landing-page/content/.git
+apps/landing-page/content/blog/rng-explicado.md
+apps/landing-page/content/blog/testnet-lancamento.md
+apps/landing-page/content/faq/como-comprar-cartelas.md
+apps/landing-page/content/faq/conhecimentos.md
+apps/landing-page/content/faq/o-que-e-cryptobingo.md
+apps/landing-page/content/faq/premios.md
+apps/landing-page/content/pages/README.mdx
+apps/landing-page/content/settings/home.json
++ Thought: 358ms
+Read apps/api-gateway/src/controllers/contentController.ts [offset=50]
+Read apps/landing-page/app/routes.ts 
+Read apps/landing-page/src/components/Header.tsx 
++ Thought: 15.1s
+Beleza. Aqui vai o plano completo:
+Plano: Landing Page i18n + TinaCMS + Conteúdo
+Estado Atual
+O quê	Onde	Idioma
+4 FAQ	content/faq/*.md (TinaCMS)	só pt
+2 Blog posts	content/blog/*.md (TinaCMS)	só pt
+1 Settings	content/settings/home.json (TinaCMS)	só pt
+1 Page (placeholder)	content/pages/README.mdx (TinaCMS)	só pt
+Header/Footer/UI	hardcoded strings nos componentes	só pt
+<html lang="pt-BR">	app/root.tsx	fixo pt
+Conteúdo dinâmico	MongoDB via api-gateway (frontend app, NÃO landing)	n/a
+MongoDB→Tina migration: Landing page nunca usou MongoDB. O contentController.ts serve o frontend app (app.cryptobingo.bet), não a landing. A "migração" é estrutural: reorganizar arquivos existentes no TinaCMS para suporte i18n.
+Arquitetura Proposta
+content/
+  blog/
+    pt/  (existing files moved here)
+    en/  (new translations)
+    zh/  (new translations)
+  faq/
+    pt/
+    en/
+    zh/
+  tutorials/   ← NOVO
+    pt/
+    en/
+    zh/
+  settings/
+    home.pt.json
+    home.en.json
+    home.zh.json
+  pages/
+    pt/
+    en/
+    zh/
+Coleções Tina: blog_pt/_en/_zh, faq_pt/_en/_zh, tutorial_pt/_en/_zh, etc.
+Loaders: loadBlog(locale), loadFAQ(locale), loadTutorials(locale), loadSettings(locale)
+i18n Stack
+Solução
+react-i18next (novo pacote) — JSON files em src/locales/en.json, pt.json, zh.json
+TinaCMS locale dirs + loader
+Prefixo /:lang? (opcional, default /en/...)
+en (mudar <html lang>, redirect / → /en)
+Dropdown no Header
+SSG Routing
+// app/routes.ts — rotas parametrizadas por locale
+{ path: '/', file: 'HomePage.tsx' }              // detecta locale, redirect
+{ path: '/:lang', file: 'HomePage.tsx' }          // /en, /pt, /zh
+{ path: '/:lang/blog', file: 'BlogIndex.tsx' }
+{ path: '/:lang/blog/:slug', file: 'BlogPost.tsx' }
+{ path: '/:lang/faq', file: 'FaqPage.tsx' }
+{ path: '/:lang/tutorials', file: 'TutorialsIndex.tsx' }
+{ path: '/:lang/tutorials/:slug', file: 'TutorialPost.tsx' }
+SSG gera páginas para todos os {lang, slug} combos conhecidos.
+Tasks
+Fase 1 — i18n infrastructure
+Adicionar react-i18next + i18next ao landing page
+Criar src/i18n/index.ts com config (default: en, fallback: en)
+Criar locale files: src/locales/{en,pt,zh}.json com strings de Header, Footer, páginas
+Modificar <html lang> dinamicamente via locale detectado
+Adicionar locale switcher no Header
+Migrar strings hardcoded dos componentes para t()
+Fase 2 — TinaCMS collections restructure
+7. Atualizar tina/config.ts: 3 coleções por tipo (blog_pt/_en/_zh, faq_pt/_en/_zh, tutorial_pt/_en/_zh, etc.)
+8. Mover arquivos existentes para content/*/pt/
+9. Criar loaders em lib/content.ts com parâmetro locale
+Fase 3 — Content migration
+10. Traduzir FAQ existente (4 itens) para en + zh
+11. Traduzir blog existente (2 posts) para en + zh
+12. Traduzir settings (hero, features) para en + zh
+13. Escrever tutorial "Como criar carteira WAX" em pt/en/zh
+Fase 4 — Routes + pages
+14. Refatorar rotas em app/routes.ts com prefixo /:lang
+15. Atualizar FaqPage, BlogIndex, BlogPost para receber locale do loader
+16. Criar TutorialsIndex.tsx + TutorialPost.tsx
+17. Adicionar links tutoriais no Header
+Fase 5 — Polish
+18. SEO i18n (hreflang tags no <head>)
+19. Sitemap multilingue
+20. Redirect / → /en (301)
+# Questions
+O plano cobre 5 fases, ~20 tasks. Quer que eu detalhe mais alguma parte ou pode prosseguir?
+vamos detalhar mais para não termos gaps. para começar, nosso app frontend principal hoje é o test.cryptobingo.bet; vamos incluir em nosso contexto o grill with docs, o impeccable e o superpowers, e também quaisquer outras ferramentas que tenhamos para nos ajudar a esmiuçar e detalhar corretamente o plano que seguiremos a risca, inclusive incluindo processos, procedimentos, flows, TDD, sonarqube, testes, etc.
++ Thought: 2.0s
+Skill "grill-with-docs"
++ Thought: 3.9s
+Certo. Vou esmiuçar o plano contra o código/docs existentes. Primeira pergunta:
+1. Sobre "migrar conteúdo do MongoDB para TinaCMS"
+Olhando o código: apps/api-gateway/src/controllers/contentController.ts serve o frontend app (app.cryptobingo.bet), não a landing page.
+A landing page sempre usou arquivos locais (lib/content.ts lê content/), conectados ao TinaCMS/repo cryptobingo-tina.
+A FAQ e Blog atuais já estão em arquivos TinaCMS, não em MongoDB.
+Read apps/landing-page/lib/content.ts 
++ Thought: 1.5s
+Descoberta: Landing page nunca usou MongoDB pra conteúdo. FAQ, blog, settings — tudo já está em arquivos TinaCMS locais (content/). O contentController.ts do MongoDB serve o frontend app (app.cryptobingo.bet), não a landing page.
+Então não há migração MongoDB→Tina a fazer. O trabalho real é:
+Reorganizar arquivos existentes para estrutura i18n (content/faq/pt/, content/faq/en/, etc.)
+Traduzir conteúdo pt→en→zh
+Adicionar react-i18next pra strings de componente (Header, Footer, etc.)
+Locale routing com prefixo /:lang
+A dúvida: o conteúdo gerenciado via contentController.ts (frontend app) — FAQ/News/Tutorials que foram criados pelo Admin UI do frontend — vai continuar no MongoDB servindo o frontend app, ou todo conteúdo editorial (incluindo do frontend app) deve migrar pro TinaCMS também?
+▣  Plan · DeepSeek V4 Flash Free · 13m 9s
+exatamente. a idéia é que no futuro, o projeto landing substitua a pagina landing do projeto frontend. se voce acessar a pagina online hoje, verá que nenhum conteúdo é carregado na landing (www). todos tem "fetch error". nós migrarmos estes conteúdos para o tina, acredito que seja melhor visto pela comunidade e bots. o que está no frontend, pode continuar lá por enquanto. só faremos a "troca de landing" no futuro, quando saírmos de testnet para mainnet.
++ Thought: 10.1s
+Read apps/landing-page/src/pages/HomePage.tsx 
+Grep "tina|client|fetch|api" in apps/landing-page/src 
++ Thought: 4.0s
+$ cd /home/iuri/Projetos/cryptobingo && git submodule status 2>/dev/null; echo "---"; cat .gitmodules 2>/dev/null; echo "---"; ls -la apps/landing-page/content/.git 2>/dev/null
+f03c4c2c8b5f2218a6651947de3355a4d6f1d2f5 apps/landing-page/content (f03c4c2)
+---
+[submodule "apps/landing-page/content"]
+	path = apps/landing-page/content
+	url = https://github.com/iurineumann/cryptobingo-tina.git
+---
+-rw-r--r-- 1 iuri iuri 56 Jul  3 00:27 apps/landing-page/content/.git
+invalid [tool=glot, error=Model tried to call unavailable tool 'glot'. Available tools: bash, cloudflare_docs, cloudflare_execute, cloudflare_search, cloudflare-bindings_d1_database_create, cloudflare-bindings_d1_database_delete, cloudflare-bindings_d1_database_get, cloudflare-bindings_d1_database_query, cloudflare-bindings_d1_databases_list, cloudflare-bindings_hyperdrive_config_delete, cloudflare-bindings_hyperdrive_config_edit, cloudflare-bindings_hyperdrive_config_get, cloudflare-bindings_hyperdrive_configs_list, cloudflare-bindings_kv_namespace_create, cloudflare-bindings_kv_namespace_delete, cloudflare-bindings_kv_namespace_get, cloudflare-bindings_kv_namespace_update, cloudflare-bindings_kv_namespaces_list, cloudflare-bindings_migrate_pages_to_workers_guide, cloudflare-bindings_r2_bucket_create, cloudflare-bindings_r2_bucket_delete, cloudflare-bindings_r2_bucket_get, cloudflare-bindings_r2_buckets_list, cloudflare-bindings_search_cloudflare_documentation, cloudflare-bindings_workers_get_worker, cloudflare-bindings_workers_get_worker_code, cloudflare-bindings_workers_list, cloudflare-builds_workers_builds_get_build, cloudflare-builds_workers_builds_get_build_logs, cloudflare-builds_workers_builds_list_builds, cloudflare-builds_workers_builds_set_active_worker, cloudflare-builds_workers_get_worker, cloudflare-builds_workers_get_worker_code, cloudflare-builds_workers_list, cloudflare-docs_migrate_pages_to_workers_guide, cloudflare-docs_search_cloudflare_documentation, cloudflare-observability_migrate_pages_to_workers_guide, cloudflare-observability_observability_keys, cloudflare-observability_observability_values, cloudflare-observability_query_worker_observability, cloudflare-observability_search_cloudflare_documentation, cloudflare-observability_workers_get_worker, cloudflare-observability_workers_get_worker_code, cloudflare-observability_workers_list, edit, glob, grep, invalid, memory, question, read, skill, task, todowrite, webfetch, websearch, write.]
++ Thought: 950ms
+Glob ".github/workflows/*landing*" 
+Read apps/landing-page/staticwebapp.config.json 
++ Thought: 462ms
+Glob ".github/workflows/*deploy*" 
+Grep "landing" in .github (16 matches)
+Read .github/workflows/deploy-landing.yml 
++ Thought: 6.3s
+WebFetch https://www.cryptobingo.bet
+WebFetch https://www.cryptobingo.bet/blog
+WebFetch https://www.cryptobingo.bet/faq
++ Thought: 5.7s
+WebFetch https://test.cryptobingo.bet
++ Thought: 462ms
+WebFetch https://test.cryptobingo.bet/api/v1/content/faq
++ Thought: 6.7s
+Achado importante! www.cryptobingo.bet funciona (FAQ/blog carregam em PT). O que está quebrado é test.cryptobingo.bet — o frontend app tenta buscar FAQ via API (/api/v1/content/faq) e a API retorna 404 (MongoDB vazio).
+Mas o plano não muda — só confirma que a landing page (www) é o veículo certo pra hospedar conteúdo editorial.
+Plano Refinado — 5 Fases
+Raio-X Atual (www.cryptobingo.bet)
+O que	Status	Problema
+FAQ (4 itens)	✅ Funciona, só PT	Sem EN/ZH
+Blog (2 posts)	✅ Funciona, só PT	Sem EN/ZH, sem link no Header
+Settings (hero, features)	✅ Funciona, só PT	Sem EN/ZH
+Header	Sem links pra FAQ/Blog/Tutoriais	Só Ideas + externos
+<html lang>	Fixo pt-BR	Devia ser en
+Locale switcher	❌ Não existe	 
+Component strings	Hardcoded PT	Header, Footer, Hero, etc.
+Fase 1 — i18n Stack
+Como
+pnpm add
+default en, fallback en, suporte en|pt|zh
+Todas strings de UI (Header nav labels, Footer, Hero CTA, etc.)
+Mesmas chaves, PT
+Mesmas chaves, ZH
+Dinâmico via locale, default en
+Header, Footer, Hero, Features, Roadmap → t() calls
+Fase 2 — TinaCMS Content Restructure
+Como
+3 coleções por tipo: blog_pt/_en/_zh, faq_pt/_en/_zh, tutorial_pt/_en/_zh
+content/faq/*.md → content/faq/pt/*.md (add locale frontmatter)
+FAQ (4) + Blog (2) traduzidos
+FAQ (4) + Blog (2) traduzidos
+Hero/features traduzidos
+Páginas legais (privacy, terms) — futuros
+Fase 3 — Content Loaders + Routing
+Como
+loadFAQ(locale), loadBlog(locale), loadTutorials(locale), loadSettings(locale)
+Prefixo /:lang?, redirect / → /en
+Extrai locale dos params, valida en|pt|zh
+No Header, links para /{locale}/...
+Fase 4 — Tutorials
+Tarefa	O que	Como
+4.1	Add routes	/:lang/tutorials, /:lang/tutorials/:slug
+4.2	Create TutorialsIndex.tsx	Lista por ordem
+4.3	Create TutorialPost.tsx	Render MDX com TOC sidebar
+4.4	Write "Criar carteira WAX" (PT)	Pesquisar + adaptar conteúdo original
+4.5	Translate to EN	"How to Create a WAX Wallet"
+4.6	Translate to ZH	"创建WAX钱包"
+4.7	Add tutorial link to Header	Nav link
+Fase 5 — Deploy Fix + Polish
+Como
+Add submodules: true no deploy-landing.yml (já funciona, mas explícito)
+<link rel="alternate" hreflang="en|pt|zh" no <head>
+Atualizar public/sitemap.xml
+301 no staticwebapp.config.json
+Process: Cada task segue TDD (RED→GREEN→refactor), SonarQube blockers/criticals antes de commit, teste pnpm --filter @cryptobingo/landing-page test verde.
+Check: O que ajustar antes de começar a execução?
+▣  Plan · DeepSeek V4 Flash Free · 1m 22s
+ah!!! algo muito importante para adicionarmos ao nosso escopo, até mesmo antes de partir para o conteudo, mas que também de certa maneira é conteúdo: as páginas vitais pro nosso sistema: privacy, legal e todas as outras que DEVEMOS ter para garantir adequação, tanto normativa quanto jurídica e também de transparência e boas práticas
++ Thought: 3.4s
+Grep "privacy|terms|termos|legal|lgpd|imprint|responsible|gaming" in apps/landing-page 
+Grep "privacy|terms|termos|legal" in apps/landing-page/content 
+Read apps/landing-page/src/components/Footer.tsx 
++ Thought: 804ms
+Grep "privacy|terms|lgpd|responsible.*gambling|cookie.*policy" in apps/frontend/src 
+Grep "privacy|termos" in apps/frontend/src/pages 
+Grep "privacy|terms|termos|privacidade" in apps/landing-page/content 
++ Thought: 9.7s
+Confirmado — zero conteúdo legal no projeto. Footer links Terms e Privacy apontam pra #.
+Numa plataforma GameFi com usuários BR/global, as páginas essenciais:
+Página	Por quê	Rota proposta
+Terms of Service	Contrato usuário, regras, jurisdição, arbitragem	/terms
+Privacy Policy	LGPD/GDPR, coleta dados, cookies, DPO	/privacy
+Risk Disclaimer	Proteção legal — riscos cripto, jogos, blockchain	/risk-disclaimer
+Responsible Gaming	Boa prática + compliance — auto-exclusão, limites, recursos	/responsible-gaming
+Game Rules	Regras bingo, RTP 85%, payouts, draw modes	/game-rules
+Todas em 3 idiomas (en/pt/zh), como páginas TinaCMS (content/pages/{en,pt,zh}/).
+Plano Revisado — 6 Fases
+Tasks
+5 páginas legais × 3 idiomas + Tina collections + rotas + Footer links
+react-i18next, locale files, <html lang>, locale switcher, migrate strings
+3 coleções por tipo, mover arquivos PT, estrutura locale dirs
+loaders(locale), rotas /:lang, redirect /→/en
+Collection + páginas + "Criar carteira WAX" en/pt/zh
+submodules, hreflang, sitemap, redirects
+Fase 0 detalhada — Legal Pages (antes de qualquer conteúdo)
+Tina:
+3 coleções: page_en → content/pages/en/, page_pt → content/pages/pt/, page_zh → content/pages/zh/
+Schema: title, body (rich-text MDX), description (SEO), slug (único por locale)
+Seeds: criar .mdx para cada página legal em cada língua
+Frontend:
+PageView.tsx — componente genérico que renderiza qualquer page por slug+locale
+Rotas: /:lang/terms, /:lang/privacy, /:lang/risk-disclaimer, /:lang/responsible-gaming, /:lang/game-rules
+Footer: corrigir legal links de # para rotas reais com locale prefix
+Conteúdo (escrever em EN primeiro, traduzir PT/ZH):
+Terms of Service — cláusulas: aceitação, contas, regras de jogo, pagamentos, prop. intelectual, limitação responsabilidade, lei aplicável, rescisão
+Privacy Policy — dados coletados, finalidades, LGPD direitos titular, cookies (GA4/GTM/Clarity), DPO contato, retenção, compartilhamento
+Risk Disclaimer — volatilidade cripto, risco de perda, blockchain irreversível, smart contract risks, sem aconselhamento financeiro
+Responsible Gaming — auto-exclusão (como fazer), limites depósito, idade mínima 18/21, recursos internacionais e Brasil (Jogadores Anônimos, PRO-AMO)
+Game Rules — RTP 85%, max_weight, patterns/combos/stages, draw modes, FREE SPACE, payout formula
+Asked 3 questions
++ Thought: 434ms
+# Questions
+Antes de detalharmos mais, confirme o foco:
+Escopo completo (6 fases) (Recomendado)
+Sobre o conteúdo legal: vou escrever os textos base (EN) e traduzir para PT/ZH. Tem preferência sobre como quer o conteúdo legal?
+Pesquisa referências primeiro
+Vou ajustar a ordem pra Fase 0 (legal) ser a primeira implementada. Confirma que, depois que eu apresentar o plano final detalhado, quer que eu inicie a implementação?
+Só apresentar, decido depois
++ Thought: 1.1s
+Beleza. Vou pesquisar referências legais de plataformas similares (crypto gaming) pra basear o conteúdo.
+Exa Web Search "crypto gambling platform terms of service privacy policy example 2025 2026" 
+Exa Web Search "stake.com terms of service privacy policy structure" 
+Exa Web Search "crypto bingo platform legal pages responsible gaming policy" 
++ Thought: 3.8s
+Boa referências coletadas. Crypto.Games, CoinPoker, Stake, WingoBingo — estrutura consistente entre todos. Principais aprendizados:
+5 pilares legais em todas: Terms + Privacy + Responsible Gaming + Dispute Resolution + AML/KYC
+Todas têm cláusula de "English prevails" sobre traduções
+Todas referenciam/cruzam entre si
+Responsável por conteúdo legal: eu escrevo, você aprova
+Vou consolidar o plano final detalhado:
+Plano Final — Landing Page i18n + Legal + Conteúdo
+Estrutura de Arquivos (alvo)
+content/
+  pages/en/
+    terms.mdx           # Terms of Service
+    privacy.mdx         # Privacy Policy
+    risk-disclaimer.mdx # Risk Disclaimer
+    responsible-gaming.mdx
+    game-rules.mdx
+  pages/pt/
+    termos.mdx          # Termos de Serviço
+    privacidade.mdx     # Política de Privacidade
+    ...
+  pages/zh/
+    ...
+  faq/pt/               # existing PT files
+  faq/en/               # new translations
+  faq/zh/
+  blog/pt/
+  blog/en/
+  blog/zh/
+  tutorials/pt/
+  tutorials/en/
+  tutorials/zh/
+  settings/home.en.json
+  settings/home.pt.json
+  settings/home.zh.json
+TinaCMS: 12 coleções (4 tipos × 3 idiomas)
+Tipo	PT	EN	ZH
+page	page_pt → pages/pt/	page_en → pages/en/	page_zh → pages/zh/
+faq	faq_pt → faq/pt/	faq_en → faq/en/	faq_zh → faq/zh/
+blog	blog_pt → blog/pt/	blog_en → blog/en/	blog_zh → blog/zh/
+tutorial	tutorial_pt → tutorials/pt/	tutorial_en → tutorials/en/	tutorial_zh → tutorials/zh/
+Settings: 3 coleções (settings_pt, settings_en, settings_zh) → home.{locale}.json
+Rotas
+/                     → redirect 301 → /en
+/en                   → Home (EN)
+/pt                   → Home (PT)
+/zh                   → Home (ZH)
+/en/terms             → Terms of Service (EN)
+/pt/termos            → Termos de Serviço (PT)
+/zh/terms             → 服务条款 (ZH)
+/en/privacy           → Privacy Policy
+/en/risk-disclaimer   → Risk Disclaimer
+/en/responsible-gaming→ Responsible Gaming
+/en/game-rules        → Game Rules
+/en/faq               → FAQ
+/en/faq/:slug         → FAQ item (optional, flat list by default)
+/en/blog              → Blog index
+/en/blog/:slug        → Blog post
+/en/tutorials         → Tutorials index
+/en/tutorials/:slug   → Tutorial
+Tasks Detalhadas (6 Fases)
+Fase 0 — Legal Pages
+0.1 Tina Schema — Add 3 page collections (page_pt, page_en, page_zh)
+title: string, required
+body: rich-text (mdx), isBody
+description: textarea (SEO)
+slug: string, required
+0.2 Create legal page content (5 pages × 3 locales)
+Baseado nas referências (Crypto.Games, Stake, CoinPoker, WingoBingo), escrever conteúdo original adaptado ao CryptoBingo:
+Seções propostas
+Acceptance, Eligibility, Accounts, Game Rules, Payments/Blockchain, IP, Liability, Termination, Governing Law, Changes
+Data Controller, Data Collected, Purpose, Legal Basis, Sharing, Cookies (GA4/GTM/Clarity), LGPD Rights, DPO, Retention, Security
+Crypto Volatility, Loss Risk, Blockchain Irreversibility, Smart Contract Risk, No Financial Advice, No Guarantee
+Philosophy, Self-Assessment, Deposit Limits, Time-Out, Self-Exclusion (1y/3y/5y), Minor Protection, Help Resources (BR + global), Complaints
+RTP 85%/GGR 15%, Max Weight, Patterns/Combos/Stages, Draw Modes (standard/fixed/firstfull/goldenball/multimatch), FREE SPACE, Prize Formula, Payout Pipeline
+0.3 Frontend — PageView component
+src/pages/PageView.tsx — loader recebe locale + slug, renderiza body (rich-text MDX)
+Rotas em app/routes.ts
+SEO dinâmico (title, description, hreflang)
+0.4 Footer — corrigir legal links de # para rotas reais
+0.5 Testes (TDD):
+PageView.test.tsx — renderiza legal page existente
+Fallback 404 quando slug não existe
+Links legais no Footer apontam pra rota correta
+Fase 1 — i18n Stack
+1.1 Add react-i18next + i18next ao landing page
+1.2 Criar src/i18n/config.ts (default: en, fallback: en, resources: en | pt | zh)
+1.3 Criar src/locales/{en,pt,zh}.json — strings:
+nav.{ideas,testnet,faq,blog,tutorials,github,telegram,twitter}
+footer.{product,community,legal,testnet,faq,ideas,roadmap,terms,privacy}
+hero.{title,subtitle,cta}
+features.{title,description} for each
+roadmap.{title,phase1-3}
+newsletter.{title,placeholder,button}
+locale.{en,pt,zh} (self-names for switcher)
+1.4 Migrar Header, Footer, Hero, Features, Roadmap, Newsletter → t()
+1.5 Migrar <html lang> dinâmico via locale detectado
+1.6 Locale switcher dropdown no Header
+Fase 2 — TinaCMS Collections Restructure
+2.1 tina/config.ts: 12 collections no total (4 tipos × 3 locales)
+2.2 Mover content/faq/*.md → content/faq/pt/*.md (add locale: pt frontmatter)
+2.3 Mover content/blog/*.md → content/blog/pt/*.md
+2.4 Mover content/settings/home.json → content/settings/home.pt.json
+2.5 Mover content/pages/README.mdx → content/pages/pt/ (ou limpar)
+Fase 3 — Content Loaders + Routing
+3.1 lib/content.ts refactor — todos loaders recebem locale:
+loadPages(locale: string): PageItem[]
+loadPage(slug: string, locale: string): PageItem | null
+loadFAQItems(locale: string): FAQItem[]
+loadBlogPosts(locale: string): BlogPost[]
+loadBlogPost(slug: string, locale: string): BlogPost | null
+loadTutorials(locale: string): TutorialItem[]
+loadTutorial(slug: string, locale: string): TutorialItem | null
+loadSettings(locale: string): HomeSettings
+3.2 app/routes.ts — rotas com /:lang prefixo
+3.3 Helper localeFromParams(params) — valida en|pt|zh, default en
+3.4 Redirect / → /en (301 no staticwebapp.config.json ou via loader)
+Fase 4 — Content Migration (Traduções)
+4.1 FAQ existente (4 itens) → traduzir EN + ZH
+4.2 Blog existente (2 posts) → traduzir EN + ZH
+4.3 Settings (hero, features) → home.en.json + home.zh.json
+4.4 Test: todos locales carregam sem quebrar, SSG gera páginas corretas
+Fase 5 — Tutoriais
+5.1 Tina schema: 3 collections tutorial_pt/_en/_zh
+Fields: title, description, body (rich-text mdx), order, locale
+5.2 TutorialsIndex.tsx — lista por order
+5.3 TutorialPost.tsx — render MDX
+5.4 Conteúdo "Como criar carteira WAX" (PT) → EN → ZH
+5.5 Link "Tutoriais" no Header
+5.6 Rotas /:lang/tutorials, /:lang/tutorials/:slug
+Fase 6 — Deploy Polish
+6.1 deploy-landing.yml: add submodules: recursive no checkout
+6.2 SEO hreflang: <link rel="alternate" hreflang="en|pt|zh" no <head>
+6.3 Sitemap multilingue (public/sitemap.xml)
+6.4 staticwebapp.config.json: redirect / → /en
+Processo de Implementação (cada fase)
+TDD: Write failing test → minimal code → pass → refactor
+SonarQube: sonarqube_analyze_code_snippet em cada .ts/.tsx modificado — 0 BLOCKER/CRITICAL/MAJOR
+Typecheck: npx tsc --noEmit (ok na landing)
+Testes: pnpm --filter @cryptobingo/landing-page test
+Commit: conventional commits PT-BR, Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Conteúdo legal: você (o modelo) escreve baseado nas referências → usuário aprova antes do commit
+Pronto pra sua aprovação. Quer que eu ajuste algo?
+▣  Plan · DeepSeek V4 Flash Free · 2m 33s
+não só crypto gaming, mas de jogos de azar também, visto que bingo pode ser considerado jogo de casino. teremos muitas legislações batendo em cima do nosso sistema. precisaremos estar resguaardados quanto a tudo! além também da comunidade questionando nosso sistemaa pois nosso contrato não poderá ser algo que deixemos open source para auditoria. talvez, para nosso caso, seja bom colocarmos documentos também do estilo whitepaper e coisas do tipo, para aumentar a confiança, qualidade e aderência as leis, normas, boas práticas.
++ Thought: 11.9s
+Glob "docs/*white*" 
+Glob "docs/*PRD*" (1 match)
+Glob "*WHITEPAPER*" 
+Grep "whitepaper|white.paper" in docs 
+Read docs 
++ Thought: 548ms
+Read docs/COMPLIANCE.md 
+Read docs/PRD.md [limit=60]
+Read docs/PRODUCT.md [limit=60]
++ Thought: 9.4s
+Achado importante: já temos COMPLIANCE.md (86 linhas) cobrindo Provably Fair, Lei 14.790/2023 (apostas quota fixa Brasil), LGPD — base sólida pra whitepaper.
+Também: PRD.md, PRODUCT.md, SPEC.md — ~500 linhas de documentação de produto já existentes.
+Nova Camada: Trust Docs (código fechado = compensar com transparência)
+Como contrato não será open source, precisamos de mais docs que um projeto open source:
+Documento	Propósito	Fonte
+Whitepaper	Documento técnico completo: arquitetura, tokenomics, RNG, segurança, roadmap	PRD.md + PRODUCT.md + SPEC.md + COMPLIANCE.md + ADRs
+Proof of Fairness	Como RNG RSA-SHA256 funciona, como verificar cada sorteio mesmo sem source	COMPLIANCE.md §1 + ADR oráculo
+Security & Audits	Auditorias terceiras publicadas, bug bounty, práticas de segurança	(a contratar)
+AML Policy	Anti-money laundering — como prevenimos lavagem mesmo em crypto	(escrever)
+Dispute Resolution	Como abrir reclamação, escalation, mediação	(escrever)
+Bug Bounty	Programa de recompensa por encontrar falhas	(política)
+Taxonomia completa do site
+Legal (obrigatório):
+  ├── Terms of Service
+  ├── Privacy Policy (LGPD/GDPR)
+  ├── Risk Disclaimer
+  ├── Responsible Gaming
+  ├── AML Policy
+  └── Dispute Resolution
+
+Trust (compensa closed-source):
+  ├── Whitepaper
+  ├── Proof of Fairness
+  ├── Security & Audits
+  └── Bug Bounty
+
+Game:
+  ├── Game Rules
+  └── RTP & Economics
+
+Content:
+  ├── FAQ
+  ├── Blog
+  └── Tutorials
+Proposta de organização das Fases
+Fase	O quê	~Tasks
+0	⚖️ Legal obrigatório (Terms, Privacy, Risk Disclaimer, Responsible Gaming)	8
+1	🌐 i18n Stack (react-i18next, locale files, <html lang>, switcher)	7
+2	🏗️ TinaCMS restructure + Content Loaders + Routing	6
+3	📖 Trust Docs (Whitepaper, Proof of Fairness, Security, AML, Dispute Resolution, Bug Bounty)	8
+4	📚 Content Migration + Tutoriais	8
+5	🚀 Deploy Polish (submodules, hreflang, sitemap, redirects)	4
+Whitepaper priorizado antes de traduzir FAQ/blog porque é a base de confiança.
+# Questions
+Expandimos o escopo legal? Das páginas listadas, quais você quer como prioridade máxima?
+Todas: Terms + Privacy + Risk + RG + AML + Dispute (Recomendado)
+O whitepaper fica como página longa no site ou como PDF separado (ou ambos)?
+Página HTML no site + PDF download (Recomendado)
++ Thought: 5.9s
+Confirmado. 6 páginas legais + whitepaper (HTML+PDF). Vou consolidar o plano final completo.
+CryptoBingo Landing Page — Plano de Implementação
+Alvo: www.cryptobingo.bet
+Escopo: i18n (EN padrão) + conteúdo legal/trust/tutorial via TinaCMS
+Arquitetura Final de Conteúdo
+content/
+  pages/
+    en/{terms,privacy,risk-disclaimer,responsible-gaming,aml,dispute-resolution,whitepaper,games-rules}.mdx
+    pt/{termos,privacidade,...}.mdx
+    zh/{terms,privacidade,...}.mdx
+  faq/
+    en/*.md
+    pt/*.md
+    zh/*.md
+  blog/
+    en/*.md
+    pt/*.md
+    zh/*.md
+  tutorials/
+    en/*.md
+    pt/*.md
+    zh/*.md
+  settings/
+    home.en.json
+    home.pt.json
+    home.zh.json
+TinaCMS: 13 coleções (page_en/pt/zh, faq_en/pt/zh, blog_en/pt/zh, tutorial_en/pt/zh, settings_en/pt/zh)
+Whitepaper
+Fonte: Compilado de docs existentes no repositório:
+docs/COMPLIANCE.md — Provably Fair, Lei 14.790/2023, LGPD
+docs/PRD.md — Product Requirements
+docs/PRODUCT.md — Visão geral
+docs/SPEC.md — Especificação técnica
+docs/adr/ — Decisões arquiteturais (RNG, draw modes, payouts, etc.)
+Formato: Página HTML em /en/whitepaper + PDF para download em /whitepaper.pdf
+Geração PDF: Script scripts/generate-whitepaper-pdf.ts que converte o markdown pra PDF
+Fases (ordem de execução)
+Fase 0 — ⚖️ Legal Pages (8 tasks)
+#	Task	Tipo
+0.1	Adicionar 3 coleções page_pt/en/zh no Tina schema	Schema
+0.2	Escrever Terms of Service PT → EN → ZH	Conteúdo
+0.3	Escrever Privacy Policy (LGPD/GDPR) PT → EN → ZH	Conteúdo
+0.4	Escrever Risk Disclaimer PT → EN → ZH	Conteúdo
+0.5	Escrever Responsible Gaming Policy PT → EN → ZH	Conteúdo
+0.6	Escrever AML Policy PT → EN → ZH	Conteúdo
+0.7	Escrever Dispute Resolution Policy PT → EN → ZH	Conteúdo
+0.8	Criar src/pages/PageView.tsx — loader genérico slug+locale + render MDX	Frontend
+Fase 1 — 🌐 i18n Stack (7 tasks)
+Task
+pnpm add react-i18next i18next
+src/i18n/config.ts — default en, suporte `en
+src/locales/{en,pt,zh}.json — strings de UI
+Migrar Header, Footer, Hero, Features, Roadmap → t()
+<html lang> dinâmico via locale
+Locale switcher dropdown no Header
+Atualizar Footer: legal links de # → rotas reais
+Fase 2 — 🏗️ TinaCMS Restructure + Loaders (6 tasks)
+Task
+tina/config.ts — 13 coleções (4 tipos × 3 locales + settings × 3)
+Mover content/faq/*.md → content/faq/pt/*.md
+Mover content/blog/*.md → content/blog/pt/*.md
+Mover content/settings/home.json → home.pt.json
+lib/content.ts — todos loaders parametrizados por locale
+app/routes.ts — rotas com /:lang prefixo
+Fase 3 — 📖 Whitepaper (5 tasks)
+Task
+Escrever whitepaper completo (compilar de PRD.md + PRODUCT.md + SPEC.md + COMPLIANCE.md + ADRs)
+Traduzir whitepaper EN → PT → ZH
+Criar src/pages/WhitepaperPage.tsx — layout com TOC lateral, seções navegáveis
+Script scripts/generate-whitepaper-pdf.ts — gera PDF do whitepaper
+Rota /:lang/whitepaper + link download /whitepaper.pdf
+Fase 4 — 📚 Trust Docs + Game Rules + Tutoriais (8 tasks)
+Task
+Escrever Proof of Fairness page (RNG RSA-SHA256, verificação) EN → PT → ZH
+Escrever Security & Audits page (auditorias, bug bounty) EN → PT → ZH
+Escrever Game Rules page (RTP, patterns, draw modes, payout) EN → PT → ZH
+Adicionar 3 coleções tutorial_pt/en/zh no Tina schema
+Criar TutorialsIndex.tsx + TutorialPost.tsx
+Pesquisar conteúdo original "Criar carteira WAX" → escrever PT
+Traduzir tutorial carteira WAX EN + ZH
+Link "Tutoriais" no Header
+Fase 5 — 🚀 Deploy Polish (4 tasks)
+Task
+deploy-landing.yml: submodules: recursive no checkout
+SEO hreflang no <head>
+Atualizar public/sitemap.xml
+staticwebapp.config.json: redirect / → /en
+TDD + Quality Gates (toda task)
+RED → GREEN → refactor → SonarQube → typecheck → commit
+Total: 38 tasks, 6 fases. Whitepaper como fase separada porque é o documento mais denso e crítico pra confiança.
+Quer ajustar algo na ordem ou conteúdo antes de eu declarar o plano finalizado?
+▣  Plan · DeepSeek V4 Flash Free · 1m 35s
+quanto a security e audits, por operarmos em um ambiente de blockchain e sermos voltados a uma comunidade que possui conhecimento sobre como funcionam, podemos já nos adaptar, integrando ao programa de bounty, para que a auditoria e parte de segurança sejam feitas pelos membros da comunidade em si a princípio, além de utilizar ferramentas que encontremos que possam nos ajudar dentro de nossas capacidades, principalmente fincanceiras.
++ Thought: 10.2s
+Boa estratégia. Transformar "Security & Audits" em Bug Bounty Program — comunidade audita, plataforma recompensa com tokens.
+Refinamento: Trust Docs
+Antes (estático, caro)
+Problema
+Auditoria terceira custa $50k+. Inviável agora.
+Depois (comunitário, viável)
+Abordagem
+Comunidade audita. Recompensa em WAX/BINGO conforme gravidade. Ferramentas gratuitas que pudermos rodar.
+On-chain WASM decompilável, RNG seeds pre-commitados, fórmulas determinísticas — mesmo sem source, qualquer node verifica.
+Bug Bounty — Estrutura Proposta
+Severidade	Impacto	Recompensa
+Critical	Perda direta de fundos, halt protocolo	$500-2000 em WAX/BINGO
+High	Manipulação pagamento, corrupção estado	$200-500
+Medium	Erro lógico com exploit limitado	$50-200
+Low	Menor, informacional	$10-50
+Note	Sem Proof of Concept = sem recompensa	—
+Regras:
+Disclosure responsável (email, não público)
+7 dias pra corrigir antes de divulgação pública
+Só primeiro report vale
+Scans automatizados não qualificam (precisa PoC)
+Sem engenharia social, DoS, spam
+Hall of Fame público
+Ferramentas gratuitas que podemos rodar:
+clang-tidy / clang static analyzer — análise C++ do contrato
+Flags -Wall -Wextra no cdt-cpp
+Manual diff review publicado no GitHub
+Checklist comunidade Antelope (eosio-security-checklist)
+Plano Atualizado — Fase 3
+#	Task	Antes	Agora
+4.1	Proof of Fairness ✅	RNG + verificação	RNG + verificação + decompilação WASM
+4.2	Security & Audits ❌	Auditoria paga	Removido
+4.2 novo	Bug Bounty Program	—	Política completa + Hall of Fame
+4.3	Game Rules ✅	Mantido	Mantido
+Plano Final Consolidado (6 Fases, 38 tasks)
+Fase 0 — ⚖️ Legal: Terms + Privacy + Risk + RG + AML + Dispute (8 tasks)
+Fase 1 — 🌐 i18n: react-i18next + locale files + switcher (7 tasks)
+Fase 2 — 🏗️ Tina: 13 collections + loaders + routes (6 tasks)
+Fase 3 — 📖 Whitepaper + Trust: whitepaper + Proof of Fairness + Bug Bounty (5 tasks)
+Fase 4 — 📚 Content: traduções + tutorial carteira WAX (8 tasks)
+Fase 5 — 🚀 Deploy: submodules + hreflang + sitemap + redirect (4 tasks)
+38 tasks total. Ordem importa: Legal → i18n → Tina → Whitepaper → Conteúdo → Deploy.
+Pronto pra finalizar o plano e começar?
+▣  Plan · DeepSeek V4 Flash Free · 22.6s
+vamos adaptar o bug bounty atual, que é em fase de testes, para conceder não baseado em valores, mas no lançamento, em itens de raridade maior, conforme o tipo de bug found. outra coisa que precisamos ter em mente é lgpd,gpdr e afins.
++ Thought: 1.2s
+Grep "bounty|bug.*bounty|hall.*fame|disclosure|responsible.*disclosure" in . 
+Glob "**/*bounty*" 
+Glob "**/*Bounty*" 
++ Thought: 883ms
+Grep "nft.?conf|nft.?config|rarity|tier.*nft|nft.*tier" in contracts 
+Grep "nft|rarity|tier|collection" in contracts/bingo 
+Grep "nftconf|nft_config|setnftconf" in contracts 
++ Thought: 2.2s
+Grep "nftconf|nft_config" in contracts/bingo 
+Grep "nftconf|nft_config|setnftconf" in contracts/bingo 
++ Thought: 574ms
+Grep "nftconf|setnftconf|delnftconf" in contracts (22 matches)
+Grep "nft|NFT" in contracts/bingo/include (46 matches)
++ Thought: 5.2s
+Entendi. Vou refinar:
+Bug Bounty: NFTs por raridade conforme severidade.
+LGPD/GDPR: Privacy Policy com seções dedicadas.
+Plano Final Refinado
+Fase 0 — ⚖️ Legal Pages (8 tasks)
+Detalhe
+Schema: title, body (mdx), description, slug
+EN (referência) → PT → ZH
+EN → PT → ZH. Seções obrigatórias LGPD/GDPR: base legal, direitos titular (acesso/correção/exclusão/portabilidade), DPO contato, retenção, compartilhamento, transferência internacional (blockchain), cookies (GA4/GTM/Clarity), consentimento, LGPD Art. 18-19, GDPR Art. 12-23
+Perda total, volatilidade cripto, blockchain irreversível, smart contract risks, sem aconselhamento
+Auto-exclusão, limites depósito, time-out, idade mínima, recursos BR (PRO-AMO, Jogadores Anônimos) + globais
+Anti-money laundering, KYC, transações suspeitas, compliance
+Como abrir reclamação, prazos, escalation, mediação
+Loader genérico slug+locale, render MDX, SEO dinâmico
+Fase 1 — 🌐 i18n Stack (7 tasks)
+Task
+pnpm add react-i18next i18next
+src/i18n/config.ts — default en, resources en|pt|zh
+src/locales/{en,pt,zh}.json — strings UI (nav, footer, hero, features, roadmap, newsletter)
+Migrar Header, Footer, Hero, Features, Roadmap, Newsletter → t()
+<html lang> dinâmico
+Locale switcher no Header
+Footer: legal links apontam para rotas reais
+Fase 2 — 🏗️ TinaCMS Restructure + Loaders + Routing (6 tasks)
+Task
+tina/config.ts: 13 collections (page_en/pt/zh, faq_en/pt/zh, blog_en/pt/zh, tutorial_en/pt/zh, settings_en/pt/zh)
+Mover content/faq → content/faq/pt
+Mover content/blog → content/blog/pt
+settings/home.json → home.pt.json + criar home.en.json home.zh.json
+lib/content.ts: todos loaders com locale param
+app/routes.ts: rotas /:lang prefixo, redirect / → /en
+Fase 3 — 📖 Whitepaper (5 tasks)
+Task
+Escrever whitepaper completo (compilar PRD.md + PRODUCT.md + SPEC.md + COMPLIANCE.md + ADRs)
+Traduzir EN → PT → ZH
+WhitepaperPage.tsx — layout com TOC lateral, seções, navegação
+Script scripts/generate-whitepaper-pdf.ts
+Rota /:lang/whitepaper + /whitepaper.pdf download
+Fase 4 — 📚 Trust Docs + Tutoriais (8 tasks)
+Detalhe
+RNG RSA-SHA256, seeds pre-commitadas, fórmulas determinísticas, como verificar no explorer WAX (WASM decompilado)
+Recompensas em NFTs por raridade: Critical → Legendary (1/1), High → Epic, Medium → Rare, Low → Uncommon, Note → Common. Processo: disclosure responsável, email, 7d pra correção, Hall of Fame público.
+RTP 85%/GGR 15%, max_weight, patterns/combos/stages, draw modes, FREE SPACE, fórmula prêmio
+Schema: title, description, body (mdx), order
+Lista por order, render MDX
+Conteúdo original, passo a passo
+ 
+ 
+Fase 5 — 🚀 Deploy Polish (4 tasks)
+Task
+deploy-landing.yml: submodules: recursive
+SEO hreflang: <link rel="alternate" hreflang="en|pt|zh"
+Sitemap multilingue
+Redirect / → /en (staticwebapp.config.json)
+Resumo
+Tipo
+Páginas obrigatórias LGPD/GDPR + termos
+Infraestrutura de idiomas, EN padrão
+Collections + loaders + rotas
+Documento técnico completo + PDF
+Proof of Fairness + Bug Bounty (NFTs) + Game Rules + tutorial carteira WAX
+CI/CD, SEO, redirects
+ 
+Pronto pra aprovação. Quer ajustar algo?
+▣  Plan · DeepSeek V4 Flash Free · 39.4s
+com esta estrutura, conseguimos inclusive ter uma facilidade em questão de AMP (Accelerated Mobile Pages), correto?
++ Thought: 7.6s
+Não automaticamente. Explico:
+SSG ajuda, mas AMP tem requisitos conflitantes com React:
+Nossa arquitetura (React Router v7 SSG)
+Geramos SSG, isso OK
+Tailwind gera CSS sob medida, OK
+React hydration injeta bundles .js nas páginas — AMP bloqueia
+Usamos <img> React nativo, sem AMP components
+Precisaria pipeline separado de validação
+Caminhos possíveis:
+Abordagem	Custo	Benefício
+A) Dual build: SSG normal + templates AMP separados	Alto — manter 2 versões de cada página	Máximo SEO mobile
+B) Skip AMP, focar Core Web Vitals	Zero — já temos SSG rápido	95% do benefício, 0% da dor
+C) AMP só nas páginas legais (menos interativas)	Médio — precisaria renderizadores paralelos	Cobertura parcial
+Minha recomendação: (B) — AMP vem perdendo relevância desde 2021 (Google não exige mais pra Top Stories). Nosso SSG já entrega:
+HTML estático pronto (LCP excelente)
+CSS crítico inline (Tailwind)
+Sem blockers de renderização
+Lighthouse 90+ com pouco esforço
+AMP adicionaria complexidade significativa de build/manutenção pra ganho marginal. Se quiser acelerar mobile, melhor investir em:
+Preconnect + DNS-prefetch
+Otimização de imagens (WebP + responsive)
+Service Worker pra cache offline
+Quer seguir com AMP mesmo assim ou focar em performance SSG nativa?
+▣  Plan · DeepSeek V4 Flash Free · 16.3s
+não, vamos seguir suas recomendações e manter B. além disso, antes de fecharmos o plano, gostaria que se atualizasse quanto ao seu conhecimento, uma vez que pode existir defasagem em tecnologias, metodologias, princípios, boas práticas, contexto e quaisquer coisas mais, buscando, para cada ponto do nosso plano, seja em questão de uso de tecnologias, bibliotecas, geração de conteúdo, formatação, ferramentas, skills, agents, e tudo mais que tocarmos, na internet informações atualizadas sobre como trabalhar melhor e de maneira mais prática, eficaz e eficiente, incluindo nossos processos, procedimentos, fluxos e inclusive, podendo apliá-los e melhorá-los. devemos ter um sistema impecável, de primeira linha, entreprise grade, user friendly, agnóstico quanto ao device, que tanto pessoas quanto agents, ia's, bots consigam entender. com isso, teremos com certeza um sucesso nas mãos.
++ Thought: 1.9s
+Excelente. Vou pesquisar o estado-da-arte atual de cada tecnologia do plano pra garantir que não haja defasagem.
+Exa Web Search "React Router v7 SSG best practices 2026 server-side rendering static generation" 
+Exa Web Search "TinaCMS i18n multi-language content management 2025 2026 best practices" 
+Exa Web Search "react-i18next v5 latest patterns 2026 TypeScript best practices" 
++ Thought: 5.3s
+Exa Web Search "Tailwind CSS v4 latest best practices 2026 static site optimization" 
+Exa Web Search "hreflang SEO best practices 2026 multilingual sitemap" 
+Exa Web Search "SSG static site SEO performance Core Web Vitals best practices 2026" 
++ Thought: 4.0s
+Goal
+Implement landing page (www.cryptobingo.bet) with full i18n (EN default), legal/trust pages via TinaCMS, and populate with content.
+Constraints & Preferences
+Abordagem A: 3 TinaCMS collections per content type (pt/en/zh) + locale prefix in routes.
+Default locale: English. lang="en", redirect / → /en.
+Full i18n: react-i18next on landing page. Component strings in src/locales/{en,pt,zh}.json.
+Content from TinaCMS — local git content repo (cryptobingo-tina), NO MongoDB for landing page.
+Closed-source contract → compensate with Proof of Fairness, Whitepaper, Bug Bounty (NFTs by rarity).
+AMP: Skip. Focus on Core Web Vitals + SSG native performance.
+Whitepaper: HTML page + downloadable PDF.
+Bug Bounty: Rewards are NFTs by rarity tier, not cash.
+LGPD/GDPR: Privacy Policy must have dedicated sections for Brazil (LGPD Art. 18-19) and EU (GDPR Art. 12-23).
+TDD for every implementation task. SonarQube before each commit.
+Process: grill-with-docs, impeccable, superpowers skills active.
+Progress
+Done
+Fase 4 — Share + Analytics: fully implemented and verified (8/8 tasks, 288 tests green).
+Plan docs/superpowers/plans/2026-07-03-share-analytics-plan.md marked COMPLETED.
+Session memory mem_1783114548969_2k53bvsac recorded with final state.
+All 17 prior plans in docs/superpowers/plans/ confirmed COMPLETED via git log.
+www.cryptobingo.bet verified working: FAQ (4 items, PT), Blog (2 posts, PT), Settings — served by TinaCMS local files.
+test.cryptobingo.bet confirmed broken: /api/v1/content/faq returns 404 (MongoDB empty).
+Research done: Crypto.Games, Stake, CoinPoker, WingoBingo legal doc structures as references.
+Best practices researched: React Router v7 SSG pre-rendering, TinaCMS i18n patterns, react-i18next v5 hooks.
+AMP decision: Skip. SSG + Core Web Vitals sufficient.
+In Progress
+Plano Final consolidated but NOT yet approved for execution (user asked to present first, decide later).
+Blocked
+(none)
+Key Decisions
+12 TinaCMS collections (4 types × 3 locales): page_pt/en/zh, faq_pt/en/zh, blog_pt/en/zh, tutorial_pt/en/zh. Plus 3 settings_pt/en/zh.
+Legal docs (6 pages × 3 locales): Terms, Privacy (LGPD/GDPR), Risk Disclaimer, Responsible Gaming, AML, Dispute Resolution — all written first in EN, then PT, then ZH.
+Whitepaper: compiled from PRD.md + PRODUCT.md + SPEC.md + COMPLIANCE.md + ADRs. HTML page + PDF via script scripts/generate-whitepaper-pdf.ts.
+Bug Bounty: NFTs by rarity — Critical→Legendary 1/1, High→Epic, Medium→Rare, Low→Uncommon, Note→Common. Responsible disclosure, 7d fix window, Hall of Fame.
+Routing: /:lang? prefix, root / → redirect 301 to /en. Locale switcher in Header.
+Security & Audits page replaced by Bug Bounty Program (community-driven, affordable).
+Next Steps
+User approves final plan.
+Execute Fase 0 — Legal Pages (8 tasks, starting with Tina schema + Terms in EN).
+Execute Fase 1 — i18n Stack (7 tasks).
+Execute Fase 2 — TinaCMS Restructure + Loaders + Routing (6 tasks).
+Execute Fase 3 — Whitepaper (5 tasks).
+Execute Fase 4 — Trust Docs + Content (8 tasks, incl. tutorial "Create WAX Wallet").
+Execute Fase 5 — Deploy Polish (4 tasks, incl. submodules, hreflang, sitemap, redirect).
+Critical Context
+Zero legal content currently exists. Footer Terms/Privacy both link to #.
+Content dir is a git submodule pointing to github.com/iurineumann/cryptobingo-tina.git.
+CI fix needed: deploy-landing.yml uses actions/checkout@v4 WITHOUT submodules: true (though deployed site currently works — submodule was fetched during a manual or prior deploy).
+ADR-037 (Unified Content System via MongoDB) exists but is NOT implemented for landing page — landing page uses TinaCMS local files exclusively.
+Existing docs feeding whitepaper: docs/COMPLIANCE.md, docs/PRD.md, docs/PRODUCT.md, docs/SPEC.md, docs/adr/ (RNG, draw modes, payouts, etc.).
+NFTCONFIG system already deployed in smart contract (nft_config table, setnftconf/delnftconf actions, rarities via AtomicAssets templates) — directly usable for Bug Bounty rewards.
+Relevant Files
+apps/landing-page/tina/config.ts: TinaCMS schema — will grow from 4 collections to 13.
+apps/landing-page/lib/content.ts: Server-side content loaders — all need locale param.
+apps/landing-page/app/routes.ts: SSG routes — must add /:lang prefix for all pages.
+apps/landing-page/app/root.tsx: Current <html lang="pt-BR"> — must become dynamic.
+apps/landing-page/src/components/Footer.tsx: Legal links href="#" — must point to real routes.
+apps/landing-page/src/components/Header.tsx: No locale switcher, no FAQ/Blog/Tutorials links.
+apps/landing-page/content/: Git submodule → cryptobingo-tina.git — content root.
+apps/landing-page/.github/workflows/deploy-landing.yml: CI — needs submodules: recursive.
+docs/COMPLIANCE.md: Provably Fair, Lei 14.790/2023, LGPD — base for legal/trust content.
+docs/PRD.md: Product requirements — base for whitepaper.
+docs/PRODUCT.md: Product overview — base for whitepaper.
+contracts/bingo/include/bingo.hpp: nft_config table, nft_rule, nft_seq — ready for Bug Bounty NFT rewards.
+▣  Compaction · DeepSeek V4 Flash Free · 26.4s
++ Thought: 3.3s
+Session status: all research done, Plano Final consolidated, awaiting user approval before implementation.
+Research results:
+Tailwind v4: Oxide engine (Rust, 182x faster). No tailwind.config.js needed — CSS custom properties for theme. JIT default.
+Hreflang: Use <link> in <head> + XML sitemap (self-referencing + x-default). Return tag requirement mandatory. For React Router v7 SSG, generate programmatic sitemap per locale.
+SSG performance: SSG beats all strategies for TTFB/LCP (sub-50ms CDN). No hydration cost concern here (minimal JS on landing page). Core Web Vitals: LCP ~0.8s desktop, ~1.4s mobile.
+Current state:
+17 prior plans completed
+Last session (share+analytics): 288 tests, all green, deployed
+www.cryptobingo.bet working (FAQ, Blog, Settings — TinaCMS)
+Plano Final (Fase 0–5, 38 tasks) ready — NOT yet approved
+Need from you: approve the final plan, refine scope, or clarify anything before execution begins.
+▣  Plan · DeepSeek V4 Flash Free · 9.7s
+houve um compaction durante o processo. vamos refazer esta última interação para garantirmos que não haja perda de contexto, que é vital para nosso sucesso. proponho mantermos uma estrutura de multi agentes para levantar o que pedi antes e vou pedir abaixo novamente, levando como base o nosso plano base. para isso, creio que seja útil termos um sistema de planejamento onde os outputs sejam escritos em arquivo, para que possam se referenciar e que possam existir conversas e discussões entre os pontos levantados em cada agent, de modo que consigamos consolidar um plano eficaz, eficiente, prático, moderno, preciso. a seguir, o que pedi por último: não, vamos seguir suas recomendações e manter B. além disso, antes de fecharmos o plano, gostaria que se atualizasse quanto ao seu conhecimento, uma vez que pode existir defasagem em tecnologias, metodologias, princípios, boas práticas, contexto e quaisquer coisas mais, buscando, para cada ponto do nosso plano, seja em questão de uso de tecnologias, bibliotecas, geração de conteúdo, formatação, ferramentas, skills, agents, e tudo mais que tocarmos, na internet informações atualizadas sobre como trabalhar melhor e de maneira mais prática, eficaz e eficiente, incluindo nossos processos, procedimentos, fluxos e inclusive, podendo apliá-los e melhorá-los. devemos ter um sistema impecável, de primeira linha, entreprise grade, user friendly, agnóstico quanto ao device, que tanto pessoas quanto agents, ia's, bots consigam entender. com isso, teremos com certeza um sucesso nas mãos. 
++ Thought: 25.0s
+Antes de desenhar o sistema multi-agente, preciso clarificar: o "B" que vc confirmou se refere a qual decisão? Contexto perdido no compaction.
+Minhas suspeitas:
+Abordagem B para TinaCMS i18n: collection única com campo locale (vs. 3 collections separadas por locale)
+Outra decisão que discutimos
+Qual era o par A × B?
+▣  Plan · DeepSeek V4 Flash Free · 28.5s
+contextualizando: Entendi. Vou refinar:
+Bug Bounty: NFTs por raridade conforme severidade.
+LGPD/GDPR: Privacy Policy com seções dedicadas.
+Plano Final Refinado
+Fase 0 — ⚖️ Legal Pages (8 tasks)
+#	Task	Detalhe
+0.1	Tina: 3 collections page_pt/en/zh	Schema: title, body (mdx), description, slug
+0.2	Terms of Service	EN (referência) → PT → ZH
+0.3	Privacy Policy	EN → PT → ZH. Seções obrigatórias LGPD/GDPR: base legal, direitos titular (acesso/correção/exclusão/portabilidade), DPO contato, retenção, compartilhamento, transferência internacional (blockchain), cookies (GA4/GTM/Clarity), consentimento, LGPD Art. 18-19, GDPR Art. 12-23
+0.4	Risk Disclaimer	Perda total, volatilidade cripto, blockchain irreversível, smart contract risks, sem aconselhamento
+0.5	Responsible Gaming	Auto-exclusão, limites depósito, time-out, idade mínima, recursos BR (PRO-AMO, Jogadores Anônimos) + globais
+0.6	AML Policy	Anti-money laundering, KYC, transações suspeitas, compliance
+0.7	Dispute Resolution	Como abrir reclamação, prazos, escalation, mediação
+0.8	Create PageView.tsx	Loader genérico slug+locale, render MDX, SEO dinâmico
+Fase 1 — 🌐 i18n Stack (7 tasks)
+#	Task
+1.1	pnpm add react-i18next i18next
+1.2	src/i18n/config.ts — default en, resources en|pt|zh
+1.3	src/locales/{en,pt,zh}.json — strings UI (nav, footer, hero, features, roadmap, newsletter)
+1.4	Migrar Header, Footer, Hero, Features, Roadmap, Newsletter → t()
+1.5	<html lang> dinâmico
+1.6	Locale switcher no Header
+1.7	Footer: legal links apontam para rotas reais
+Fase 2 — 🏗️ TinaCMS Restructure + Loaders + Routing (6 tasks)
+#	Task
+2.1	tina/config.ts: 13 collections (page_en/pt/zh, faq_en/pt/zh, blog_en/pt/zh, tutorial_en/pt/zh, settings_en/pt/zh)
+2.2	Mover content/faq → content/faq/pt
+2.3	Mover content/blog → content/blog/pt
+2.4	settings/home.json → home.pt.json + criar home.en.json home.zh.json
+2.5	lib/content.ts: todos loaders com locale param
+2.6	app/routes.ts: rotas /:lang prefixo, redirect / → /en
+Fase 3 — 📖 Whitepaper (5 tasks)
+#	Task
+3.1	Escrever whitepaper completo (compilar PRD.md + PRODUCT.md + SPEC.md + COMPLIANCE.md + ADRs)
+3.2	Traduzir EN → PT → ZH
+3.3	WhitepaperPage.tsx — layout com TOC lateral, seções, navegação
+3.4	Script scripts/generate-whitepaper-pdf.ts
+3.5	Rota /:lang/whitepaper + /whitepaper.pdf download
+Fase 4 — 📚 Trust Docs + Tutoriais (8 tasks)
+#	Task	Detalhe
+4.1	Proof of Fairness	RNG RSA-SHA256, seeds pre-commitadas, fórmulas determinísticas, como verificar no explorer WAX (WASM decompilado)
+4.2	Bug Bounty Program	Recompensas em NFTs por raridade: Critical → Legendary (1/1), High → Epic, Medium → Rare, Low → Uncommon, Note → Common. Processo: disclosure responsável, email, 7d pra correção, Hall of Fame público.
+4.3	Game Rules	RTP 85%/GGR 15%, max_weight, patterns/combos/stages, draw modes, FREE SPACE, fórmula prêmio
+4.4	Tina: 3 collections tutorial_pt/en/zh	Schema: title, description, body (mdx), order
+4.5	TutorialsIndex.tsx + TutorialPost.tsx	Lista por order, render MDX
+4.6	Pesquisar + escrever "Criar carteira WAX" PT	Conteúdo original, passo a passo
+4.7	Traduzir tutorial EN + ZH	 
+4.8	Link "Tutoriais" no Header	 
+Fase 5 — 🚀 Deploy Polish (4 tasks)
+#	Task
+5.1	deploy-landing.yml: submodules: recursive
+5.2	SEO hreflang: <link rel="alternate" hreflang="en|pt|zh"
+5.3	Sitemap multilingue
+5.4	Redirect / → /en (staticwebapp.config.json)
+Resumo
+Fase	Tasks	Tipo
+0 Legal	8	Páginas obrigatórias LGPD/GDPR + termos
+1 i18n	7	Infraestrutura de idiomas, EN padrão
+2 Tina	6	Collections + loaders + rotas
+3 Whitepaper	5	Documento técnico completo + PDF
+4 Trust + Content	8	Proof of Fairness + Bug Bounty (NFTs) + Game Rules + tutorial carteira WAX
+5 Deploy	4	CI/CD, SEO, redirects
+Total	38	 
+Pronto pra aprovação. Quer ajustar algo?
+▣  Plan · DeepSeek V4 Flash Free · 39.4s
+com esta estrutura, conseguimos inclusive ter uma facilidade em questão de AMP (Accelerated Mobile Pages), correto?
++ Thought: 7.6s
+Não automaticamente. Explico:
+SSG ajuda, mas AMP tem requisitos conflitantes com React:
+Requisito AMP	Nossa arquitetura (React Router v7 SSG)
+✅ HTML estático pré-renderizado	Geramos SSG, isso OK
+✅ CSS inline < 50kb	Tailwind gera CSS sob medida, OK
+❌ Zero JavaScript customizado	React hydration injeta bundles .js nas páginas — AMP bloqueia
+❌ Componentes AMP (<amp-img> etc.)	Usamos <img> React nativo, sem AMP components
+❌ Validação AMP obrigatória	Precisaria pipeline separado de validação
+Caminhos possíveis:
+Abordagem	Custo
+A) Dual build: SSG normal + templates AMP separados	Alto — manter 2 versões de cada página
+B) Skip AMP, focar Core Web Vitals	Zero — já temos SSG rápido
+C) AMP só nas páginas legais (menos interativas)	Médio — precisaria renderizadores paralelos
+Minha recomendação: (B) — AMP vem perdendo relevância desde 2021 (Google não exige mais pra Top Stories). Nosso SSG já entrega:
+- HTML estático pronto (LCP excelente)
+- CSS crítico inline (Tailwind)
+- Sem blockers de renderização
+- Lighthouse 90+ com pouco esforço
+AMP adicionaria complexidade significativa de build/manutenção pra ganho marginal. Se quiser acelerar mobile, melhor investir em:
+- Preconnect + DNS-prefetch
+- Otimização de imagens (WebP + responsive)
+- Service Worker pra cache offline
+Quer seguir com AMP mesmo assim ou focar em performance SSG nativa? 
++ Thought: 23.7s
+AMP: Skip. SSG já entrega LCP < 1s, zero blockers, sem custo de build AMP. Manter decisão.
+Preciso clarificar "B" — qual das duas?
+Decisão	Abordagem B	Plano mostra
+TinaCMS i18n	Collection única + campo locale (5 collections total)	3 collections por tipo = 13 collections total
+Plano acima usa 13 collections (page_en/pt/zh, faq_en/pt/zh, ...). Se "B" = collection única, plano precisa reescrever Fase 0.1 e 2.1.
+Sistema multi-agente planejamento:
+Proponho:
+Disparar 5 agentes pesquisa em paralelo
+Cada um escreve .md em docs/superpowers/research/
+Leio todos, consolido, ajusto plano, apresento pra aprovação
+Agentes:
+A1 — SSG + Routing: React Router v7 prerender dinâmico com /:lang, rotas por locale, redirect / → /en
+A2 — TinaCMS + Content: single collection × 3 collections, locale field, MDX rendering patterns, file-based content
+A3 — i18n + SEO: react-i18next v5 TS augmentation selector API, hreflang, sitemap multilingue, <html lang> dinâmico
+A4 — Trust + Legal: LGPD/GDPR crypto-gaming content patterns, Bug Bounty NFT infra (AtomicAssets), Proof of Fairness docs
+A5 — Build + Performance: Tailwind v4 Oxide, CI submodules, Brotli/Gzip, Lighthouse targets
+Aprova estrutura? Clarifica "B"?
+▣  Plan · DeepSeek V4 Flash Free · 30.9s
+não, B se referia a não utilizar AMP.
++ Thought: 6.4s
+Confirmado: AMP skip, decisão mantida, plano intacto.
+Sistema multi-agente pesquisa — estrutura:
+docs/superpowers/research/
+  A1-ssg-routing.md     ← React Router v7 prerender dinâmico
+  A2-tinacms-content.md  ← Collections + locale + MDX
+  A3-i18n-seo.md         ← react-i18next v5 + hreflang + sitemap
+  A4-trust-legal.md      ← LGPD/GDPR crypto + Bug Bounty NFTs
+  A5-build-perf.md       ← Tailwind v4 + CI + Brotli
+Fluxo:
+╭───────────────────────────────────────╮
+│ You: "Aprova pesquisa multi-agente?" │
+╰──────────┬────────────────────────────╯
+           │ sim
+           ▼
+┌─────────────────────┐
+│ Disparo simultâneo   │ ← 5 task agents em paralelo
+│ A1, A2, A3, A4, A5  │
+└─────────┬───────────┘
+          │ cada um retorna findings
+          ▼
+┌─────────────────────┐
+│ Eu consolido         │ ← cruzo, detecto conflitos,
+│ ajusto plano base    │   ajusto, apresento diff
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Plan refinado pronto │ ← vc aprova → execução
+│ pra aprovação final  │
+└─────────────────────┘
+Proponho:
+Cada agente read-only (explore/grep/webfetch) — retorna resultados pra mim
+Eu escrevo os .md consolidados (posso fazer fora do plan mode? vc decide)
+Apresento diff do plano + recomendações
+Aprova estrutura? Ou prefere ajuste antes de disparar?
+▣  Plan · DeepSeek V4 Flash Free · 13.0s

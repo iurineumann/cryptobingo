@@ -25,9 +25,9 @@ export default function Footer({ social }: FooterProps) {
 
   const productLinks = [
     { label: t('nav.testnet'), href: 'https://test.cryptobingo.bet' },
-    { label: 'FAQ', href: `/${lang}/faq` },
+    { label: t('nav.faq'), href: `/${lang}/faq` },
     { label: t('nav.ideas'), href: '/ideas' },
-    { label: 'Blog', href: `/${lang}/blog` },
+    { label: t('nav.blog'), href: `/${lang}/blog` },
   ] as const;
 
   const legalLinks = [
@@ -85,7 +85,7 @@ export default function Footer({ social }: FooterProps) {
             <div className="flex flex-col gap-2">
               <a href={s.github} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.github')}</a>
               <a href={s.telegram} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.telegram')}</a>
-              <a href={s.discord} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">Discord</a>
+              <a href={s.discord} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.discord')}</a>
               <a href={s.twitter} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-400 hover:text-white transition-colors">{t('nav.twitter')}</a>
             </div>
           </div>

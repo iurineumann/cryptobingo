@@ -1,0 +1,1 @@
+Continue CryptoBingo dev session. Read .contextos/guard/SESSION_GUARD.md, .contextos/tasks/situation.md, .contextos/journal/2026-07-04.md, and .contextos/memory/core.md to restore full context. Then check .opencode/WORKFLOW.md for current task status and next steps.

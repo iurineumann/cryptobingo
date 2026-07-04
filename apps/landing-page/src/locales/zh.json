@@ -12,7 +12,8 @@
     "tutorials": "教程",
     "github": "GitHub",
     "telegram": "Telegram",
-    "twitter": "X/Twitter"
+    "twitter": "X/Twitter",
+    "discord": "Discord"
   },
   "hero": {
     "badge": "WAX上的BINGO GameFi",
@@ -84,6 +85,9 @@
   "faq": {
     "title": "常见问题",
     "description": "关于CryptoBingo的常见问题"
+  },
+  "redirect": {
+    "redirecting": "重定向中..."
   },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",
