@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import { HelmetProvider, Helmet } from 'react-helmet-async';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -111,6 +111,57 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 `;
 
+function jsonLdStructuredData(locale: string) {
+  const org = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'CryptoBingo',
+    url: `https://www.cryptobingo.bet/${locale}`,
+    logo: 'https://www.cryptobingo.bet/favicon.svg',
+    sameAs: ['https://discord.gg/cryptobingo', 'https://x.com/CryptoBingo_Bet'],
+    description: 'On-chain BINGO GameFi on WAX blockchain',
+  };
+  const website = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    url: `https://www.cryptobingo.bet/${locale}`,
+    name: 'CryptoBingo',
+    inLanguage: locale,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `https://www.cryptobingo.bet/${locale}/ideas?q={search_term_string}`,
+    },
+  };
+  const json = JSON.stringify([org, website], null, 2);
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />;
+}
+
+const LOCALES = ['en', 'pt', 'zh'] as const;
+
+function alternateLinks(pathname: string) {
+  const match = pathname.match(/^\/(en|pt|zh)(\/|$)/);
+  const currentLocale = match?.[1] ?? 'en';
+  const rest = pathname.replace(/^\/(en|pt|zh)(\/|$)/, '/');
+
+  return (
+    <Fragment>
+      {LOCALES.map((loc) => (
+        <link
+          key={loc}
+          rel="alternate"
+          hrefLang={loc}
+          href={`https://www.cryptobingo.bet/${loc}${rest}`}
+        />
+      ))}
+      <link
+        rel="alternate"
+        hrefLang="x-default"
+        href={`https://www.cryptobingo.bet/en${rest}`}
+      />
+    </Fragment>
+  );
+}
+
 function RouteTracker() {
   const location = useLocation();
   useEffect(() => {
@@ -154,6 +205,9 @@ export default function Root() {
     <HelmetProvider>
       <Helmet htmlAttributes={{ lang: currentLang }}>
         <meta property="og:locale" content={localeToOgLocale(urlLocale)} />
+        <meta name="google-site-verification" content="TODO_VERIFY" />
+        {alternateLinks(location.pathname)}
+        {jsonLdStructuredData(urlLocale)}
       </Helmet>
       <html lang={currentLang}>
         <head>
