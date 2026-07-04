@@ -225,6 +225,52 @@ export interface GameStatsBatch {
     rtp_pct:       number;
 }
 
+// ==========================================
+// PLATFORM SUMMARY (para landing page e dashboards)
+// ==========================================
+
+export interface PlatformSummary {
+    total_games:   number;
+    total_prizes:  number;
+    total_players: number;
+    avg_rtp_pct:   number;
+    currency:      string;
+    generated_at:  string;
+}
+
+/**
+ * Resumo agregado da plataforma — queries games_history + transactions_ledger.
+ * Usado pela landing page (StatsBar) e dashboards públicos.
+ */
+export async function getPlatformSummary(): Promise<PlatformSummary> {
+    const [gamesRes, playersRes] = await Promise.all([
+        pgPool.query(
+            `SELECT
+                COUNT(*)::int                     AS total_games,
+                COALESCE(SUM(total_paid_out), 0)  AS total_prizes,
+                COALESCE(AVG(rtp_pct) * 100, 0)   AS avg_rtp_pct
+             FROM games_history
+             WHERE status IN ('archived', 'aborted')`
+        ),
+        pgPool.query(
+            `SELECT COUNT(DISTINCT wallet_address)::int AS total_players
+             FROM transactions_ledger`
+        ),
+    ]);
+
+    const g = gamesRes.rows[0];
+    const p = playersRes.rows[0];
+
+    return {
+        total_games:   Number(g.total_games),
+        total_prizes:  Math.round(parseFloat(g.total_prizes)),
+        total_players: Number(p.total_players),
+        avg_rtp_pct:   Math.round(parseFloat(g.avg_rtp_pct) * 100) / 100,
+        currency:      'WAX',
+        generated_at:  new Date().toISOString(),
+    };
+}
+
 /**
  * Retorna estatísticas de compliance para uma lista de game_ids.
  * Best-effort: retorna apenas jogos que foram sincronizados no ledger.

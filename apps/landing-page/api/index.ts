@@ -1,5 +1,6 @@
 import './subscribe.js';
 import './stats.js';
+import './stats_game.js';
 import './ideas/index.js';
 import './ideas/vote.js';
 import './votes/confirm.js';

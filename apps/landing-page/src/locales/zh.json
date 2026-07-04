@@ -159,13 +159,18 @@
     "audited": "已审计 ✅",
     "provably_fair": "可验证公平 ✅",
     "view_contract": "查看合约",
-    "players_count": "1万+玩家"
+    "players_count": "社区在成长"
   },
   "stats": {
     "games_played": "已进行游戏",
     "prizes_paid": "已支付奖品",
     "active_players": "活跃玩家",
-    "rtp": "当前RTP"
+    "rtp": "当前RTP",
+    "loading": "实时统计 — 测试网已激活"
+  },
+  "tutorials": {
+    "coming_soon": "教程即将推出！",
+    "back": "返回教程"
   },
   "seo": {
     "home_title": "CryptoBingo — WAX链上BINGO GameFi",

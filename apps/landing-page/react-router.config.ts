@@ -20,6 +20,14 @@ function getFAQSlugs(locale: string): string[] {
     .map(f => f.replace(/\.md$/, ""));
 }
 
+function getTutorialSlugs(locale: string): string[] {
+  const tutorialDir = path.resolve(process.cwd(), "content", "tutorial", locale);
+  if (!fs.existsSync(tutorialDir)) return [];
+  return fs.readdirSync(tutorialDir)
+    .filter(f => f.endsWith(".mdx"))
+    .map(f => f.replace(/\.mdx$/, ""));
+}
+
 function getPageSlugs(locale: string): string[] {
   const pageDir = path.resolve(process.cwd(), "content", "pages", locale);
   if (!fs.existsSync(pageDir)) return [];
@@ -37,6 +45,8 @@ function prerenderPaths(): string[] {
     `/${locale}/admin`,
     `/${locale}/press-kit`,
     `/${locale}/tokenomics`,
+    `/${locale}/tutorials`,
+    ...getTutorialSlugs(locale).map(slug => `/${locale}/tutorials/${slug}`),
     ...getBlogSlugs(locale).map(slug => `/${locale}/blog/${slug}`),
     ...getPageSlugs(locale).map(slug => `/${locale}/${slug}`),
   ]);

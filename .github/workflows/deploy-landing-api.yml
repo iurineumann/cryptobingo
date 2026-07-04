@@ -40,7 +40,7 @@ jobs:
           jq '{name,version,main,dependencies}' ${{ github.workspace }}/apps/landing-page/api/package.json > package.json
           npm install
           mkdir -p _lib ideas votes admin
-          cp ${{ github.workspace }}/apps/landing-page/api/{host.json,index.js,stats.js,subscribe.js} ./
+          cp ${{ github.workspace }}/apps/landing-page/api/{host.json,index.js,stats.js,stats_game.js,subscribe.js} ./
           cp ${{ github.workspace }}/apps/landing-page/api/_lib/*.js _lib/
           cp ${{ github.workspace }}/apps/landing-page/api/ideas/*.js ideas/
           cp ${{ github.workspace }}/apps/landing-page/api/votes/*.js votes/

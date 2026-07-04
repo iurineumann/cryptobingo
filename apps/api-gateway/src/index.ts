@@ -67,6 +67,7 @@ import {
   getGamesHistory,
   syncGameToLedger,
   getGameStatsBatchHandler,
+  getPlatformSummaryHandler,
 } from "./controllers/statisticsController";
 import { ensureLedgerTables } from "./database/ledger";
 import {
@@ -453,6 +454,7 @@ function registerRoutes(): void {
   app.get("/api/v1/statistics/rtp", getRtpStatistics);
   app.get("/api/v1/statistics/games", getGamesHistory);
   app.get("/api/v1/statistics/games/batch", getGameStatsBatchHandler);
+  app.get("/api/v1/statistics/summary", getPlatformSummaryHandler);
 
   // ── Admin: Ledger sync (JWT + admin) ──────────────────────────────────────
   app.post(

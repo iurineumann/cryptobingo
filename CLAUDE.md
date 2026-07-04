@@ -80,7 +80,7 @@ cd /tmp/fa-prod
 jq '{name,version,main,dependencies}' ../apps/landing-page/api/package.json > package.json
 npm install
 mkdir -p _lib ideas votes admin
-cp <api-dir>/{host.json,index.js,stats.js,subscribe.js} ./
+cp <api-dir>/{host.json,index.js,stats.js,stats_game.js,subscribe.js} ./
 cp <api-dir>/_lib/*.js _lib/
 cp <api-dir>/ideas/*.js ideas/
 cp <api-dir>/votes/*.js votes/

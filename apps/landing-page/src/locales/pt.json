@@ -159,13 +159,18 @@
     "audited": "Auditado ✅",
     "provably_fair": "Provavelmente Justo ✅",
     "view_contract": "Ver Contrato",
-    "players_count": "10K+ Jogadores"
+    "players_count": "Comunidade Crescente"
   },
   "stats": {
     "games_played": "Jogos Realizados",
     "prizes_paid": "Prêmios Pagos",
     "active_players": "Jogadores Ativos",
-    "rtp": "RTP Atual"
+    "rtp": "RTP Atual",
+    "loading": "Estatísticas reais — testnet ativa"
+  },
+  "tutorials": {
+    "coming_soon": "Tutoriais em breve!",
+    "back": "Voltar para tutoriais"
   },
   "seo": {
     "home_title": "CryptoBingo — BINGO GameFi On-Chain na WAX",
