@@ -20,6 +20,7 @@ export default function StatsBar() {
     const [statsData, setStatsData] = useState<GameStat[] | null>(null);
     const [animCounts, setAnimCounts] = useState<number[]>([0, 0, 0, 0]);
 
+    // Tenta API real, fallback para mock se falhar
     useEffect(() => {
         getGameStats()
             .then((data) => {
