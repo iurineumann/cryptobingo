@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import NextDrawTimer from '@/components/NextDrawTimer';
 
 interface HeroProps {
@@ -12,6 +14,8 @@ interface HeroProps {
 
 export default function Hero({ hero }: HeroProps) {
   const { t } = useTranslation();
+  const { locale } = useParams();
+  const { trackEvent } = useAnalytics(locale);
   const h = hero || {
     title: t('hero.title'),
     subtitle: t('hero.subtitle'),
@@ -48,6 +52,7 @@ export default function Hero({ hero }: HeroProps) {
             rel="noopener noreferrer"
             data-testid="hero-cta"
             className="inline-flex items-center bg-accent-400 text-surface-900 font-semibold px-6 py-3 rounded-xl hover:bg-accent-300 transition animate-[pulse-cta_2s_ease-in-out_infinite]"
+            onClick={() => trackEvent('cta_click', { cta_location: 'hero' })}
           >
             {h.cta_text}
           </a>
@@ -55,6 +60,7 @@ export default function Hero({ hero }: HeroProps) {
             href="#features"
             data-testid="hero-learn-more"
             className="inline-flex items-center border border-accent-400/40 text-accent-300 font-semibold px-6 py-3 rounded-xl hover:bg-accent-500/10 hover:border-accent-400 transition-all"
+            onClick={() => trackEvent('cta_click', { cta_location: 'hero_learn' })}
           >
             {t('hero.learn_more')}
           </a>
