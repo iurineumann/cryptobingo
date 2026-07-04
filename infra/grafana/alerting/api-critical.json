@@ -1,0 +1,48 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "api-critical",
+      "folder": "CryptoBingo",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "api-5xx-rate",
+          "title": "API 5xx > 1%",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "sum(rate(http_requests_total{status=~\"5\\\\d{2}\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "conditions": [
+                  {
+                    "evaluator": { "type": "gt", "params": [1] },
+                    "query": { "params": ["A"] },
+                    "reducer": { "type": "last" },
+                    "operator": { "type": "and" }
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "5m",
+          "annotations": {
+            "summary": "API 5xx rate > 1%",
+            "description": "Taxa de erro HTTP 5xx ultrapassou 1% nos ultimos 5 minutos"
+          },
+          "labels": { "severity": "critical", "team": "platform" }
+        }
+      ]
+    }
+  ]
+}
