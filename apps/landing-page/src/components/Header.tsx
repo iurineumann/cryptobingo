@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type NavLinkItem =
@@ -24,7 +25,9 @@ export default function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const [langOpen, setLangOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   const currentLocale = useSegmentLocale(location.pathname) || 'en';
 
@@ -37,6 +40,25 @@ export default function Header() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileOpen(false);
+    }
+    if (mobileOpen) {
+      document.addEventListener('keydown', handleKey);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
+  // Fecha drawer ao navegar
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   function switchLocale(code: string) {
     i18n.changeLanguage(code);
@@ -60,7 +82,9 @@ export default function Header() {
           <span>CryptoBingo</span>
           <span className="text-accent-400">●</span>
         </a>
-        <nav className="flex items-center gap-6">
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-6" data-testid="desktop-nav">
           {navLinks.map((link) => {
             if (link.type === 'internal') {
               return (
@@ -124,8 +148,108 @@ export default function Header() {
               </div>
             )}
           </div>
+          <a
+            href="https://test.cryptobingo.bet"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="mobile-cta"
+            className="bg-accent-400 text-surface-900 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-accent-300 transition whitespace-nowrap"
+          >
+            {t('hero.cta_text')}
+          </a>
         </nav>
+
+        {/* Mobile hamburger */}
+        <button
+          data-testid="mobile-menu-toggle"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="md:hidden text-slate-400 hover:text-white transition-colors"
+          aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
+        >
+          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div
+          ref={drawerRef}
+          data-testid="mobile-drawer"
+          className="md:hidden fixed inset-0 top-16 z-40 bg-surface-950/95 backdrop-blur-sm"
+        >
+          <nav className="flex flex-col gap-4 p-6">
+            {navLinks.map((link) => {
+              if (link.type === 'internal') {
+                return (
+                  <NavLink
+                    key={link.label}
+                    to={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        'text-base text-slate-400 hover:text-white transition-colors py-2',
+                        isActive && 'text-white'
+                      )
+                    }
+                  >
+                    {link.label}
+                  </NavLink>
+                );
+              }
+              if (link.type === 'disabled') {
+                return (
+                  <span
+                    key={link.label}
+                    className="text-base text-slate-400 opacity-50 cursor-not-allowed py-2"
+                  >
+                    {link.label}
+                  </span>
+                );
+              }
+              return (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base text-slate-400 hover:text-white transition-colors py-2"
+                >
+                  {link.label}
+                </a>
+              );
+            })}
+
+            {/* Locale switcher mobile */}
+            <div className="flex gap-2 pt-4 border-t border-surface-700">
+              {locales.map((loc) => (
+                <button
+                  key={loc.code}
+                  onClick={() => switchLocale(loc.code)}
+                  className={cn(
+                    'flex-1 text-sm py-2 rounded-lg transition-colors',
+                    loc.code === currentLocale
+                      ? 'bg-brand-500/20 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-surface-800'
+                  )}
+                >
+                  {loc.label}
+                </button>
+              ))}
+            </div>
+
+            {/* CTA fixo no drawer */}
+            <a
+              href="https://test.cryptobingo.bet"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="mobile-cta-drawer"
+              className="mt-4 bg-accent-400 text-surface-900 font-semibold text-center px-6 py-3 rounded-xl hover:bg-accent-300 transition"
+            >
+              {t('hero.cta_text')}
+            </a>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
