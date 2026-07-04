@@ -92,6 +92,27 @@
   "redirect": {
     "redirecting": "重定向中..."
   },
+  "how_it_works": {
+    "section_tag": "运作方式",
+    "section_title": "区块链上的透明宾果",
+    "section_desc": "传统宾果让你相信运气。CryptoBingo让你相信代码。",
+    "step1_label": "之前",
+    "step1_title": "传统黑箱",
+    "step1_desc": "在普通宾果中，开奖在封闭系统中进行。你无法验证是否公平。",
+    "step2_label": "之后",
+    "step2_title": "可验证的链上开奖",
+    "step2_desc": "每个抽出的号码由RSA-SHA256预言机生成并记录在WAX区块链上。任何人都可以验证。",
+    "step3_label": "连接",
+    "step3_title": "放心游玩",
+    "step3_desc": "连接你的WAX钱包，购买彩票，实时观看每个结果在链上揭晓。"
+  },
+  "trust_bar": {
+    "built_on_wax": "基于WAX构建",
+    "audited": "已审计 ✅",
+    "provably_fair": "可验证公平 ✅",
+    "view_contract": "查看合约",
+    "players_count": "1万+玩家"
+  },
   "stats": {
     "games_played": "已进行游戏",
     "prizes_paid": "已支付奖品",

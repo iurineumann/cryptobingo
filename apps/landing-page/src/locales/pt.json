@@ -92,6 +92,27 @@
   "redirect": {
     "redirecting": "Redirecionando..."
   },
+  "how_it_works": {
+    "section_tag": "Como Funciona",
+    "section_title": "BINGO Transparente na Blockchain",
+    "section_desc": "Do jeito tradicional você confia na sorte. No CryptoBingo, você confia no código.",
+    "step1_label": "Antes",
+    "step1_title": "Caixa-Preta Tradicional",
+    "step1_desc": "Em bingos comuns, os sorteios acontecem em sistemas fechados. Você não pode verificar se foram justos.",
+    "step2_label": "Depois",
+    "step2_title": "Sorteio On-Chain Verificável",
+    "step2_desc": "Cada número sorteado é gerado por um oráculo RSA-SHA256 e registrado na blockchain WAX. Qualquer um pode verificar.",
+    "step3_label": "Conexão",
+    "step3_title": "Jogue com Confiança",
+    "step3_desc": "Conecte sua carteira WAX, compre cartelas e veja cada resultado sendo revelado em tempo real na chain."
+  },
+  "trust_bar": {
+    "built_on_wax": "Construído na WAX",
+    "audited": "Auditado ✅",
+    "provably_fair": "Provavelmente Justo ✅",
+    "view_contract": "Ver Contrato",
+    "players_count": "10K+ Jogadores"
+  },
   "stats": {
     "games_played": "Jogos Realizados",
     "prizes_paid": "Prêmios Pagos",

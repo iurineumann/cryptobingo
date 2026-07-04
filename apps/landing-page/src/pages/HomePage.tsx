@@ -5,6 +5,8 @@ import type { HomeSettings } from '../../lib/content';
 import Seo from '@/components/Seo';
 import Header from '@/components/Header';
 import Hero from '@/components/Hero';
+import TrustBar from '@/components/TrustBar';
+import HowItWorks from '@/components/HowItWorks';
 import Features from '@/components/Features';
 import Roadmap from '@/components/Roadmap';
 import StatsBar from '@/components/StatsBar';
@@ -27,6 +29,8 @@ export default function HomePage() {
       <Seo title={t('seo.home_title')} description={t('seo.home_desc')} canonical={`/${lang}`} />
       <Header />
       <Hero hero={settings.hero} />
+      <TrustBar />
+      <HowItWorks />
       <Features features={settings.features} />
       <Roadmap />
       <StatsBar />
