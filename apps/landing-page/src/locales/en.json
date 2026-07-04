@@ -20,7 +20,8 @@
     "title": "Win real prizes with provably fair draws every game",
     "subtitle": "CryptoBingo brings classic BINGO to Web3. Every draw verifiable on WAX blockchain, prizes in crypto and NFTs.",
     "cta_text": "Play Now",
-    "learn_more": "Learn More"
+    "learn_more": "Learn More",
+    "next_draw": "Next draw in {{time}}"
   },
   "features": {
     "section_tag": "Why CryptoBingo",

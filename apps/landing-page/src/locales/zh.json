@@ -20,7 +20,8 @@
     "title": "每局游戏均可验证公平，赢取真实奖品",
     "subtitle": "CryptoBingo将经典BINGO带入Web3。每次开奖均在WAX区块链上可验证，奖品为加密货币和NFT。",
     "cta_text": "开始游戏",
-    "learn_more": "了解更多"
+    "learn_more": "了解更多",
+    "next_draw": "下次开奖 {{time}}"
   },
   "features": {
     "section_tag": "为什么选择CryptoBingo",

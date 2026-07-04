@@ -20,7 +20,8 @@
     "title": "Ganhe prêmios reais com provably fair em cada partida",
     "subtitle": "CryptoBingo traz o clássico BINGO para Web3. Sorteios verificáveis na blockchain WAX, prêmios em cripto e NFTs.",
     "cta_text": "Jogar Agora",
-    "learn_more": "Saiba Mais"
+    "learn_more": "Saiba Mais",
+    "next_draw": "Próximo sorteio em {{time}}"
   },
   "features": {
     "section_tag": "Por que CryptoBingo",
