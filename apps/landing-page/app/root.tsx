@@ -149,13 +149,13 @@ function alternateLinks(pathname: string) {
         <link
           key={loc}
           rel="alternate"
-          hrefLang={loc}
+          hreflang={loc}
           href={`https://www.cryptobingo.bet/${loc}${rest}`}
         />
       ))}
       <link
         rel="alternate"
-        hrefLang="x-default"
+        hreflang="x-default"
         href={`https://www.cryptobingo.bet/en${rest}`}
       />
     </Fragment>
