@@ -43,4 +43,32 @@ describe('AdminLayout permission filtering', () => {
 
     expect(screen.getByText(/users/i)).toBeTruthy();
   });
+
+  it('deve mostrar todos os itens para contract_admin mesmo sem permissions', () => {
+    render(React.createElement(AdminLayout, {
+      ...defaultProps,
+      profile: { wallet_address: 'bingogamectr', role: 'contract_admin' } as any,
+      permissions: [],
+    }));
+
+    expect(screen.getByTestId('admin-nav-dashboard')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-rooms')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-patterns')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-gametypes')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-users')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-compliance')).toBeTruthy();
+    expect(screen.getByTestId('admin-nav-mypanel')).toBeTruthy();
+  });
+
+  it('deve NÃO mostrar seções vazias quando role não tem permissões', () => {
+    render(React.createElement(AdminLayout, {
+      ...defaultProps,
+      profile: { wallet_address: 'test', role: 'user' } as any,
+      permissions: ['admin.dashboard.view'],
+    }));
+
+    expect(screen.getByTestId('admin-nav-dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('admin-nav-users')).toBeNull();
+    expect(screen.queryByTestId('admin-nav-nfts')).toBeNull();
+  });
 });

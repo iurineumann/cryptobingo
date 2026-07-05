@@ -112,15 +112,18 @@ export default function AdminLayout({
     (item) =>
       !SECTION_PERMS[item.id] ||
       SECTION_PERMS[item.id].length === 0 ||
-      hasAnyPermission(permissions, SECTION_PERMS[item.id])
+      hasAnyPermission(permissions, SECTION_PERMS[item.id], profile.role)
   );
 
   const currentNav = visibleNav.find(n => n.id === section);
 
-  const SidebarGroup = ({ group, title }: { group: string; title: string }) => (
+  const SidebarGroup = ({ group, title }: { group: string; title: string }) => {
+    const groupItems = visibleNav.filter(n => n.group === group);
+    if (groupItems.length === 0) return null;
+    return (
     <div className="site-sidebar-section">
       <span className="site-sidebar-title">{title}</span>
-      {visibleNav.filter(n => n.group === group).map(item => (
+      {groupItems.map(item => (
         <a
           key={item.id}
           href={`/admin/${item.id}`}
@@ -135,6 +138,7 @@ export default function AdminLayout({
       ))}
     </div>
   );
+  };
 
   return (
     <div className="site-shell mode-admin" style={{ height: '100dvh' }}>
