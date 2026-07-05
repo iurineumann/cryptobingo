@@ -8,3 +8,9 @@ export interface ContentHeaderProps {
   readTime: number;
   readTimeLabel?: string;
 }
+
+export interface ContentImage {
+  src: string;
+  alt: string;
+  caption?: string;
+}
