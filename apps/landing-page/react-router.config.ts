@@ -4,12 +4,20 @@ import path from 'node:path';
 
 const LOCALES = ['en', 'pt', 'zh'] as const;
 
-function getBlogSlugs(locale: string): string[] {
-  const blogDir = path.resolve(process.cwd(), "content", "blog", locale);
-  if (!fs.existsSync(blogDir)) return [];
-  return fs.readdirSync(blogDir)
-    .filter(f => f.endsWith(".md"))
-    .map(f => f.replace(/\.md$/, ""));
+function loadSlugsIndex(): Record<string, Record<string, Record<string, string>>> {
+  const filePath = path.resolve(process.cwd(), "content", "slugs.json");
+  if (!fs.existsSync(filePath)) return {};
+  return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+}
+
+const SLUGS_INDEX = loadSlugsIndex();
+
+function getSlugsForType(type: string, locale: string): string[] {
+  const entries = SLUGS_INDEX[type];
+  if (!entries) return [];
+  return Object.values(entries)
+    .map(entry => entry[locale])
+    .filter(Boolean);
 }
 
 function getFAQSlugs(locale: string): string[] {
@@ -18,14 +26,6 @@ function getFAQSlugs(locale: string): string[] {
   return fs.readdirSync(faqDir)
     .filter(f => f.endsWith(".md"))
     .map(f => f.replace(/\.md$/, ""));
-}
-
-function getTutorialSlugs(locale: string): string[] {
-  const tutorialDir = path.resolve(process.cwd(), "content", "tutorial", locale);
-  if (!fs.existsSync(tutorialDir)) return [];
-  return fs.readdirSync(tutorialDir)
-    .filter(f => f.endsWith(".mdx"))
-    .map(f => f.replace(/\.mdx$/, ""));
 }
 
 function getPageSlugs(locale: string): string[] {
@@ -46,8 +46,8 @@ function prerenderPaths(): string[] {
     `/${locale}/press-kit`,
     `/${locale}/tokenomics`,
     `/${locale}/tutorials`,
-    ...getTutorialSlugs(locale).map(slug => `/${locale}/tutorials/${slug}`),
-    ...getBlogSlugs(locale).map(slug => `/${locale}/blog/${slug}`),
+    ...getSlugsForType('tutorial', locale).map(slug => `/${locale}/tutorials/${slug}`),
+    ...getSlugsForType('blog', locale).map(slug => `/${locale}/blog/${slug}`),
     ...getPageSlugs(locale).map(slug => `/${locale}/${slug}`),
   ]);
 

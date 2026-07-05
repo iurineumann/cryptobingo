@@ -10,6 +10,7 @@ import { ContentBody } from '@/components/ContentBody';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedContent } from '@/components/RelatedContent';
 import { PrevNextNav } from '@/components/PrevNextNav';
+import { FAQSection } from '@/components/FAQSection';
 import { trackEvent } from '@/services/analytics';
 
 export async function loader({ params }: { params: { slug: string; locale?: string } }): Promise<{
@@ -75,6 +76,13 @@ export default function BlogPost() {
             readTimeLabel={readTimeLabel}
           />
           <ContentBody html={post.body} />
+          {post.faq && post.faq.length > 0 && (
+            <FAQSection
+              items={post.faq}
+              locale={lang}
+              storageKey={`faq-open-${post.slug}`}
+            />
+          )}
         </article>
 
         <RelatedContent items={relatedPosts} type="blog" locale={lang} />

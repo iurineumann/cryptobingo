@@ -1,67 +1,62 @@
 ## Goal
-Landing page completa: i18n, CMS, conteudo legal, SEO, analytics, observabilidade, UX.
+Landing page com UX completa, busca e conteudo i18n pt/en/zh. Content workflow com personas + QA (ADR-044).
 
 ## Constraints
-- Azure SWA free tier (no server runtime)
-- SSG puro (React Router v7 ssr:false + prerender)
-- TDD obrigatorio vitest
-- Git flow: feature → PR → develop
-- Sem comentarios em codigo
-- i18n pt/en/zh
-- GTM container GTM-N88CZVJF, GA4 G-BLQRZ64RES, Clarity xge781i2so
+- Azure SWA free tier (no server runtime), SSG puro (React Router v7 ssr:false + prerender)
+- TDD obrigatorio vitest, SonarQube, Git flow (feature → PR → develop)
+- i18n pt/en/zh, slugs traduziveis (content/slugs.json)
+- GTM N88CZVJF, GA4 G-BLQRZ64RES, Clarity xge781i2so
 
 ## Progress
-
 ### PRs merged to develop
-| PR | Branch | Issues |
+| PR | Branch | Result |
 |---|---|---|
 | #185 | feature/lp-fixes-e-analytics | Analytics 15 eventos + ADR-042 |
 | #187 | feature/lp-observability | Pino, Sentry, Grafana alertas, OTel tracing, ADR-043 |
-| #188 | feature/lp-features-restantes | 11 issues: perf, 8 UX features, fixes |
+| #188 | feature/lp-features-restantes | 11 UX features + perf |
 
-### Fases PLANO-FINAL
-| Fase | Status |
-|---|---|
-| 0 — CI/SWA/Cache/CSP | ✅ |
-| 0.5 — Legal pipeline (TinaCMS) | ✅ |
-| 1 — i18n Stack | ✅ |
-| 2 — TinaCMS + Routing | ✅ |
-| 3 — Legal + Trust (9 paginas) | ✅ |
-| 4 — Whitepaper | ✅ |
-| 5 — Content + Tutoriais | ✅ |
-| 6 — SEO + Polish (hreflang, canonical, sitemap, 404, structured data) | ✅ |
-| 7 — Analytics (GA4, hooks, ADR-042) | ✅ |
-| 8 — Observabilidade (Pino, Sentry, Grafana, OTel, ADR-043) | ✅ |
-| 9 — UX features + fixes (11 issues) | ✅ |
+### Branch Atual
+`feature/lp-content-ux-search` — 13 commits ahead `develop`
 
-### Analytics (15 eventos)
-cta_click, nav_click, locale_switch, newsletter_subscribe, newsletter_error, external_link_click, faq_toggle, press_kit_download, blog_click, tutorial_click, scroll_depth, page_timing, section_visibility
+### Plan A (UX Foundations) — ✅
+Layout tipografia, ContentHeader/Body, useReadingProgress, BlogPost/TutorialPost
 
-### Observabilidade
-- Pino: API Gateway + Worker (JSON logging, requestId ALS)
-- Sentry: Frontend (ErrorBoundary) + Landing (SSG-safe)
-- Grafana alertas: 6 regras (worker, api, chain) + Slack notifier
-- OTel: API Gateway (auto-instrumentations) + Worker (amqplib)
+### Plan B (Nav & TOC) — ✅
+TocSidebar, Breadcrumbs (schema.org), RelatedContent, PrevNextNav, Pagination, TagFilter, anchor icons. 40 test files / 163 tests PASS. Build 99 URLs.
 
-### UX features implementadas
-ActivityFeed (wins live), HowItWorks BAB redesign, Hero pulse+animation+timer+screenshot, Header urgency timer+hamburger drawer, StatsBar counting-up, WalletSection, Feature icons fix, i18n keys audit
+### Plan C (Content Production) — ✅ (precisa remediacao)
+14 posts blog + 9 tutoriais × 3 locales = 75 arquivos (42 .md + 27 .mdx). Figure.tsx + FigureGallery (12 testes). Commit 072995f.
 
-### Performance
-Lighthouse script (6 pages), bundle visualizer (rollup-plugin-visualizer), tree-shaking OK, 596KB JS, 53KB CSS
+### ADRs
+- ADR-042: Analytics Landing Page
+- ADR-043: Stack de Observabilidade
+- ADR-044: Workflow Producao Conteudo com Personas e QA Obrigatorio
 
-## Testes
-- Landing: 92 tests, 26 files
+### Docs criados
+- docs/guides/content-personas.md — 22 personas (4 core + 9 especialistas + 9 audiencia)
+- docs/adr/ADR-044-conteudo-workflow-personas-qa.md
+- .opencode/plans/2026-07-05-plano-remediacao-conteudo.md — 4 fases
+
+### Gaps identificados (07-05)
+- 75 arquivos produzidos sem ativar personas/RAG/content QA
+- Info factual desatualizada (WAX wallet passkeys, EOS→Vaulta, stats)
+- `images:[]` vazio em todos os arquivos
+- Links contextuais ausentes
+- Workflow revisado em ADR-044
+
+### Pendente
+- Fase 0: content/slugs.json + content.ts modificado
+- Fase 1: remediacao factual (WAX wallet 2026, EOS→Vaulta, eco Antelope)
+- Fase 2: imagens frontmatter + Figure inline
+- Fase 3: links contextuais + referencias
+- Fase 4: scripts/check-content-qa.mjs + workflow personas
+- Plan D: Search system (MiniSearch, overlay, trigger, results)
+
+### Testes
+- Landing: 163 tests, 40 files
 - API Gateway: 350+ tests
 - Worker: 200+ tests
 - Frontend: 290+ tests
 
-## ADRs Criados
-- ADR-042: Analytics Landing Page
-- ADR-043: Stack de Observabilidade
-
-## Branch Atual
-`develop` — todas as features mergeadas. Landing page completa.
-
-## Next Steps
-- Verificar deploy landing page
-- Voltar a issues de outros pacotes (worker, frontend, contrato)
+### Performance
+596KB JS, 53KB CSS, tree-shaking OK, Lighthouse 6 pages

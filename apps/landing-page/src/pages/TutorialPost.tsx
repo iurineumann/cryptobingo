@@ -9,6 +9,7 @@ import { ContentHeader } from '@/components/ContentHeader';
 import { ContentBody } from '@/components/ContentBody';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { RelatedContent } from '@/components/RelatedContent';
+import { FAQSection } from '@/components/FAQSection';
 
 export async function loader({ params }: { params: { locale?: string; slug: string } }): Promise<{
   tutorial: TutorialItem;
@@ -98,6 +99,13 @@ export default function TutorialPost() {
             readTimeLabel={readTimeLabel}
           />
           <ContentBody html={tutorial.body} />
+          {tutorial.faq && tutorial.faq.length > 0 && (
+            <FAQSection
+              items={tutorial.faq}
+              locale={lang}
+              storageKey={`faq-open-${tutorial.slug}`}
+            />
+          )}
 
           <nav className="mt-12 pt-8 border-t border-gray-800 flex items-center justify-between">
             <div>

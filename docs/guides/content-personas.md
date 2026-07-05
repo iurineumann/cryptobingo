@@ -32,6 +32,14 @@
 - **Input esperado:** Rascunho revisado
 - **Output:** Validacao tecnica ou correcoes
 
+### SEO Engineer
+
+- **Responsabilidade:** Otimiza conteudo para busca (keywords, heading hierarchy, meta, structured data, links internos)
+- **Quando ativar:** Durante producao, junto com Copywriter
+- **Input esperado:** Briefing de topico, palavra-chave primaria, concorrentes SERP
+- **Output:** Keyword strategy, heading outline, meta description, internal link proposals, structured data markup
+- **Observacao:** SEO Engineer trabalha integrado ao Copywriter — nao como revisor posterior. Estrategia SEO molda a estrutura do texto, nao e uma camada aplicada depois.
+
 ## Especialistas (sob demanda)
 
 ### Psicologo Cognitivo
@@ -177,7 +185,7 @@ Diferenca das produtoras: avaliam **eficacia**, nao **correcao**. Pergunta princ
 
 ## Fluxo de Trabalho
 
-1. **Core Team** produz rascunho inicial (Strategy → Writer → Editor → Domain Expert)
+1. **Core Team** produz rascunho inicial (Strategy → SEO Engineer + Writer → Editor → Domain Expert)
 2. Rascunho circula para **especialistas produtores** via mensagem no canal de revisao
 3. Cada especialista avalia se consegue contribuir naquele ponto. Pode declarar "sem contribuicao".
 4. Especialistas que contribuem refinam entre si ate **consenso**
@@ -194,7 +202,8 @@ Diferenca das produtoras: avaliam **eficacia**, nao **correcao**. Pergunta princ
 |----------|-------------------|
 | Tutorial com 5+ passos | Psicologo Cognitivo, Designer Instrucional |
 | Post sobre RTP/premios | Legal/Compliance, Domain Expert |
-| Primeiro post de uma serie | SEO Specialist, Community Manager |
+| Primeiro post de uma serie | SEO Engineer, Community Manager |
+| Qualquer post novo | SEO Engineer (keywords + estrutura) |
 | Conteudo com diagramas tecnicos | Visual Designer, Domain Expert |
 | Traducao concluida | Localization QA, Editor |
 | Post sobre seguranca/golpes | Legal/Compliance, Community Manager |

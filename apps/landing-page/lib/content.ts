@@ -5,6 +5,42 @@ import { marked, Renderer, lexer } from 'marked';
 
 const contentDir = path.resolve(process.cwd(), 'content');
 
+interface SlugsIndex {
+  [type: string]: {
+    [canonicalId: string]: {
+      [locale: string]: string;
+    };
+  };
+}
+
+let slugsCache: SlugsIndex | null = null;
+
+function loadSlugsIndex(): SlugsIndex {
+  if (slugsCache) return slugsCache;
+  const filePath = path.join(contentDir, 'slugs.json');
+  if (fs.existsSync(filePath)) {
+    slugsCache = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } else {
+    slugsCache = {};
+  }
+  return slugsCache;
+}
+
+export function getLocalizedSlug(type: string, canonicalId: string, locale: string): string | null {
+  const index = loadSlugsIndex();
+  return index[type]?.[canonicalId]?.[locale] || null;
+}
+
+export function getCanonicalId(type: string, slug: string, locale: string): string | null {
+  const index = loadSlugsIndex();
+  const entries = index[type];
+  if (!entries) return null;
+  for (const [canonical, slugs] of Object.entries(entries)) {
+    if (slugs[locale] === slug) return canonical;
+  }
+  return null;
+}
+
 function slugify(text: string): string {
     return text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '');
 }
@@ -17,7 +53,23 @@ legalRenderer.heading = function ({ text, depth }: { text: string; depth: number
     }
     return `<h${depth} id="${id}">${text}</h${depth}>`;
 };
+legalRenderer.image = function ({ href, text, title }: { href: string; text: string; title?: string | null }) {
+    const img = `<img src="${href}" alt="${text}" loading="lazy" class="rounded-lg w-full h-auto bg-surface-800" />`;
+    if (title) {
+        return `<figure class="my-8">${img}<figcaption class="mt-3 text-center text-sm text-gray-500 italic">${title}</figcaption></figure>`;
+    }
+    return img;
+};
 marked.use({ renderer: legalRenderer });
+
+export function renderMarkdown(content: string): string {
+    return String(marked.parse(content));
+}
+
+interface FAQEntry {
+  question: string;
+  answer: string;
+}
 
 interface FAQItem {
   question: string;
@@ -36,6 +88,7 @@ interface BlogPost {
   tags: string[];
   body: string;
   slug: string;
+  faq?: FAQEntry[];
 }
 
 interface HomeSettings {
@@ -103,8 +156,10 @@ export function loadBlogPosts(locale: string = 'pt'): BlogPost[] {
   return files.map(file => {
     const raw = fs.readFileSync(path.join(blogDir, file), 'utf-8');
     const { data, content } = matter(raw);
+    const canonicalId = file.replace(/\.md$/, '');
+    const slug = getLocalizedSlug('blog', canonicalId, locale) || canonicalId;
     return {
-      slug: file.replace(/\.md$/, ''),
+      slug,
       title: data.title || '',
       description: data.description || '',
       date: data.date || '',
@@ -112,13 +167,29 @@ export function loadBlogPosts(locale: string = 'pt'): BlogPost[] {
       cover: data.cover || '',
       tags: data.tags || [],
       body: String(marked.parse(content.trim())),
+      faq: data.faq as FAQEntry[] | undefined,
     } satisfies BlogPost;
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export function loadBlogPost(slug: string, locale: string = 'pt'): BlogPost | null {
-  const posts = loadBlogPosts(locale);
-  return posts.find(p => p.slug === slug) || null;
+  const canonicalId = getCanonicalId('blog', slug, locale);
+  if (!canonicalId) return null;
+  const filePath = path.join(contentDir, 'blog', locale, `${canonicalId}.md`);
+  if (!fs.existsSync(filePath)) return null;
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const { data, content } = matter(raw);
+  return {
+    slug,
+    title: data.title || '',
+    description: data.description || '',
+    date: data.date || '',
+    author: data.author || '',
+    cover: data.cover || '',
+    tags: data.tags || [],
+    body: String(marked.parse(content.trim())),
+    faq: data.faq as FAQEntry[] | undefined,
+  } satisfies BlogPost;
 }
 
 interface TutorialItem {
@@ -127,6 +198,7 @@ interface TutorialItem {
   body: string;
   slug: string;
   order: number;
+  faq?: FAQEntry[];
 }
 
 export function loadTutorials(locale: string = 'en'): TutorialItem[] {
@@ -138,18 +210,23 @@ export function loadTutorials(locale: string = 'en'): TutorialItem[] {
   return files.map(file => {
     const raw = fs.readFileSync(path.join(tutorialDir, file), 'utf-8');
     const { data, content } = matter(raw);
+    const canonicalId = file.replace(/\.mdx$/, '');
+    const slug = getLocalizedSlug('tutorial', canonicalId, locale) || canonicalId;
     return {
-      slug: file.replace(/\.mdx$/, ''),
+      slug,
       title: data.title || '',
       description: data.description || '',
       body: content.trim(),
       order: data.order || 99,
+      faq: data.faq as FAQEntry[] | undefined,
     } satisfies TutorialItem;
   }).sort((a, b) => a.order - b.order);
 }
 
 export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialItem | null {
-  const filePath = path.join(contentDir, 'tutorial', locale, `${slug}.mdx`);
+  const canonicalId = getCanonicalId('tutorial', slug, locale);
+  if (!canonicalId) return null;
+  const filePath = path.join(contentDir, 'tutorial', locale, `${canonicalId}.mdx`);
   if (!fs.existsSync(filePath)) return null;
   const raw = fs.readFileSync(filePath, 'utf-8');
   const { data, content } = matter(raw);
@@ -159,6 +236,7 @@ export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialI
     description: data.description || '',
     body: marked.parse(content.trim()),
     order: data.order || 99,
+    faq: data.faq as FAQEntry[] | undefined,
   };
 }
 
@@ -261,4 +339,4 @@ export function computeRelatedPosts(
     .map(r => ({ title: r.post.title, slug: r.post.slug, cover: r.post.cover }));
 }
 
-export type { BlogPost, FAQItem, HomeSettings, PageContent, TutorialItem };
+export type { BlogPost, FAQEntry, FAQItem, HomeSettings, PageContent, TutorialItem };
