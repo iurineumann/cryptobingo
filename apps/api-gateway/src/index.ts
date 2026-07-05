@@ -4,9 +4,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-if (process.env.OTEL_ENABLED === 'true') {
-  require('./services/tracing');
-}
+require('./instrumentation');
 
 import { createServer } from "node:http";
 import { Server as SocketIoServer } from "socket.io";
