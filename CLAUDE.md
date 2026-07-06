@@ -54,6 +54,41 @@ docs/adr/            Decisões arquiteturais (fonte de verdade de regras de neg�
 - **Worker/API:** `npx jest <arquivo>` ou `-t '<nome>'` para um teste só.
 - **Harness E2E:** `node run-tests.js` (pula se faltam env keys). Para um suite: ver seção Harness.
 
+## Deploy Frontend (Manual)
+
+GitHub Actions desabilitado (repo privado free tier). Deploy manual SEMPRE via `scripts/deploy-frontend.sh`.
+
+**⚠️ REGRA CRÍTICA:** Vite embute `VITE_*` em tempo de build. Build sem `.env.production` correto → produção herda URLs de dev (localhost). Sintomas:
+- Console: `[Wharfkit] RPC URL configurada para: http://127.0.0.1:8888`
+- CSP bloqueia `localhost:8083/api/v1/...` (produção nunca precisa de localhost na CSP)
+
+**Passos:**
+```bash
+# 1. Verificar env vars de produção
+cat apps/frontend/.env.production  # deve ter URLs da testnet, NUNCA localhost
+
+# 2. Build + deploy automático (verifica .env.production + varre JS contra localhost)
+bash scripts/deploy-frontend.sh
+
+# 3. OU manualmente (se o script falhar):
+export SWA_DEPLOY_TOKEN_FRONTEND=$(az staticwebapp secrets list \
+  --name cryptobingo-frontend --resource-group cryptobingo-testnet \
+  --query "properties.apiKey" -o tsv)
+cd apps/frontend && pnpm build
+# Verificar JS: grep -oP 'https?://(localhost|127\.0\.0\.1)[^"'"'"']*' dist/assets/index-*.js
+swa deploy dist --deployment-token "$SWA_DEPLOY_TOKEN_FRONTEND" \
+  --app-name cryptobingo-frontend --env production \
+  --swa-config-location /absolute/path/to/apps/frontend
+```
+
+**Pós-deploy (verificação obrigatória):**
+1. Abrir `https://test.cryptobingo.bet` → F12 Console
+2. NÃO deve aparecer `localhost` ou `127.0.0.1` em nenhum erro
+3. CSP header: `curl -sI https://test.cryptobingo.bet | grep content-security-policy`
+4. CSP não precisa de `localhost` — se vir, build foi com env errada
+
+**Swap-ui:** não tem SWA config — CSP gerenciado via nginx/Cloudflare, não por SWA.
+
 ## Landing Page API (ADR-039)
 
 API serverless da landing page (`apps/landing-page/api/`). Azure Function App standalone (Consumption, Node 22) + Aiven PostgreSQL.
