@@ -317,7 +317,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
                 break;
 
             default:
-                logger.warn({ tag: 'Orquestrador' }, `draw_mode desconhecido: ${drawMode}. Usando standard.`)
+                logger.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`)
                 totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
         }
 

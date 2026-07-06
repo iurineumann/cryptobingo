@@ -334,7 +334,7 @@ function consumeMessages(): void {
                 }
 
                 default: {
-                    logger.warn({ tag: 'RabbitMQ' }, `Ação desconhecida: "${action}". Descartando para DLQ.`)
+                    logger.warn(`[RabbitMQ] Ação desconhecida: "${action}". Descartando para DLQ.`)
                     eventsFailedTotal.inc({ action: 'unknown', reason: 'unknown_action' });
                     eventsDeadLetteredTotal.inc({ action: 'unknown' });
                     timer();
@@ -354,13 +354,12 @@ function consumeMessages(): void {
         } catch (err) {
             timer();
             const remaining = MAX_RETRIES - deliveryCount - 1;
-            logger.error(
-                `❌ [RabbitMQ] Erro em "${action}" jogo ${gameId} ` +
-                `(delivery #${deliveryCount + 1}, restam ${remaining} tentativas):`, err
+            logger.error({ err, action, gameId, deliveryCount: deliveryCount + 1, remaining },
+                `❌ [RabbitMQ] Erro em "${action}" jogo ${gameId} (delivery #${deliveryCount + 1}, restam ${remaining} tentativas)`
             );
             eventsFailedTotal.inc({ action, reason: 'blockchain_error' });
             if (remaining <= 0) {
-                logger.error({ tag: 'RabbitMQ' }, `Descartando "${action}" jogo ${gameId} para DLQ.`)
+                logger.error(`[RabbitMQ] Descartando "${action}" jogo ${gameId} para DLQ.`)
                 eventsDeadLetteredTotal.inc({ action });
                 channel.nack(msg, false, false);
             } else {

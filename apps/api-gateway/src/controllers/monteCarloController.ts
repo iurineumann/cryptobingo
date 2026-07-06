@@ -1055,7 +1055,7 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
         res.status(200).json(response);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error('[Calibração] Erro:', err);
+        logger.error({ err }, '[Calibração] Erro:');
         res.status(500).json({ error: `Erro durante a calibração: ${msg}` });
     }
 }
