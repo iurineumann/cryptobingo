@@ -11,11 +11,13 @@ export interface ExplorerPreset {
 }
 
 export const EXPLORER_PRESETS: ExplorerPreset[] = [
+  { url: 'https://testnet.waxblock.io',               label: 'WaxBlock (testnet)',       network: 'testnet' },
   { url: 'https://testnet.wax.bloks.io',             label: 'Bloks (testnet)',          network: 'testnet' },
   { url: 'https://wax-testnet.eosq.eosnation.io',     label: 'EOSQ (testnet)',           network: 'testnet' },
   { url: 'https://wax.bloks.io',                      label: 'Bloks (mainnet)',          network: 'mainnet' },
+  { url: 'https://waxblock.io',                       label: 'WaxBlock (mainnet)',       network: 'mainnet' },
   { url: 'https://wax.eosq.eosnation.io',             label: 'EOSQ (mainnet)',           network: 'mainnet' },
-  { url: 'https://explorer.wax.io',                   label: 'WAX Explorer (mainnet)',    network: 'mainnet' },
+  { url: 'https://explorer.wax.io',                   label: 'WAX Explorer (mainnet)',   network: 'mainnet' },
 ];
 
 export function getSelectedExplorerUrl(): string | null {
