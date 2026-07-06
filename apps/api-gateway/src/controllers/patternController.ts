@@ -7,10 +7,10 @@
 // Ref: ADR-004 Fase 2, openapi.yaml v1.3.0
 
 import { Request, Response } from 'express';
-import { Session }           from '@wharfkit/session';
+import { Session, type SessionOptions } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
-import { rpcClient }         from '@cryptobingo/blockchain-core';
-import { UInt64 }            from '@wharfkit/antelope';
+import { APIClient, UInt64 }   from '@wharfkit/antelope';
+import { rpcClient }            from '@cryptobingo/blockchain-core';
 import type { BlockchainPattern, BlockchainGametype } from '@cryptobingo/shared-types';
 import { redisClient }          from '../database/redis';
 import GametypeMetadataModel from '../models/GametypeMetadata';
@@ -23,6 +23,8 @@ const CHAIN_ID          = process.env.CHAIN_ID!;
 const RPC_URL           = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 const PATTERN_CACHE_TTL = 3_600; // 1 hora — alinhado ao patternCache.ts do worker
 
+const SHARED_CLIENT = new APIClient({ url: RPC_URL });
+
 // ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 // bingogamectr@admin aceita bingogamesvc@active como signatário — CONTRACT_PRIVATE_KEY não é necessária
 function getAdminSession(): Session {
@@ -31,7 +33,7 @@ function getAdminSession(): Session {
         permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
-    });
+    }, { client: SHARED_CLIENT } as SessionOptions);
 }
 
 // ADR-016: sincroniza as combinações (combo_id → weight) on-chain via setcombos.
