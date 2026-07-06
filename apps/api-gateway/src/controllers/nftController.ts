@@ -10,7 +10,6 @@ import { Session }                from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { Checksum256 }            from '@wharfkit/antelope';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
 
 const ATOMICAPI_PROXY_BASE = process.env.ATOMICAPI_PROXY_URL ?? 'https://wax.api.atomicassets.io';
 const ATOMIC_CONTRACT      = 'atomicassets';
@@ -411,7 +410,7 @@ async function getOwnedBurnCandidates(
 export async function getAtomicAssets(req: Request, res: Response): Promise<void> {
     try {
         const suffix = req.originalUrl.replace(/^\/api\/v1\/atomic\//, '');
-        const targetUrl = `${ATOMICAPI_PROXY_BASE}/atomicassets/v1/${suffix}`;
+        const targetUrl = `${ATOMICAPI_PROXY_BASE}/atomicassets/${suffix}`;
         const atomicRes = await fetch(targetUrl, { headers: { Accept: 'application/json' } });
         const body = await atomicRes.text();
         res.status(atomicRes.status)
