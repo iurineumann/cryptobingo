@@ -291,6 +291,27 @@ API genérica de conteúdo editorial em `apps/api-gateway/src/controllers/conten
 - `ContentAdmin.tsx` — CRUD com BlockNote editor, translation review UI
 - Tipos suportados: faq, howitworks, sponsors, tutorials, news
 
+## Observabilidade — Application Insights (ADR-043)
+
+Azure Application Insights (free tier, 5GB/mês) via `@azure/monitor-opentelemetry`.
+
+**Sampling:** api-gateway 20%, worker 10%.
+
+**Toggle:** `APPLICATIONINSIGHTS_ENABLED=false` desliga sem remover código.
+
+**Connection string:** NUNCA logar ou hardcodar. Usar env var `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+Em produção: configurar via `az containerapp update --set-env-vars` ou `az functionapp config appsettings set`.
+
+**Arquivos-chave:**
+- `apps/api-gateway/src/instrumentation.ts` — entrypoint do api-gateway
+- `apps/worker-game-loop/src/instrumentation.ts` — entrypoint do worker
+- Landing page: `APPLICATIONINSIGHTS_CONNECTION_STRING` setada diretamente no Function App
+- `.env` local: vars vazias e `APPLICATIONINSIGHTS_ENABLED=false`
+
+**Worker específico:** mantém `@opentelemetry/instrumentation-amqplib` para tracing RabbitMQ.
+
+**Fora do escopo:** frontend, swap-ui, landing SSG (client-side não telemetrado).
+
 ## Gamificação (ADR-028 Fase 2)
 
 **Achievements (29):** worker engine (`achievementEngine.ts`), API (`GET /profile/achievements`), frontend modal (`AchievementModal.tsx`), locales pt/en/zh.

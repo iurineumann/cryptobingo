@@ -132,7 +132,8 @@ jobs:
               -g ${{ env.AZURE_RG }} \
               -n api-gateway \
               --container-name api-gateway \
-              --image ${{ env.IMAGE_NS }}/cryptobingo-api-gateway:testnet
+              --image ${{ env.IMAGE_NS }}/cryptobingo-api-gateway:testnet \
+              --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CS }} APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2 APPLICATIONINSIGHTS_ENABLED=true
 
       # ── Worker ───────────────────────────────────────────────────
       - name: Deploy Worker
@@ -144,7 +145,8 @@ jobs:
               -g ${{ env.AZURE_RG }} \
               -n worker-game-loop \
               --container-name worker-game-loop \
-              --image ${{ env.IMAGE_NS }}/cryptobingo-worker-game-loop:testnet
+              --image ${{ env.IMAGE_NS }}/cryptobingo-worker-game-loop:testnet \
+              --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CS }} APPLICATIONINSIGHTS_SAMPLING_RATIO=0.1 APPLICATIONINSIGHTS_ENABLED=true
 
       # ── Frontend (Static Web App) ────────────────────────────────
       - uses: pnpm/action-setup@v4
