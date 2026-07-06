@@ -8,7 +8,7 @@ if (
     azureMonitorExporterOptions: {
       connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
     },
-    samplingRatio: parseFloat(
+    samplingRatio: Number.parseFloat(
       process.env.APPLICATIONINSIGHTS_SAMPLING_RATIO || '0.1',
     ),
   });
