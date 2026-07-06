@@ -13,7 +13,7 @@ declare global {
 type EventParams = Record<string, string | number | boolean | undefined>;
 
 const GA4_MEASUREMENT_ID = 'G-BLQRZ64RES';
-const PROBE_URL = 'https://www.google-analytics.com/gtag/js?id=' + GA4_MEASUREMENT_ID;
+const PROBE_URL = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_MEASUREMENT_ID;
 
 let adblockCached: boolean | null = null;
 
