@@ -3,9 +3,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-if (process.env.OTEL_ENABLED === 'true') {
-  require('./services/tracing');
-}
+require('./instrumentation');
 
 import mongoose from 'mongoose';
 import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames } from './services/rabbitmq';
