@@ -315,7 +315,7 @@ RG: `cryptobingo-testnet` (westus/westus2). Free tier majoritário.
 ```
 MONGO_URL=mongodb://cryptobingo-mongo:<key>@cryptobingo-mongo.mongo.cosmos.azure.com:10255/cryptobingo?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@cryptobingo-mongo@&serverSelectionTimeoutMS=60000
 POSTGRES_URL=postgresql://cryptobingo:<pw>@cryptobingo-pg.postgres.database.azure.com/postgres?sslmode=require
-RPC_URL=https://testnet.waxsweden.org
+RPC_URL=https://waxtestnet.greymass.com
 CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
 CONTRACT_ACCOUNT=bingogamectr
 SWAP_CONTRACT=bingogameswp
@@ -324,6 +324,8 @@ APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=aa4afc46-3411-4b4c-b7ea
 APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2
 APPLICATIONINSIGHTS_ENABLED=true
 ```
+
+**⚠️ RPC e Node 22:** `testnet.waxsweden.org` tem `SocketError: other side closed` com undici (fetch nativo Node 22). Usar `waxtestnet.greymass.com` em produção. Local/CI com Node 18 pode usar qualquer um.
 
 **worker-game-loop:**
 ```
