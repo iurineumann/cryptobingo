@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { Session } from '@wharfkit/session';
+import { Session, type SessionOptions } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import { Name, UInt64 } from '@wharfkit/antelope';
+import { APIClient, Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import RoomMetadataModel from '../models/RoomMetadata';
 import { logger } from '../middleware/logger';
@@ -13,6 +13,8 @@ const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID         = process.env.CHAIN_ID!;
 const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
 
+const SHARED_CLIENT = new APIClient({ url: RPC_URL });
+
 // ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 function getAdminSession(): Session {
     return new Session({
@@ -20,7 +22,7 @@ function getAdminSession(): Session {
         permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
-    });
+    }, { client: SHARED_CLIENT } as SessionOptions);
 }
 
 // ==========================================
