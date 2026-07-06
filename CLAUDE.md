@@ -291,6 +291,128 @@ API genérica de conteúdo editorial em `apps/api-gateway/src/controllers/conten
 - `ContentAdmin.tsx` — CRUD com BlockNote editor, translation review UI
 - Tipos suportados: faq, howitworks, sponsors, tutorials, news
 
+## Infraestrutura Testnet (Azure)
+
+RG: `cryptobingo-testnet` (westus/westus2). Free tier majoritário.
+
+### Recursos
+
+| Nome | Tipo | Região | Tier | Custo |
+|------|------|--------|------|-------|
+| `api-gateway` | Container App | westus | Consumption | ~$0 (tráfego mínimo) |
+| `worker-game-loop` | Container App | westus | Consumption | ~$0 |
+| `cryptobingo-mongo` | Cosmos DB MongoDB | westus | Free (1000 RU/s) | $0 |
+| `cryptobingo-pg` | PostgreSQL Flexible | westus | Burstable B1ms | ~$25/mês |
+| `cryptobingo-landing-api` | Function App | westus2 | Consumption | ~$0 |
+| `cryptobingo-appinsights` | Application Insights | westus2 | Workspace-based | $0 (até 5GB/mês) |
+| `cryptobingo-loganalytics` | Log Analytics | westus2 | Pay-as-you-go | $0 (baixo volume) |
+| `cryptobingo-aca-env` | Container Apps Environment | westus | Consumption | $0 |
+| Static Web Apps (frontend/swap) | Static Web Apps | westus | Free | $0 |
+
+### Env vars por Container App
+
+**api-gateway:**
+```
+MONGO_URL=mongodb://cryptobingo-mongo:<key>@cryptobingo-mongo.mongo.cosmos.azure.com:10255/cryptobingo?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@cryptobingo-mongo@&serverSelectionTimeoutMS=60000
+POSTGRES_URL=postgresql://cryptobingo:<pw>@cryptobingo-pg.postgres.database.azure.com/postgres?sslmode=require
+RPC_URL=https://testnet.waxsweden.org
+CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
+CONTRACT_ACCOUNT=bingogamectr
+SWAP_CONTRACT=bingogameswp
+MICROSERVICE_ACTOR=bingogamesvc
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=aa4afc46-3411-4b4c-b7ea-ae37368543d6;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=78e10668-9868-4438-8bfd-58f584a3f756
+APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2
+APPLICATIONINSIGHTS_ENABLED=true
+```
+
+**worker-game-loop:**
+```
+MONGO_URL=<mesmo do api-gateway>
+POSTGRES_URL=postgresql://cryptobingo:<pw>@cryptobingo-pg.postgres.database.azure.com/postgres?sslmode=verify-full
+RABBITMQ_URL=amqps://<user>:<pw>@fly.rmq.cloudamqp.com/<vhost>
+RPC_URL=https://testnet.waxsweden.org
+CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
+CONTRACT_ACCOUNT=bingogamectr
+APPLICATIONINSIGHTS_CONNECTION_STRING=<mesmo do api-gateway>
+APPLICATIONINSIGHTS_SAMPLING_RATIO=0.1
+APPLICATIONINSIGHTS_ENABLED=true
+```
+
+> `.env.testnet` em cada app tem template com secrets mascarados. Obter valores reais com:
+> `az containerapp show -n <app> -g cryptobingo-testnet --query "properties.template.containers[0].env" -o json`
+
+### Cosmos DB MongoDB (ADR-044)
+
+**Database:** `cryptobingo` (shared throughput, 400 RU/s → free tier).
+**Collections com dados:** `systemtokens` (2), `gametypemetadatas` (7), `roommetadatas` (21), `sponsororgs` (1).
+**Collections vazias (populam naturalmente):** `userprofiles`, `prizetxes`, `buyintxes`, `chatmessages`, `auditlogs`, `contents`, `referrals`, `daily_rewards`, `sponsordelegations`.
+
+**Firewall:** `networkAclBypass=AzureServices`. Container Apps conectam via backbone Azure.
+**Migração:** dados restaurados via mongodump do MongoDB local → Cosmos DB em 2026-07-06.
+**Dados perdidos na migração:** `userprofiles` (~509 docs). Recriados no próximo login dos usuários.
+
+**Comandos úteis:**
+```bash
+# Listar coleções com contagem
+docker exec bingo_mongodb mongosh "mongodb://cryptobingo-mongo:<key>@cryptobingo-mongo.mongo.cosmos.azure.com:10255/cryptobingo?ssl=true&replicaSet=globaldb&retrywrites=false" --quiet --eval 'db.getCollectionNames().forEach(function(c){print(c+": "+db[c].countDocuments({}))})'
+
+# Dump de coleção específica
+docker exec bingo_mongodb mongodump --uri="<MONGO_URL>" --archive=/tmp/dump.gz --gzip --nsInclude="cryptobingo.<collection>"
+```
+
+### App Insights (ADR-043)
+
+Azure Application Insights (free 5GB/mês) via `@azure/monitor-opentelemetry`.
+
+| App | Sampling | Arquivo |
+|-----|----------|---------|
+| api-gateway | 20% | `apps/api-gateway/src/instrumentation.ts` |
+| worker-game-loop | 10% | `apps/worker-game-loop/src/instrumentation.ts` |
+| landing-page | n/d | `APPLICATIONINSIGHTS_CONNECTION_STRING` env var no Function App |
+
+**Toggle:** `APPLICATIONINSIGHTS_ENABLED=false` desliga sem remover código.
+**Connection string:** NUNCA logar ou hardcodar. Em produção: setada via `az containerapp update --set-env-vars`.
+**Local `.env`:** vars vazias e `APPLICATIONINSIGHTS_ENABLED=false`.
+**Worker específico:** mantém `@opentelemetry/instrumentation-amqplib` para tracing RabbitMQ.
+**Fora do escopo:** frontend, swap-ui, landing SSG (client-side não telemetrado).
+
+**Smoke test (Live Metrics):**
+```bash
+# Verificar se App Insights está recebendo telemetria
+az monitor app-insights component show \
+  --app cryptobingo-appinsights \
+  --resource-group cryptobingo-testnet \
+  --query "{ikey:instrumentationKey, appId:appId}"
+```
+Depois abrir portal → `cryptobingo-appinsights` → Live Metrics. Deve mostrar requests em tempo real ao chamar `/health/live` ou `/api/v1/health`.
+
+### Azure Advisor — Recomendações aplicadas
+
+| Recomendação | Ação | Status |
+|---|---|---|
+| Cosmos DB firewall rules | `networkAclBypass=AzureServices` | ✅ Aplicado |
+| Cosmos DB Private Link | Não implementado (custo) | ⏳ Futuro |
+| Desabilitar acesso público | Não implementado (sem Private Link) | ⏳ Futuro |
+
+### Comandos úteis
+
+```bash
+# MONGO_URL com serverSelectionTimeout (evita timeout em cold start)
+MONGO_URL=mongodb://<user>:<key>@<host>.mongo.cosmos.azure.com:10255/<db>?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@<account>@&serverSelectionTimeoutMS=60000
+
+# App Insights connection string
+InstrumentationKey=<ikey>;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=<appId>
+
+# Setar env var em Container App
+az containerapp update -n <app> -g cryptobingo-testnet \
+  --container-name <app> \
+  --set-env-vars "KEY=value"
+
+# Ver health checks
+curl https://<app-fqdn>/health/live
+curl https://<app-fqdn>/health/ready
+```
+
 ## Gamificação (ADR-028 Fase 2)
 
 **Achievements (29):** worker engine (`achievementEngine.ts`), API (`GET /profile/achievements`), frontend modal (`AchievementModal.tsx`), locales pt/en/zh.
