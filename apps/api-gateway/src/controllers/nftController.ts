@@ -402,7 +402,7 @@ async function getOwnedBurnCandidates(
 }
 
 // ==========================================
-// GET /api/v1/atomic/*splat
+// GET /api/v1/atomic/*
 // Proxy para AtomicAssets REST API (evita CORS do navegador).
 // Retransmite resposta original (status + headers + body).
 // ==========================================
