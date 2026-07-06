@@ -214,9 +214,7 @@ describe('getLeaderboardByRoom', () => {
 describe('getLeaderboardXp', () => {
     it('[REG] retorna ranking XP ordenado', async () => {
         mockUserFind.mockReturnValue({
-            sort:  jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            lean:  jest.fn(async () => [
+            lean: jest.fn(async () => [
                 { wallet_address: 'bob.wam', nickname: 'Bob', progression: { xp: 5000, tier: 'Ouro', level: 10, games_played: 20 } },
                 { wallet_address: 'alice.wam', nickname: null, progression: { xp: 3000, tier: 'Prata', level: 7, games_played: 12 } },
             ]),
@@ -241,9 +239,7 @@ describe('getLeaderboardXp', () => {
 
     it('[REG] retorna 500 se MongoDB falhar', async () => {
         mockUserFind.mockReturnValue({
-            sort:  jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            lean:  jest.fn(async () => { throw new Error('Mongo down'); }),
+            lean: jest.fn(async () => { throw new Error('Mongo down'); }),
         });
         const res = makeRes();
         await getLeaderboardXp(makeReq(), res);
@@ -251,15 +247,16 @@ describe('getLeaderboardXp', () => {
     });
 
     it('[REG] limita ?limit a máximo 50', async () => {
+        const mockData = Array.from({ length: 100 }, (_, i) => ({
+            wallet_address: `user${i}.wam`,
+            progression: { xp: 1000 - i * 10, tier: 'Cobre', level: 1, games_played: 1 },
+        }));
         mockUserFind.mockReturnValue({
-            sort:  jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            lean:  jest.fn(async () => []),
+            lean: jest.fn(async () => mockData),
         });
         const res = makeRes();
         await getLeaderboardXp(makeReq({}, { limit: '200' }), res);
-        // limit(N) chamado com no máximo 50
-        const limitCall = (mockUserFind().limit as jest.Mock).mock.calls[0][0];
-        expect(limitCall).toBe(50);
+        const body = (res.json as jest.Mock).mock.calls[0][0];
+        expect(body.entries.length).toBeLessThanOrEqual(50);
     });
 });

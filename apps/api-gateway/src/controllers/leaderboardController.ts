@@ -7,8 +7,6 @@ import { redisClient } from '../database/redis';
 import { UserProfile } from '../models/UserProfile';
 import type { LeaderboardEntry, LeaderboardXpEntry } from '@cryptobingo/shared-types';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
-
 const TTL_SECONDS = 300; // 5 min
 
 // ==========================================
@@ -107,9 +105,12 @@ export async function getLeaderboardXp(req: Request, res: Response): Promise<voi
         const profiles = await UserProfile.find(
             { 'progression.xp': { $exists: true, $gt: 0 } },
             { wallet_address: 1, nickname: 1, progression: 1 },
-        ).sort({ 'progression.xp': -1 }).limit(limit).lean();
+        ).lean();
 
-        const entries: LeaderboardXpEntry[] = profiles.map((p, idx) => ({
+        profiles.sort((a, b) => (b.progression?.xp ?? 0) - (a.progression?.xp ?? 0));
+        const topProfiles = profiles.slice(0, limit);
+
+        const entries: LeaderboardXpEntry[] = topProfiles.map((p, idx) => ({
             rank:          idx + 1,
             wallet:        p.wallet_address,
             nickname:      p.nickname ?? null,

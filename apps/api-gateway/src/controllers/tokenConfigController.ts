@@ -2,11 +2,10 @@ import { Request, Response } from 'express';
 import { isValidObjectId } from 'mongoose';
 import SystemToken from '../models/SystemToken';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
-
 export const listTokens = async (_req: Request, res: Response): Promise<void> => {
     try {
-        const tokens = await SystemToken.find({ enabled: true }).sort({ label: 1 }).lean();
+        const tokens = (await SystemToken.find({ enabled: true }).lean())
+            .sort((a, b) => a.label.localeCompare(b.label));
         res.status(200).json({ tokens });
     } catch (err) {
         logger.error({ err: err, tag: 'TokenConfig' }, 'Erro ao listar tokens');

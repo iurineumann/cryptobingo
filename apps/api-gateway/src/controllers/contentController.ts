@@ -7,8 +7,6 @@ import { Content } from '../models/Content';
 import { translateNewsContent } from '../services/translation';
 import type { ContentItem } from '@cryptobingo/shared-types';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
-
 const TTL_SECONDS = 120;
 const CACHE_PREFIX = 'content';
 
@@ -76,12 +74,12 @@ export async function listContent(req: Request, res: Response): Promise<void> {
         const filter = { type, active: true };
         const [items, total] = await Promise.all([
             Content.find(filter)
-                .sort({ pinned: -1, sort_order: 1 })
                 .skip(offset)
                 .limit(limit)
                 .lean(),
             Content.countDocuments(filter),
         ]);
+        items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
         const payload = {
             items: items.map(docToContentItem),

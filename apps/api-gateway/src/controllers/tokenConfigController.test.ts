@@ -18,7 +18,7 @@ jest.mock('../models/SystemToken', () => {
         return tokens.splice(idx, 1)[0];
     });
     const find = jest.fn((_filter?: any) => ({
-        sort: () => ({ lean: async () => tokens.filter(t => t.enabled) }),
+        lean: async () => tokens.filter(t => t.enabled),
     }));
     return {
         __esModule: true,

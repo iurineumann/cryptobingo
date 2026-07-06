@@ -5,8 +5,6 @@ import { Signature, Checksum256 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { logAudit } from '../utils/audit';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
-
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 // Curva φ-tier (espelhada do xpEngine.ts — ADR-028 §9)
@@ -334,13 +332,15 @@ export const listUsers = async (req: Request, res: Response): Promise<void> => {
         const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
         const skip  = (page - 1) * limit;
 
-        const [users, total] = await Promise.all([
+        const [allUsers, total] = await Promise.all([
             UserProfile.find({}, {
                 wallet_address: 1, nickname: 1, role: 1, permissions: 1,
                 'progression.games_played': 1, createdAt: 1,
-            }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            }).lean(),
             UserProfile.countDocuments(),
         ]);
+        allUsers.sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime());
+        const users = allUsers.slice(skip, skip + limit);
 
         res.status(200).json({
             users: users.map(u => ({
