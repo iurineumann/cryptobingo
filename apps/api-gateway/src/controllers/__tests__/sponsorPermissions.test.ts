@@ -86,11 +86,9 @@ describe('sponsorPermissionController', () => {
       });
 
       (SponsorDelegation.find as jest.Mock).mockReturnValue({
-        sort: jest.fn().mockReturnValue({
-          lean: jest.fn().mockResolvedValue([
-            { wallet_address: 'delegate1', permissions: ['sponsor.org_abc.treasury.view'], active: true },
-          ]),
-        }),
+        lean: jest.fn().mockResolvedValue([
+          { wallet_address: 'delegate1', permissions: ['sponsor.org_abc.treasury.view'], active: true, createdAt: new Date('2025-01-01') },
+        ]),
       });
 
       await listMyDelegations(req as Request, res);

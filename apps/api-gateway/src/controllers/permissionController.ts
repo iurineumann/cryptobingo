@@ -4,8 +4,6 @@ import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
 import { logAudit } from '../utils/audit';
 import { logger } from '../middleware/logger';
-import { getRequestId } from '../middleware/requestId';
-
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 function generateOrgId(): string {
@@ -44,14 +42,12 @@ export async function listSponsorOrgs(req: Request, res: Response) {
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
 
-    const [orgs, total] = await Promise.all([
-      SponsorOrg.find()
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+    const [allOrgs, total] = await Promise.all([
+      SponsorOrg.find().lean(),
       SponsorOrg.countDocuments(),
     ]);
+    allOrgs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const orgs = allOrgs.slice(skip, skip + limit);
 
     res.json({ orgs, total, page, limit });
   } catch (err) {

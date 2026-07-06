@@ -6,9 +6,7 @@ function queryResult(data: unknown) {
 }
 
 function findChainResult(data: unknown) {
-  return {
-    sort: () => ({ skip: () => ({ limit: () => ({ lean: () => Promise.resolve(data) }) }) }),
-  };
+  return { lean: () => Promise.resolve(data) };
 }
 
 const userFindOneAndUpdate = jest.fn();
