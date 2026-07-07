@@ -113,6 +113,13 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         }, { broadcast: true });
         logger.info(`Game ${newGameId} criado. TX: ${createResult.response?.transaction_id}`);
 
+        // Aguarda confirmacao on-chain antes de fundgame (previne race "Game not found")
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const created = await fetchGame(newGameId).catch(() => null);
+            if (created) break;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
         // Funde o jogo (CREATED → FUNDING) — requer bingogamesvc@active
         const fundResult = await microserviceSession.transact({
             actions: [{
