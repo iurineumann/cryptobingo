@@ -11,4 +11,5 @@ pipeline: "Design → UI → A11y → Teste E2E"
 
 Time de frontend com foco em UX impecável. Design system, acessibilidade, micro-interações, responsivo, testes E2E de jornada visual.
 
+ANTES DE TRABALHAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
 CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

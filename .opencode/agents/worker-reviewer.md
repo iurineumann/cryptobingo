@@ -25,4 +25,5 @@ Verifique SEMPRE:
 
 Pode rodar typecheck (`tsc --project tsconfig.build.json --noEmit`) e `npx jest` para confirmar suspeitas. NÃO reinicie a chain nem faça deploy. Conciso e técnico; priorize correção de fundos/estado.
 
+ANTES DE TRABALHAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
 CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

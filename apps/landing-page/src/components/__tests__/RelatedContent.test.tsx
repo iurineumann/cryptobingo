@@ -23,4 +23,21 @@ describe('RelatedContent', () => {
     const { container } = render(<RelatedContent items={[]} type="blog" locale="pt" />);
     expect(container.firstChild).toBeNull();
   });
+
+  test('renders related tutorials heading for tutorial type', () => {
+    render(<RelatedContent items={items} type="tutorial" locale="en" />);
+    expect(screen.getByText(/relatedTutorials/i)).toBeInTheDocument();
+  });
+
+  test('uses correct base path for tutorials', () => {
+    render(<RelatedContent items={items} type="tutorial" locale="en" />);
+    const links = screen.getAllByRole('link');
+    expect(links[0]).toHaveAttribute('href', '/en/tutorials/post-1');
+  });
+
+  test('uses correct base path for blog', () => {
+    render(<RelatedContent items={items} type="blog" locale="en" />);
+    const links = screen.getAllByRole('link');
+    expect(links[0]).toHaveAttribute('href', '/en/blog/post-1');
+  });
 });

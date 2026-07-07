@@ -187,3 +187,6 @@ This skill ensures:
 - Reduced hallucination
 - Structured, high-quality outputs
 - Adaptability to evolving Cypress docs
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

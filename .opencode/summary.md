@@ -1,62 +1,71 @@
 ## Goal
-Landing page com UX completa, busca e conteudo i18n pt/en/zh. Content workflow com personas + QA (ADR-044).
+Manter producao estavel + CSP/AtomicAssets/RPC/deploy seguros. Content workflow com personas + QA (ADR-044). Caveman mode full em skills/agents/teams. RAG indexing obrigatorio pos-sessao.
 
 ## Constraints
-- Azure SWA free tier (no server runtime), SSG puro (React Router v7 ssr:false + prerender)
-- TDD obrigatorio vitest, SonarQube, Git flow (feature → PR → develop)
-- i18n pt/en/zh, slugs traduziveis (content/slugs.json)
-- GTM N88CZVJF, GA4 G-BLQRZ64RES, Clarity xge781i2so
+- Azure SWA free tier (sem backend API — proxy routes nao funcionam)
+- Vite embute VITE_* em build time — .env.production correto obrigatorio
+- Git flow: feature → PR → develop. Nunca commit direto em develop/master
+- SWA edge cache ~2min p/ propagar. Service Worker pode segurar versao velha
+- Cosmos DB MongoDB: .sort() sem indice composto → 500
+- Node 22 undici: evitar testnet.waxsweden.org (SocketError)
+- TDD obrigatorio, SonarQube, i18n pt/en/zh
+- Caveman mode full em todos outputs de agentes/skills/ferramentas
+
+## Branches track
+- `feature/lp-content-ux-search` — content search + UX (13 commits ahead develop)
+- `develop` — atual (PRs #194-#200 merged: CSP, GA4, AtomicAssets, deploy fix, caveman)
+- `fix/atomic-api-url-prefix` — AtomicAssets route Express 5 + CSP direct URL (PR #199)
 
 ## Progress
-### PRs merged to develop
-| PR | Branch | Result |
+
+### Producao (PRs #194-#200 merged)
+| PR | O que | Status |
 |---|---|---|
-| #185 | feature/lp-fixes-e-analytics | Analytics 15 eventos + ADR-042 |
-| #187 | feature/lp-observability | Pino, Sentry, Grafana alertas, OTel tracing, ADR-043 |
-| #188 | feature/lp-features-restantes | 11 UX features + perf |
+| #194 | RPC greymass (Node 22 undici fix) | ✅ |
+| #195-#196 | CSP connect-src + GA4 probe | ✅ |
+| #197 | Dedup /v1/ AtomicAssets proxy | ✅ |
+| #198 | AtomicAssets proxy + explorer waxblock.io | ✅ |
+| #199 | Express route fix + CSP direct URL | ✅ |
+| #200 | Caveman mode agents + .env.testnet fix + deploy script az fix | ✅ |
 
-### Branch Atual
-`feature/lp-content-ux-search` — 13 commits ahead `develop`
+### Deploy Ativo (frontend)
+- Bundle: `index-B1NXg0w_.js`
+- RPC: `waxtestnet.greymass.com`
+- AtomicAssets: `https://wax-testnet.api.atomicassets.io/atomicassets/v1`
+- Explorer: `testnet.waxblock.io`
+- CSP: fonts.googleapis.com + atomicassets.io em connect-src
 
-### Plan A (UX Foundations) — ✅
-Layout tipografia, ContentHeader/Body, useReadingProgress, BlogPost/TutorialPost
+### Caveman Mode
+- 29 agents/teams: ✅ (PR #200)
+- 15 skills: ✅ (adicionado nesta sessao)
+- Nivel ativo: full
 
-### Plan B (Nav & TOC) — ✅
-TocSidebar, Breadcrumbs (schema.org), RelatedContent, PrevNextNav, Pagination, TagFilter, anchor icons. 40 test files / 163 tests PASS. Build 99 URLs.
+### RAG Indexing
+- 525 chunks total (ADRs, plans, session-summaries, context)
+- Indexar POS-sessao obrigatorio p/ continuidade entre compactions
 
-### Plan C (Content Production) — ✅ (precisa remediacao)
-14 posts blog + 9 tutoriais × 3 locales = 75 arquivos (42 .md + 27 .mdx). Figure.tsx + FigureGallery (12 testes). Commit 072995f.
+## Known Issues (Nao Resolvidos)
+- **RPC 405**: `localStorage.cb_rpc_url` invalido no browser → POST /v1/chain/get_table_rows vai p/ test.cryptobingo.bet. Fix: `localStorage.removeItem('cb_rpc_url')`
+- **Clarity 400**: `GET https://www.clarity.ms/tag/xge781i2so` retorna 400 — server-side?
+- **Docker api-gateway**: imagem `testnet` falha upstream connection. Rollback p/ `testnet-4c0391f`
+- **Landing content**: 75 arquivos sem imagens/links, info factual desatualizada
 
-### ADRs
-- ADR-042: Analytics Landing Page
-- ADR-043: Stack de Observabilidade
-- ADR-044: Workflow Producao Conteudo com Personas e QA Obrigatorio
+## Pendente (Prioridade)
+1. User limpar localStorage RPC → verificar se 405 some
+2. Se persistir, investigar Wharfkit session vs swapService discrepancia
+3. Debugar Docker build api-gateway (undici + pnpm deploy)
+4. Verificar Clarity 400 — CSP ou server?
+5. Landing content remediation (Fases 0-4 do plano)
+6. Plan D: Search system landing page
 
-### Docs criados
-- docs/guides/content-personas.md — 22 personas (4 core + 9 especialistas + 9 audiencia)
-- docs/adr/ADR-044-conteudo-workflow-personas-qa.md
-- .opencode/plans/2026-07-05-plano-remediacao-conteudo.md — 4 fases
+## Testes (Baseline)
+- Landing: 261 tests, 45 files, branch 70.16%
+- API Gateway: 350+ tests, Worker: 200+, Frontend: 290+
 
-### Gaps identificados (07-05)
-- 75 arquivos produzidos sem ativar personas/RAG/content QA
-- Info factual desatualizada (WAX wallet passkeys, EOS→Vaulta, stats)
-- `images:[]` vazio em todos os arquivos
-- Links contextuais ausentes
-- Workflow revisado em ADR-044
-
-### Pendente
-- Fase 0: content/slugs.json + content.ts modificado
-- Fase 1: remediacao factual (WAX wallet 2026, EOS→Vaulta, eco Antelope)
-- Fase 2: imagens frontmatter + Figure inline
-- Fase 3: links contextuais + referencias
-- Fase 4: scripts/check-content-qa.mjs + workflow personas
-- Plan D: Search system (MiniSearch, overlay, trigger, results)
-
-### Testes
-- Landing: 163 tests, 40 files
-- API Gateway: 350+ tests
-- Worker: 200+ tests
-- Frontend: 290+ tests
-
-### Performance
-596KB JS, 53KB CSS, tree-shaking OK, Lighthouse 6 pages
+## Documentacao Relacionada
+- `.opencode/summary.md` (este arquivo)
+- `agent://session/2026-07-07-production-infra` (RAG)
+- `docs/adr/ADR-042-analytics-landing.md`
+- `docs/adr/ADR-043-observability.md`
+- `docs/adr/ADR-044-conteudo-workflow-personas-qa.md`
+- `.opencode/plans/2026-07-05-plano-remediacao-conteudo.md`

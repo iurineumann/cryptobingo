@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import PressKitPage from '../PressKitPage';
 
+const mockParams = vi.hoisted(() => ({ locale: 'en' }));
+
 vi.mock('react-router-dom', () => ({
-  useParams: () => ({ locale: 'en' }),
+  useParams: () => mockParams,
 }));
 
 vi.mock('@/components/Header', () => ({
@@ -14,10 +16,22 @@ vi.mock('@/components/Footer', () => ({
   default: () => <div data-testid="footer" />,
 }));
 
-describe('PressKitPage analytics', () => {
+vi.mock('@/components/Seo', () => ({ default: () => null }));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en-US' } }),
+}));
+
+describe('PressKitPage', () => {
   beforeEach(() => {
     window.dataLayer = [];
     (window as any)._analyticsConsented = true;
+  });
+
+  it('should render brand colors', () => {
+    render(<PressKitPage />);
+    expect(screen.getByText('Primary')).toBeInTheDocument();
+    expect(screen.getByText('#8B5CF6')).toBeInTheDocument();
   });
 
   it('should push press_kit_download for logo download', () => {
@@ -51,5 +65,11 @@ describe('PressKitPage analytics', () => {
         item: 'screenshots',
       })
     );
+  });
+
+  it('should handle missing locale', () => {
+    mockParams.locale = '';
+    render(<PressKitPage />);
+    expect(screen.getByText('Primary')).toBeInTheDocument();
   });
 });

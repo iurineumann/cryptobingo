@@ -71,3 +71,6 @@ Result: Provides step-by-step guidance and generates appropriate configurations
 
 Part of the **Technical Documentation** skill category.
 Tags: documentation, markdown, api-docs, readme, technical-writing
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

@@ -81,4 +81,27 @@ describe('Header', () => {
     render(<Header />);
     expect(screen.getByTestId('urgency-timer')).toBeInTheDocument();
   });
+
+  it('should push nav_click on mobile drawer external link', () => {
+    render(<Header />);
+    fireEvent.click(screen.getByTestId('mobile-menu-toggle'));
+    const drawer = screen.getByTestId('mobile-drawer');
+    const githubLink = within(drawer).getByText('nav.github');
+    fireEvent.click(githubLink);
+    expect(window.dataLayer).toContainEqual(
+      expect.objectContaining({ event: 'nav_click', link_text: 'nav.github' })
+    );
+  });
+
+  it('should call switchLocale on mobile locale button click', () => {
+    render(<Header />);
+    fireEvent.click(screen.getByTestId('mobile-menu-toggle'));
+    const drawer = screen.getByTestId('mobile-drawer');
+    const ptBtn = within(drawer).getByText('PT');
+    fireEvent.click(ptBtn);
+    expect(mockChangeLanguage).toHaveBeenCalledWith('pt');
+    expect(window.dataLayer).toContainEqual(
+      expect.objectContaining({ event: 'locale_switch', to_locale: 'pt' })
+    );
+  });
 });

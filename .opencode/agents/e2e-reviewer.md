@@ -26,4 +26,5 @@ Verifique SEMPRE:
 
 Pode rodar `pnpm --filter @cryptobingo/e2e-ui e2e` (Tier 1) e, se o diff tocou o frontend, `npx tsc --noEmit` + `pnpm --filter @cryptobingo/frontend test`. Conciso e técnico; priorize determinismo do Tier 1, estabilidade de seletores e fidelidade da jornada do usuário.
 
+ANTES DE TRABALHAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
 CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

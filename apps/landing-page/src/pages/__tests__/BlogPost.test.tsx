@@ -1,22 +1,19 @@
-import { render, screen } from '@testing-library/react';
-import { describe, test, expect, vi } from 'vitest';
-import BlogPost from '../BlogPost';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import BlogPost, { loader } from '../BlogPost';
+
+const mockTrackEvent = vi.fn();
+const mockContent = vi.hoisted(() => ({
+  mockLoadBlogPost: vi.fn(),
+  mockComputeRelatedPosts: vi.fn(),
+}));
 
 vi.mock('react-router-dom', () => ({
-  useLoaderData: () => ({
-    post: {
-      title: 'Test Post',
-      description: 'Test description',
-      date: '2024-01-01',
-      author: 'Author Name',
-      cover: '/cover.jpg',
-      tags: ['tag1', 'tag2'],
-      body: '<p>Hello world</p>',
-      slug: 'test-post',
-    },
-    relatedPosts: [],
-  }),
+  useLoaderData: () => mockLoaderData,
   useParams: () => ({ slug: 'test', locale: 'en' }),
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -35,6 +32,48 @@ vi.mock('@/components/ContentBody', () => ({
   ContentBody: () => <div role="progressbar" />,
 }));
 
+vi.mock('@/services/analytics', () => ({
+  trackEvent: (...args: unknown[]) => mockTrackEvent(...args),
+}));
+
+vi.mock('../../../lib/content', () => ({
+  loadBlogPost: (...args: unknown[]) => mockContent.mockLoadBlogPost(...args),
+  computeRelatedPosts: (...args: unknown[]) => mockContent.mockComputeRelatedPosts(...args),
+}));
+
+let mockLoaderData: unknown = {
+  post: {
+    title: 'Test Post',
+    description: 'Test description',
+    date: '2024-01-01',
+    author: 'Author Name',
+    cover: '/cover.jpg',
+    tags: ['tag1', 'tag2'],
+    body: '<p>Hello world</p>',
+    slug: 'test-post',
+  },
+  relatedPosts: [],
+};
+
+beforeEach(() => {
+  mockLoaderData = {
+    post: {
+      title: 'Test Post',
+      description: 'Test description',
+      date: '2024-01-01',
+      author: 'Author Name',
+      cover: '/cover.jpg',
+      tags: ['tag1', 'tag2'],
+      body: '<p>Hello world</p>',
+      slug: 'test-post',
+    },
+    relatedPosts: [],
+  };
+  mockTrackEvent.mockReset();
+  mockContent.mockLoadBlogPost.mockReset();
+  mockContent.mockComputeRelatedPosts.mockReset();
+});
+
 describe('BlogPost', () => {
   test('renders with ContentHeader and ContentBody', () => {
     render(<BlogPost />);
@@ -47,5 +86,57 @@ describe('BlogPost', () => {
     render(<BlogPost />);
     const backLink = screen.getByText(/blog\.back/);
     expect(backLink).toBeInTheDocument();
+  });
+
+  test('shows not found when data is null', () => {
+    mockLoaderData = null;
+    render(<BlogPost />);
+    expect(screen.getByRole('heading')).toHaveTextContent('Post not found');
+  });
+
+  test('renders FAQ section when post has FAQ', () => {
+    mockLoaderData = {
+      post: {
+        title: 'FAQ Post',
+        description: 'Has FAQ',
+        date: '2024-01-01',
+        author: 'Author',
+        body: '<p>Body</p>',
+        slug: 'faq-post',
+        tags: [],
+        faq: [{ question: 'Question?', answer: 'Answer' }],
+      },
+      relatedPosts: [],
+    };
+    render(<BlogPost />);
+    expect(screen.getByText(/Question\?/)).toBeInTheDocument();
+  });
+
+  test('fires trackEvent on back link click', () => {
+    render(<BlogPost />);
+    fireEvent.click(screen.getByText(/blog\.back/));
+    expect(mockTrackEvent).toHaveBeenCalledWith('blog_click', {
+      post_slug: 'test-post',
+    });
+  });
+
+  describe('loader', () => {
+    test('returns post and related posts', async () => {
+      mockContent.mockLoadBlogPost.mockReturnValue({
+        title: 'Test', body: '', description: '', date: '', author: '', slug: 'test', tags: [],
+      });
+      mockContent.mockComputeRelatedPosts.mockReturnValue([]);
+      const result = await loader({ params: { slug: 'test', locale: 'en' } });
+      expect(result).toEqual({
+        post: { title: 'Test', body: '', description: '', date: '', author: '', slug: 'test', tags: [] },
+        relatedPosts: [],
+      });
+    });
+
+    test('returns null when post not found', async () => {
+      mockContent.mockLoadBlogPost.mockReturnValue(null);
+      const result = await loader({ params: { slug: 'nonexistent' } });
+      expect(result).toBeNull();
+    });
   });
 });
