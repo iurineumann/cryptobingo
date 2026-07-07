@@ -600,7 +600,7 @@ function registerRoutes(): void {
     getEligibleDiscountNfts,
   );
   app.post("/api/v1/nfts/sync-burns", playerLimiter, requireAuth, syncBurns);
-  app.get("/api/v1/atomic/*", playerLimiter, getAtomicAssets);
+  app.get("/api/v1/atomic/{*path}", playerLimiter, getAtomicAssets);
 
   // ── Config: tokens autorizados ───────────────────────────────────────
   app.get("/api/v1/config/tokens", playerLimiter, listTokens);
