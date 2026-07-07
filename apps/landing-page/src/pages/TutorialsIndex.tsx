@@ -5,6 +5,7 @@ import type { TutorialItem } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { useAnalytics } from '@/hooks/useAnalytics';
 
 export async function loader({ params }: { params: { locale?: string } }): Promise<{ items: TutorialItem[] }> {
@@ -24,6 +25,12 @@ export default function TutorialsIndex() {
       <Seo title={t('seo.tutorials_title')} description={t('seo.tutorials_desc')} canonical={`/${lang}/tutorials`} />
       <Header />
       <main id="main-content" className="max-w-4xl mx-auto px-4 py-20">
+        <Breadcrumbs
+          segments={[
+            { label: t('nav.home'), href: `/${lang}` },
+            { label: t('nav.tutorials') },
+          ]}
+        />
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
           {t('seo.tutorials_title')}
         </h1>

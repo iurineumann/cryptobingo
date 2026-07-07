@@ -168,6 +168,21 @@
     "rtp": "RTP Atual",
     "loading": "Estatísticas reais — testnet ativa"
   },
+  "content": {
+    "readTime": "{{count}} min de leitura",
+    "relatedPosts": "Artigos Relacionados",
+    "relatedTutorials": "Tutoriais Relacionados",
+    "previous": "← Anterior",
+    "next": "Próximo →"
+  },
+  "blog": {
+    "back": "← Voltar para Blog"
+  },
+  "tutorial": {
+    "step": "Passo {{current}} de {{total}}",
+    "previous": "← Anterior",
+    "next": "Próximo →"
+  },
   "tutorials": {
     "coming_soon": "Tutoriais em breve!",
     "back": "Voltar para tutoriais"

@@ -25,6 +25,14 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
   foi verificado vs. o que falta.
 - **Camada → skill + revisor:** ao tocar uma camada, use a **skill** dela e delegue a revisão pré-PR
   ao **agent** correspondente (ver tabela em *Skills & Agents*).
+- **Content QA é obrigatorio:** nao produza conteudo sem ativar personas (Copywriter, Editor, Visual
+  Designer, SEO Specialist), consultar RAG (tags: content-quality, persona-decision, images) e
+  executar `scripts/check-content-qa.mjs`. Info factual deve ser verificada contra pesquisa web
+  (max 90 dias). Ver ADR-044.
+- **Slugs traduziveis:** URLs usam slugs do `content/slugs.json`, nao nomes de arquivo. Modificar
+  `lib/content.ts` ao adicionar novo locale. Nunca atrelar URL ao filename.
+- **Imagens obrigatorias:** frontmatter `images: []` populado em todo post/tutorial. Figure component
+  com lazy loading + zoom. Fontes: Unsplash (fotos), Mermaid (diagramas), screenshots (tutoriais).
 
 ## Layout
 

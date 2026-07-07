@@ -73,7 +73,7 @@ export default function Header() {
 
   const navLinks: NavLinkItem[] = [
     { type: 'external', label: t('nav.testnet'), href: 'https://test.cryptobingo.bet' },
-    { type: 'internal', label: t('nav.ideas'), href: '/ideas' },
+    { type: 'internal', label: t('nav.ideas'), href: `/${currentLocale}/ideas` },
     { type: 'internal', label: t('nav.tutorials'), href: `/${currentLocale}/tutorials` },
     { type: 'external', label: t('nav.github'), href: 'https://github.com/iurineumann/cryptobingo' },
     { type: 'external', label: t('nav.telegram'), href: 'https://t.me/cryptobingo_bet' },

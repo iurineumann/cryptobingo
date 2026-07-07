@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -70,6 +71,23 @@
     --shadow-modal:        0 25px 50px -12px rgb(0 0 0 / 0.7);
 }
 
+.prose-invert {
+  --tw-prose-body: var(--color-gray-300);
+  --tw-prose-headings: var(--color-white);
+  --tw-prose-links: var(--color-brand-400);
+  --tw-prose-bold: var(--color-white);
+  --tw-prose-counters: var(--color-gray-400);
+  --tw-prose-bullets: var(--color-gray-400);
+  --tw-prose-hr: var(--color-gray-700);
+  --tw-prose-quotes: var(--color-gray-300);
+  --tw-prose-quote-borders: var(--color-brand-500);
+  --tw-prose-code: var(--color-brand-300);
+  --tw-prose-pre-code: var(--color-gray-200);
+  --tw-prose-pre-bg: var(--color-surface-900);
+  --tw-prose-th-borders: var(--color-gray-600);
+  --tw-prose-td-borders: var(--color-gray-700);
+}
+
 html {
     scroll-behavior: smooth;
     text-rendering: optimizeLegibility;
@@ -96,6 +114,7 @@ body {
     padding-top: 1.5rem;
     border-top: 1px solid rgb(30 30 46 / 1);
     position: relative;
+    scroll-margin-top: 100px;
 }
 
 .legal-doc-body h2::before {
@@ -108,6 +127,19 @@ body {
     border-top: none;
     margin-top: 0;
     padding-top: 0;
+}
+
+.legal-doc-body h2 .anchor-link {
+  opacity: 0;
+  margin-left: 0.5rem;
+  color: var(--color-brand-400);
+  font-weight: 300;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.legal-doc-body h2:hover .anchor-link {
+  opacity: 1;
 }
 
 @media print {

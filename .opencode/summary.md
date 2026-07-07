@@ -1,59 +1,62 @@
 ## Goal
-- Implementar analytics (GA4 via GTM) na landing page + integrar hooks profundidade + gerar docs/ADR
+Landing page com UX completa, busca e conteudo i18n pt/en/zh. Content workflow com personas + QA (ADR-044).
 
-## Constraints & Preferences
-- Landing page em Azure SWA free tier (sem server runtime)
-- Az Function landing-api.cryptobingo.bet como backend (fora do escopo)
-- Nao mexer em index.html (dev) / app/root.tsx (prod) — setup GTM/CCv3 intocado
-- trackEvent so chama dataLayer.push (sem GA4 MP fallback)
-- Nomes de eventos em ingles
-- TDD obrigatorio (test-first) com vitest
-- Git flow: feature branch → PR → develop
-- SonarQube blocker/critical antes de commit
-- Sem comentarios em codigo
+## Constraints
+- Azure SWA free tier (no server runtime), SSG puro (React Router v7 ssr:false + prerender)
+- TDD obrigatorio vitest, SonarQube, Git flow (feature → PR → develop)
+- i18n pt/en/zh, slugs traduziveis (content/slugs.json)
+- GTM N88CZVJF, GA4 G-BLQRZ64RES, Clarity xge781i2so
 
 ## Progress
-- [fix] Blog markdown: `content.ts:111` `marked.parse()`, `BlogPost.tsx` `dangerouslySetInnerHTML`
-- [fix] TOC scroll tracking: `PageView.tsx` IntersectionObserver fix (topmost heading + rootMargin)
-- [fix] Tutoriais sem link: adicionado no Header + Footer
-- [spec] `docs/superpowers/specs/analytics-landing-page-plan.md` — 15 eventos
-- [spec] `docs/superpowers/specs/observability-stack-plan.md` — 5 fases
-- [plan] `docs/superpowers/plans/2026-07-04-analytics-landing-page.md` — 10 tasks
-- [plan] `docs/superpowers/plans/2026-07-04-observability-stack.md` — 5 fases
-- Task 1: `services/analytics.ts` + testes (commit `a0d05e1`)
-- Task 2: `hooks/useAnalytics.ts` + testes (commit `e56c7b9`, fix `0ad698c`)
-- Task 3: Hero.tsx — cta_click (commit `a2b564e`)
-- Task 4: Header.tsx — nav_click, cta_click, locale_switch
-- Task 5: Newsletter.tsx — newsletter_subscribe, newsletter_error
-- Task 6: Footer.tsx — external_link_click, nav_click (internal)
-- Task 7: FaqPage.tsx — faq_toggle
-- Task 8: hooks profundidade — useScrollDepth, usePageTiming, useSectionVisibility (commit `8fec300`, fix `d8c8579`)
-- Task 9: PressKitPage, BlogIndex, TutorialsIndex — downloads/clicks
-- Task 10: QA + Docs + ADR + HomePage integration (commit `c12c888`)
-- `docs/adr/ADR-042-analytics-landing-page.md`
-- `docs/superpowers/analytics-setup-landing.md`
-- 82 testes, 24 files, build ok
-
-## Events Implementados (15)
-| Evento | Local | Gatilho |
+### PRs merged to develop
+| PR | Branch | Result |
 |---|---|---|
-| `cta_click` | Hero (hero, hero_learn), Header (header, drawer) | Click CTA |
-| `nav_click` | Header, Footer (internal) | Nav link click |
-| `locale_switch` | Header | Lang switcher |
-| `newsletter_subscribe` | Newsletter | Submit OK |
-| `newsletter_error` | Newsletter | Submit erro |
-| `external_link_click` | Footer | External link click |
-| `faq_toggle` | FAQ page | Details toggle |
-| `press_kit_download` | PressKit | Download button |
-| `blog_click` | BlogIndex | Post link click |
-| `tutorial_click` | TutorialsIndex | Tutorial link click |
-| `scroll_depth` | HomePage | Scroll milestones 25/50/75/90/100% |
-| `page_timing` | HomePage | Time thresholds 10/30/60/120/180/300s |
-| `section_visibility` | HomePage | Section enters viewport (once) |
+| #185 | feature/lp-fixes-e-analytics | Analytics 15 eventos + ADR-042 |
+| #187 | feature/lp-observability | Pino, Sentry, Grafana alertas, OTel tracing, ADR-043 |
+| #188 | feature/lp-features-restantes | 11 UX features + perf |
 
-## Branch
-`feature/lp-fixes-e-analytics` — 1 commit ahead of `develop` (merge PR #183)
+### Branch Atual
+`feature/lp-content-ux-search` — 13 commits ahead `develop`
 
-## Next Steps
-- Verificar deploy landing page apos merge
-- Implementar Monte Carlo calibration UI / ajustes finos de peso
+### Plan A (UX Foundations) — ✅
+Layout tipografia, ContentHeader/Body, useReadingProgress, BlogPost/TutorialPost
+
+### Plan B (Nav & TOC) — ✅
+TocSidebar, Breadcrumbs (schema.org), RelatedContent, PrevNextNav, Pagination, TagFilter, anchor icons. 40 test files / 163 tests PASS. Build 99 URLs.
+
+### Plan C (Content Production) — ✅ (precisa remediacao)
+14 posts blog + 9 tutoriais × 3 locales = 75 arquivos (42 .md + 27 .mdx). Figure.tsx + FigureGallery (12 testes). Commit 072995f.
+
+### ADRs
+- ADR-042: Analytics Landing Page
+- ADR-043: Stack de Observabilidade
+- ADR-044: Workflow Producao Conteudo com Personas e QA Obrigatorio
+
+### Docs criados
+- docs/guides/content-personas.md — 22 personas (4 core + 9 especialistas + 9 audiencia)
+- docs/adr/ADR-044-conteudo-workflow-personas-qa.md
+- .opencode/plans/2026-07-05-plano-remediacao-conteudo.md — 4 fases
+
+### Gaps identificados (07-05)
+- 75 arquivos produzidos sem ativar personas/RAG/content QA
+- Info factual desatualizada (WAX wallet passkeys, EOS→Vaulta, stats)
+- `images:[]` vazio em todos os arquivos
+- Links contextuais ausentes
+- Workflow revisado em ADR-044
+
+### Pendente
+- Fase 0: content/slugs.json + content.ts modificado
+- Fase 1: remediacao factual (WAX wallet 2026, EOS→Vaulta, eco Antelope)
+- Fase 2: imagens frontmatter + Figure inline
+- Fase 3: links contextuais + referencias
+- Fase 4: scripts/check-content-qa.mjs + workflow personas
+- Plan D: Search system (MiniSearch, overlay, trigger, results)
+
+### Testes
+- Landing: 163 tests, 40 files
+- API Gateway: 350+ tests
+- Worker: 200+ tests
+- Frontend: 290+ tests
+
+### Performance
+596KB JS, 53KB CSS, tree-shaking OK, Lighthouse 6 pages
