@@ -95,7 +95,7 @@ if [ -z "${SWA_DEPLOY_TOKEN_FRONTEND:-}" ]; then
     echo "   Obtendo do Azure CLI..."
     TOKEN=$(az staticwebapp secrets list --name "$APP_NAME" \
         --resource-group cryptobingo-testnet \
-        --query "properties.apiKey" -o 2>/dev/null)
+        --query "properties.apiKey" -o tsv 2>/dev/null)
     if [ -z "$TOKEN" ]; then
         echo "❌ Não foi possível obter token automaticamente."
         echo "   Exporte SWA_DEPLOY_TOKEN_FRONTEND manualmente."

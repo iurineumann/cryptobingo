@@ -25,3 +25,5 @@ Verifique SEMPRE:
 - **CI:** job `e2e-ui` (Tier 1) como gate de PR; `e2e-ui-real` (Tier 2) em schedule/dispatch, sem bloquear PR; upload de artefatos em falha.
 
 Pode rodar `pnpm --filter @cryptobingo/e2e-ui e2e` (Tier 1) e, se o diff tocou o frontend, `npx tsc --noEmit` + `pnpm --filter @cryptobingo/frontend test`. Conciso e técnico; priorize determinismo do Tier 1, estabilidade de seletores e fidelidade da jornada do usuário.
+
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.
