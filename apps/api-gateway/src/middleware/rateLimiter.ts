@@ -19,7 +19,7 @@
 //
 // Ref: OWASP API Security Top 10 — API4:2023 Unrestricted Resource Consumption
 
-import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler, ipKeyGenerator } from 'express-rate-limit';
 import { RedisStore }                          from 'rate-limit-redis';
 import { Request, Response, NextFunction }     from 'express';
 import { redisClient }                         from '../database/redis';
@@ -87,7 +87,7 @@ function createLimiter(options: {
             const ip = Array.isArray(forwarded)
                 ? forwarded[0]
                 : (forwarded?.split(',')[0]?.trim() ?? req.ip ?? 'unknown');
-            return `${keyPrefix}:${ip}`;
+            return `${keyPrefix}:${ipKeyGenerator(ip)}`;
         },
         handler: (_req, res) => {
             res.status(429).json({
