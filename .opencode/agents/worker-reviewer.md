@@ -24,3 +24,5 @@ Verifique SEMPRE:
 - Funções puras (`applyDrawnBalls`/`checkWinPatterns`/`selectBestPayout`) cobertas por teste.
 
 Pode rodar typecheck (`tsc --project tsconfig.build.json --noEmit`) e `npx jest` para confirmar suspeitas. NÃO reinicie a chain nem faça deploy. Conciso e técnico; priorize correção de fundos/estado.
+
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.
