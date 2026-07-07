@@ -152,7 +152,7 @@ export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialI
     slug,
     title: data.title || '',
     description: data.description || '',
-    body: marked.parse(content.trim()),
+    body: marked.parse(content.trim()) as string,
   };
 }
 
@@ -183,16 +183,16 @@ export function loadPageContent(slug: string, locale: string = 'en'): PageConten
 
   const raw = fs.readFileSync(filePath, 'utf-8');
   const { data, content } = matter(raw);
-  const body = marked.parse(content.trim());
+  const body = marked.parse(content.trim()) as string;
 
   const tokens = lexer(content);
-  const headings = tokens
-    .filter((t): t is { type: 'heading'; depth: number; text: string; tokens: unknown[] } =>
-      t.type === 'heading' && t.depth === 2)
-    .map(t => ({
-      text: t.text,
-      id: slugify(t.text),
-    }));
+  const headings: PageHeading[] = [];
+  for (const t of tokens) {
+    if (t.type === 'heading' && t.depth === 2) {
+      const text = 'text' in t ? (t as { text: string }).text : '';
+      headings.push({ text, id: slugify(text) });
+    }
+  }
 
   const stat = fs.statSync(filePath);
   const lastUpdated = stat.mtime.toISOString().split('T')[0];
