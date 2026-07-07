@@ -410,7 +410,7 @@ async function getOwnedBurnCandidates(
 export async function getAtomicAssets(req: Request, res: Response): Promise<void> {
     try {
         const suffix = req.originalUrl.replace(/^\/api\/v1\/atomic\//, '');
-        const targetUrl = `${ATOMICAPI_PROXY_BASE}/atomicassets/${suffix}`;
+        const targetUrl = `${ATOMICAPI_PROXY_BASE}/atomicassets/v1/${suffix}`;
         const atomicRes = await fetch(targetUrl, { headers: { Accept: 'application/json' } });
         const body = await atomicRes.text();
         res.status(atomicRes.status)

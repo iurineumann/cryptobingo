@@ -62,14 +62,3 @@ debug/
 .opencode/
 debug.txt
 
-# React Router build artifacts
-.react-router/
-# Session artifacts — not part of project
-.contextos/
-docs/superpowers/
-contexto-multi-agent.txt
-toda-conversa.txt
-personas-research-report.md
-deploy.sh
-google-marketing-stack-mcp/
-docs/adr/templates/
