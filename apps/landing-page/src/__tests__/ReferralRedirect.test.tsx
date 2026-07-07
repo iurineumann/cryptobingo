@@ -27,4 +27,15 @@ describe('ReferralRedirect', () => {
         expect(screen.getByText('redirect.redirecting')).toBeDefined();
         expect(window.location.replace).toHaveBeenCalledWith('https://app.cryptobingo.bet/?ref=ABC123');
     });
+
+    it('navega para app sem code', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const Stub = createRoutesStub([
+            { path: '/ref', Component: ReferralRedirect },
+        ]);
+
+        render(<Stub initialEntries={['/ref']} />);
+
+        expect(window.location.replace).not.toHaveBeenCalled();
+    });
 });

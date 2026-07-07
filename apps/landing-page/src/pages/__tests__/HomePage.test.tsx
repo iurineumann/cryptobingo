@@ -1,7 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import HomePage from '../HomePage';
+import { loader } from '../HomePage';
+
+vi.mock('../../../lib/content', () => ({
+  loadSettings: (locale: string) => ({ hero: { title: locale === 'pt' ? 'Teste' : 'Test' } }),
+}));
+
+const mockParams = vi.hoisted(() => ({ locale: 'en' }));
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -10,7 +16,7 @@ vi.mock('react-router-dom', async () => {
     useLoaderData: () => ({
       hero: { title: 'Test', cta: 'Play', learnMore: 'Learn' },
     }),
-    useParams: () => ({ locale: 'en' }),
+    useParams: () => mockParams,
   };
 });
 
@@ -24,8 +30,11 @@ vi.mock('@/components/Roadmap', () => ({ default: () => null }));
 vi.mock('@/components/StatsBar', () => ({ default: () => null }));
 vi.mock('@/components/Newsletter', () => ({ default: () => null }));
 vi.mock('@/components/Footer', () => ({ default: () => null }));
+vi.mock('@/hooks/useAnalytics', () => ({ useAnalytics: () => ({ trackEvent: vi.fn() }) }));
 
-describe('HomePage analytics', () => {
+import HomePage from '../HomePage';
+
+describe('HomePage', () => {
   beforeEach(() => {
     window.dataLayer = [];
     (window as any)._analyticsConsented = true;
@@ -47,5 +56,27 @@ describe('HomePage analytics', () => {
       </MemoryRouter>,
     );
     expect(container).toBeDefined();
+  });
+
+  it('should handle missing locale in params', () => {
+    mockParams.locale = '';
+    const { container } = render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    expect(container).toBeDefined();
+  });
+});
+
+describe('HomePage loader', () => {
+  it('should use default locale when none provided', async () => {
+    const result = await loader({ params: {} });
+    expect(result.hero.title).toBe('Test');
+  });
+
+  it('should use provided locale', async () => {
+    const result = await loader({ params: { locale: 'pt' } });
+    expect(result.hero.title).toBe('Teste');
   });
 });
