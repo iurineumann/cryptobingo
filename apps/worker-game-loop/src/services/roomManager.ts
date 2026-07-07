@@ -125,8 +125,9 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         logger.info(`Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
 
         return newGameId;
-    } catch (err) {
-        logger.error({ err, tag: 'RoomManager' }, `Erro ao criar próximo jogo para sala ${room.room_id}:`)
+    } catch (err: any) {
+        logger.error({ err, tag: 'RoomManager', errMsg: err?.message, errCode: err?.code },
+            `Sala ${room.room_id}: erro ao criar/próximo jogo (creategame ou fundgame falhou).`)
         return null;
     }
 }
@@ -159,6 +160,11 @@ async function fetchRoomOnChain(roomId: string): Promise<BlockchainRoom | null> 
 // ==========================================
 // Polling: cria primeiro jogo para salas ativas sem jogo atual
 // ==========================================
+
+const FUND_RETRY_MAX = 6;
+const FUND_RETRY_BACKOFF_BASE_MS = 60_000;
+const FUND_RETRY_BACKOFF_MAX_MS = 1_800_000;
+const fundRetryMap = new Map<string, { count: number; lastAttempt: number }>();
 
 export async function ensureFirstGameForActiveRooms(): Promise<void> {
     try {
@@ -208,10 +214,69 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
                 // abortgame já deveria ter zerado current_game_id; estado transitório.
                 // Aguarda o próximo ciclo de polling — não chama closegame (ação inválida).
                 logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: jogo ${gameId} aborted — aguardando zeramento via abortgame no próximo ciclo.`)
+            } else if (existingGame?.status === 'created') {
+                await recoverCreatedGame(room, gameId);
             }
         }
     } catch (err) {
         logger.error({ err, tag: 'RoomManager' }, 'Erro no polling de primeira partida:')
+    }
+}
+
+async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise<void> {
+    const retry = fundRetryMap.get(gameId) || { count: 0, lastAttempt: 0 };
+
+    if (retry.count >= FUND_RETRY_MAX) {
+        logger.warn({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: max retries (${FUND_RETRY_MAX}) alcancado p/ game ${gameId}. Abortando...`);
+        try {
+            await microserviceSession.transact({
+                actions: [{
+                    account:       CONTRACT_ACCOUNT,
+                    name:          'abortgame',
+                    authorization: [microserviceSession.permissionLevel],
+                    data:          { game_id: gameId, reason: 'fund retry exhausted' },
+                }],
+            }, { broadcast: true });
+            logger.info({ tag: 'RoomManager' }, `Game ${gameId} abortado apos ${FUND_RETRY_MAX} tentativas de fundgame.`)
+        } catch (abortErr: any) {
+            logger.error({ err: abortErr, tag: 'RoomManager' },
+                `Sala ${room.room_id}: abortgame falhou p/ game ${gameId} (contrato pode nao aceitar created ainda).`);
+        }
+        fundRetryMap.delete(gameId);
+        return;
+    }
+
+    const backoff = Math.min(
+        FUND_RETRY_BACKOFF_BASE_MS * Math.pow(2, retry.count),
+        FUND_RETRY_BACKOFF_MAX_MS,
+    );
+    const elapsed = Date.now() - retry.lastAttempt;
+    if (elapsed < backoff) {
+        logger.debug({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: aguardando backoff ${Math.round((backoff - elapsed) / 1000)}s p/ fundgame ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX}).`);
+        return;
+    }
+
+    try {
+        logger.info({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: tentando fundgame p/ game ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX})...`);
+        await microserviceSession.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'fundgame',
+                authorization: [microserviceSession.permissionLevel],
+                data:          { game_id: gameId },
+            }],
+        }, { broadcast: true });
+        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado com sucesso!`);
+        fundRetryMap.delete(gameId);
+    } catch (fundErr: any) {
+        retry.count++;
+        retry.lastAttempt = Date.now();
+        fundRetryMap.set(gameId, retry);
+        logger.error({ err: fundErr, tag: 'RoomManager', retry: retry.count, maxRetries: FUND_RETRY_MAX },
+            `Sala ${room.room_id}: fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
     }
 }
 
