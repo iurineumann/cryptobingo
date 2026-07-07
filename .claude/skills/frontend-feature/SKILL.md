@@ -54,3 +54,6 @@ Pacote `@cryptobingo/frontend` (React + Vite + TS). Testes: **vitest** —
 - [ ] Utilitários separados de componentes (Fast Refresh).
 - [ ] Chamadas REST em `services/api.ts`; leituras on-chain com bounds `UInt64`.
 - [ ] `npx tsc --noEmit` limpo + `vitest run` verde.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

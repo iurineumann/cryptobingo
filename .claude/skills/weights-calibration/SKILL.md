@@ -47,3 +47,6 @@ cláusulas do ADR-016) + `base_multiplier` + `max_balls` + `target_rtp` (0.85). 
 - [ ] Pesos finais dentro de 1–25500.
 - [ ] Persistir on-chain (padrões via `addgametype`/rules; combos via `setcombos`) + Mongo coerente.
 - [ ] Testes do monteCarloController verdes; ADR se a fórmula mudou.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

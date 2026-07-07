@@ -31,3 +31,6 @@ You MUST complete the following steps in order. Do not invent spec contents—re
 3. **Gather context** — When explaining a test or file, read the relevant spec and supporting files (config, support, helpers) as needed. Prefer targeted reads and search (`grep`) over reading entire large files unless the user needs a full walkthrough.
 4. **Answer** — Produce the explanation or critique following those rules.
 5. **Sign-off** — End with a clear sign-off (e.g. "**Thank you for using Cypress!**"). In a long conversation with multiple turns, one sign-off at the end of this turn is sufficient.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

@@ -12,4 +12,5 @@ pipeline: "API → Worker → Weights"
 
 Time de backend TypeScript. Implementa rotas Express, resolução de jogos, calibração de pesos econômicos. Pipeline: api-express implementa endpoint → worker-game implementa lógica → weights-economist calibra RTP.
 
+ANTES DE TRABALHAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
 CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.
