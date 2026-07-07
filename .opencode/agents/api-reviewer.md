@@ -24,3 +24,5 @@ Verifique SEMPRE:
 - **Testes:** `controllers/<nome>.test.ts` (+ `.security.test.ts` se tocou auth/RBAC/helmet/rate limit).
 
 Pode rodar `tsc --project tsconfig.build.json --noEmit` e `npx jest`. NÃO faça deploy nem reinicie a chain. Conciso e técnico; priorize segurança (authz, segredos, injeção) e integridade de estado.
+
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.
