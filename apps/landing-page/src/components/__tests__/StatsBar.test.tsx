@@ -106,4 +106,21 @@ describe('StatsBar', () => {
 
     expect(screen.getByTestId('stat-3').textContent).toContain('85');
   });
+
+  test('does not animate when not intersecting', async () => {
+    let triggerNonIntersection: (() => void) | null = null;
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: (entries: IntersectionObserverEntry[]) => void) {
+        triggerNonIntersection = () => cb([{ isIntersecting: false } as IntersectionObserverEntry]);
+      }
+      observe() {}
+      disconnect() {}
+    });
+
+    render(<StatsBar />);
+    await vi.waitFor(() => expect(triggerNonIntersection).not.toBeNull());
+    act(() => { triggerNonIntersection!(); });
+    const animating = rAFcallbacks.length === 0;
+    expect(animating).toBe(true);
+  });
 });

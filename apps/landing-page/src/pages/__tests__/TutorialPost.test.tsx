@@ -1,6 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import TutorialPost from '../TutorialPost';
+import TutorialPost, { loader } from '../TutorialPost';
+
+const mockContent = vi.hoisted(() => ({
+  mockLoadTutorialPost: vi.fn(),
+  mockLoadTutorials: vi.fn(),
+  mockComputeRelatedPosts: vi.fn(),
+}));
 
 let mockLoaderData: unknown = {
   tutorial: {
@@ -38,6 +44,12 @@ vi.mock('@/components/ContentBody', () => ({
   ContentBody: () => <div role="progressbar" />,
 }));
 
+vi.mock('../../../lib/content', () => ({
+  loadTutorialPost: (...args: unknown[]) => mockContent.mockLoadTutorialPost(...args),
+  loadTutorials: (...args: unknown[]) => mockContent.mockLoadTutorials(...args),
+  computeRelatedPosts: (...args: unknown[]) => mockContent.mockComputeRelatedPosts(...args),
+}));
+
 beforeEach(() => {
   mockLoaderData = {
     tutorial: {
@@ -53,6 +65,9 @@ beforeEach(() => {
     current: 1,
     relatedTutorials: [],
   };
+  mockContent.mockLoadTutorialPost.mockReset();
+  mockContent.mockLoadTutorials.mockReset();
+  mockContent.mockComputeRelatedPosts.mockReset();
 });
 
 describe('TutorialPost', () => {
@@ -148,5 +163,26 @@ describe('TutorialPost', () => {
     };
     render(<TutorialPost />);
     expect(screen.getByTestId('faq-section')).toBeInTheDocument();
+  });
+
+  describe('loader', () => {
+    test('returns tutorial with prev/next', async () => {
+      mockContent.mockLoadTutorialPost.mockReturnValue({ title: 'Tuto', body: '<p>Body</p>', slug: 'tuto', order: 1, description: '', date: '', author: '' });
+      mockContent.mockLoadTutorials.mockReturnValue([
+        { slug: 'prev', title: 'Prev', order: 0, body: '', description: '' },
+        { slug: 'tuto', title: 'Tuto', order: 1, body: '', description: '' },
+        { slug: 'next', title: 'Next', order: 2, body: '', description: '' },
+      ]);
+      mockContent.mockComputeRelatedPosts.mockReturnValue([]);
+      const result = await loader({ params: { slug: 'tuto', locale: 'en' } });
+      expect(result?.previous?.slug).toBe('prev');
+      expect(result?.next?.slug).toBe('next');
+    });
+
+    test('returns null when tutorial not found', async () => {
+      mockContent.mockLoadTutorialPost.mockReturnValue(null);
+      const result = await loader({ params: { slug: 'nonexistent' } });
+      expect(result).toBeNull();
+    });
   });
 });

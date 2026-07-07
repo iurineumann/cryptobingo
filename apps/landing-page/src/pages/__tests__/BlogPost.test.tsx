@@ -1,21 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import BlogPost from '../BlogPost';
+import BlogPost, { loader } from '../BlogPost';
 
 const mockTrackEvent = vi.fn();
-let mockLoaderData: unknown = {
-  post: {
-    title: 'Test Post',
-    description: 'Test description',
-    date: '2024-01-01',
-    author: 'Author Name',
-    cover: '/cover.jpg',
-    tags: ['tag1', 'tag2'],
-    body: '<p>Hello world</p>',
-    slug: 'test-post',
-  },
-  relatedPosts: [],
-};
+const mockContent = vi.hoisted(() => ({
+  mockLoadBlogPost: vi.fn(),
+  mockComputeRelatedPosts: vi.fn(),
+}));
 
 vi.mock('react-router-dom', () => ({
   useLoaderData: () => mockLoaderData,
@@ -45,6 +36,25 @@ vi.mock('@/services/analytics', () => ({
   trackEvent: (...args: unknown[]) => mockTrackEvent(...args),
 }));
 
+vi.mock('../../../lib/content', () => ({
+  loadBlogPost: (...args: unknown[]) => mockContent.mockLoadBlogPost(...args),
+  computeRelatedPosts: (...args: unknown[]) => mockContent.mockComputeRelatedPosts(...args),
+}));
+
+let mockLoaderData: unknown = {
+  post: {
+    title: 'Test Post',
+    description: 'Test description',
+    date: '2024-01-01',
+    author: 'Author Name',
+    cover: '/cover.jpg',
+    tags: ['tag1', 'tag2'],
+    body: '<p>Hello world</p>',
+    slug: 'test-post',
+  },
+  relatedPosts: [],
+};
+
 beforeEach(() => {
   mockLoaderData = {
     post: {
@@ -60,6 +70,8 @@ beforeEach(() => {
     relatedPosts: [],
   };
   mockTrackEvent.mockReset();
+  mockContent.mockLoadBlogPost.mockReset();
+  mockContent.mockComputeRelatedPosts.mockReset();
 });
 
 describe('BlogPost', () => {
@@ -105,6 +117,26 @@ describe('BlogPost', () => {
     fireEvent.click(screen.getByText(/blog\.back/));
     expect(mockTrackEvent).toHaveBeenCalledWith('blog_click', {
       post_slug: 'test-post',
+    });
+  });
+
+  describe('loader', () => {
+    test('returns post and related posts', async () => {
+      mockContent.mockLoadBlogPost.mockReturnValue({
+        title: 'Test', body: '', description: '', date: '', author: '', slug: 'test', tags: [],
+      });
+      mockContent.mockComputeRelatedPosts.mockReturnValue([]);
+      const result = await loader({ params: { slug: 'test', locale: 'en' } });
+      expect(result).toEqual({
+        post: { title: 'Test', body: '', description: '', date: '', author: '', slug: 'test', tags: [] },
+        relatedPosts: [],
+      });
+    });
+
+    test('returns null when post not found', async () => {
+      mockContent.mockLoadBlogPost.mockReturnValue(null);
+      const result = await loader({ params: { slug: 'nonexistent' } });
+      expect(result).toBeNull();
     });
   });
 });
