@@ -710,7 +710,21 @@ export async function recoverStuckGames(): Promise<void> {
                     ? new Date((game as any).updated_at + 'Z').getTime()
                     : now;
 
-                if (drawnCount === 75) {
+                const wagered = (game as any).total_wagered;
+                const wageredAmount = Number.parseFloat(wagered?.quantity ?? '0') || 0;
+
+                // Cancelamento por zero venda: jogo em DRAWING sem nenhum ticket
+                // não tem como ter vencedor — aborta imediatamente (não espera o
+                // oráculo nem o timeout de 5min). Evita salas travadas em drawing.
+                if (wageredAmount === 0 && drawnCount < 75) {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em DRAWING sem tickets (${wagered?.quantity ?? '0'}). Abortando (NO_TICKETS_DRAWING).`)
+                    try {
+                        await executeAbortGame(gameId, 'NO_TICKETS_DRAWING');
+                        notifyGameAborted(gameId, 'NO_TICKETS_DRAWING');
+                    } catch (err) {
+                        logger.error({ err, tag: 'Recovery' }, `Erro ao abortar jogo ${gameId} (sem tickets):`);
+                    }
+                } else if (drawnCount === 75) {
                     logger.info({ tag: 'Recovery' }, `Jogo ${gameId} com 75/75 bolas. Orquestrando payout...`)
                     orchestrateGame(gameId).catch(err =>
                         logger.error({ err, tag: 'Recovery' }, `Erro orchestrateGame (${gameId}):`)
