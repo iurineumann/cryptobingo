@@ -688,13 +688,17 @@ export async function recoverStuckGames(): Promise<void> {
     logger.info({ tag: 'Recovery' }, 'Varredura de jogos presos no startup...')
 
     // 1. Recovery de DRAWING (gap principal — não coberto por auto-advance)
+    // reverse:true → varre os game_ids MAIS RECENTES primeiro. Os jogos ativos
+    // (salas) têm game_id = timestamp em ms (crescente), então os travados
+    // atuais estão no topo. Com >100 jogos no histórico, reverse:false só via
+    // os mais antigos (aborted) e nunca enxergava os drawings presos.
     try {
         const response = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
             scope:   CONTRACT_ACCOUNT,
             table:   'games',
-            limit:   100,
-            reverse: false,
+            limit:   200,
+            reverse: true,
             json:    true,
         });
 
@@ -747,13 +751,14 @@ export async function recoverStuckGames(): Promise<void> {
     }
 
     // 2. Recovery de LOCKED → start draw (call autoStartLockedGames eager)
+    // reverse:true para priorizar jogos recentes (mesmo motivo da varredura DRAWING).
     try {
         const lockedResult = await rpcClient.v1.chain.get_table_rows({
             code:    CONTRACT_ACCOUNT,
             scope:   CONTRACT_ACCOUNT,
             table:   'games',
-            limit:   100,
-            reverse: false,
+            limit:   200,
+            reverse: true,
             json:    true,
         });
 
