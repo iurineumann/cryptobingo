@@ -118,7 +118,7 @@ describe('SponsorsAdmin', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenLastCalledWith(
-          '/api/v1/admin/sponsor-orgs',
+          `${import.meta.env.VITE_API_GATEWAY_URL}/api/v1/admin/sponsor-orgs`,
           expect.objectContaining({
             method: 'POST',
             body: expect.stringContaining('wallet1'),
