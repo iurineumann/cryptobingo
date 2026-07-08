@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Plus, Trash2, UserPlus } from 'lucide-react';
 import { getAuthToken } from '../../services/api';
+import { API_BASE } from '@/config/env';
 
 interface SponsorDelegationsProps {
     readonly permissions?: string[];
@@ -58,7 +59,7 @@ function CreateDelegateModal({
         setError(null);
         try {
             const perms = Array.from(selected);
-            const res = await fetch('/api/v1/sponsor/delegations', {
+            const res = await fetch(`${API_BASE}/sponsor/delegations`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ export default function SponsorDelegations({ permissions = [] }: SponsorDelegati
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/sponsor/delegations', {
+            const res = await fetch(`${API_BASE}/sponsor/delegations`, {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${getAuthToken()}`,
@@ -162,7 +163,7 @@ export default function SponsorDelegations({ permissions = [] }: SponsorDelegati
 
     const handleRemove = async (wallet: string) => {
         try {
-            const res = await fetch(`/api/v1/sponsor/delegations/${wallet}`, {
+            const res = await fetch(`${API_BASE}/sponsor/delegations/${wallet}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` },
             });

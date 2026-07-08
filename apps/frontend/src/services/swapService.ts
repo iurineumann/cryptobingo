@@ -6,8 +6,7 @@
 
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
 import { getEffectiveRpcUrl } from '../utils/rpcStore';
-
-const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
+import { API_BASE } from '@/config/env';
 
 async function handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {

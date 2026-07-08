@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
+import { API_BASE, WS_BASE } from '@/config/env';
 
 export type MessageType = 'user' | 'system_draw' | 'system_drop' | 'system_status';
 
@@ -28,8 +29,8 @@ interface UseChatReturn {
     resetUnread: () => void;
 }
 
-const API_URL = import.meta.env.VITE_API_GATEWAY_URL ?? '';
-const WS_URL  = import.meta.env.VITE_WS_URL || API_URL;
+const API_URL = API_BASE;
+const WS_URL  = WS_BASE;
 
 // ── Cache e sockets persistentes entre montagens ─────────────────
 const messageCache = new Map<string, ChatMessage[]>();

@@ -24,7 +24,8 @@ describe('trackEvent', () => {
 
     trackEvent('test_event', { key: 'value' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/analytics/event', {
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${import.meta.env.VITE_API_GATEWAY_URL}/api/v1/analytics/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'test_event', params: { key: 'value' } }),

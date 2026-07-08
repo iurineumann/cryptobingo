@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import { fetchRtpReport, fetchGamesHistory, type RtpReport, type GameHistoryEntry } from '../../services/api';
+import { API_BASE } from '@/config/env';
 
 export default function ComplianceAdmin() {
     const { t } = useTranslation();
@@ -34,7 +35,7 @@ export default function ComplianceAdmin() {
     const handleSync = async () => {
         setSyncing(true);
         try {
-            const res = await fetch('/api/v1/admin/ledger/sync', { method: 'POST' });
+            const res = await fetch(`${API_BASE}/admin/ledger/sync`, { method: 'POST' });
             if (!res.ok) throw new Error(await res.text());
             await load();
         } catch (err) {
