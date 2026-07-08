@@ -57,12 +57,20 @@ async function bootstrap(): Promise<void> {
     setInterval(autoClaimDrawnGames,   15_000);
     setInterval(autoStartLockedGames,  30_000);
 
-    // ── 4b. Startup recovery scan ─────────────────────────────────────────────────
+    // ── 4b. Startup recovery scan + recovery periódico ───────────────────────
     // Recupera jogos em DRAWING com balls completas (crash após oracle responder)
-    // e jogos LOCKED que precisam de sorteio (não cobertos pelo auto-advance inicial)
+    // e jogos LOCKED que precisam de sorteio (não cobertos pelo auto-advance inicial).
+    // Também aborta jogos em DRAWING sem tickets (cancelamento por zero venda).
+    // É PERIÓDICO (não só no startup) — caso contrário, drawings presos após
+    // restart do worker ficam travados para sempre.
     recoverStuckGames().catch(err =>
         logger.error({ err, tag: 'Bootstrap' }, 'Erro no recovery scan:')
     );
+    setInterval(() => {
+        recoverStuckGames().catch(err =>
+            logger.error({ err, tag: 'Recovery' }, 'Erro no recovery periódico:')
+        );
+    }, 60_000);
 
     // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
     startBurnSyncCron();
