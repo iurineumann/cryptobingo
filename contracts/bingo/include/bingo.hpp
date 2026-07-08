@@ -514,6 +514,10 @@ namespace bingo {
         [[eosio::action]] void pauseroom(uint64_t room_id);
         [[eosio::action]] void closeroom(uint64_t room_id);
         [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty = 1);
+        // Altera os preços de ticket de uma sala existente (mesma validação do createroom).
+        // Bloqueia se a sala tiver jogo em andamento (current_game_id != 0) para evitar
+        // inconsistência com jogos em curso.
+        [[eosio::action]] void updateroom(uint64_t room_id, extended_asset ticket_price_min, extended_asset ticket_price_max, extended_asset ticket_price_default);
         // ADR-028 §4: configura economia de sala patrocinada (allowlist, campanha, taxa, projeção)
         [[eosio::action]] void setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets);
         // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala
