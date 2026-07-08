@@ -310,7 +310,7 @@ export async function updateRoomSettings(req: Request, res: Response): Promise<v
             actions.push({
                 account:       CONTRACT_ACCOUNT,
                 name:          'updateroom',
-                authorization: [session.permissionLevel],
+                authorization: [{ actor: CONTRACT_ACCOUNT, permission: 'active' }],
                 data: {
                     room_id: UInt64.from(roomId),
                     ticket_price_min: {
