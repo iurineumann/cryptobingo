@@ -1,6 +1,5 @@
 import type { MongoUserProfile, PatternType } from '@cryptobingo/shared-types';
-
-const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
+import { API_BASE } from '@/config/env';
 
 let _token: string | null = localStorage.getItem('cb_jwt');
 

@@ -1,3 +1,5 @@
+import { API_BASE } from '@/config/env';
+
 let adblockDetected = false;
 
 export function setAdblockDetected(v: boolean): void {
@@ -7,7 +9,7 @@ export function setAdblockDetected(v: boolean): void {
 export function trackEvent(name: string, params?: Record<string, unknown>): void {
   try {
     if (adblockDetected && navigator.onLine) {
-      fetch('/api/v1/analytics/event', {
+      fetch(`${API_BASE}/analytics/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, params }),

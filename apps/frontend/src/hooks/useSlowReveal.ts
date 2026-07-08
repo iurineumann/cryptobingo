@@ -16,8 +16,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
 import type { WinnerPayload } from '../types/events';
+import { WS_BASE } from '@/config/env';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? '';
+const WS_URL = WS_BASE;
 
 // ==========================================
 // TIPOS

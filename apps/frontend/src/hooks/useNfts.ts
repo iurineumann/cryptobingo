@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { getAuthToken }        from '../services/api';
+import { API_BASE } from '@/config/env';
 
 export interface NftAsset {
     asset_id:       string;
@@ -24,7 +25,7 @@ export function useNfts() {
         if (!getAuthToken()) return;
 
         setLoading(true);
-        fetch(`${import.meta.env.VITE_API_GATEWAY_URL}/api/v1/nfts/my-assets`, {
+        fetch(`${API_BASE}/nfts/my-assets`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         })
             .then(r => r.ok ? r.json() : Promise.reject(r.statusText))

@@ -5,9 +5,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
+import { API_BASE, WS_BASE } from '@/config/env';
 
-const API_URL = import.meta.env.VITE_API_GATEWAY_URL ?? '';
-const WS_URL  = import.meta.env.VITE_WS_URL || API_URL;
+const API_URL = API_BASE;
+const WS_URL  = WS_BASE;
 const REACTION_TTL_MS = 4_000;
 
 export interface FloatingReaction { id: string; wallet: string; emoji: string; }
