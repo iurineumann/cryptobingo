@@ -271,7 +271,14 @@ function AppRoot() {
     const [restoringSession, setRestoringSession] = useState(true);
     const [showAchievements, setShowAchievements] = useState(false);
 
-    const userPermissions: string[] = (profile as any)?.permissions ?? [];
+    // role admin/contract_admin implica todas as permissões de admin.
+    // O backend RBAC também trata esses roles como admin.*, então o front
+    // deve refletir o mesmo para não esconder botões de ação.
+    const basePerms: string[] = (profile as any)?.permissions ?? [];
+    const userPermissions: string[] =
+        profile && (profile.role === 'admin' || profile.role === 'contract_admin')
+            ? Array.from(new Set(['admin.*', ...basePerms]))
+            : basePerms;
 
     const isAdmin = !!(
         profile && (
