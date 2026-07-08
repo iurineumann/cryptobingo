@@ -537,8 +537,19 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
     if (!hasTickets) {
         logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId} sem cartelas. Abortando...`)
         try {
-            await executeLockGame(gameId);
-            await executeAbortGame(gameId, 'NO_TICKETS');
+            // Tenta abort direto em FUNDING (contrato com suporte).
+            // Se falhar (contrato antigo), lock + aguarda confirmacao + abort.
+            try {
+                await executeAbortGame(gameId, 'NO_TICKETS');
+            } catch {
+                await executeLockGame(gameId);
+                for (let i = 0; i < 10; i++) {
+                    const g = await fetchGame(gameId).catch(() => null);
+                    if (g?.status === 'locked') break;
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                await executeAbortGame(gameId, 'NO_TICKETS');
+            }
             notifyGameAborted(gameId, 'NO_TICKETS');
             onGameResolved(gameId).catch(err =>
                 logger.error({ err, tag: 'AutoAdvance' }, `onGameResolved error (abort vazio, jogo ${gameId}):`)

@@ -584,6 +584,24 @@
             ]
         },
         {
+            "name": "setcampaign",
+            "base": "",
+            "fields": [
+                {
+                    "name": "campaign_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "payout_per_game",
+                    "type": "extended_asset"
+                },
+                {
+                    "name": "leftover_policy",
+                    "type": "name"
+                }
+            ]
+        },
+        {
             "name": "setcombos",
             "base": "",
             "fields": [
@@ -718,6 +736,16 @@
                 {
                     "name": "sym",
                     "type": "symbol_code"
+                }
+            ]
+        },
+        {
+            "name": "userlogin",
+            "base": "",
+            "fields": [
+                {
+                    "name": "nonce_data",
+                    "type": "bytes"
                 }
             ]
         },
@@ -897,6 +925,11 @@
             "ricardian_contract": ""
         },
         {
+            "name": "setcampaign",
+            "type": "setcampaign",
+            "ricardian_contract": ""
+        },
+        {
             "name": "setcombos",
             "type": "setcombos",
             "ricardian_contract": ""
@@ -934,6 +967,11 @@
         {
             "name": "sweepggr",
             "type": "sweepggr",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "userlogin",
+            "type": "userlogin",
             "ricardian_contract": ""
         },
         {
