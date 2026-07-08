@@ -286,22 +286,49 @@ export async function updateRoomSettings(req: Request, res: Response): Promise<v
     const { roomId } = req.params as Record<string, string>;
     const {
         room_drop_chance_bps, max_tickets_per_player,
+        ticket_price_min_quantity, ticket_price_min_contract,
+        ticket_price_max_quantity, ticket_price_max_contract,
+        ticket_price_default_quantity, ticket_price_default_contract,
     } = req.body;
 
     try {
         const session = getAdminSession();
-        const result = await session.transact({
-            actions: [{
+        const actions: any[] = [{
+            account:       CONTRACT_ACCOUNT,
+            name:          'setroommeta',
+            authorization: [session.permissionLevel],
+            data: {
+                room_id:                UInt64.from(roomId),
+                room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
+                max_tickets_per_player: max_tickets_per_player ?? 10,
+            },
+        }];
+
+        // Atualiza preços da sala (acao updateroom) quando informados
+        if (ticket_price_min_quantity || ticket_price_max_quantity || ticket_price_default_quantity) {
+            actions.push({
                 account:       CONTRACT_ACCOUNT,
-                name:          'setroommeta',
+                name:          'updateroom',
                 authorization: [session.permissionLevel],
                 data: {
-                    room_id:                UInt64.from(roomId),
-                    room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
-                    max_tickets_per_player: max_tickets_per_player ?? 10,
+                    room_id: UInt64.from(roomId),
+                    ticket_price_min: {
+                        quantity: ticket_price_min_quantity,
+                        contract: ticket_price_min_contract,
+                    },
+                    ticket_price_max: {
+                        quantity: ticket_price_max_quantity,
+                        contract: ticket_price_max_contract,
+                    },
+                    ticket_price_default: {
+                        quantity: ticket_price_default_quantity,
+                        contract: ticket_price_default_contract,
+                    },
                 },
-            }],
-        }, { broadcast: true });
+            });
+        }
+
+        const result = await session.transact({ actions }, { broadcast: true });
 
         res.status(200).json({
             message:        `Configurações da sala ${roomId} atualizadas.`,
