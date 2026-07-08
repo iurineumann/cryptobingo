@@ -1582,6 +1582,42 @@ namespace bingo {
         });
     }
 
+    // Altera os preços de ticket de uma sala existente.
+    // Mesma validação do createroom; bloqueia se há jogo em andamento.
+    void bingo_contract::updateroom(
+        uint64_t       room_id,
+        extended_asset ticket_price_min,
+        extended_asset ticket_price_max,
+        extended_asset ticket_price_default
+    ) {
+        require_auth(get_self());
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
+        check(room_itr->current_game_id == 0, "Sala com jogo em andamento nao pode ter precos alterados.");
+
+        // Validação (igual createroom)
+        check(ticket_price_min.quantity.amount > 0, "ticket_price_min deve ser maior que zero.");
+        check(ticket_price_max.quantity.amount >= ticket_price_min.quantity.amount,
+            "ticket_price_max deve ser >= ticket_price_min.");
+        check(ticket_price_default.quantity.amount >= ticket_price_min.quantity.amount &&
+              ticket_price_default.quantity.amount <= ticket_price_max.quantity.amount,
+            "ticket_price_default deve estar entre min e max.");
+        // Os 3 preços devem usar o mesmo token (símbolo + contract)
+        check(ticket_price_min.quantity.symbol == ticket_price_max.quantity.symbol &&
+              ticket_price_max.quantity.symbol == ticket_price_default.quantity.symbol,
+            "Os tres precos devem usar o mesmo token (simbolo).");
+        check(ticket_price_min.contract == ticket_price_max.contract &&
+              ticket_price_max.contract == ticket_price_default.contract,
+            "Os tres precos devem usar o mesmo contract.");
+
+        rooms.modify(room_itr, same_payer, [&](auto& r) {
+            r.ticket_price_min     = ticket_price_min;
+            r.ticket_price_max     = ticket_price_max;
+            r.ticket_price_default = ticket_price_default;
+        });
+    }
+
     // ADR-028 §4: configura economia da sala patrocinada (allowlist de templates
     // NFT, vínculo de campanha, taxa da casa e projeção de tickets p/ colateral).
     void bingo_contract::setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets) {
