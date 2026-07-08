@@ -285,7 +285,7 @@ export async function closeRoom(req: Request, res: Response): Promise<void> {
 export async function updateRoomSettings(req: Request, res: Response): Promise<void> {
     const { roomId } = req.params as Record<string, string>;
     const {
-        room_drop_chance_bps, max_tickets_per_player,
+        room_drop_chance_bps, max_tickets_per_player, difficulty,
         ticket_price_min_quantity, ticket_price_min_contract,
         ticket_price_max_quantity, ticket_price_max_contract,
         ticket_price_default_quantity, ticket_price_default_contract,
@@ -301,6 +301,7 @@ export async function updateRoomSettings(req: Request, res: Response): Promise<v
                 room_id:                UInt64.from(roomId),
                 room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
                 max_tickets_per_player: max_tickets_per_player ?? 10,
+                difficulty:             difficulty ?? 1,
             },
         }];
 
