@@ -70,18 +70,23 @@ function createLimiter(options: {
 }): RateLimitRequestHandler {
     const { windowMs, limit, keyPrefix, message } = options;
 
-    // Neste ponto o Redis já está conectado — RedisStore pode ser instanciado com segurança
-    const store = new RedisStore({
-        sendCommand: (...args: string[]) => (redisClient as any).sendCommand(args),
-        prefix:      `rl:${keyPrefix}:`,
-    });
+    // Tenta RedisStore; se falhar, usa MemoryStore embutido do express-rate-limit
+    let store: RedisStore | undefined;
+    try {
+        store = new RedisStore({
+            sendCommand: (...args: string[]) => (redisClient as any).sendCommand(args),
+            prefix:      `rl:${keyPrefix}:`,
+        });
+    } catch {
+        console.warn(`[RateLimit] RedisStore falhou para ${keyPrefix} — usando MemoryStore`);
+    }
 
     return rateLimit({
         windowMs,
         limit,
         standardHeaders: true,
         legacyHeaders:   false,
-        store,
+        ...(store ? { store } : {}),
         keyGenerator: (req) => {
             const forwarded = req.headers['x-forwarded-for'];
             const ip = Array.isArray(forwarded)
@@ -104,9 +109,9 @@ function createLimiter(options: {
 // ==========================================
 
 /**
- * Inicializa os rate limiters com o RedisStore.
+ * Inicializa os rate limiters com RedisStore.
  * Deve ser chamada uma única vez após connectRedis() retornar com sucesso.
- * Se o Redis estiver indisponível, mantém o passthrough (fail-open).
+ * Se o Redis estiver indisponível, cada limiter usa MemoryStore como fallback.
  */
 export function initRateLimiters(): void {
     try {
@@ -118,8 +123,6 @@ export function initRateLimiters(): void {
 
         console.log('✅ [RateLimit] Limiters inicializados com RedisStore.');
     } catch (err) {
-        console.error('❌ [RateLimit] Falha ao inicializar RedisStore — usando passthrough:', err);
-        // Os limiters permanecem como passthrough — fail-open controlado.
-        // Em produção, alertar o time de infra pois o rate limiting está inativo.
+        console.error('❌ [RateLimit] Falha inesperada ao inicializar limiters:', err);
     }
 }
