@@ -56,6 +56,7 @@ bingogamectr
 | Config crítica | `setconfig`, `settreasury`, `sweepggr` | `require_auth(get_self())` = `@active` | cleos direto (cold key) |
 | Admin operacional | `creategame`, `addpattern`, `delpattern`, `addgametype`, `delgametype`, `setstages`, `setcombos`, `setnftconf`, `delnftconf` | `require_auth(permission_level{get_self(),"admin"_n})` | api-gateway / worker como `bingogamectr@admin` com chave `bingogamesvc` |
 | Admin de sala | `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta` | `require_auth(permission_level{get_self(),"admin"_n})` | api-gateway como `bingogamectr@admin` com chave `bingogamesvc` |
+| Edição de preços de sala | `updateroom` | `require_auth(get_self())` = `@active` | api-gateway como `bingogamectr@active` com chave `bingogamesvc` (ver ADR-045) |
 | Multi-party | `linkcampaign`, `closecmpgn` | `require_auth(permission_level{get_self(),"admin"_n})` OU `has_auth(sponsor)` | api-gateway (`bingogamectr@admin`) ou sponsor direto |
 | Multi-party drop | `allocatedrop`, `deallocdrop` | `require_auth(permission_level{get_self(),"admin"_n})` OU `has_auth(owner)` | api-gateway (`bingogamectr@admin`) ou owner direto |
 | FSM microserviço | `fundgame`, `lockgame`, `startdraw`, `claimwin`, `claimcombo`, `claimstage`, `closegame`, `execdrop` | `require_auth("bingogamesvc"_n)` | worker como `bingogamesvc@active` |
@@ -114,6 +115,44 @@ for ACTION in creategame setnftconf delnftconf addpattern delpattern \
       -p bingogamectr@active
 done
 ```
+
+---
+
+## Correção posterior (2026-07-09 — ADR-045)
+
+A tabela acima foi corrigida: a action **`updateroom`** (edição de preços de sala,
+ADR-045) exige `require_auth(get_self())` = **`bingogamectr@active`**, **não** `admin`.
+
+**Motivo:** o `cdt-cpp` 4.0.1 otimiza `require_auth(permission_level{get_self(),
+"admin"_n})` para `require_auth(get_self())` quando a permission é filha direta de
+`get_self()` (active). No WASM resultante, declarar `admin` na transação é
+"irrelevant authority". Reproduzido via `cleos`: `-p bingogamectr@admin` (chave
+`bingogamesvc`) → erro de irrelevant authority; `-p bingogamectr@active` (cold key)
+→ passa.
+
+**Ajuste de hierarchy:** `bingogamesvc@active` foi adicionado também como satisfator
+de `bingogamectr@active` (além de `admin`), para que o backend assine `updateroom`
+com a chave do microserviço. Diagrama revisado:
+
+```
+bingogamectr
+├── @owner          → cold key (fora dos serviços online)
+├── @active         → cold key + eosio.code
+│                     + bingogamesvc@active  (w:1)  ← microserviço satisfaz active (updateroom)
+│                     SOMENTE: setconfig, settreasury, sweepggr, updateroom
+└── @admin          → threshold 1
+                      ├── bingogamectr@active  (w:1)
+                      └── bingogamesvc@active  (w:1)  ← microserviço satisfaz admin
+                      Cobre: creategame, addpattern/delpattern, addgametype/delgametype,
+                             setstages, setcombos, setnftconf/delnftconf,
+                             createroom, activateroom, pauseroom, closeroom, setroommeta,
+                             linkcampaign, closecmpgn, allocatedrop, deallocdrop
+```
+
+**Consequência de segurança:** o blast radius da chave `bingogamesvc@active` cresce
+de `admin` para `active`, mas as únicas actions `active` chamadas por serviços são
+`updateroom` (api-gateway) e as FSM do worker (`bingogamesvc` direto). `setconfig`/
+`settreasury`/`sweepggr` continuam exigindo a cold key.
 
 ---
 

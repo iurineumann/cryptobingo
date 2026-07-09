@@ -308,7 +308,7 @@ paths:
 
   /rooms/{roomId}/settings:
     put:
-      summary: Atualiza configurações on-chain da sala (max_tickets, etc.)
+      summary: Atualiza configurações on-chain da sala (max_tickets, drop_chance, difficulty, preços)
       tags: [Rooms]
       security: [{ BearerAuth: [] }]
       parameters:
@@ -325,9 +325,20 @@ paths:
               properties:
                 max_tickets_per_player: { type: integer }
                 room_drop_chance_bps: { type: integer, minimum: 0, maximum: 10000 }
+                difficulty: { type: integer, minimum: 1 }
+                ticket_price_min_quantity: { type: integer, description: "Quantidade do preço mínimo (ex: 10000 para 1.0000)" }
+                ticket_price_min_contract: { type: string, description: "Contract do token do preço mínimo" }
+                ticket_price_max_quantity: { type: integer }
+                ticket_price_max_contract: { type: string }
+                ticket_price_default_quantity: { type: integer }
+                ticket_price_default_contract: { type: string }
       responses:
         '200':
           description: Configurações atualizadas
+        '401':
+          description: Não autenticado (JWT ausente/inválido)
+        '500':
+          description: Erro de assinatura/envio on-chain
 
   /rooms/{roomId}/activate:
     post:
@@ -1950,64 +1961,64 @@ components:
         currency:
           type: string
           description: Símbolo da moeda (ex. "WAX").
-         status:
-           type: string
-           enum: [confirmed]
-           description: Status da transação.
+        status:
+          type: string
+          enum: [confirmed]
+          description: Status da transação.
 
-     ContentItem:
-       type: object
-       properties:
-         _id:
-           type: string
-         type:
-           type: string
-         title:
-           type: string
-         slug:
-           type: string
-         content:
-           type: string
-           description: Texto ou JSON de blocks (BlockNote)
-         content_format:
-           type: string
-           enum: [text, blocks]
-         metadata:
-           type: object
-         image_url:
-           type: string
-         sort_order:
-           type: integer
-         pinned:
-           type: boolean
-         active:
-           type: boolean
-         locale_overrides:
-           type: object
-         created_at:
-           type: string
-           format: date-time
-         updated_at:
-           type: string
-           format: date-time
-     ContentInput:
-       type: object
-       required: [title, content]
-       properties:
-         title:
-           type: string
-         slug:
-           type: string
-         content:
-           type: string
-         content_format:
-           type: string
-           enum: [text, blocks]
-         metadata:
-           type: object
-         image_url:
-           type: string
-         sort_order:
-           type: integer
-         pinned:
-           type: boolean
+    ContentItem:
+      type: object
+      properties:
+        _id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+          description: Texto ou JSON de blocks (BlockNote)
+        content_format:
+          type: string
+          enum: [text, blocks]
+        metadata:
+          type: object
+        image_url:
+          type: string
+        sort_order:
+          type: integer
+        pinned:
+          type: boolean
+        active:
+          type: boolean
+        locale_overrides:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ContentInput:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+        content_format:
+          type: string
+          enum: [text, blocks]
+        metadata:
+          type: object
+        image_url:
+          type: string
+        sort_order:
+          type: integer
+        pinned:
+          type: boolean

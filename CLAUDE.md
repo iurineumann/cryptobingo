@@ -169,6 +169,10 @@ quebram com `unpack_exception` (não há action para limpar a tabela). Ex.: ADR-
   `addgametype/delgametype`, `setstages`, `setcombos`, `setnftconf/delnftconf`,
   `createroom`, `activateroom`, `pauseroom`, `closeroom`, `setroommeta`,
   `linkcampaign`, `closecmpgn`, `allocatedrop`, `deallocdrop`
+- `bingogamectr@active` (cold key + `eosio.code` + **`bingogamesvc@active`** como satisfator)
+  → actions que exigem `require_auth(get_self())`: `setconfig`, `settreasury`,
+  `sweepggr` e **`updateroom`** (edição de preços de sala — ADR-045). O backend assina
+  `updateroom` como `bingogamectr@active` com a chave do microserviço.
 - `bingogamesvc@active` → actions FSM: `fundgame`, `lockgame`, `startdraw`, `claimwin`,
   `claimcombo`, `claimstage`, `closegame`, `execdrop`, `abortgame`
 - **Serviços online usam apenas `MICROSERVICE_PRIVATE_KEY`** — `CONTRACT_PRIVATE_KEY` não
