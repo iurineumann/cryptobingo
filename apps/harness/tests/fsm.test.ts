@@ -1021,6 +1021,35 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
 });
 
 // ==========================================
+// SUITE 7.5 — ROOM_TOKEN_MISMATCH (regressão ADR-045)
+// Valida: createroom rejeita token misto (symbol + contract)
+// ==========================================
+
+describe('ROOM_TOKEN_MISMATCH — createroom com token misto', () => {
+
+    const ROOM_ID = randomRoomId();
+
+    test('RTM-0: createroom com min=WAX, default=BINGO → falha', async () => {
+        const min = ExtendedAsset.from({ quantity: '10.0000 WAX',   contract: 'eosio.token' });
+        const max = ExtendedAsset.from({ quantity: '50.0000 WAX',   contract: 'eosio.token' });
+        const def = ExtendedAsset.from({ quantity: '10.0000 BINGO', contract: 'eosio.token' });
+        await expect(
+            transact(bingoSession, 'bingogamectr', 'createroom', {
+                room_id:                ROOM_ID,
+                sponsor:                'bingogamectr',
+                gametype_id:            GAMETYPE_ID_STD,
+                ticket_price_min:       min,
+                ticket_price_max:       max,
+                ticket_price_default:   def,
+                max_tickets_per_player: 5,
+                sponsor_room:           false,
+            })
+        ).rejects.toThrow();
+        console.log('   ✅ createroom com token misto (WAX vs BINGO) → rejeitado');
+    });
+});
+
+// ==========================================
 // SUITE 8 — COMBINAÇÕES (ADR-016)
 // Valida: setcombos (registro on-chain), claimcombo (payout = price ×
 // base_multiplier × combo_weight / 100) e validação de combo_id inexistente.
