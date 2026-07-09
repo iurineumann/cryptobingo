@@ -16,11 +16,18 @@ vi.mock('../../hooks/useSlowReveal', () => ({
 }));
 
 vi.mock('../../services/api', () => ({
-  fetchGamePatterns: vi.fn().mockResolvedValue([]),
   fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [], stages: [] }),
   fetchRoom: vi.fn().mockResolvedValue({ room_id: '1', metadata: { name: 'Sala' }, current_game_id: '0' }),
   fetchGamePrizeTransactions: vi.fn().mockResolvedValue({ items: [], total: 0, gameId: '100' }),
 }));
+
+vi.mock('../ticketUtils', async (orig) => {
+  const actual = await orig<typeof import('../ticketUtils')>();
+  return {
+    ...actual,
+    fetchGamePatterns: vi.fn().mockResolvedValue([]),
+  };
+});
 
 const M = [1,2,3,4,5, 16,17,18,19,20, 31,32,33,34, 46,47,48,49,50, 61,62,63,64,65];
 
@@ -58,5 +65,37 @@ describe('useGameRoomState — isolamento de cartelas por jogador', () => {
     const { result } = renderHook(() => useGameRoomState({ gameId: '100', roomId: undefined, session: makeSession('player2') }));
     await waitFor(() => expect(result.current.playerTickets.length).toBeGreaterThan(0));
     expect(result.current.playerTickets.map(t => t.id)).toEqual(['2']);
+  });
+});
+
+describe('useGameRoomState — gametype_id da sala como fonte de verdade', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('usa gametype_id da sala (não do jogo) para buscar patterns', async () => {
+    const { fetchRoom } = await import('../../services/api');
+    vi.mocked(fetchRoom).mockResolvedValue({
+      room_id: '1', metadata: { name: 'Sala' }, current_game_id: '0',
+      gametype_id: '3',
+    } as any);
+
+    const { fetchGamePatterns } = await import('../ticketUtils');
+
+    const game = {
+      game_id: '100', status: 'funding', drawn_balls: [], room_id: '1',
+      ticket_price: { quantity: '1.0000 WAX', contract: 'eosio.token' }, gametype_id: '1', end_time: 0,
+    };
+    const get_table_rows = vi.fn(async ({ table }: { table: string }) => {
+      if (table === 'games') return { rows: [game], more: false };
+      if (table === 'tickets') return { rows: [], more: false };
+      return { rows: [], more: false };
+    });
+    const session = { actor: 'player1', client: { v1: { chain: { get_table_rows } } } } as unknown as Session;
+
+    renderHook(() => useGameRoomState({ gameId: '100', roomId: undefined, session }));
+    await waitFor(() => {
+      expect(vi.mocked(fetchGamePatterns)).toHaveBeenCalled();
+    });
+    expect(vi.mocked(fetchGamePatterns)).toHaveBeenCalledWith(expect.anything(), '3');
+    expect(vi.mocked(fetchGamePatterns)).not.toHaveBeenCalledWith(expect.anything(), '1');
   });
 });
