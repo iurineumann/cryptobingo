@@ -1601,7 +1601,13 @@ namespace bingo {
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
-        check(room_itr->current_game_id == 0, "Sala com jogo em andamento nao pode ter precos alterados.");
+        // Permite editar preços se a sala não está ativa (pausada/inativa): nessas
+        // situações não há jogo em andamento de fato, mesmo que current_game_id
+        // retenha o id do último jogo (pauseroom não o zera). Só bloqueia quando
+        // status=='active' E há jogo corrente (current_game_id != 0).
+        // Issue #236.
+        check(room_itr->status != "active"_n || room_itr->current_game_id == 0,
+            "Sala com jogo em andamento nao pode ter precos alterados.");
 
         // Validação (igual createroom)
         check(ticket_price_min.quantity.amount > 0, "ticket_price_min deve ser maior que zero.");
