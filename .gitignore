@@ -62,3 +62,14 @@ debug/
 .opencode/
 debug.txt
 
+# Agent environment & local tooling (not project code)
+.contextos/
+.agents/skills/
+skills-lock.json
+google-marketing-stack-mcp/
+.github/workflows/opencode.yml
+
+# Build artifacts
+apps/landing-page/.react-router/
+apps/landing-page/coverage/
+
