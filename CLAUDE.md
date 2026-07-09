@@ -367,7 +367,7 @@ CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
 CONTRACT_ACCOUNT=bingogamectr
 SWAP_CONTRACT=bingogameswp
 MICROSERVICE_ACTOR=bingogamesvc
-APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=aa4afc46-3411-4b4c-b7ea-ae37368543d6;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=78e10668-9868-4438-8bfd-58f584a3f756
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=***REMOVED-ROTATE-VIA-KEYVAULT***;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=***REMOVED***
 APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2
 APPLICATIONINSIGHTS_ENABLED=true
 ```
