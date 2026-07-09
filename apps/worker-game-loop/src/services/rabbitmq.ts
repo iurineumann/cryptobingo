@@ -589,8 +589,8 @@ export async function autoClaimDrawnGames(): Promise<void> {
             code:    CONTRACT_ACCOUNT,
             scope:   CONTRACT_ACCOUNT,
             table:   'games',
-            limit:   100,
-            reverse: false,
+            limit:   200,
+            reverse: true,
             json:    true,
         });
 
@@ -636,8 +636,8 @@ export async function autoStartLockedGames(): Promise<void> {
             code:    CONTRACT_ACCOUNT,
             scope:   CONTRACT_ACCOUNT,
             table:   'games',
-            limit:   100,
-            reverse: false,
+            limit:   200,
+            reverse: true,
             json:    true,
         });
 
