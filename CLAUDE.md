@@ -28,7 +28,7 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
 - **Content QA é obrigatorio:** nao produza conteudo sem ativar personas (Copywriter, Editor, Visual
   Designer, SEO Specialist), consultar RAG (tags: content-quality, persona-decision, images) e
   executar `scripts/check-content-qa.mjs`. Info factual deve ser verificada contra pesquisa web
-  (max 90 dias). Ver ADR-044.
+  (max 90 dias). Ver ADR-040.
 - **Slugs traduziveis:** URLs usam slugs do `content/slugs.json`, nao nomes de arquivo. Modificar
   `lib/content.ts` ao adicionar novo locale. Nunca atrelar URL ao filename.
 - **Imagens obrigatorias:** frontmatter `images: []` populado em todo post/tutorial. Figure component
@@ -367,7 +367,7 @@ CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
 CONTRACT_ACCOUNT=bingogamectr
 SWAP_CONTRACT=bingogameswp
 MICROSERVICE_ACTOR=bingogamesvc
-APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=aa4afc46-3411-4b4c-b7ea-ae37368543d6;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=78e10668-9868-4438-8bfd-58f584a3f756
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=***REMOVED-ROTATE-VIA-KEYVAULT***;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=***REMOVED***
 APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2
 APPLICATIONINSIGHTS_ENABLED=true
 ```
@@ -390,7 +390,7 @@ APPLICATIONINSIGHTS_ENABLED=true
 > `.env.testnet` em cada app tem template com secrets mascarados. Obter valores reais com:
 > `az containerapp show -n <app> -g cryptobingo-testnet --query "properties.template.containers[0].env" -o json`
 
-### Cosmos DB MongoDB (ADR-044)
+### Cosmos DB MongoDB (ADR-041)
 
 **Database:** `cryptobingo` (shared throughput, 400 RU/s → free tier).
 **Collections com dados:** `systemtokens` (2), `gametypemetadatas` (7), `roommetadatas` (21), `sponsororgs` (1).

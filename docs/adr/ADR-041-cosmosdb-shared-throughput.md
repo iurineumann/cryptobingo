@@ -1,4 +1,4 @@
-# ADR-044: Migração Cosmos DB para Throughput Compartilhado
+# ADR-041: Migração Cosmos DB para Throughput Compartilhado
 
 **Status:** Aceito (2026-07-06)
 **Data:** 2026-07-06

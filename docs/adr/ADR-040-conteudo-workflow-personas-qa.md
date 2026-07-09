@@ -1,4 +1,4 @@
-# ADR-044 — Workflow de Producao de Conteudo com Personas e QA Obrigatorio
+# ADR-040 — Workflow de Producao de Conteudo com Personas e QA Obrigatorio
 
 **Status:** Aceito (2026-07-05)
 **Data:** 2026-07-05
