@@ -1590,7 +1590,7 @@ namespace bingo {
         extended_asset ticket_price_max,
         extended_asset ticket_price_default
     ) {
-        require_auth(permission_level{get_self(), "admin"_n});
+        require_auth(get_self());
         rooms_table rooms(get_self(), get_self().value);
         auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
         check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
