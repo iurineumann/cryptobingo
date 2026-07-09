@@ -4,6 +4,7 @@ import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { adminSession, microserviceSession } from './blockchain';
 import { processRoomDrops } from './dropWorker';
 import { logger } from './logger';
+import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const REDIS_ROOM_PREFIX = 'room:';
@@ -133,8 +134,13 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
 
         return newGameId;
     } catch (err: any) {
-        logger.error({ err, tag: 'RoomManager', errMsg: err?.message, errCode: err?.code },
-            `Sala ${room.room_id}: erro ao criar/próximo jogo (creategame ou fundgame falhou).`)
+        const roomKey = `room:${room.room_id}`;
+        if (isResourceExhausted(err)) {
+            handleResourceBackoff(roomKey, 'RoomManager', `sala ${room.room_id}`);
+        } else {
+            logger.error({ err, tag: 'RoomManager', errMsg: err?.message, errCode: err?.code },
+                `Sala ${room.room_id}: erro ao criar/próximo jogo (creategame ou fundgame falhou).`)
+        }
         return null;
     }
 }
