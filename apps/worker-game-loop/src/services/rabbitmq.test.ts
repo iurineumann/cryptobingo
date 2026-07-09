@@ -196,72 +196,64 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
     });
 });
 
+// Helper: confirma que o scan reverso (limit:200, reverse:true) acha um jogo
+// recente de `status` escondido entre >100 jogos antigos (aborted).
+async function expectReverseScanFindsRecent(
+    target: () => Promise<void>,
+    status: string,
+    recentId: string,
+    assertTarget: () => void,
+): Promise<void> {
+    const oldGames = Array.from({ length: 101 }, (_, i) =>
+        makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
+    );
+    const recent = makeBlockchainGame({ game_id: recentId, status });
+    const allGames = [...oldGames, recent];
+
+    mockGetTableRows
+        .mockResolvedValueOnce({ rows: allGames })
+        .mockResolvedValueOnce({ rows: [] });
+
+    await target();
+
+    expect(mockGetTableRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        limit: 200,
+        reverse: true,
+    }));
+    assertTarget();
+}
+
 // ── autoClaimDrawnGames ─────────────────────────────────────────────────────
 
 describe('autoClaimDrawnGames', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+    beforeEach(() => jest.clearAllMocks());
 
     it('reverse:true + limit:200 encontra jogo drawn recente entre >100 jogos antigos', async () => {
-        const oldGames = Array.from({ length: 101 }, (_, i) =>
-            makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
+        await expectReverseScanFindsRecent(
+            autoClaimDrawnGames,
+            'drawn',
+            '9999999999',
+            () => expect(mockOrchestrate).toHaveBeenCalledWith('9999999999'),
         );
-        const recentDrawn = makeBlockchainGame({
-            game_id: '9999999999',
-            status: 'drawn',
-        });
-        const allGames = [...oldGames, recentDrawn];
-
-        mockGetTableRows
-            .mockResolvedValueOnce({ rows: allGames })
-            .mockResolvedValueOnce({ rows: [] });
-
-        await autoClaimDrawnGames();
-
-        expect(mockGetTableRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
-            limit: 200,
-            reverse: true,
-        }));
-        expect(mockOrchestrate).toHaveBeenCalledWith('9999999999');
     });
 });
 
 // ── autoStartLockedGames ──────────────────────────────────────────────────
 
 describe('autoStartLockedGames', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
-    afterEach(() => {
-        jest.useRealTimers();
-    });
+    beforeEach(() => jest.clearAllMocks());
+    afterEach(() => jest.useRealTimers());
 
     it('reverse:true + limit:200 encontra jogo locked recente entre >100 jogos antigos', async () => {
         jest.useFakeTimers();
-
-        const oldGames = Array.from({ length: 101 }, (_, i) =>
-            makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
+        await expectReverseScanFindsRecent(
+            autoStartLockedGames,
+            'locked',
+            '9999999998',
+            // processLockedGame chama autoStartDraw sem await, mas executeStartDraw
+            // é chamado síncrono na função — comprova que o jogo recente foi encontrado
+            () => expect(mockStartDraw).toHaveBeenCalledWith('9999999998'),
         );
-        const recentLocked = makeBlockchainGame({
-            game_id: '9999999998',
-            status: 'locked',
-        });
-        const allGames = [...oldGames, recentLocked];
-
-        mockGetTableRows
-            .mockResolvedValueOnce({ rows: allGames })
-            .mockResolvedValueOnce({ rows: [] });
-
-        await autoStartLockedGames();
-
-        expect(mockGetTableRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
-            limit: 200,
-            reverse: true,
-        }));
-        // processLockedGame chama autoStartDraw sem await, mas executeStartDraw
-        // é chamado síncrono na função — comprova que o jogo recente foi encontrado
-        expect(mockStartDraw).toHaveBeenCalledWith('9999999998');
     });
 });
 
