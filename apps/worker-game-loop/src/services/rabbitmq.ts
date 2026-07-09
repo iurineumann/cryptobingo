@@ -65,6 +65,7 @@ const GC_BATCH_SIZE = 50;
 
 import { setRabbitConnected } from './connectionState';
 import { logger } from './logger';
+import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 
 let connection: ChannelModel;
 let channel:    Channel;
@@ -573,10 +574,18 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
         );
 
         autoStartDraw(gameId).catch(err => {
+            if (isResourceExhausted(err)) {
+                handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                return;
+            }
             logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
             processedGames.delete(gameId);
         });
     } catch (err) {
+        if (isResourceExhausted(err)) {
+            handleResourceBackoff(gameId, 'AutoAdvance', `lock jogo ${gameId}`);
+            return;
+        }
         logger.error({ err, tag: 'AutoAdvance' }, `Erro ao travar jogo ${gameId}:`)
         processedGames.delete(gameId);
     }
@@ -670,6 +679,10 @@ async function processLockedGame(gameId: string): Promise<void> {
     autoAdvanceGamesTotal.inc({ action: 'start_locked' });
     processedGames.add(gameId);
     autoStartDraw(gameId).catch(err => {
+        if (isResourceExhausted(err)) {
+            handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+            return;
+        }
         logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
         processedGames.delete(gameId);
     });
@@ -726,7 +739,11 @@ export async function recoverStuckGames(): Promise<void> {
                         await executeAbortGame(gameId, 'NO_TICKETS_DRAWING');
                         notifyGameAborted(gameId, 'NO_TICKETS_DRAWING');
                     } catch (err) {
-                        logger.error({ err, tag: 'Recovery' }, `Erro ao abortar jogo ${gameId} (sem tickets):`);
+                        if (isResourceExhausted(err)) {
+                            handleResourceBackoff(gameId, 'Recovery', `abort NO_TICKETS_DRAWING jogo ${gameId}`);
+                        } else {
+                            logger.error({ err, tag: 'Recovery' }, `Erro ao abortar jogo ${gameId} (sem tickets):`);
+                        }
                     }
                 } else if (drawnCount === 75) {
                     logger.info({ tag: 'Recovery' }, `Jogo ${gameId} com 75/75 bolas. Orquestrando payout...`)
@@ -739,7 +756,11 @@ export async function recoverStuckGames(): Promise<void> {
                         await executeAbortGame(gameId, 'ORACLE_TIMEOUT_RECOVERY');
                         notifyGameAborted(gameId, 'ORACLE_TIMEOUT_RECOVERY');
                     } catch (err) {
-                        logger.error({ err, tag: 'Recovery' }, `Erro ao abortar jogo ${gameId}:`)
+                        if (isResourceExhausted(err)) {
+                            handleResourceBackoff(gameId, 'Recovery', `abort ORACLE_TIMEOUT jogo ${gameId}`);
+                        } else {
+                            logger.error({ err, tag: 'Recovery' }, `Erro ao abortar jogo ${gameId}:`)
+                        }
                     }
                 } else {
                     logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em DRAWING (${drawnCount}/75 bolas, recente). Aguardando oráculo...`)
@@ -778,27 +799,35 @@ export async function recoverStuckGames(): Promise<void> {
     logger.info({ tag: 'Recovery' }, 'Varredura concluída.')
 }
 
-async function autoStartDraw(gameId: string): Promise<void> {
+export async function autoStartDraw(gameId: string): Promise<void> {
     logger.info({ tag: 'AutoAdvance' }, `Iniciando sorteio do jogo ${gameId}...`)
 
-    await executeStartDraw(gameId);
+    try {
+        await executeStartDraw(gameId);
 
-    const drawnBalls = await waitForDrawnBalls(gameId);
+        const drawnBalls = await waitForDrawnBalls(gameId);
 
-    if (!drawnBalls) {
-        logger.error({ tag: 'AutoAdvance' }, `Timeout do oráculo para jogo ${gameId}. Abortando.`)
-        await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
-        notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
-        return;
-    }
-
-    logger.info({ tag: 'AutoAdvance' }, `Oráculo respondeu (jogo ${gameId}). Orquestrando...`)
-    fetchGame(gameId).then(game => {
-        if (game?.room_id && game.room_id !== '0') {
-            sendDrawStartedMessage(game.room_id).catch(() => {});
+        if (!drawnBalls) {
+            logger.error({ tag: 'AutoAdvance' }, `Timeout do oráculo para jogo ${gameId}. Abortando.`)
+            await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
+            notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
+            return;
         }
-    }).catch(() => {});
 
-    await orchestrateGame(gameId);
+        logger.info({ tag: 'AutoAdvance' }, `Oráculo respondeu (jogo ${gameId}). Orquestrando...`)
+        fetchGame(gameId).then(game => {
+            if (game?.room_id && game.room_id !== '0') {
+                sendDrawStartedMessage(game.room_id).catch(() => {});
+            }
+        }).catch(() => {});
+
+        await orchestrateGame(gameId);
+    } catch (err) {
+        if (isResourceExhausted(err)) {
+            handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+            return;
+        }
+        throw err;
+    }
 }
 

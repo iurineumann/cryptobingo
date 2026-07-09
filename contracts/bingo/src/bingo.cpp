@@ -1457,6 +1457,13 @@ namespace bingo {
             "ticket_price_default deve estar entre min e max.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
+        // Os 3 preços devem usar o mesmo token (símbolo + contract)
+        check(ticket_price_min.quantity.symbol == ticket_price_max.quantity.symbol &&
+              ticket_price_max.quantity.symbol == ticket_price_default.quantity.symbol,
+            "Os tres precos devem usar o mesmo token (simbolo).");
+        check(ticket_price_min.contract == ticket_price_max.contract &&
+              ticket_price_max.contract == ticket_price_default.contract,
+            "Os tres precos devem usar o mesmo contract.");
 
         rooms.emplace(get_self(), [&](auto& r) {
             r.room_id                 = room_id;

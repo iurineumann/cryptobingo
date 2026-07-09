@@ -68,7 +68,8 @@ jest.mock('./metrics', () => ({
 
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoClaimDrawnGames, autoStartLockedGames } from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames } from './rabbitmq';
+import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
@@ -261,5 +262,88 @@ describe('autoStartLockedGames', () => {
         // processLockedGame chama autoStartDraw sem await, mas executeStartDraw
         // é chamado síncrono na função — comprova que o jogo recente foi encontrado
         expect(mockStartDraw).toHaveBeenCalledWith('9999999998');
+    });
+});
+
+describe('Retry backoff helpers', () => {
+    beforeEach(() => {
+        resRetryMap.clear();
+    });
+
+    describe('isResourceExhausted', () => {
+        it('reconhece "account cpu limit" como recurso exaurido', () => {
+            expect(isResourceExhausted(new Error('reached account cpu limit'))).toBe(true);
+        });
+
+        it('reconhece "billed CPU time" como recurso exaurido', () => {
+            expect(isResourceExhausted(new Error('billed CPU time (200 us) is greater than the maximum billable CPU time for the transaction (150 us)'))).toBe(true);
+        });
+
+        it('reconhece "subjective cpu" como recurso exaurido', () => {
+            expect(isResourceExhausted(new Error('subjective cpu bandwidth limit exceeded'))).toBe(true);
+        });
+
+        it('reconhece "net usage" como recurso exaurido', () => {
+            expect(isResourceExhausted(new Error('net usage exceeds available capacity'))).toBe(true);
+        });
+
+        it('reconhece "expired by" como recurso exaurido', () => {
+            expect(isResourceExhausted(new Error('expired by the network'))).toBe(true);
+        });
+
+        it('retorna false para erro genérico', () => {
+            expect(isResourceExhausted(new Error('assertion failure: game not found'))).toBe(false);
+        });
+
+        it('retorna false para erro sem mensagem', () => {
+            expect(isResourceExhausted(new Error())).toBe(false);
+        });
+
+        it('retorna false para err sem message', () => {
+            expect(isResourceExhausted({ code: 500 })).toBe(false);
+        });
+    });
+
+    describe('resBackoffMs', () => {
+        it('count=0 → 60000 (backoff base)', () => {
+            expect(resBackoffMs('game-0')).toBe(60_000);
+        });
+
+        it('count=1 → 120000 (2× base)', () => {
+            resRetryMap.set('game-1', { count: 1, lastAttempt: Date.now() });
+            expect(resBackoffMs('game-1')).toBe(120_000);
+        });
+
+        it('count=5 → 1.8M (saturado em max)', () => {
+            resRetryMap.set('game-5', { count: 5, lastAttempt: Date.now() });
+            expect(resBackoffMs('game-5')).toBe(1_800_000);
+        });
+
+        it('count=10 → 1.8M (saturado em max)', () => {
+            resRetryMap.set('game-10', { count: 10, lastAttempt: Date.now() });
+            expect(resBackoffMs('game-10')).toBe(1_800_000);
+        });
+    });
+
+    describe('autoStartDraw com resource exhaustion', () => {
+        beforeEach(() => {
+            jest.clearAllMocks();
+            resRetryMap.clear();
+        });
+
+        it('quando executeStartDraw lança "account cpu limit" → backoff incrementado, sem abort', async () => {
+            mockStartDraw.mockRejectedValueOnce(new Error('reached account cpu limit'));
+
+            await autoStartDraw('cpu-test-game');
+
+            // resRetryMap deve ter entrada com count=1
+            const entry = resRetryMap.get('cpu-test-game');
+            expect(entry).toBeDefined();
+            expect(entry!.count).toBe(1);
+
+            // Não deve ter chamado abort nem orchestrate
+            expect(mockAbortGame).not.toHaveBeenCalled();
+            expect(mockOrchestrate).not.toHaveBeenCalled();
+        });
     });
 });
