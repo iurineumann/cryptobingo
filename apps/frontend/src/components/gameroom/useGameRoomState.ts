@@ -618,8 +618,19 @@ export function useGameRoomState(
 
       const loadedGame = gameRes.rows[0] as BlockchainGameState | undefined;
 
-      // Busca max_balls do gametype (fallback = 75 para jogos sem gametype)
-      const gametypeId = (loadedGame as any)?.gametype_id;
+      // Sala é fonte de verdade do gametype_id — buscar antes dos patterns
+      let roomData: EnrichedRoom | undefined;
+      const roomIdToFetch = loadedGame?.room_id && loadedGame.room_id !== '0'
+        ? loadedGame.room_id
+        : roomId;
+      if (roomIdToFetch) {
+        try {
+          const mod = await import('../../services/api');
+          roomData = await mod.fetchRoom(roomIdToFetch);
+        } catch { /* silencioso */ }
+      }
+
+      const gametypeId = roomData?.gametype_id ?? (loadedGame as any)?.gametype_id;
       if (gametypeId && String(gametypeId) !== '0') {
         try {
           const gtRes = await session.client.v1.chain.get_table_rows({
@@ -634,7 +645,6 @@ export function useGameRoomState(
             if (gt.draw_mode) setLocalDrawMode(gt.draw_mode);
           }
         } catch { /* mantém default 75 */ }
-        // Busca patterns e combinações deste gametype
         try {
           const [patterns, meta] = await Promise.all([
             fetchGamePatterns(session, String(gametypeId)),
@@ -646,37 +656,30 @@ export function useGameRoomState(
           if (meta.stages?.length) setGameStages(meta.stages);
         } catch { /* patterns/combos indisponíveis */ }
       }
-      if (loadedGame && loadedGame.room_id && loadedGame.room_id !== '0') {
-        try {
-          const { fetchRoom } = await import('../../services/api');
-          const roomData = await fetchRoom(loadedGame.room_id);
-          setRoom(roomData);
-          // Se o jogo atual terminou, busca o current_game_id da sala
-          if (['archived', 'aborted'].includes(loadedGame.status)) {
-            const nextId = String(roomData.current_game_id);
-            if (nextId !== '0' && nextId !== gameId) {
+
+      if (roomData) {
+        setRoom(roomData);
+        if (loadedGame && ['archived', 'aborted'].includes(loadedGame.status)) {
+          const nextId = String(roomData.current_game_id);
+          if (nextId !== '0' && nextId !== gameId) {
+            try {
               const nextRes = await session.client.v1.chain.get_table_rows({
                 code: CONTRACT, scope: CONTRACT, table: 'games',
                 lower_bound: UInt64.from(nextId), upper_bound: UInt64.from(nextId), limit: 1, json: true,
               });
               if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
-            }
+            } catch { /* silencioso */ }
           }
-        } catch { /* silencioso */ }
-      } else if (roomId) {
-        try {
-          const { fetchRoom } = await import('../../services/api');
-          const roomData = await fetchRoom(roomId);
-          setRoom(roomData);
-          if (roomData.current_game_id && String(roomData.current_game_id) !== '0' && String(roomData.current_game_id) !== gameId) {
+        } else if (roomData.current_game_id && String(roomData.current_game_id) !== '0' && String(roomData.current_game_id) !== gameId) {
+          try {
             const nextRes = await session.client.v1.chain.get_table_rows({
               code: CONTRACT, scope: CONTRACT, table: 'games',
               lower_bound: UInt64.from(String(roomData.current_game_id)),
               upper_bound: UInt64.from(String(roomData.current_game_id)), limit: 1, json: true,
             });
             if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
-          }
-        } catch { /* silencioso */ }
+          } catch { /* silencioso */ }
+        }
       }
 
       // A tabela `tickets` tem scope=game_id (todas as cartelas da partida, de todos
