@@ -63,11 +63,13 @@ Mesmo sem a senha, a superfície de ataque é desnecessária e viola o próprio 
 
 ## GAPs de governança identificados na mesma discovery
 
-- **ADR-044 duplicado:** `docs/adr/ADR-044-conteudo-workflow-personas-qa.md` E
-  `docs/adr/ADR-044-cosmosdb-shared-throughput.md` usam o mesmo número. Reatribuir um deles
-  para ADR-046+ (após este) ou ADR-040/041 (números pulados).
-- **ADR-040 e ADR-041 pulados:** nenhum arquivo com esses números existe. Próxima ADR deve
-  preencher a lacuna ou documentar deliberadamente o salto.
+- **ADR-044 duplicado (RESOLVIDO em 2026-07-09):** os dois arquivos que usavam o número 044
+  foram reatribuídos por ordem cronológica via `git mv`:
+  `ADR-044-conteudo-workflow-personas-qa.md` → **ADR-040** (Aceito 2026-07-05);
+  `ADR-044-cosmosdb-shared-throughput.md` → **ADR-041** (Aceito 2026-07-06).
+  Referências cruzadas em CLAUDE.md atualizadas (conteúdo→ADR-040, Cosmos→ADR-041).
+- **ADR-040 e ADR-041 pulados (RESOLVIDO):** lacuna preenchida com os ADRs acima. Sequência
+  agora contígua de 001→046 (sem saltos).
 
 ## Referências
 

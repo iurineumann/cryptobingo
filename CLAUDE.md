@@ -28,7 +28,7 @@ tarefas complexas/arquiteturais**. Regras duráveis que valem SEMPRE (sem precis
 - **Content QA é obrigatorio:** nao produza conteudo sem ativar personas (Copywriter, Editor, Visual
   Designer, SEO Specialist), consultar RAG (tags: content-quality, persona-decision, images) e
   executar `scripts/check-content-qa.mjs`. Info factual deve ser verificada contra pesquisa web
-  (max 90 dias). Ver ADR-044.
+  (max 90 dias). Ver ADR-040.
 - **Slugs traduziveis:** URLs usam slugs do `content/slugs.json`, nao nomes de arquivo. Modificar
   `lib/content.ts` ao adicionar novo locale. Nunca atrelar URL ao filename.
 - **Imagens obrigatorias:** frontmatter `images: []` populado em todo post/tutorial. Figure component
@@ -390,7 +390,7 @@ APPLICATIONINSIGHTS_ENABLED=true
 > `.env.testnet` em cada app tem template com secrets mascarados. Obter valores reais com:
 > `az containerapp show -n <app> -g cryptobingo-testnet --query "properties.template.containers[0].env" -o json`
 
-### Cosmos DB MongoDB (ADR-044)
+### Cosmos DB MongoDB (ADR-041)
 
 **Database:** `cryptobingo` (shared throughput, 400 RU/s → free tier).
 **Collections com dados:** `systemtokens` (2), `gametypemetadatas` (7), `roommetadatas` (21), `sponsororgs` (1).
