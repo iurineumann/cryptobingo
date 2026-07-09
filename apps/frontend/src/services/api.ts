@@ -734,6 +734,12 @@ export async function updateRoomMetadata(roomId: string, data: Partial<RoomMetad
 export async function updateRoomSettings(roomId: string, data: {
     room_drop_chance_bps?: number;
     max_tickets_per_player?: number;
+    ticket_price_min_quantity?: string;
+    ticket_price_min_contract?: string;
+    ticket_price_max_quantity?: string;
+    ticket_price_max_contract?: string;
+    ticket_price_default_quantity?: string;
+    ticket_price_default_contract?: string;
 }): Promise<{ transaction_id: string }> {
     const res = await fetch(`${API_BASE}/rooms/${roomId}/settings`, {
         method: 'PUT', headers: authHeaders(),
