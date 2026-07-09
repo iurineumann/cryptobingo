@@ -60,18 +60,46 @@ jest.mock('./metrics', () => ({
     eventsFailedTotal:        { inc: jest.fn() },
     eventsDeadLetteredTotal:  { inc: jest.fn() },
     eventProcessingDuration:  { startTimer: jest.fn().mockReturnValue(jest.fn()) },
+    autoAdvanceRunsTotal:     { inc: jest.fn() },
+    autoAdvanceErrorsTotal:   { inc: jest.fn() },
+    autoAdvanceGamesTotal:    { inc: jest.fn() },
+    oraclePollAttempts:       { observe: jest.fn() },
 }));
 
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoStartDraw }  from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames } from './rabbitmq';
 import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
+import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
+import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
 const mockOrchestrate    = orchestrateGame    as jest.Mock;
 const mockFundGame       = executeFundGame    as jest.Mock;
 const mockLockGame       = executeLockGame    as jest.Mock;
 const mockStartDraw      = executeStartDraw   as jest.Mock;
 const mockAbortGame      = executeAbortGame   as jest.Mock;
+
+const mockGetTableRows = rpcClient.v1.chain.get_table_rows as jest.Mock;
+const mockFetchGame    = fetchGame as jest.Mock;
+
+function makeBlockchainGame(overrides: Partial<BlockchainGameState>): BlockchainGameState {
+    return {
+        game_id: '0',
+        status: 'aborted',
+        ticket_price: { quantity: '5.0000 WAX', contract: 'eosio.token' },
+        total_wagered: { quantity: '0.0000 WAX', contract: 'eosio.token' },
+        sponsor_pool: [],
+        drawn_balls: [],
+        campaign_id: '0',
+        gametype_id: '0',
+        end_time: 0,
+        room_id: '0',
+        golden_ball_num: 0,
+        golden_multiplier: 0,
+        total_paid: 0,
+        ...overrides,
+    } as BlockchainGameState;
+}
 
 // Helpers para simular mensagens RabbitMQ
 function makeMsg(payload: object, xDeathCount = 0) {
@@ -165,6 +193,75 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
         // O ACK é chamado (claimwin usa fire-and-forget para o orchestrator)
         expect(mockChannel.ack).toHaveBeenCalledWith(msg);
         expect(mockChannel.nack).not.toHaveBeenCalled();
+    });
+});
+
+// ── autoClaimDrawnGames ─────────────────────────────────────────────────────
+
+describe('autoClaimDrawnGames', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('reverse:true + limit:200 encontra jogo drawn recente entre >100 jogos antigos', async () => {
+        const oldGames = Array.from({ length: 101 }, (_, i) =>
+            makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
+        );
+        const recentDrawn = makeBlockchainGame({
+            game_id: '9999999999',
+            status: 'drawn',
+        });
+        const allGames = [...oldGames, recentDrawn];
+
+        mockGetTableRows
+            .mockResolvedValueOnce({ rows: allGames })
+            .mockResolvedValueOnce({ rows: [] });
+
+        await autoClaimDrawnGames();
+
+        expect(mockGetTableRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            limit: 200,
+            reverse: true,
+        }));
+        expect(mockOrchestrate).toHaveBeenCalledWith('9999999999');
+    });
+});
+
+// ── autoStartLockedGames ──────────────────────────────────────────────────
+
+describe('autoStartLockedGames', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('reverse:true + limit:200 encontra jogo locked recente entre >100 jogos antigos', async () => {
+        jest.useFakeTimers();
+
+        const oldGames = Array.from({ length: 101 }, (_, i) =>
+            makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
+        );
+        const recentLocked = makeBlockchainGame({
+            game_id: '9999999998',
+            status: 'locked',
+        });
+        const allGames = [...oldGames, recentLocked];
+
+        mockGetTableRows
+            .mockResolvedValueOnce({ rows: allGames })
+            .mockResolvedValueOnce({ rows: [] });
+
+        await autoStartLockedGames();
+
+        expect(mockGetTableRows).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            limit: 200,
+            reverse: true,
+        }));
+        // processLockedGame chama autoStartDraw sem await, mas executeStartDraw
+        // é chamado síncrono na função — comprova que o jogo recente foi encontrado
+        expect(mockStartDraw).toHaveBeenCalledWith('9999999998');
     });
 });
 
