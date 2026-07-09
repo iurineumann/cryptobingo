@@ -41,6 +41,12 @@ interface EditForm {
     auto_start_delay_sec: number;
     chat_enabled: boolean;
     max_tickets_per_player: number;
+    // moeda + preços da sala (seguem a mesma moeda)
+    currency_quantity: string;
+    currency_contract: string;
+    ticket_price_min_quantity: string;
+    ticket_price_max_quantity: string;
+    ticket_price_default_quantity: string;
 }
 
 const defaultForm: CreateForm = {
@@ -58,7 +64,24 @@ const defaultEditForm: EditForm = {
     name: '', description: '',
     auto_start_delay_sec: 30, chat_enabled: true,
     max_tickets_per_player: 10,
+    currency_quantity: '0.0000 BINGO', currency_contract: 'bingogametkn',
+    ticket_price_min_quantity: '0.0000 BINGO',
+    ticket_price_max_quantity: '0.0000 BINGO',
+    ticket_price_default_quantity: '0.0000 BINGO',
 };
+
+// ── Helpers de asset on-chain: "1.0000 SYM" (quantity + símbolo) ──
+function assetSymbol(asset: string): string {
+    const parts = asset.trim().split(/\s+/);
+    return parts.length >= 2 ? parts[parts.length - 1].toUpperCase() : '';
+}
+function assetAmount(asset: string): string {
+    const parts = asset.trim().split(/\s+/);
+    return parts.length >= 1 ? parts[0] : asset.trim();
+}
+function withSymbol(asset: string, symbol: string): string {
+    return `${assetAmount(asset)} ${symbol}`;
+}
 
 export default function RoomsAdmin() {
     const { t } = useTranslation();
@@ -112,6 +135,27 @@ export default function RoomsAdmin() {
 
     const handleCreate = async () => {
         if (form.room_id === 0) { setError(t('admin.rooms_required_room_id')); return; }
+
+        // ── Validação de moeda × preços ──────────────────────────────────────
+        // Os valores de ticket devem seguir a moeda da sala (mesmo símbolo) e
+        // obedecer min ≤ default ≤ max. Garante consistência on-chain.
+        const curSym = assetSymbol(form.currency_quantity);
+        if (!curSym) {
+            setError('Informe a moeda da sala no formato "1.0000 SYM" (ex: 1.0000 WAX).');
+            return;
+        }
+        const priceFields = [form.ticket_price_min_quantity, form.ticket_price_max_quantity, form.ticket_price_default_quantity];
+        if (!priceFields.every(p => assetSymbol(p) === curSym)) {
+            setError(`Os valores de ticket devem usar a mesma moeda da sala (${curSym}).`);
+            return;
+        }
+        const amt = (a: string) => parseFloat(assetAmount(a)) || 0;
+        if (!(amt(form.ticket_price_min_quantity) <= amt(form.ticket_price_default_quantity) &&
+              amt(form.ticket_price_default_quantity) <= amt(form.ticket_price_max_quantity))) {
+            setError('Ordem inválida: mínimo ≤ padrão ≤ máximo.');
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
         try {
@@ -121,12 +165,13 @@ export default function RoomsAdmin() {
                 gametype_id: form.gametype_id || undefined,
                 currency_quantity: form.currency_quantity,
                 currency_contract: form.currency_contract,
+                // preços herdam SEMPRE o contract da moeda (consistência total)
                 ticket_price_min_quantity: form.ticket_price_min_quantity,
-                ticket_price_min_contract: form.ticket_price_min_contract,
+                ticket_price_min_contract: form.currency_contract,
                 ticket_price_max_quantity: form.ticket_price_max_quantity,
-                ticket_price_max_contract: form.ticket_price_max_contract,
+                ticket_price_max_contract: form.currency_contract,
                 ticket_price_default_quantity: form.ticket_price_default_quantity,
-                ticket_price_default_contract: form.ticket_price_default_contract,
+                ticket_price_default_contract: form.currency_contract,
                 max_tickets_per_player: form.max_tickets_per_player || 0,
                 name: form.name || undefined,
                 description: form.description || undefined,
@@ -183,6 +228,11 @@ export default function RoomsAdmin() {
             auto_start_delay_sec: room.metadata?.auto_start_delay_sec ?? 30,
             chat_enabled: room.metadata?.chat_enabled ?? true,
             max_tickets_per_player: room.max_tickets_per_player ?? 10,
+            currency_quantity: room.ticket_price_min?.quantity ?? '0.0000 BINGO',
+            currency_contract: room.ticket_price_min?.contract ?? 'bingogametkn',
+            ticket_price_min_quantity: room.ticket_price_min?.quantity ?? '0.0000 BINGO',
+            ticket_price_max_quantity: room.ticket_price_max?.quantity ?? '0.0000 BINGO',
+            ticket_price_default_quantity: room.ticket_price_default?.quantity ?? '0.0000 BINGO',
         });
     };
 
@@ -190,6 +240,28 @@ export default function RoomsAdmin() {
         if (!editTarget) return;
         setEditSubmitting(true);
         setError(null);
+
+        // ── Validação de moeda × preços (igual ao cadastro) ──
+        const curSym = assetSymbol(editForm.currency_quantity);
+        if (!curSym) {
+            setError('Informe a moeda da sala no formato "1.0000 SYM" (ex: 1.0000 WAX).');
+            setEditSubmitting(false);
+            return;
+        }
+        const editPrices = [editForm.ticket_price_min_quantity, editForm.ticket_price_max_quantity, editForm.ticket_price_default_quantity];
+        if (!editPrices.every(p => assetSymbol(p) === curSym)) {
+            setError(`Os valores de ticket devem usar a mesma moeda da sala (${curSym}).`);
+            setEditSubmitting(false);
+            return;
+        }
+        const amtE = (a: string) => parseFloat(assetAmount(a)) || 0;
+        if (!(amtE(editForm.ticket_price_min_quantity) <= amtE(editForm.ticket_price_default_quantity) &&
+              amtE(editForm.ticket_price_default_quantity) <= amtE(editForm.ticket_price_max_quantity))) {
+            setError('Ordem inválida: mínimo ≤ padrão ≤ máximo.');
+            setEditSubmitting(false);
+            return;
+        }
+
         try {
             await updateRoomMetadata(editTarget.room_id, {
                 name: editForm.name,
@@ -203,11 +275,18 @@ export default function RoomsAdmin() {
             return;
         }
 
-        // Atualiza config on-chain (não bloqueia o sucesso da metadata)
+        // Atualiza config on-chain (preços + max_tickets). Não bloqueia o sucesso da metadata.
         let settingsWarning = '';
         try {
             await updateRoomSettings(editTarget.room_id, {
                 max_tickets_per_player: editForm.max_tickets_per_player,
+                // preços herdam SEMPRE o contract da moeda (consistência total)
+                ticket_price_min_quantity: editForm.ticket_price_min_quantity,
+                ticket_price_min_contract: editForm.currency_contract,
+                ticket_price_max_quantity: editForm.ticket_price_max_quantity,
+                ticket_price_max_contract: editForm.currency_contract,
+                ticket_price_default_quantity: editForm.ticket_price_default_quantity,
+                ticket_price_default_contract: editForm.currency_contract,
             });
         } catch (err) {
             settingsWarning = ` (${t('admin.rooms_error_settings')})`;
@@ -294,7 +373,18 @@ export default function RoomsAdmin() {
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_currency')}
                             <input className="cb-input w-full mt-1" value={form.currency_quantity}
-                                onChange={e => setForm(f => ({ ...f, currency_quantity: e.target.value }))} />
+                                placeholder="1.0000 WAX"
+                                onChange={e => {
+                                    const v = e.target.value;
+                                    const sym = assetSymbol(v);
+                                    setForm(f => sym ? {
+                                        ...f, currency_quantity: v,
+                                        // preços passam a seguir a moeda recém-definida
+                                        ticket_price_min_quantity:    withSymbol(f.ticket_price_min_quantity, sym),
+                                        ticket_price_max_quantity:    withSymbol(f.ticket_price_max_quantity, sym),
+                                        ticket_price_default_quantity: withSymbol(f.ticket_price_default_quantity, sym),
+                                    } : { ...f, currency_quantity: v });
+                                }} />
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_currency_contract')}
@@ -303,18 +393,27 @@ export default function RoomsAdmin() {
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_min')}
-                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_min" value={form.ticket_price_min_quantity}
-                                onChange={e => setForm(f => ({ ...f, ticket_price_min_quantity: e.target.value }))} />
+                            <div className="flex items-center gap-1 mt-1">
+                                <input className="cb-input w-full" data-testid="rooms-field-price_min" value={assetAmount(form.ticket_price_min_quantity)}
+                                    onChange={e => setForm(f => ({ ...f, ticket_price_min_quantity: withSymbol(e.target.value, assetSymbol(form.currency_quantity) || 'BINGO') }))} />
+                                <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(form.currency_quantity) || '—'}</span>
+                            </div>
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_max')}
-                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_max" value={form.ticket_price_max_quantity}
-                                onChange={e => setForm(f => ({ ...f, ticket_price_max_quantity: e.target.value }))} />
+                            <div className="flex items-center gap-1 mt-1">
+                                <input className="cb-input w-full" data-testid="rooms-field-price_max" value={assetAmount(form.ticket_price_max_quantity)}
+                                    onChange={e => setForm(f => ({ ...f, ticket_price_max_quantity: withSymbol(e.target.value, assetSymbol(form.currency_quantity) || 'BINGO') }))} />
+                                <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(form.currency_quantity) || '—'}</span>
+                            </div>
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_price_default')}
-                            <input className="cb-input w-full mt-1" data-testid="rooms-field-price_default" value={form.ticket_price_default_quantity}
-                                onChange={e => setForm(f => ({ ...f, ticket_price_default_quantity: e.target.value }))} />
+                            <div className="flex items-center gap-1 mt-1">
+                                <input className="cb-input w-full" data-testid="rooms-field-price_default" value={assetAmount(form.ticket_price_default_quantity)}
+                                    onChange={e => setForm(f => ({ ...f, ticket_price_default_quantity: withSymbol(e.target.value, assetSymbol(form.currency_quantity) || 'BINGO') }))} />
+                                <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(form.currency_quantity) || '—'}</span>
+                            </div>
                         </label>
                         <label className="text-xs text-[--cb-text-tertiary]">
                             {t('admin.rooms_form_max_tickets')}
@@ -436,6 +535,51 @@ export default function RoomsAdmin() {
                                 {t('admin.rooms_form_max_tickets')}
                                 <input className="cb-input w-full mt-1" type="number" value={editForm.max_tickets_per_player}
                                     onChange={e => setEditForm(f => ({ ...f, max_tickets_per_player: parseInt(e.target.value) || 10 }))} />
+                            </label>
+                            {/* ── Moeda da sala ── */}
+                            <label className="text-xs text-[--cb-text-tertiary] col-span-2">
+                                {t('admin.rooms_form_currency')}
+                                <input className="cb-input w-full mt-1" value={editForm.currency_quantity}
+                                    placeholder="1.0000 WAX"
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        const sym = assetSymbol(v);
+                                        setEditForm(f => sym ? {
+                                            ...f, currency_quantity: v,
+                                            ticket_price_min_quantity:     withSymbol(f.ticket_price_min_quantity, sym),
+                                            ticket_price_max_quantity:     withSymbol(f.ticket_price_max_quantity, sym),
+                                            ticket_price_default_quantity: withSymbol(f.ticket_price_default_quantity, sym),
+                                        } : { ...f, currency_quantity: v });
+                                    }} />
+                            </label>
+                            <label className="text-xs text-[--cb-text-tertiary] col-span-2">
+                                {t('admin.rooms_form_currency_contract')}
+                                <input className="cb-input w-full mt-1" value={editForm.currency_contract}
+                                    onChange={e => setEditForm(f => ({ ...f, currency_contract: e.target.value }))} />
+                            </label>
+                            <label className="text-xs text-[--cb-text-tertiary]">
+                                {t('admin.rooms_form_price_min')}
+                                <div className="flex items-center gap-1 mt-1">
+                                    <input className="cb-input w-full" data-testid="edit-price_min" value={assetAmount(editForm.ticket_price_min_quantity)}
+                                        onChange={e => setEditForm(f => ({ ...f, ticket_price_min_quantity: withSymbol(e.target.value, assetSymbol(editForm.currency_quantity) || 'BINGO') }))} />
+                                    <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(editForm.currency_quantity) || '—'}</span>
+                                </div>
+                            </label>
+                            <label className="text-xs text-[--cb-text-tertiary]">
+                                {t('admin.rooms_form_price_max')}
+                                <div className="flex items-center gap-1 mt-1">
+                                    <input className="cb-input w-full" data-testid="edit-price_max" value={assetAmount(editForm.ticket_price_max_quantity)}
+                                        onChange={e => setEditForm(f => ({ ...f, ticket_price_max_quantity: withSymbol(e.target.value, assetSymbol(editForm.currency_quantity) || 'BINGO') }))} />
+                                    <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(editForm.currency_quantity) || '—'}</span>
+                                </div>
+                            </label>
+                            <label className="text-xs text-[--cb-text-tertiary] col-span-2">
+                                {t('admin.rooms_form_price_default')}
+                                <div className="flex items-center gap-1 mt-1">
+                                    <input className="cb-input w-full" data-testid="edit-price_default" value={assetAmount(editForm.ticket_price_default_quantity)}
+                                        onChange={e => setEditForm(f => ({ ...f, ticket_price_default_quantity: withSymbol(e.target.value, assetSymbol(editForm.currency_quantity) || 'BINGO') }))} />
+                                    <span className="text-[--cb-text-tertiary] text-sm whitespace-nowrap">{assetSymbol(editForm.currency_quantity) || '—'}</span>
+                                </div>
                             </label>
                             <label className="text-xs text-[--cb-text-tertiary] flex items-center gap-2 mt-4">
                                 <input type="checkbox" checked={editForm.chat_enabled}
