@@ -1138,6 +1138,28 @@
       ]
     },
     {
+      "name": "updateroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price_min",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_max",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_default",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
       "name": "setroomnft",
       "base": "",
       "fields": [
@@ -1448,6 +1470,11 @@
     {
       "name": "pauseroom",
       "type": "pauseroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "updateroom",
+      "type": "updateroom",
       "ricardian_contract": ""
     },
     {
