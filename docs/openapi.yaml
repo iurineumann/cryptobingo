@@ -1966,59 +1966,59 @@ components:
           enum: [confirmed]
           description: Status da transação.
 
-     ContentItem:
-       type: object
-       properties:
-         _id:
-           type: string
-         type:
-           type: string
-         title:
-           type: string
-         slug:
-           type: string
-         content:
-           type: string
-           description: Texto ou JSON de blocks (BlockNote)
-         content_format:
-           type: string
-           enum: [text, blocks]
-         metadata:
-           type: object
-         image_url:
-           type: string
-         sort_order:
-           type: integer
-         pinned:
-           type: boolean
-         active:
-           type: boolean
-         locale_overrides:
-           type: object
-         created_at:
-           type: string
-           format: date-time
-         updated_at:
-           type: string
-           format: date-time
-     ContentInput:
-       type: object
-       required: [title, content]
-       properties:
-         title:
-           type: string
-         slug:
-           type: string
-         content:
-           type: string
-         content_format:
-           type: string
-           enum: [text, blocks]
-         metadata:
-           type: object
-         image_url:
-           type: string
-         sort_order:
-           type: integer
-         pinned:
-           type: boolean
+    ContentItem:
+      type: object
+      properties:
+        _id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+          description: Texto ou JSON de blocks (BlockNote)
+        content_format:
+          type: string
+          enum: [text, blocks]
+        metadata:
+          type: object
+        image_url:
+          type: string
+        sort_order:
+          type: integer
+        pinned:
+          type: boolean
+        active:
+          type: boolean
+        locale_overrides:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ContentInput:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+        content_format:
+          type: string
+          enum: [text, blocks]
+        metadata:
+          type: object
+        image_url:
+          type: string
+        sort_order:
+          type: integer
+        pinned:
+          type: boolean
