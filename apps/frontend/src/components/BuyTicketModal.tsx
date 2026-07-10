@@ -276,6 +276,13 @@ export default function BuyTicketModal({
         clearError();
         if (count < 1) return;
         if (priceError) return;
+        // Guarda contra janela de funding já encerrada: evita disparar
+        // /tickets/generate e receber 409 do backend (jogo não está 'funding').
+        // O backend valida status on-chain; aqui antecipamos no client.
+        if (isClosed) {
+            setPurchaseErrorRaw(t('buy_ticket.error_funding_ended'));
+            return;
+        }
 
         setGenerating(true);
         try {
