@@ -100,23 +100,31 @@ async function fetchPools(): Promise<RawPool[]> {
         // Redis indisponível — continua sem cache
     }
 
-    const res = await rpcClient.v1.chain.get_table_rows({
-        code:       SWAP_CONTRACT,
-        scope:      SWAP_CONTRACT,
-        table:      'pools',
-        json:       true,
-        limit:      100,
-    });
-
-    const pools = (res.rows ?? []) as RawPool[];
-
     try {
-        await redisClient.set(cacheKey, JSON.stringify(pools), { EX: POOLS_CACHE_TTL });
-    } catch {
-        // silencia falha de cache write
-    }
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:       SWAP_CONTRACT,
+            scope:      SWAP_CONTRACT,
+            table:      'pools',
+            json:       true,
+            limit:      100,
+        });
 
-    return pools;
+        const pools = (res.rows ?? []) as RawPool[];
+
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(pools), { EX: POOLS_CACHE_TTL });
+        } catch {
+            // silencia falha de cache write
+        }
+
+        return pools;
+    } catch (err) {
+        // Degradação graceful: se o contrato de swap não está deployado na
+        // testnet (tabela 'pools' ausente) ou o RPC falha, retorna lista vazia
+        // em vez de 502. Em produção (contrato deployado) o fluxo é normal.
+        logger.warn({ err: err, tag: 'swapController' }, 'fetchPools: contrato de swap indisponível, retornando []');
+        return [];
+    }
 }
 
 // ── leitura de NFT discounts ───────────────────────────────────────────────────
@@ -133,21 +141,26 @@ async function fetchNftDiscounts(): Promise<RawNftDiscount[]> {
         if (cached) return JSON.parse(cached) as RawNftDiscount[];
     } catch { /* ok */ }
 
-    const res = await rpcClient.v1.chain.get_table_rows({
-        code:  SWAP_CONTRACT,
-        scope: SWAP_CONTRACT,
-        table: 'nftdiscounts',
-        json:  true,
-        limit: 100,
-    });
-
-    const discounts = (res.rows ?? []) as RawNftDiscount[];
-
     try {
-        await redisClient.set(cacheKey, JSON.stringify(discounts), { EX: 60 });
-    } catch { /* ok */ }
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:  SWAP_CONTRACT,
+            scope: SWAP_CONTRACT,
+            table: 'nftdiscounts',
+            json:  true,
+            limit: 100,
+        });
 
-    return discounts;
+        const discounts = (res.rows ?? []) as RawNftDiscount[];
+
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(discounts), { EX: 60 });
+        } catch { /* ok */ }
+
+        return discounts;
+    } catch (err) {
+        logger.warn({ err: err, tag: 'swapController' }, 'fetchNftDiscounts: contrato de swap indisponível, retornando []');
+        return [];
+    }
 }
 
 /**

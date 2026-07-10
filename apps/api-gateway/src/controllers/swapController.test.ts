@@ -70,12 +70,13 @@ describe('GET /api/v1/swap/pools', () => {
         expect(mockGetTableRows).not.toHaveBeenCalled();
     });
 
-    it('retorna 502 se nodeos falhar', async () => {
+    it('degrada para 200 {pools:[]} se nodeos/swap contract falhar (sem 502)', async () => {
         mockGetTableRows.mockRejectedValue(new Error('nodeos offline'));
 
         const res = await request(makeApp()).get('/api/v1/swap/pools');
 
-        expect(res.status).toBe(502);
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ pools: [] });
     });
 });
 
