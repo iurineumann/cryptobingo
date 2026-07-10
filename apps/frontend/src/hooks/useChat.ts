@@ -60,7 +60,7 @@ export function useChat({ roomId, walletAddress }: UseChatOptions): UseChatRetur
             const params = new URLSearchParams({ limit: '30' });
             if (before) params.set('before', before);
 
-            const res = await fetch(`${API_URL}/api/v1/rooms/${roomId}/chat?${params}`, {
+            const res = await fetch(`${API_URL}/rooms/${roomId}/chat?${params}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
