@@ -960,6 +960,12 @@ namespace bingo {
         games.modify(game_itr, same_payer, [&](auto& g) { g.status = "drawing"_n; });
         // signing_value = game_id — único por partida (primary key da tabela reqs).
         // Compatível com o contrato orng.wax de produção: requestrand(assoc_id, signing_value, caller).
+        // Inline requestrand disparado como 'active' (NÃO 'admin'): o contrato orng faz
+        // require_auth(caller) onde caller = bingogamectr, que o EOSIO resolve para a
+        // permissão MÍNIMA bingogamectr@active. Uma permissão filha ('admin') não satisfaz
+        // a pai ('active') — daí o inline PRECISA ser 'active'. Para autorizar o inline,
+        // bingogamectr@active DEVE conter eosio.code (delegação inline padrão EOSIO; a chave
+        // fria permanece fria — eosio.code é permissão virtual, não expõe a chave privada).
         action(
             permission_level{get_self(), "active"_n},
             config.oracle_account.value_or("orng.wax"_n), "requestrand"_n,
