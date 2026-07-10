@@ -40,7 +40,8 @@ const RPC_URL          = process.env.RPC_URL                   ?? 'http://127.0.
 const CHAIN_ID         = process.env.CHAIN_ID                  ?? '8a34ec7df1b8cd06ff4a8abbaa7cc50300823350cadc59ab296cb00d104d2b8f';
 const ORNG_WAX_KEY     = process.env.ORNG_WAX_KEY;
 const RSA_KEY_PATH     = process.env.ORNG_RSA_PRIVATE_KEY_PATH
-                         ?? path.resolve(__dirname, '../contracts/orng/dev-rsa-private.pem');
+                         ?? '/app/rsa/dev-rsa-private.pem';
+const RSA_KEY_INLINE   = process.env.ORNG_RSA_PRIVATE_KEY; // PEM inline (Container Apps secret)
 const POLL_INTERVAL_MS = parseInt(process.env.ORNG_POLL_INTERVAL_MS ?? '2000', 10);
 // Conta do contrato ORNG que o daemon atende.
 // Dev/local: 'orng.wax' (criada pelo init_dev_env.sh).
@@ -99,7 +100,7 @@ if (!ORNG_WAX_KEY) {
     console.error('[ORNG Oracle] ORNG_WAX_KEY não definida. Aborting.');
     process.exit(1);
 }
-if (!fs.existsSync(RSA_KEY_PATH)) {
+if (!RSA_KEY_INLINE && !fs.existsSync(RSA_KEY_PATH)) {
     console.error(`[ORNG Oracle] RSA private key não encontrada em: ${RSA_KEY_PATH}`);
     process.exit(1);
 }
@@ -107,7 +108,7 @@ if (!fs.existsSync(RSA_KEY_PATH)) {
 // ── PID file (opcional, só fora de container) ─────────────────────────────────
 
 if (WRITE_PID_FILE) {
-    const PID_FILE = path.resolve(__dirname, '../.orng-oracle.pid');
+    const PID_FILE = path.resolve('/tmp/.orng-oracle.pid');
     fs.writeFileSync(PID_FILE, String(process.pid), 'utf-8');
     process.on('exit', () => { try { fs.unlinkSync(PID_FILE); } catch { /* noop */ } });
 }
@@ -125,7 +126,7 @@ const session = new Session({
 
 // ── RSA ───────────────────────────────────────────────────────────────────────
 
-const rsaPrivateKeyPem = fs.readFileSync(RSA_KEY_PATH, 'utf-8');
+const rsaPrivateKeyPem = RSA_KEY_INLINE ?? fs.readFileSync(RSA_KEY_PATH, 'utf-8');
 
 // make_msg — idêntico ao C++ e ao rsaSigning.js do repositório oficial:
 //   sha256(seed_32bytes || dapp_8bytes_LE || nonce_8bytes_LE)
@@ -196,7 +197,7 @@ async function fetchPendingReqs(): Promise<ReqRow[]> {
             scope:    ORACLE_ACCOUNT,
             table:    'reqs',
             limit:    100,
-            lower_bound: lowerBound,
+            lower_bound: lowerBound as any,
             json:     true,
         });
         const rows = (res.rows ?? []) as ReqRow[];
