@@ -521,7 +521,8 @@ if [ -f "${CONTRACT_SRC_HOST}/bingo.wasm" ] && [ -f "${CONTRACT_SRC_HOST}/bingo.
         for ACTION in creategame confignft delnftconf addpattern delpattern \
                       addgametype delgametype setstages setcombos \
                       createroom activateroom pauseroom closeroom setroommeta setroomnft \
-                      linkcampaign closecmpgn allocatedrop deallocdrop abortgame; do
+                      linkcampaign closecmpgn allocatedrop deallocdrop abortgame \
+                      setoracle; do
             cleos set action permission bingogamectr bingogamectr "$ACTION" admin \
               -p bingogamectr@active 2>/dev/null || true
         done
@@ -620,6 +621,7 @@ echo "[✓] Chave RSA v1 registrada e ativada."
 # ── 8b-6. Grava variáveis RSA no .waxdev.env ───────────────────────────────
 echo "ORNG_RSA_PRIVATE_KEY_PATH=$(realpath "$ORNG_RSA_PRIV")" >> .waxdev.env
 echo "ORNG_RSA_EXPONENT=${ORNG_RSA_EXPONENT}"                 >> .waxdev.env
+echo "ORNG_ACCOUNT=orng.wax"                                  >> .waxdev.env
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 8c. CONFIGURA signer_key DO CONTRATO
