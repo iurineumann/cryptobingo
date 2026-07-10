@@ -187,6 +187,19 @@ interface ReqRow {
 
 const inFlight = new Set<string>();
 
+// Reqs com erro não-recuperável (ex.: "Game not found" — assoc_id de jogo
+// inexistente) são descartadas após N falhas para não gerar loop de retry
+// nos logs. Resetadas a cada hora (cooldown) para dar segunda chance a
+// casos transientes.
+const skipped         = new Set<string>();
+const failCount       = new Map<string, number>();
+const SKIP_THRESHOLD  = 3;
+const NON_RETRYABLE   = ['Game not found'];
+
+function isNonRetryable(msg: string): boolean {
+    return NON_RETRYABLE.some(s => msg.includes(s));
+}
+
 // Busca TODAS as requisições pendentes (com paginação via next_key).
 async function fetchPendingReqs(): Promise<ReqRow[]> {
     const all: ReqRow[] = [];
@@ -255,6 +268,15 @@ async function fulfillRequest(row: ReqRow): Promise<void> {
 let polling = false;
 let stopped = false;
 
+// Reset periódico do cooldown (1h): dá nova chance a reqs com erro transitório.
+setInterval(() => {
+    if (skipped.size > 0) {
+        console.log(`[ORNG Oracle] cooldown: reavaliando ${skipped.size} req(s) pulada(s)`);
+        skipped.clear();
+        failCount.clear();
+    }
+}, 3600_000).unref();
+
 async function poll(): Promise<void> {
     if (polling || stopped) return;
     polling = true;
@@ -263,6 +285,7 @@ async function poll(): Promise<void> {
         for (const row of rows) {
             const key = row.id;
             if (inFlight.has(key)) continue;
+            if (skipped.has(key))    continue;
             inFlight.add(key);
             fulfillRequest(row)
                 .catch(err => {
@@ -273,6 +296,21 @@ async function poll(): Promise<void> {
                         id:     row.id,
                         assoc_id: row.assoc_id,
                     });
+                    // Erro não-recuperável → descarta após N tentativas.
+                    if (isNonRetryable(msg)) {
+                        const n = (failCount.get(key) ?? 0) + 1;
+                        failCount.set(key, n);
+                        if (n >= SKIP_THRESHOLD) {
+                            skipped.add(key);
+                            console.warn(`[ORNG Oracle] ⚠ id=${row.id} pulada (erro não-recuperável x${n}): ${msg}`);
+                            telemetry.trackEvent('OracleRequestSkipped', {
+                                oracle:   ORACLE_ACCOUNT,
+                                id:       row.id,
+                                assoc_id: row.assoc_id,
+                                reason:   'non-retryable',
+                            });
+                        }
+                    }
                 })
                 .finally(() => inFlight.delete(key));
         }
