@@ -1,14 +1,27 @@
 #!/usr/bin/env npx ts-node
 // ============================================================
-// scripts/orng-oracle.ts — Daemon oracle do WAX ORNG (dev)
+// scripts/orng-oracle.ts — Daemon oracle do WAX ORNG
 //
 // Fluxo (idêntico ao oracle de produção do WAX ORNG):
-//   1. Poll da tabela reqs em orng.wax a cada ORNG_POLL_INTERVAL_MS
+//   1. Poll da tabela reqs em ${ORNG_ACCOUNT} (ORNG_ACCOUNT, default 'orng.wax')
+//      a cada ORNG_POLL_INTERVAL_MS
 //   2. Para cada request pendente:
 //      a. Reconstrói make_msg(seed, dapp, nonce) — idêntico ao contrato C++
-//      b. Assina com RSA-PKCS1v15-SHA256 usando a chave privada RSA dev
-//      c. Chama orng.wax::setrand(oracle, id, ver, sig_hex)
+//      b. Assina com RSA-PKCS1v15-SHA256 usando a chave privada RSA
+//      c. Chama ${ORACLE_ACCOUNT}::setrand(oracle, id, ver, sig_hex)
 //   3. O contrato verifica, computa rnd=sha256(sig_hex) e entrega ao caller
+//
+// Env (todos opcionais com default de dev/local):
+//   RPC_URL                  (default http://127.0.0.1:8888)
+//   CHAIN_ID                 (default chain_id do nodeos local dev)
+//   ORNG_WAX_KEY             chave privada da conta ORACLE_ACCOUNT@active (obrigatória)
+//   ORNG_ACCOUNT             conta do contrato ORNG (default 'orng.wax';
+//                            testnet usa 'bingogamerng')
+//   ORNG_RSA_PRIVATE_KEY_PATH (default ../contracts/orng/dev-rsa-private.pem)
+//   ORNG_POLL_INTERVAL_MS   (default 2000)
+//   APPINSIGHTS_CONNECTION_STRING / APPINSIGHTS_INSTRUMENTATIONKEY
+//                            se definido, emite telemetria (ETAPA 6 / Azure)
+//   WRITE_PID_FILE=1         escreve .orng-oracle.pid (útil só fora de container)
 //
 // Ref: https://github.com/worldwide-asset-exchange/wax-orng (branch develop)
 //      tests/rsaSigning.js — make_msg e assinatura RSA
@@ -29,7 +42,56 @@ const ORNG_WAX_KEY     = process.env.ORNG_WAX_KEY;
 const RSA_KEY_PATH     = process.env.ORNG_RSA_PRIVATE_KEY_PATH
                          ?? path.resolve(__dirname, '../contracts/orng/dev-rsa-private.pem');
 const POLL_INTERVAL_MS = parseInt(process.env.ORNG_POLL_INTERVAL_MS ?? '2000', 10);
-const ORACLE_ACCOUNT   = 'orng.wax';
+// Conta do contrato ORNG que o daemon atende.
+// Dev/local: 'orng.wax' (criada pelo init_dev_env.sh).
+// Testnet: 'bingogamerng' (conta dedicada criada manualmente na testnet).
+const ORACLE_ACCOUNT   = process.env.ORNG_ACCOUNT ?? 'orng.wax';
+const WRITE_PID_FILE   = process.env.WRITE_PID_FILE === '1';
+
+// ── Telemetria (App Insights, opcional) ──────────────────────────────────────
+
+interface Telemetry {
+    trackEvent(name: string, props?: Record<string, string>): void;
+    trackException(err: unknown, props?: Record<string, string>): void;
+    trackMetric(name: string, value: number): void;
+    flush(): void;
+}
+
+function createTelemetry(): Telemetry {
+    const connStr = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+                 ?? process.env.APPINSIGHTS_CONNECTION_STRING;
+    const ikey    = process.env.APPINSIGHTS_INSTRUMENTATIONKEY
+                 ?? process.env.APPINSIGHTS_INSTRUMENTATIONKEY;
+
+    if (connStr || ikey) {
+        try {
+            // dinâmico para não quebrar o dev se o pacote não estiver instalado
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const appInsights = require('applicationinsights');
+            if (connStr) appInsights.setup(connStr);
+            else          appInsights.setup(ikey as string);
+            const client = appInsights.defaultClient;
+            appInsights.start();
+            return {
+                trackEvent: (n, p) => client.trackEvent({ name: n, properties: p }),
+                trackException: (e, p) => client.trackException({ exception: e as Error, properties: p }),
+                trackMetric: (n, v) => client.trackMetric({ name: n, value: v }),
+                flush: () => client.flush(),
+            };
+        } catch (e) {
+            console.warn(`[ORNG Oracle] App Insights configurado mas pacote ausente: ${(e as Error).message}`);
+        }
+    }
+    // Fallback: no-op (modo dev)
+    return {
+        trackEvent:  () => {},
+        trackException: () => {},
+        trackMetric: () => {},
+        flush:       () => {},
+    };
+}
+
+const telemetry = createTelemetry();
 
 // ── Validações iniciais ───────────────────────────────────────────────────────
 
@@ -42,13 +104,13 @@ if (!fs.existsSync(RSA_KEY_PATH)) {
     process.exit(1);
 }
 
-// ── PID file ──────────────────────────────────────────────────────────────────
+// ── PID file (opcional, só fora de container) ─────────────────────────────────
 
-const PID_FILE = path.resolve(__dirname, '../.orng-oracle.pid');
-fs.writeFileSync(PID_FILE, String(process.pid), 'utf-8');
-process.on('exit',   () => { try { fs.unlinkSync(PID_FILE); } catch { /* noop */ } });
-process.on('SIGTERM', () => process.exit(0));
-process.on('SIGINT',  () => process.exit(0));
+if (WRITE_PID_FILE) {
+    const PID_FILE = path.resolve(__dirname, '../.orng-oracle.pid');
+    fs.writeFileSync(PID_FILE, String(process.pid), 'utf-8');
+    process.on('exit', () => { try { fs.unlinkSync(PID_FILE); } catch { /* noop */ } });
+}
 
 // ── Clientes ─────────────────────────────────────────────────────────────────
 
@@ -124,15 +186,25 @@ interface ReqRow {
 
 const inFlight = new Set<string>();
 
+// Busca TODAS as requisições pendentes (com paginação via next_key).
 async function fetchPendingReqs(): Promise<ReqRow[]> {
-    const res = await rpcClient.v1.chain.get_table_rows({
-        code:  ORACLE_ACCOUNT,
-        scope: ORACLE_ACCOUNT,
-        table: 'reqs',
-        limit: 10,
-        json:  true,
-    });
-    return (res.rows ?? []) as ReqRow[];
+    const all: ReqRow[] = [];
+    let lowerBound: string | undefined;
+    do {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:     ORACLE_ACCOUNT,
+            scope:    ORACLE_ACCOUNT,
+            table:    'reqs',
+            limit:    100,
+            lower_bound: lowerBound,
+            json:     true,
+        });
+        const rows = (res.rows ?? []) as ReqRow[];
+        all.push(...rows);
+        // continua paginando enquanto houver mais
+        lowerBound = res.more ? (rows[rows.length - 1]?.id as unknown as string) : undefined;
+    } while (lowerBound);
+    return all;
 }
 
 async function fulfillRequest(row: ReqRow): Promise<void> {
@@ -154,7 +226,7 @@ async function fulfillRequest(row: ReqRow): Promise<void> {
     // 2. Assina com RSA
     const sigHex = signMessage(msgBuf);
 
-    // 3. Chama orng.wax::setrand
+    // 3. Chama ${ORACLE_ACCOUNT}::setrand
     await session.transact({
         actions: [{
             account:       ORACLE_ACCOUNT,
@@ -170,26 +242,65 @@ async function fulfillRequest(row: ReqRow): Promise<void> {
     }, { broadcast: true });
 
     console.log(`[ORNG Oracle] ✓ id=${id} fulfilled (${sigHex.length / 2} bytes RSA)`);
+    telemetry.trackEvent('OracleRequestFulfilled', {
+        oracle: ORACLE_ACCOUNT,
+        id,
+        assoc_id: row.assoc_id,
+        dapp,
+    });
+    telemetry.trackMetric('OracleRequestsFulfilled', 1);
 }
+
+let polling = false;
+let stopped = false;
 
 async function poll(): Promise<void> {
-    let rows: ReqRow[];
+    if (polling || stopped) return;
+    polling = true;
     try {
-        rows = await fetchPendingReqs();
-    } catch {
-        return; // nodeos pode estar inicializando — silencioso
-    }
-
-    for (const row of rows) {
-        const key = row.id;
-        if (inFlight.has(key)) continue;
-        inFlight.add(key);
-
-        fulfillRequest(row)
-            .catch(err => console.error(`[ORNG Oracle] Erro id=${row.id}:`, err?.message ?? err))
-            .finally(() => inFlight.delete(key));
+        const rows = await fetchPendingReqs();
+        for (const row of rows) {
+            const key = row.id;
+            if (inFlight.has(key)) continue;
+            inFlight.add(key);
+            fulfillRequest(row)
+                .catch(err => {
+                    const msg = err?.message ?? String(err);
+                    console.error(`[ORNG Oracle] Erro id=${row.id}:`, msg);
+                    telemetry.trackException(err, {
+                        oracle: ORACLE_ACCOUNT,
+                        id:     row.id,
+                        assoc_id: row.assoc_id,
+                    });
+                })
+                .finally(() => inFlight.delete(key));
+        }
+    } catch (err) {
+        // nodeos pode estar inicializando — silencioso, mas registra telemetria
+        telemetry.trackException(err, { oracle: ORACLE_ACCOUNT, phase: 'fetchPendingReqs' });
+    } finally {
+        polling = false;
     }
 }
+
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+
+async function shutdown(signal: string): Promise<void> {
+    if (stopped) return;
+    stopped = true;
+    console.log(`\n[ORNG Oracle] Recebido ${signal} — encerrando (aguardando in-flight)...`);
+    telemetry.trackEvent('OracleShutdown', { signal });
+    // aguarda no máximo 10s pelas requisições em voo
+    const deadline = Date.now() + 10000;
+    while (inFlight.size > 0 && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 200));
+    }
+    telemetry.flush();
+    process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
@@ -198,11 +309,15 @@ console.log('╔═════════════════════�
 console.log('║  CryptoBingo — ORNG Oracle Daemon              ║');
 console.log('╚════════════════════════════════════════════════╝');
 console.log(`  RPC       : ${RPC_URL}`);
+console.log(`  Chain ID  : ${CHAIN_ID.slice(0, 16)}...`);
 console.log(`  Oracle    : ${ORACLE_ACCOUNT}`);
 console.log(`  RSA key   : ${RSA_KEY_PATH}`);
 console.log(`  Poll      : ${POLL_INTERVAL_MS}ms`);
+console.log(`  Telemetry : ${process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || process.env.APPINSIGHTS_INSTRUMENTATIONKEY ? 'App Insights' : 'console-only'}`);
 console.log(`  PID       : ${process.pid}`);
 console.log('');
+
+telemetry.trackEvent('OracleStart', { oracle: ORACLE_ACCOUNT, rpc: RPC_URL });
 
 poll();
 setInterval(poll, POLL_INTERVAL_MS);

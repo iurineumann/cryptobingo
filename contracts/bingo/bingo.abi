@@ -626,6 +626,16 @@
       ]
     },
     {
+      "name": "setoracle",
+      "base": "",
+      "fields": [
+        {
+          "name": "oracle",
+          "type": "name"
+        }
+      ]
+    },
+    {
       "name": "setroommeta",
       "base": "",
       "fields": [
@@ -806,6 +816,14 @@
         {
           "name": "signer_key",
           "type": "public_key"
+        },
+        {
+          "name": "treasury_account",
+          "type": "name"
+        },
+        {
+          "name": "oracle_account",
+          "type": "name$"
         }
       ]
     },
@@ -1497,6 +1515,11 @@
     {
       "name": "setconfig",
       "type": "setconfig",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setoracle",
+      "type": "setoracle",
       "ricardian_contract": ""
     },
     {

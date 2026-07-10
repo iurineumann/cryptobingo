@@ -160,6 +160,18 @@ namespace bingo {
         config_singleton config_table(get_self(), get_self().value);
         config_state config = config_table.exists() ? config_table.get() : config_state{};
         config.treasury_account = account;
+        // Preserva signer_key e oracle_account (ou defaults se ausentes)
+        config_table.set(config, get_self());
+    }
+
+    // ADR-XXX: parametriza conta do oráculo RNG.
+    // Só admin (bingogamectr@admin) pode alterar. Valida existência da conta.
+    void bingo_contract::setoracle(name oracle) {
+        require_auth(permission_level{get_self(), "admin"_n});
+        check(is_account(oracle), "oracle_account invalida ou inexistente.");
+        config_singleton config_table(get_self(), get_self().value);
+        config_state config = config_table.exists() ? config_table.get() : config_state{};
+        config.oracle_account.emplace(oracle);
         config_table.set(config, get_self());
     }
 
@@ -939,6 +951,9 @@ namespace bingo {
 
     void bingo_contract::startdraw(uint64_t game_id) {
         require_auth("bingogamesvc"_n);
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        auto config = config_table.get();
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
@@ -947,7 +962,7 @@ namespace bingo {
         // Compatível com o contrato orng.wax de produção: requestrand(assoc_id, signing_value, caller).
         action(
             permission_level{get_self(), "active"_n},
-            "orng.wax"_n, "requestrand"_n,
+            config.oracle_account.value_or("orng.wax"_n), "requestrand"_n,
             std::make_tuple(game_id, game_id, get_self())
         ).send();
     }
@@ -957,7 +972,9 @@ namespace bingo {
     // onde rnd = sha256(rsa_sig_hex_string).
     // As 75 bolas são derivadas on-chain via Fisher-Yates seeded pelo checksum256.
     void bingo_contract::receiverand(uint64_t assoc_id, eosio::checksum256 random_value) {
-        require_auth("orng.wax"_n);
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        require_auth(config_table.get().oracle_account.value_or("orng.wax"_n));
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(assoc_id, "Game not found for Oracle response.");

@@ -9,9 +9,6 @@
       "dependsOn": ["^build", "build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "tests/**/*.ts"]
     },
-    "bootstrap": {
-      "cache": false
-    },
     "e2e": {
       "dependsOn": ["^build"],
       "cache": false

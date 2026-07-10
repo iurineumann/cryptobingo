@@ -19,6 +19,8 @@ namespace bingo {
     struct [[eosio::table("config")]] config_state {
         public_key signer_key;
         name       treasury_account = "bingogamectr"_n; // destino do sweep de GGR (ADR-005)
+        // binary_extension → compatível com linhas existentes que não têm o campo
+        eosio::binary_extension<name> oracle_account;  // conta do oráculo RNG (paridade testnet/mainnet)
     };
     typedef singleton<"config"_n, config_state> config_singleton;
 
@@ -464,6 +466,9 @@ namespace bingo {
         // ── Configuração ─────────────────────────────────────────────────────
         [[eosio::action]] void setconfig(public_key signer_key);
         [[eosio::action]] void settreasury(name account); // ADR-005: define destino do sweep GGR
+        // ADR-XXX: parametriza conta do oráculo RNG (padrão "orng.wax").
+        // Chamado por admin (bingogamectr@admin). Exige conta existente on-chain.
+        [[eosio::action]] void setoracle(name oracle);
 
         // ── FSM de Jogos ──────────────────────────────────────────────────────
         [[eosio::action]] void creategame(uint64_t game_id, extended_asset ticket_price, uint64_t gametype_id, uint64_t room_id);
