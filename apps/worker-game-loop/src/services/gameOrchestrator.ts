@@ -37,7 +37,7 @@ import {
     io,
     type WinnerPayload,
 } from './broadcaster';
-import { executeCloseGame }                                          from './blockchain';
+import { executeCloseGame, executeAbortGame }                         from './blockchain';
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
 import { sendGameSummaryMessage }                                    from './chatSystemHelper';
@@ -286,6 +286,18 @@ export async function orchestrateGame(gameId: string): Promise<void> {
             maxBalls        = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
             goldenBallAfter = gt.golden_ball_after ?? 0;
             baseMultiplier  = gt.base_multiplier ?? 1;
+
+            // ADR-051 / L4.2: MULTI_MATCH exige stages não-vazios. Sem defesa, o
+            // orquestrador revelaria todas as 75 bolas e deixaria o jogo travado em drawn.
+            if (drawMode === 'multimatch') {
+                const stages = Array.isArray(gt.stages) ? gt.stages : [];
+                if (stages.length === 0) {
+                    logger.error({ tag: 'Orquestrador' },
+                        `Jogo ${gameId}: gametype ${gametypeId} é MULTI_MATCH mas stages=[] (inválido). Abortando.`);
+                    await executeAbortGame(gameId, 'MULTI_MATCH sem stages definidos (config invalida)');
+                    return;
+                }
+            }
         }
     }
 
