@@ -162,7 +162,7 @@ export function useGameRoomState(
   const {
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
     isGameEnded, goldenBall, goldenMultiplierProgress, clearedStages, drawMode,
-    prizeStatuses, wsEverConnected, hydratePrizeStatuses,
+    prizeStatuses, wsEverConnected, wsReceivedBalls, hydratePrizeStatuses,
   } = useSlowReveal(gameId);
 
   const timeRemaining = useMemo(() => {
@@ -186,19 +186,30 @@ export function useGameRoomState(
     [game?.status, drawnBalls.length],
   );
 
+  // Só usamos o fallback quando o reveal ao vivo NÃO vai mais acontecer:
+  //  - isGameEnded (WS confirmou fim do reveal), OU
+  //  - wsReceivedBalls (recebemos bolas ao vivo e o reveal parou), OU
+  //  - jogo já 'archived' (entramos depois do término — visualização histórica).
+  // Enquanto conectados a um jogo 'drawn' sem bolas nem game_ended, ESPERAMOS
+  // (não mostramos o resultado final) — corrige flash do resultado logo após o lock.
+  const showFallback = useMemo(() =>
+    isStaticFinalState && (isGameEnded || wsReceivedBalls || (game?.status ?? '') === 'archived'),
+    [isStaticFinalState, isGameEnded, wsReceivedBalls, game?.status],
+  );
+
   const fallbackBalls = useMemo((): typeof drawnBalls => {
-    if (!isStaticFinalState || !game) return [];
+    if (!showFallback || !game) return [];
     const raw = game.drawn_balls;
     const arr: number[] = Array.isArray(raw) ? raw : parseHexMatrix(raw as unknown as string);
     return arr
       .slice(0, maxBalls)
       .filter(b => b !== 0)
       .map((num, idx) => ({ order: idx + 1, number: num, timestamp: '' }));
-  }, [isStaticFinalState, game, maxBalls]);
+  }, [showFallback, game, maxBalls]);
 
   // Hidrata prizeStatuses da API p/ jogos encerrados onde WS não re-emite eventos
   useEffect(() => {
-    if (!gameId || !isStaticFinalState) return;
+    if (!gameId || !showFallback) return;
     fetchGamePrizeTransactions(gameId)
       .then(res => {
         hydratePrizeStatuses(res.items.map(p => ({
@@ -224,10 +235,11 @@ export function useGameRoomState(
   // drawMode final: prefere on-chain (disponível desde o load), fallback WS game_ended
   const resolvedDrawMode = localDrawMode ?? drawMode;
 
-  // Jogo efetivamente encerrado: via WS ou por status archived/drawn.
-  // Só considera staticFinalState após WS ter conectado ao menos 1x (evita flash
-  // do resultado final antes do slow reveal começar — entre closing e live).
-  const isEffectiveGameEnded = isGameEnded || (isStaticFinalState && wsEverConnected);
+  // Jogo efetivamente encerrado: via WS (game_ended) ou por fallback estático
+  // (showFallback — reveal ao vivo não vai mais acontecer). Não basta wsEverConnected:
+  // o socket conecta ANTES das bolas chegarem, então conectado+status drawn sem bolas
+  // ainda é reveal em andamento → não mostramos o resultado final ainda.
+  const isEffectiveGameEnded = isGameEnded || showFallback;
 
   // Status efetivo para exibição: enquanto o slow reveal estiver ativo (bolas chegando
   // via WS mas jogo ainda não encerrado), mostra "drawing" independentemente do status
