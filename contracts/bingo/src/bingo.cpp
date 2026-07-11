@@ -186,7 +186,14 @@ namespace bingo {
 
         if (gametype_id != 0) {
             gametypes_table gametypes(get_self(), get_self().value);
-            check(gametypes.find(gametype_id) != gametypes.end(), "gametype_id nao encontrado.");
+            auto gt_itr = gametypes.find(gametype_id);
+            check(gt_itr != gametypes.end(), "gametype_id nao encontrado.");
+            // ADR-051: gametype multimatch sem stages produz jogo invalido
+            // (revela 75 bolas e nao paga). Bloqueia na criacao do jogo.
+            if (gt_itr->draw_mode == "multimatch"_n) {
+                check(!gt_itr->stages.empty(),
+                    "Gametype multimatch sem stages definidos. Use setstages antes de criar o jogo.");
+            }
         }
 
         // Se vinculado a uma sala, valida que ela existe, está ativa e sem partida corrente
@@ -379,18 +386,31 @@ namespace bingo {
         for (const auto& m : valid_modes) { if (draw_mode == m) { valid = true; break; } }
         check(valid, "draw_mode invalido. Use: standard, fixed, firstfull, goldenball, multimatch.");
 
-        // Valida campos por modo
+        // Valida campos por modo (ADR-051: consistência semântica por draw_mode)
         if (draw_mode == "goldenball"_n) {
             check(golden_ball_after > 0 && golden_ball_after < 74,
                 "golden_ball_after deve ser entre 1 e 73.");
         }
+        if (draw_mode == "fixed"_n) {
+            check(max_balls >= 1 && max_balls <= 75,
+                "fixed exige max_balls entre 1 e 75.");
+        }
 
         patterns_table patterns(get_self(), get_self().value);
+        bool has_master = false;
         for (const auto& rule : rules) {
-            check(patterns.find(rule.pattern_id) != patterns.end(),
+            auto pat_itr = patterns.find(rule.pattern_id);
+            check(pat_itr != patterns.end(),
                 "pattern_id " + std::to_string(rule.pattern_id) + " nao encontrado.");
             check(rule.weight > 0, "weight deve ser maior que zero.");
             check(rule.weight <= 25500, "weight max 255.00 (hundredths).");
+            if (pat_itr->mask == 0x1FFFFFF) has_master = true;
+        }
+
+        // ADR-051: firstfull só premia o MASTER — exige regra do padrão MASTER.
+        if (draw_mode == "firstfull"_n) {
+            check(has_master,
+                "firstfull exige uma regra com o padrao MASTER (mask 0x1FFFFFF).");
         }
 
         eosio::name effective_mode = (draw_mode.value == 0) ? "standard"_n : draw_mode;
@@ -480,7 +500,7 @@ namespace bingo {
         }
 
         gametypes.modify(itr, get_self(), [&](auto& row) {
-            row.combinations.emplace(combinations);
+            row.combinations.emplace(combinations);  // binary_extension::emplace substitui o valor
         });
     }
 
