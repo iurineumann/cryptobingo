@@ -79,6 +79,8 @@ export interface SlowRevealState {
     prizeStatuses:   Record<string, PrizeStatus>;
     /** true após primeira conexão WebSocket — usado como guard p/ evitar flash de tela final. */
     wsEverConnected: boolean;
+    /** true após receber ao menos 1 bola via WS nesta conexão (distingue reveal ao vivo de jogo já encerrado). */
+    wsReceivedBalls: boolean;
     /** Hidrata prizeStatuses a partir de dados da API (jogos arquivados sem WS). */
     hydratePrizeStatuses: (entries: Array<{
         ticketId: string; winLabel: string; transactionId: string; amount: string; currency: string;
@@ -153,6 +155,10 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
     const [drawMode,          setDrawMode]          = useState<string | null>(null);
     const [prizeStatuses,     setPrizeStatuses]     = useState<Record<string, PrizeStatus>>({});
     const [wsEverConnected,   setWsEverConnected]   = useState(false);
+    /** true após receber ao menos 1 bola via WS (ball_drawn/sync_response) nesta conexão.
+     *  Usado para distinguir "reveal ao vivo em andamento" de "jogo já encerrado antes
+     *  do join" — evita flash do resultado final antes do slow reveal começar. */
+    const [wsReceivedBalls,  setWsReceivedBalls]    = useState(false);
 
     const resetState = useCallback(() => {
         setDrawnBalls([]);
@@ -167,6 +173,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         setClearedStages([]);
         setDrawMode(null);
         setPrizeStatuses({});
+        setWsReceivedBalls(false);
         lastOrderRef.current = 0;
     }, []);
 
@@ -200,6 +207,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
 
         const { order, number, timestamp } = msg.payload;
         setIsDrawing(true);
+        setWsReceivedBalls(true);
 
         if (order > lastOrderRef.current + 1) {
             console.warn(
@@ -251,6 +259,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
                 lastOrderRef.current,
                 msg.balls.at(-1)!.order
             );
+            setWsReceivedBalls(true);
         }
     }
 
@@ -444,6 +453,7 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         drawMode,
         prizeStatuses,
         wsEverConnected,
+        wsReceivedBalls,
         hydratePrizeStatuses,
     };
 }
