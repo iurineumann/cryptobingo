@@ -129,6 +129,7 @@ import {
 } from "./controllers/internalChatController";
 import { startMetricsServer, metricsMiddleware } from "./services/metrics";
 import { setupChatSocket } from "./socket/chatSocket";
+import { setupBroadcastSocket } from "./socket/broadcastSocket";
 import { setIo } from "./socket";
 import {
   getLeaderboardGlobal,
@@ -203,6 +204,7 @@ async function bootstrap(): Promise<void> {
   });
   setIo(io);
   setupChatSocket(io);
+  setupBroadcastSocket(io);
 
   httpServer.listen(PORT, () => {
     console.log("=============================================");
