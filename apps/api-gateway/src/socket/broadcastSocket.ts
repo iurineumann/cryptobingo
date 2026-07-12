@@ -18,6 +18,7 @@
 
 import { Server, Socket } from 'socket.io';
 import { redisClient } from '../database/redis';
+import { createClient, type RedisClientType } from 'redis';
 import { logger } from '../middleware/logger';
 
 // Canal Redis pub/sub onde o worker publica os eventos de reveal
@@ -30,16 +31,25 @@ const activeSessions = new Map<string, { balls: number[]; currentIdx: number }>(
 // Reconciliação: cliente que perdeu bolas pede `sync` (ADR-007 §4)
 interface SyncData { game_id: number; last_order: number }
 
-export function setupBroadcastSocket(io: Server): void {
-  // ── Subscriber Redis dedicado (não bloqueia o client principal) ──
-  const sub = redisClient.duplicate();
+export async function setupBroadcastSocket(io: Server): Promise<void> {
+  // ── Subscriber Redis dedicado ──
+  // IMPORTANTE (redis v4/6): NÃO usar redisClient.duplicate() para subscriber —
+  // o client principal já está em modo comando (RateLimit/blacklist) e o
+  // duplicate() herda esse estado, falhando silenciosamente em receber mensagens
+  // de subscribe (PUBSUB NUMSUB mostra inscrito, mas `message` nunca dispara).
+  // Criar um client SEPARADO com createClient({ url: process.env.REDIS_URL }) é o padrão
+  // correto e funciona.
+  const sub: RedisClientType = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
   sub.on('error', (err) => logger.error({ err, tag: 'BroadcastWS' }, 'Erro no subscriber Redis do broadcaster:'));
-  sub.subscribe(REVEAL_CHANNEL, (err) => {
-    if (err) logger.error({ err, tag: 'BroadcastWS' }, `Falha ao assinar ${REVEAL_CHANNEL}:`);
-    else logger.info({ tag: 'BroadcastWS' }, `Assinando canal Redis ${REVEAL_CHANNEL} (reveal).`);
-  });
+  // redis v4/6: subscriber precisa conectar antes de assinar.
+  await sub.connect();
 
-  sub.on('message', (_channel, message) => {
+  // IMPORTANTE (redis v4/6): a assinatura de subscribe é subscribe(channel, listener),
+  // onde `listener` É o handler de mensagem (assinatura (message) => {}). NÃO usar
+  // sub.on('message', ...) — no modo subscriber do redis v6 ele NÃO dispara e gera
+  // "listener is not a function"; e NÃO passar (err) => {} como se fosse callback de
+  // erro estilo Node (o redis trata como message listener inválido).
+  await sub.subscribe(REVEAL_CHANNEL, (message: string, _channel?: string) => {
     try {
       const msg = JSON.parse(message) as {
         type: string;
