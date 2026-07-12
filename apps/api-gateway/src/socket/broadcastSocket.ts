@@ -60,7 +60,26 @@ export function setupBroadcastSocket(io: Server): void {
       // Re-emite QUALQUER tipo de evento de reveal para a room.
       // Cobre: ball_drawn, winner_found, golden_ball, golden_multiplier_progress,
       // stage_cleared, game_ended, prize_tx_sent, prize_confirmed, game_locked, game_aborted.
-      io.to(room).emit(msg.type, msg.payload);
+      //
+      // ACHATAMENTO DE PAYLOAD (BUG #263): o worker publica em Redis com
+      // `payload` aninhado duplo — ex.: ball_drawn vem como
+      //   { type, gameId, payload:{ event, game_id, payload:{ order, number, ... } } }
+      // O frontend (useSlowReveal.handleBallDrawn) espera receber DIRETAMENTE
+      //   { event, game_id, payload:{ order, number, timestamp } }
+      // (lê msg.payload.order, NÃO msg.payload.payload.order). Sem achatar,
+      // order/number chegam undefined e o slow reveal não anima (jogo vai a
+      // 'drawn' sem bolas). Achata preservando event/game_id no topo.
+      const outer = msg.payload ?? {};
+      const inner = (typeof outer.payload === 'object' && outer.payload !== null)
+        ? outer.payload
+        : outer;
+      const emitPayload = {
+        ...outer,
+        game_id: outer.game_id ?? Number(msg.gameId),
+        event:   outer.event ?? msg.type,
+        payload: inner,
+      };
+      io.to(room).emit(msg.type, emitPayload);
 
       // Encerra a sessão espelhada quando o reveal termina/aborta
       if (msg.type === 'game_ended' || msg.type === 'game_aborted') {
