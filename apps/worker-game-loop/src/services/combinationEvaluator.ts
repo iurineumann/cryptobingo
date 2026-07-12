@@ -13,6 +13,8 @@
 // satisfeitas} (regra max_weight, ADR-005). Combinações aninhadas são naturalmente
 // resolvidas pela seleção do maior peso.
 
+import { fetchPatternsWithCache, type PatternEntry } from './patternCache';
+
 const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
 const COMBO_CACHE_TTL_MS = 60_000; // 1 min — alinhado à invalidação por setcombos
 
@@ -51,7 +53,10 @@ const cache = new Map<string, { ctx: ComboContext; expires: number }>();
  * Combina padrões on-chain + rules/combinações off-chain do endpoint do api-gateway.
  * Em falha, retorna contexto vazio (fail-safe → paga só por padrão).
  */
-export async function fetchComboContext(gametypeId: string): Promise<ComboContext> {
+export async function fetchComboContext(
+  gametypeId: string,
+  onChainPatterns?: PatternEntry[],
+): Promise<ComboContext> {
     const cached = cache.get(gametypeId);
     if (cached && cached.expires > Date.now()) return cached.ctx;
 
@@ -61,15 +66,38 @@ export async function fetchComboContext(gametypeId: string): Promise<ComboContex
         if (!res.ok) return empty;
         const data = await res.json() as ApiPatternsResponse;
 
-        const typeById = new Map<string, string>();
-        for (const r of data.rules ?? []) typeById.set(String(r.pattern_id), r.type);
+        // Mapeia nome do gateway -> type (do rules), para cruzar com on-chain
+        const typeByNameGateway = new Map<string, string>();
+        for (const r of data.rules ?? []) {
+            const gp = (data.patterns ?? []).find(p => String(p.pattern_id) === String(r.pattern_id));
+            if (gp) typeByNameGateway.set(gp.name, r.type);
+        }
 
+        // Padrões on-chain = fonte de verdade para NOMES (ADR-016).
+        // Se não vieram do caller, busca do cache/on-chain.
+        const onChain = onChainPatterns ?? (await fetchPatternsWithCache(gametypeId).catch(() => null));
         const patternNameById   = new Map<string, string>();
-        const patternTypeByName  = new Map<string, string>();
-        for (const p of data.patterns ?? []) {
-            if (p.pattern_id !== undefined) {
-                patternNameById.set(String(p.pattern_id), p.name);
-                patternTypeByName.set(p.name, typeById.get(String(p.pattern_id)) ?? 'simple');
+        const patternTypeByName = new Map<string, string>();
+
+        if (onChain && onChain.length) {
+            // CHAVE = nome ON-CHAIN (igual ao wonPatternNames do evaluator)
+            for (const op of onChain) {
+                patternTypeByName.set(op.name, typeByNameGateway.get(op.name) ?? 'simple');
+            }
+            // patternNameById: gateway pattern_id -> nome on-chain (p/ all_of/any_of)
+            for (const gp of data.patterns ?? []) {
+                const oc = onChain.find(o => o.name === gp.name);
+                if (oc) patternNameById.set(String(gp.pattern_id), oc.name);
+            }
+        } else {
+            // Fallback: mantém comportamento anterior (nomes do gateway)
+            const typeById = new Map<string, string>();
+            for (const r of data.rules ?? []) typeById.set(String(r.pattern_id), r.type);
+            for (const p of data.patterns ?? []) {
+                if (p.pattern_id !== undefined) {
+                    patternNameById.set(String(p.pattern_id), p.name);
+                    patternTypeByName.set(p.name, typeById.get(String(p.pattern_id)) ?? 'simple');
+                }
             }
         }
 

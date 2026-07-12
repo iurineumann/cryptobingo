@@ -196,7 +196,7 @@ export async function findAllWinners(
     masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
-    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
+    const comboCtx = await fetchComboContext(gametypeId, patterns); // ADR-016: nomes on-chain alinhados
 
     const winners:    WinResult[] = [];
     let lowerBound:   string | undefined = undefined;
@@ -250,7 +250,7 @@ async function findAllWinnersWithIndex(
     masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
-    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
+    const comboCtx = await fetchComboContext(gametypeId, patterns); // ADR-016: nomes on-chain alinhados
 
     const stateMap = new Map<string, number>();
 
