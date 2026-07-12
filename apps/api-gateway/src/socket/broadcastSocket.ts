@@ -30,10 +30,13 @@ const activeSessions = new Map<string, { balls: number[]; currentIdx: number }>(
 // Reconciliação: cliente que perdeu bolas pede `sync` (ADR-007 §4)
 interface SyncData { game_id: number; last_order: number }
 
-export function setupBroadcastSocket(io: Server): void {
+export async function setupBroadcastSocket(io: Server): Promise<void> {
   // ── Subscriber Redis dedicado (não bloqueia o client principal) ──
   const sub = redisClient.duplicate();
   sub.on('error', (err) => logger.error({ err, tag: 'BroadcastWS' }, 'Erro no subscriber Redis do broadcaster:'));
+  // redis v4: duplicate() retorna cliente DESCONECTADO — precisa conectar antes de assinar,
+  // senão o subscribe fica em offline-queue e nunca é enviado ao servidor.
+  await sub.connect();
   sub.subscribe(REVEAL_CHANNEL, (err) => {
     if (err) logger.error({ err, tag: 'BroadcastWS' }, `Falha ao assinar ${REVEAL_CHANNEL}:`);
     else logger.info({ tag: 'BroadcastWS' }, `Assinando canal Redis ${REVEAL_CHANNEL} (reveal).`);
@@ -80,6 +83,13 @@ export function setupBroadcastSocket(io: Server): void {
         payload: inner,
       };
       io.to(room).emit(msg.type, emitPayload);
+
+      // [DEBUG TEMP BUG #263] loga cada re-emissão para confirmar entrega ao cliente.
+      // REMOVER após validação do reveal ao vivo.
+      const dbg = msg.type === 'ball_drawn'
+        ? ` order=${(inner as any)?.order} number=${(inner as any)?.number}`
+        : '';
+      logger.info({ tag: 'BroadcastWS' }, `[DBG] re-emite ${msg.type} -> room ${room}${dbg}`);
 
       // Encerra a sessão espelhada quando o reveal termina/aborta
       if (msg.type === 'game_ended' || msg.type === 'game_aborted') {

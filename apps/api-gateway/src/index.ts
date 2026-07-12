@@ -204,7 +204,7 @@ async function bootstrap(): Promise<void> {
   });
   setIo(io);
   setupChatSocket(io);
-  setupBroadcastSocket(io);
+  await setupBroadcastSocket(io);
 
   httpServer.listen(PORT, () => {
     console.log("=============================================");
