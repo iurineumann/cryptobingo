@@ -203,7 +203,9 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         game_id: number;
         payload: DrawnBall;
     }) {
-        if (String(msg.game_id) !== gameId) return;
+        if (String(msg.game_id) !== gameId) {
+            return;
+        }
 
         const { order, number, timestamp } = msg.payload;
         setIsDrawing(true);

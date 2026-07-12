@@ -91,13 +91,6 @@ export async function setupBroadcastSocket(io: Server): Promise<void> {
       };
       io.to(room).emit(msg.type, emitPayload);
 
-      // [DEBUG TEMP BUG #263] loga cada re-emissão para confirmar entrega ao cliente.
-      // REMOVER após validação do reveal ao vivo.
-      const dbg = msg.type === 'ball_drawn'
-        ? ` order=${(inner as any)?.order} number=${(inner as any)?.number}`
-        : '';
-      logger.info({ tag: 'BroadcastWS' }, `[DBG] re-emite ${msg.type} -> room ${room}${dbg}`);
-
       // Encerra a sessão espelhada quando o reveal termina/aborta
       if (msg.type === 'game_ended' || msg.type === 'game_aborted') {
         activeSessions.delete(msg.gameId);
