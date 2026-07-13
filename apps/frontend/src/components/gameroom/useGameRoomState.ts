@@ -74,6 +74,7 @@ export interface GameRoomState {
   winners: WinnerPayload[]; isAborted: boolean; abortReason: string | null;
   wsStatus: string; wsEverConnected: boolean; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
   prizeStatuses: Record<string, import('../../hooks/useSlowReveal').PrizeStatus>;
+  apiPrizes: import('@cryptobingo/shared-types').PrizeTx[];
   drawMode: string | null;
   gameStages: StageRule[];
   // derivados
@@ -121,6 +122,12 @@ export function useGameRoomState(
   const [gameCombinations, setGameCombinations] = useState<CombinationRuleInput[]>([]);
   const [gameStages, setGameStages] = useState<StageRule[]>([]);
   const [localDrawMode, setLocalDrawMode] = useState<string | null>(null);
+  // Prêmios da API (GET /games/:id/prizes) — fonte de verdade para
+  // jogos arquivados MULTI_MATCH onde o WS não re-emite eventos.
+  // Mantido em estado dedicado (além de prizeStatuses, que é hidratado
+  // assincronamente) para que localWinners NÃO dependa exclusivamente
+  // do timing da hidratação — evita "No winners" em jogo já pago.
+  const [apiPrizes, setApiPrizes] = useState<import('@cryptobingo/shared-types').PrizeTx[]>([]);
   const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
   const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
 
@@ -213,7 +220,8 @@ export function useGameRoomState(
     if (!gameId || !showFallback) return;
     fetchGamePrizeTransactions(gameId)
       .then(res => {
-        hydratePrizeStatuses(res.items.map(p => ({
+        setApiPrizes(res.items ?? []);
+        hydratePrizeStatuses((res.items ?? []).map(p => ({
           ticketId: p.ticketId,
           winLabel: p.winLabel,
           transactionId: p.transactionId ?? '',
@@ -221,7 +229,7 @@ export function useGameRoomState(
           currency: p.currency,
         })));
       })
-      .catch(() => { /* silencioso — fallback apenas */ });
+      .catch((err) => { console.error('[GameRoom] Falha ao hidratar prêmios:', err); });
   }, [gameId, isStaticFinalState, hydratePrizeStatuses]);
 
   const effectiveBalls = drawnBalls.length > 0 ? drawnBalls : fallbackBalls;
@@ -264,32 +272,48 @@ export function useGameRoomState(
   // NOSONAR — business logic complexity inherent to prize aggregation, extracted where practical
   const localWinners = useMemo(() => {
     if (winners.length > 0 || !isStaticFinalState) return winners;
-    if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
+    const mode = localDrawMode ?? drawMode;
+    // MULTI_MATCH: vencedores vêm dos estágios (WS/PrizePipeline/API),
+    // não de padrões individuais nem de drawnSet — não bloquear por eles.
+    if (mode !== 'multimatch') {
+      if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
+    } else if (!playerTickets.length) {
+      return winners;
+    }
 
     // MULTI_MATCH: vencedores vêm exclusivamente dos estágios via WS/PrizePipeline.
     // Não computar padrões individuais — isso marcaria cartelas como vencedoras
     // sem terem completado estágio.
-    const mode = localDrawMode ?? drawMode;
     if (mode === 'multimatch') {
-      // Tenta reconstruir de prizeStatuses (API hydrated) quando disponível
+      // Tenta reconstruir de prizeStatuses (API hydrated) quando disponível.
+      // Fallback: apiPrizes (estado dedicado populado pelo MESMO fetch)
+      // — garante que o jogo arquivado mostre os vencedores pagos mesmo
+      // se a hidratação de prizeStatuses não tiver refletido ainda.
+      const stageResults: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
+      const seen = new Set<string>();
+      const pushStage = (ticketId: string, winLabel: string, amount: string, currency: string) => {
+        if (!winLabel?.startsWith('stage_')) return;
+        const dedupKey = `${ticketId}:${winLabel}`;
+        if (seen.has(dedupKey)) return;
+        seen.add(dedupKey);
+        stageResults.push({
+          ticket_id: ticketId,
+          win_pattern: winLabel,
+          payouts: amount ? [`${amount} ${currency ?? ''}`.trim()] : [],
+        });
+      };
       const psKeys = Object.keys(prizeStatuses);
       if (psKeys.length > 0) {
-        const stageResults: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
-        const seen = new Set<string>();
         for (const [key, ps] of Object.entries(prizeStatuses)) {
           const [ticketId, winLabel] = key.split(':');
-          if (!winLabel?.startsWith('stage_')) continue;
-          const dedupKey = `${ticketId}:${winLabel}`;
-          if (seen.has(dedupKey)) continue;
-          seen.add(dedupKey);
-          stageResults.push({
-            ticket_id: ticketId,
-            win_pattern: winLabel,
-            payouts: ps.amount ? [`${ps.amount} ${ps.currency ?? ''}`.trim()] : [],
-          });
+          pushStage(ticketId, winLabel, (ps as any)?.amount ?? '', (ps as any)?.currency ?? '');
         }
-        if (stageResults.length > 0) return stageResults;
+      } else if (apiPrizes.length > 0) {
+        for (const p of apiPrizes) {
+          pushStage(p.ticketId, p.winLabel, p.amount, p.currency);
+        }
       }
+      if (stageResults.length > 0) return stageResults;
       return [];
     }
 
@@ -335,7 +359,7 @@ export function useGameRoomState(
       }
     }
     return result;
-  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet, drawMode, localDrawMode, prizeStatuses]);
+  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet, drawMode, localDrawMode, prizeStatuses, apiPrizes]);
 
   // constrói mapa ticket_id → prize + patternName + patternCount + totalPrize
   const winnerMap = useMemo(() => {
@@ -753,6 +777,6 @@ export function useGameRoomState(
     adjustedPatternWinCount, allGameCombinationWinCount, completedCombinationsPerTicket,
     combinationCells, patternProximityMap, combinationProximityMap, sortedPatterns,
     groupedTickets, currencySymbol, ticketPrice, col, color, hasBanners, now, loadGame,
-    hydratePrizeStatuses,
+    hydratePrizeStatuses, apiPrizes,
   };
 }
