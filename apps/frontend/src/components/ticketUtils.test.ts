@@ -9,6 +9,8 @@ import {
     sortTickets,
     groupTicketsByCategory,
     isCombinationSatisfied,
+    buildPatternTypeMaps,
+    getCompletedCombinationsForTicket,
     type Pattern,
     type WinnerInfo,
     type CombinationRuleInput,
@@ -220,3 +222,82 @@ describe('isCombinationSatisfied', () => {
         expect(isCombinationSatisfied(nOfType, done, typeMap)).toBe(false);
     });
 });
+
+// ==========================================
+// REGRESSÃO — badge "2x Simples" em vez de "3x Simples" (frontend)
+// ==========================================
+// Cartela 16742076291605053501 do jogo 1783899157059 (sala 10) completa
+// ROW_3 + DIAG_TL_BR + DIAG_TR_BL (3 padrões simples) -> badge deve ser "3x Simples".
+describe('getCompletedCombinationsForTicket — badge de combinação', () => {
+    const mkCells = (idxs: number[]) => {
+        const c = new Array(25).fill(0);
+        for (const i of idxs) c[i] = 1;
+        return c;
+    };
+    // matrix on-chain column-major + state 4096 (FREE setado)
+    const MATRIX = [5, 10, 9, 7, 12, 16, 26, 18, 19, 28, 39, 40, 44, 32, 50, 60, 57, 49, 48, 65, 72, 69, 63, 75];
+    const DRAWN = [75, 71, 3, 62, 23, 34, 13, 59, 43, 58, 45, 57, 44, 55, 5, 21, 53, 7, 26, 19, 42, 24, 27, 56, 8, 70, 40, 31, 12, 2, 68, 65, 60, 20, 47, 37, 36, 49, 28, 63];
+
+    const patterns: Pattern[] = [
+        { id: '3',  name: 'ROW_3',      prize: '1', cells: mkCells([15, 16, 17, 18, 19]) },
+        { id: '13', name: 'DIAG_TL_BR', prize: '1', cells: mkCells([0, 6, 12, 18, 24]) },
+        { id: '5',  name: 'DIAG_TR_BL', prize: '1', cells: mkCells([4, 8, 16, 20, 24]) },
+    ];
+    const combinations: CombinationRuleInput[] = [
+        { name: '5x Simples', weight: 1500, clauses: [{ type: 'n_of_type', count: 5, pattern_type: 'simple' }] },
+        { name: '4x Simples', weight: 1000, clauses: [{ type: 'n_of_type', count: 4, pattern_type: 'simple' }] },
+        { name: '3x Simples', weight: 600,  clauses: [{ type: 'n_of_type', count: 3, pattern_type: 'simple' }] },
+        { name: '2x Simples', weight: 300,  clauses: [{ type: 'n_of_type', count: 2, pattern_type: 'simple' }] },
+    ];
+
+    it('3 padrões simples -> badge "3x Simples" (regressão #1783899157059)', () => {
+        // pattern_id NUMÉRICO nas regras (cenário que disparava a subcontagem pré-fix)
+        const extendedRules = [
+            { pattern_id: 3,  type: 'simple' },
+            { pattern_id: 13, type: 'simple' },
+            { pattern_id: 5,  type: 'simple' },
+        ] as any;
+        const { patternTypeByName, patternNameById } = buildPatternTypeMaps(patterns, extendedRules);
+        // normalização de tipo deve ter classificado os 3 como simple
+        expect(patternTypeByName.get('ROW_3')).toBe('simple');
+        expect(patternTypeByName.get('DIAG_TL_BR')).toBe('simple');
+        expect(patternTypeByName.get('DIAG_TR_BL')).toBe('simple');
+
+        const combos = getCompletedCombinationsForTicket(
+            MATRIX, new Set(DRAWN), patterns, combinations, patternTypeByName, patternNameById,
+        );
+        expect(combos.length).toBeGreaterThan(0);
+        expect(combos[0].name).toBe('3x Simples');
+        expect(combos[0].weight).toBe(600);
+    });
+
+    it('buildPatternTypeMaps normaliza pattern_id número x string (não subconta)', () => {
+        const numericRules = [
+            { pattern_id: 3,  type: 'simple' },
+            { pattern_id: 13, type: 'simple' },
+            { pattern_id: 5,  type: 'simple' },
+        ] as any;
+        const { patternTypeByName } = buildPatternTypeMaps(patterns, numericRules);
+        // se a normalização falhasse, estes seriam undefined e a cláusula contaria menos
+        expect(patternTypeByName.get('ROW_3')).toBe('simple');
+        expect(patternTypeByName.get('DIAG_TL_BR')).toBe('simple');
+        expect(patternTypeByName.get('DIAG_TR_BL')).toBe('simple');
+    });
+
+    it('REGRESSÃO: extendedRules com pattern_id NUMÉRICO classifica tipos (pré-fix contava 2)', () => {
+        // Cenário exato que produzia "2x Simples": pattern_id numérico no metadata
+        // do gametype divergindo de p.id (string). Sem String() o find() falhava.
+        const numericRules = [
+            { pattern_id: 3,  type: 'simple' },
+            { pattern_id: 13, type: 'simple' },
+            { pattern_id: 5,  type: 'simple' },
+        ] as any;
+        const { patternTypeByName, patternNameById } = buildPatternTypeMaps(patterns, numericRules);
+        const combos = getCompletedCombinationsForTicket(
+            MATRIX, new Set(DRAWN), patterns, combinations, patternTypeByName, patternNameById,
+        );
+        expect(combos[0].name).toBe('3x Simples');
+        expect(combos[0].weight).toBe(600);
+    });
+});
+

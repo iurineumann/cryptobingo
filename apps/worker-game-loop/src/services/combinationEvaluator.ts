@@ -14,6 +14,7 @@
 // resolvidas pela seleção do maior peso.
 
 import { fetchPatternsWithCache, type PatternEntry } from './patternCache';
+import { logger } from './logger';
 
 const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://api-gateway:8080';
 const COMBO_CACHE_TTL_MS = 60_000; // 1 min — alinhado à invalidação por setcombos
@@ -48,6 +49,12 @@ interface ApiPatternsResponse {
 
 const cache = new Map<string, { ctx: ComboContext; expires: number }>();
 
+// Último contexto de combinação BEM-SUCEDIDO por gametype. Usado como fallback
+// estável (fail-stale) quando o api-gateway falha — evita perder TODA a detecção
+// de combinações (e rebaixar silenciosamente um prêmio de combo para padrão único).
+// Ref: incidente jogo 1783899157059 (sala 10) — pago só ROW_3 por fail-open do combo ctx.
+const lastGoodCtx = new Map<string, ComboContext>();
+
 /**
  * Busca e monta o contexto de combinações de um gametype (com cache curto em memória).
  * Combina padrões on-chain + rules/combinações off-chain do endpoint do api-gateway.
@@ -63,7 +70,14 @@ export async function fetchComboContext(
     const empty: ComboContext = { combos: [], patternTypeByName: new Map(), patternNameById: new Map() };
     try {
         const res = await fetch(`${API_GATEWAY_URL}/api/v1/gametypes/${gametypeId}/patterns`);
-        if (!res.ok) return empty;
+        if (!res.ok) {
+            const stale = lastGoodCtx.get(gametypeId);
+            if (stale) {
+                logger.warn({ tag: 'Combo' }, `api-gateway retornou ${res.status} para gametype ${gametypeId}; usando último contexto válido (fail-stale).`);
+                return stale;
+            }
+            return empty;
+        }
         const data = await res.json() as ApiPatternsResponse;
 
         // Mapeia nome do gateway -> type (do rules), para cruzar com on-chain
@@ -110,8 +124,17 @@ export async function fetchComboContext(
 
         const ctx: ComboContext = { combos, patternTypeByName, patternNameById };
         cache.set(gametypeId, { ctx, expires: Date.now() + COMBO_CACHE_TTL_MS });
+        lastGoodCtx.set(gametypeId, ctx); // fail-stale: mantém último contexto válido
         return ctx;
     } catch {
+        // Fail-stale: se o api-gateway falhou, usa o último contexto bem-sucedido
+        // em vez de vazio (vazio zera TODA detecção de combinações -> prêmio rebaixado).
+        // Combos mudam raramente, então um contexto levemente obsoleto é seguro.
+        const stale = lastGoodCtx.get(gametypeId);
+        if (stale) {
+            logger.warn({ tag: 'Combo' }, `Falha ao buscar combos do gametype ${gametypeId}; usando último contexto válido (fail-stale).`);
+            return stale;
+        }
         return empty;
     }
 }

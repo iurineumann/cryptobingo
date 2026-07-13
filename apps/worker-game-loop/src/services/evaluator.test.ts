@@ -1,7 +1,9 @@
 import {
     applyDrawnBalls,
     checkWinPatterns,
+    selectBestPayout,
 } from './evaluator';
+import { bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
 
 function makeTicket(matrix: number[], state = 0x00001000): BlockchainTicketRecord {
@@ -100,7 +102,6 @@ describe('checkWinPatterns', () => {
         const wins = checkWinPatterns(state, patterns);
         expect(wins.length).toBe(0);
     });
-
     it('max_weight rule: primeiro padrão da lista pode não ser o vencedor', () => {
         // Configura: COL_B (weight 3) aparece antes de ROW_0 (weight 5)
         const reversed = [patterns[1], patterns[0]];
@@ -113,3 +114,70 @@ describe('checkWinPatterns', () => {
         expect(best.weight).toBe(5);
     });
 });
+
+// ==========================================
+// REGRESSÃO E2E — jogo 1783899157059 (sala 10 / gametype 1)
+// ==========================================
+// Cartela 16742076291605053501 deveria pagar "3x Simples" (3 padrões simples:
+// ROW_3 + DIAG_TL_BR + DIAG_TR_BL). Usa os dados EXATOS decodificados da
+// partida: matrix on-chain (column-major), 40 bolas sorteadas, padrões do
+// gametype 1 e contexto de combinação (fail-stale). Reproduz o caminho real
+// applyDrawnBalls -> checkWinPatterns -> selectBestPayout.
+describe('E2E — jogo 1783899157059 (caminho real do worker)', () => {
+    // matrix on-chain (24 bytes, column-major) + state=4096 (FREE bit 12 setado)
+    const ONCHAIN_MATRIX = [5, 10, 9, 7, 12, 16, 26, 18, 19, 28, 39, 40, 44, 32, 50, 60, 57, 49, 48, 65, 72, 69, 63, 75];
+    const DRAWN_BALLS_40 = [75, 71, 3, 62, 23, 34, 13, 59, 43, 58, 45, 57, 44, 55, 5, 21, 53, 7, 26, 19, 42, 24, 27, 56, 8, 70, 40, 31, 12, 2, 68, 65, 60, 20, 47, 37, 36, 49, 28, 63];
+
+    // padrões do gametype 1 (masks on-chain: ROW_3=8659208, DIAG_TL_BR=17043521, etc.)
+    const GT1_PATTERNS = [
+        { name: 'ROW_1', mask: 268n,             weight: 100 },
+        { name: 'ROW_2', mask: 8589952n,         weight: 100 },
+        { name: 'ROW_3', mask: 8659208n,         weight: 100 },
+        { name: 'ROW_4', mask: 275969032n,       weight: 100 },
+        { name: 'DIAG_TR_BL', mask: 1118480n,    weight: 100 },
+        { name: 'DIAG_TL_BR', mask: 17043521n,   weight: 100 },
+        { name: 'BINGO_B', mask: 1082401n,       weight: 100 },
+        { name: 'BINGO_I', mask: 33818641n,      weight: 100 },
+        { name: 'BINGO_N', mask: 1081344n,       weight: 100 },
+        { name: 'BINGO_G', mask: 34603056n,      weight: 100 },
+        { name: 'BINGO_O', mask: 33818624n,      weight: 100 },
+        { name: 'MASTER', mask: 33554431n,       weight: 100 },
+        { name: 'ROW_0', mask: 33n,              weight: 100 },
+    ];
+
+    // combos "N Simples" do gametype 1 (n_of_type simple)
+    const GT1_COMBOS = [
+        { combo_id: 0, name: '5x Simples', weight: 1500, clauses: [{ type: 'n_of_type' as const, pattern_type: 'simple', count: 5 }] },
+        { combo_id: 1, name: '4x Simples', weight: 1000, clauses: [{ type: 'n_of_type' as const, pattern_type: 'simple', count: 4 }] },
+        { combo_id: 2, name: '3x Simples', weight: 600,  clauses: [{ type: 'n_of_type' as const, pattern_type: 'simple', count: 3 }] },
+        { combo_id: 3, name: '2x Simples', weight: 300,  clauses: [{ type: 'n_of_type' as const, pattern_type: 'simple', count: 2 }] },
+    ];
+    const patternTypeByName = new Map<string, string>(
+        GT1_PATTERNS.map(p => [p.name, p.name === 'MASTER' ? 'master' : p.name.startsWith('BINGO_') ? 'special' : 'simple']),
+    );
+    const comboCtx: ComboContext = { combos: GT1_COMBOS, patternTypeByName, patternNameById: new Map() };
+    const ticket = makeTicket(ONCHAIN_MATRIX, 4096);
+
+    it('applyDrawnBalls + 40 bolas detecta exatamente 3 padrões simples', () => {
+        const state = applyDrawnBalls(ticket, DRAWN_BALLS_40);
+        const wins = checkWinPatterns(state, GT1_PATTERNS);
+        const names = wins.map(w => w.name).sort();
+        expect(names).toEqual(['DIAG_TL_BR', 'DIAG_TR_BL', 'ROW_3'].sort());
+    });
+
+    it('selectBestPayout promove 3 padrões simples para "3x Simples" (600)', () => {
+        const state = applyDrawnBalls(ticket, DRAWN_BALLS_40);
+        const wins = checkWinPatterns(state, GT1_PATTERNS);
+        const result = selectBestPayout(ticket, wins, comboCtx);
+        expect(result.patternName).toBe('3x Simples');
+        expect(result.weight).toBe(600);
+    });
+
+    it('bestSatisfiedCombo isolado confirma "3x Simples"', () => {
+        const best = bestSatisfiedCombo(['ROW_3', 'DIAG_TL_BR', 'DIAG_TR_BL'], comboCtx);
+        expect(best).not.toBeNull();
+        expect(best!.name).toBe('3x Simples');
+        expect(best!.weight).toBe(600);
+    });
+});
+

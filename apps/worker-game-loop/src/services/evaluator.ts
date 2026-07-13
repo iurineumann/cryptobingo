@@ -105,7 +105,7 @@ export interface WinResult {
  * decide se uma COMBINAÇÃO satisfeita tem peso maior — e, em caso afirmativo,
  * promove o WinResult para o tier de combinação (max_weight global, ADR-005).
  */
-function selectBestPayout(
+export function selectBestPayout(
     ticket:          BlockchainTicketRecord,
     winningPatterns: PatternEntry[],
     comboCtx:        ComboContext | null,
