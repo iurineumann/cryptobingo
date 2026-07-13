@@ -19,6 +19,8 @@ namespace bingo {
     struct [[eosio::table("config")]] config_state {
         public_key signer_key;
         name       treasury_account = "bingogamectr"_n; // destino do sweep de GGR (ADR-005)
+        // binary_extension → compatível com linhas existentes que não têm o campo
+        eosio::binary_extension<name> oracle_account;  // conta do oráculo RNG (paridade testnet/mainnet)
     };
     typedef singleton<"config"_n, config_state> config_singleton;
 
@@ -464,6 +466,9 @@ namespace bingo {
         // ── Configuração ─────────────────────────────────────────────────────
         [[eosio::action]] void setconfig(public_key signer_key);
         [[eosio::action]] void settreasury(name account); // ADR-005: define destino do sweep GGR
+        // ADR-XXX: parametriza conta do oráculo RNG (padrão "orng.wax").
+        // Chamado por admin (bingogamectr@admin). Exige conta existente on-chain.
+        [[eosio::action]] void setoracle(name oracle);
 
         // ── FSM de Jogos ──────────────────────────────────────────────────────
         [[eosio::action]] void creategame(uint64_t game_id, extended_asset ticket_price, uint64_t gametype_id, uint64_t room_id);
@@ -514,6 +519,10 @@ namespace bingo {
         [[eosio::action]] void pauseroom(uint64_t room_id);
         [[eosio::action]] void closeroom(uint64_t room_id);
         [[eosio::action]] void setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty = 1);
+        // Altera os preços de ticket de uma sala existente (mesma validação do createroom).
+        // Bloqueia se a sala tiver jogo em andamento (current_game_id != 0) para evitar
+        // inconsistência com jogos em curso.
+        [[eosio::action]] void updateroom(uint64_t room_id, extended_asset ticket_price_min, extended_asset ticket_price_max, extended_asset ticket_price_default);
         // ADR-028 §4: configura economia de sala patrocinada (allowlist, campanha, taxa, projeção)
         [[eosio::action]] void setroomnft(uint64_t room_id, std::vector<uint64_t> nft_template_allowlist, uint64_t campaign_id, uint16_t house_fee_bps, uint32_t estimated_monthly_tickets);
         // ADR-028 §5: sponsor saca saldo disponível (não-travado) do treasury da sala

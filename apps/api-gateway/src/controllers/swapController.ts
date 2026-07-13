@@ -10,6 +10,8 @@ import { randomUUID } from 'crypto';
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { redisClient } from '../database/redis';
 import type { SwapQuote, SwapPoolSummary } from '@cryptobingo/shared-types';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const SWAP_CONTRACT   = process.env.SWAP_CONTRACT  || 'bingogameswp';
 const RPC_ENDPOINT    = process.env.RPC_URL  || 'http://127.0.0.1:8888';
@@ -98,23 +100,31 @@ async function fetchPools(): Promise<RawPool[]> {
         // Redis indisponível — continua sem cache
     }
 
-    const res = await rpcClient.v1.chain.get_table_rows({
-        code:       SWAP_CONTRACT,
-        scope:      SWAP_CONTRACT,
-        table:      'pools',
-        json:       true,
-        limit:      100,
-    });
-
-    const pools = (res.rows ?? []) as RawPool[];
-
     try {
-        await redisClient.set(cacheKey, JSON.stringify(pools), { EX: POOLS_CACHE_TTL });
-    } catch {
-        // silencia falha de cache write
-    }
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:       SWAP_CONTRACT,
+            scope:      SWAP_CONTRACT,
+            table:      'pools',
+            json:       true,
+            limit:      100,
+        });
 
-    return pools;
+        const pools = (res.rows ?? []) as RawPool[];
+
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(pools), { EX: POOLS_CACHE_TTL });
+        } catch {
+            // silencia falha de cache write
+        }
+
+        return pools;
+    } catch (err) {
+        // Degradação graceful: se o contrato de swap não está deployado na
+        // testnet (tabela 'pools' ausente) ou o RPC falha, retorna lista vazia
+        // em vez de 502. Em produção (contrato deployado) o fluxo é normal.
+        logger.warn({ err: err, tag: 'swapController' }, 'fetchPools: contrato de swap indisponível, retornando []');
+        return [];
+    }
 }
 
 // ── leitura de NFT discounts ───────────────────────────────────────────────────
@@ -131,21 +141,26 @@ async function fetchNftDiscounts(): Promise<RawNftDiscount[]> {
         if (cached) return JSON.parse(cached) as RawNftDiscount[];
     } catch { /* ok */ }
 
-    const res = await rpcClient.v1.chain.get_table_rows({
-        code:  SWAP_CONTRACT,
-        scope: SWAP_CONTRACT,
-        table: 'nftdiscounts',
-        json:  true,
-        limit: 100,
-    });
-
-    const discounts = (res.rows ?? []) as RawNftDiscount[];
-
     try {
-        await redisClient.set(cacheKey, JSON.stringify(discounts), { EX: 60 });
-    } catch { /* ok */ }
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code:  SWAP_CONTRACT,
+            scope: SWAP_CONTRACT,
+            table: 'nftdiscounts',
+            json:  true,
+            limit: 100,
+        });
 
-    return discounts;
+        const discounts = (res.rows ?? []) as RawNftDiscount[];
+
+        try {
+            await redisClient.set(cacheKey, JSON.stringify(discounts), { EX: 60 });
+        } catch { /* ok */ }
+
+        return discounts;
+    } catch (err) {
+        logger.warn({ err: err, tag: 'swapController' }, 'fetchNftDiscounts: contrato de swap indisponível, retornando []');
+        return [];
+    }
 }
 
 /**
@@ -157,7 +172,7 @@ export async function listNftDiscounts(req: Request, res: Response): Promise<voi
         const discounts = await fetchNftDiscounts();
         res.json({ discounts });
     } catch (err) {
-        console.error('[swapController] listNftDiscounts:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'listNftDiscounts');
         res.status(502).json({ error: 'Falha ao ler nftdiscounts do bingogameswp' });
     }
 }
@@ -192,7 +207,7 @@ export async function listSwapPools(req: Request, res: Response): Promise<void> 
 
         res.json({ pools: summaries });
     } catch (err) {
-        console.error('[swapController] listSwapPools:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'listSwapPools');
         res.status(502).json({ error: 'Falha ao ler pools do bingogameswp' });
     }
 }
@@ -343,7 +358,7 @@ export async function getSwapQuote(req: Request, res: Response): Promise<void> {
 
         res.json(quote);
     } catch (err) {
-        console.error('[swapController] getSwapQuote:', err);
+        logger.error({ err: err, tag: 'swapController' }, 'getSwapQuote');
         res.status(502).json({ error: 'Falha ao calcular cotação' });
     }
 }

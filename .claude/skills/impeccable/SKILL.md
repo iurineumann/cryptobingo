@@ -166,3 +166,5 @@ Valid `<command>` is any command from the table above. Report the script's resul
 ## Hooks
 
 `/impeccable hooks <on|off|status|ignore-rule|ignore-file|ignore-value|reset>` manages the design detector hook for this project. The hook auto-runs the detector after direct UI file edits and surfaces findings as system reminders. Full flow is in [reference/hooks.md](reference/hooks.md); load it when the user invokes `/impeccable hooks` with any argument.
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

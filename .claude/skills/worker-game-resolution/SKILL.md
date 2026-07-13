@@ -65,3 +65,6 @@ actions de liquidação ao contrato. Testes: `npx jest <arquivo>` (em `apps/work
 - Esquecer `key_type:'i64'` → `name_type_exception` ao paginar tickets.
 - Pagar múltiplos prêmios por cartela → viola max_weight/RTP.
 - Não tratar `combinations` ausente (binary_extension) → crash ao ler gametype antigo.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

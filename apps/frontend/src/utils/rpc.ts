@@ -7,6 +7,7 @@
 // Ref: ADR-015 (rota /room/:roomId/history pública)
 
 import type { Session } from '@wharfkit/session';
+import { getEffectiveRpcUrl } from './rpcStore';
 
 export interface TableRowsParams {
     code:           string;
@@ -48,8 +49,13 @@ export async function fetchTableRows(
         };
     }
 
-    // Acesso público — Vite proxy redireciona /v1 → nó RPC configurado em VITE_RPC_URL
-    const res = await fetch('/v1/chain/get_table_rows', {
+    // Acesso público (sem sessão) — DEVE usar a URL ABSOLUTA do nó RPC.
+    // A SWA (Azure free tier) não tem backend/proxy, então um path relativo
+    // '/v1/chain/...' cairia no próprio SWA → 405 Method Not Allowed (issue #219).
+    // getEffectiveRpcUrl() resolve o nó configurado (localStorage > VITE_RPC_URL >
+    // fallback greymass), o mesmo usado pelo SessionKit em services/wharfkit.ts.
+    const base = getEffectiveRpcUrl().replace(/\/+$/, '');
+    const res = await fetch(`${base}/v1/chain/get_table_rows`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ json: true, ...params }),

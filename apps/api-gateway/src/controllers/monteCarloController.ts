@@ -27,6 +27,8 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import * as crypto from 'node:crypto';
 import { generateCombos, priceCombosByDifficulty } from '../services/comboGenerator';
 import type { PatternInfo, ComboCandidate } from '../services/comboGenerator';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 // ==========================================
 // CONFIGURAÇÃO
@@ -855,7 +857,7 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
     } = params;
 
     // ── FASE 1: Descoberta Empírica ───────────────────────────────────────
-    console.log(`   ⚗️  Fase 1: descoberta de probabilidades (${discSims} rodadas)...`);
+    logger.info(`Fase 1: descoberta de probabilidades (${discSims} rodadas)...`);
     const rawRates: Record<string, number> = discSims > 5_000
         ? await discoverInWorker(patterns, combinations, discSims, numTickets, numBalls)
         : discoverHitRates(patterns, combinations, discSims, numTickets, numBalls);
@@ -868,11 +870,11 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
     }
     const zeroItems = Object.values(rawRates).filter(r => r === 0).length;
     if (zeroItems > 0) {
-        console.log(`   🧂 Fase 2: epsilon realista (${epsilon.toExponential(2)}) injetado em ${zeroItems} item(ns) com P=0.`);
+        logger.info(`Fase 2: epsilon realista (${epsilon.toExponential(2)}) injetado em ${zeroItems} item(ns) com P=0.`);
     }
 
     // ── FASE 3: Calibração Algébrica ──────────────────────────────────────
-    console.log(`   📐 Fase 3: calibração algébrica (α=${alpha}, decay=${CALIB_ALPHA_DECAY}, tol=${tolerance})...`);
+    logger.info(`Fase 3: calibração algébrica (α=${alpha}, decay=${CALIB_ALPHA_DECAY}, tol=${tolerance})...`);
     const allNames    = Object.keys(probs);
     const initWeights = Object.fromEntries(allNames.map(n => [n, 100]));
 
@@ -880,8 +882,8 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
         probs, initWeights, base_multiplier, target_rtp, alpha, max_iter, tolerance,
     );
 
-    console.log(
-        `   ✔  Fase 3: ${cal.iterations} iter, RTP algébrico = ${(cal.algebraicRtp * 100).toFixed(2)}%, ` +
+    logger.info(
+        `Fase 3: ${cal.iterations} iter, RTP algébrico = ${(cal.algebraicRtp * 100).toFixed(2)}%, ` +
         `convergido = ${cal.converged}`
     );
 
@@ -896,7 +898,7 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         const label = attempt === 0 ? '' : ` (retry ${attempt})`;
 
-        console.log(`   🔄 Fase 3b${label}: refinamento estocástico (${currentRefineSims} sims/iter, max ${REFINE_MAX_ITER} iters)...`);
+        logger.info(`Fase 3b${label}: refinamento estocástico (${currentRefineSims} sims/iter, max ${REFINE_MAX_ITER} iters)...`);
 
         const refinement = runStochasticRefinement(
             refinedWeights, patterns, combinations,
@@ -908,8 +910,8 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
         bestRefineIter  = refinement.iterations;
         bestRefineConvg = refinement.converged;
 
-        console.log(
-            `   ✔  Fase 3b${label}: ${refinement.iterations} iter, ` +
+        logger.info(
+            `Fase 3b${label}: ${refinement.iterations} iter, ` +
             `RTP medido = ${(refinement.finalRtp * 100).toFixed(2)}%, ` +
             `convergido = ${refinement.converged}`
         );
@@ -923,7 +925,7 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
         const calibratedCombinations = combinations.map(c => ({ ...c, weight: comboWeights[c.name] }));
 
         // ── FASE 4: Validação ─────────────────────────────────────────────
-        console.log(`   🎲 Fase 4${label}: validação Monte Carlo (${currentValSims} rodadas)...`);
+        logger.info(`Fase 4${label}: validação Monte Carlo (${currentValSims} rodadas)...`);
 
         const validationInput: SimulationInput = {
             gametype_name,
@@ -966,7 +968,7 @@ async function runCalibrationPipeline( // NOSONAR — pipeline de calibração i
             };
         }
 
-        console.log(`   ⏫ Fase 4 não convergiu — retry ${attempt + 1} com amostras maiores (×${RETRY_SIM_MULTIPLIER})...`);
+        logger.info(`Fase 4 não convergiu — retry ${attempt + 1} com amostras maiores (×${RETRY_SIM_MULTIPLIER})...`);
         currentRefineSims = Math.min(currentRefineSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
         currentValSims    = Math.min(currentValSims * RETRY_SIM_MULTIPLIER, MAX_SIMULATIONS);
         retriesUsed       = attempt + 1;
@@ -1013,8 +1015,8 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
     const valSims       = Math.min(Number(validation_sims), MAX_SIMULATIONS);
     const startMs       = Date.now();
 
-    console.log(
-        `🔬 [Calibração] "${gametype_name}": ` +
+    logger.info(
+        `[Calibração] "${gametype_name}": ` +
         `Fase1=${discSims} sims, target=${(target_rtp * 100).toFixed(0)}%, ` +
         `α=${alpha}, maxBalls=${numBalls ?? 75}`
     );
@@ -1044,8 +1046,8 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
             computed_at:          new Date().toISOString(),
         };
 
-        console.log(
-            `✅ [Calibração] "${gametype_name}" concluída em ${response.duration_ms}ms — ` +
+        logger.info(
+            `[Calibração] "${gametype_name}" concluída em ${response.duration_ms}ms — ` +
             `RTP validação: ${result.validation.rtp_pct}, Viável: ${result.validation.is_viable}` +
             (result.retries > 0 ? ` (${result.retries} retentativa(s))` : '')
         );
@@ -1053,7 +1055,7 @@ export async function calibrateWeights(req: Request, res: Response): Promise<voi
         res.status(200).json(response);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[Calibração] Erro:', err);
+        logger.error({ err }, '[Calibração] Erro:');
         res.status(500).json({ error: `Erro durante a calibração: ${msg}` });
     }
 }
@@ -1102,8 +1104,7 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
 
     const allAlerts: string[] = [];
 
-    console.log(
-        `🎯 [Suggest] "${gametype_name}": mode=${draw_mode}, ` +
+    logger.info({ tag: 'Suggest' }, `"${gametype_name}": mode=${draw_mode}, ` +
         `baseMul=${base_multiplier}, maxBalls=${numBalls ?? 75}`
     );
 
@@ -1111,14 +1112,14 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
         // ── Fase 1: Descoberta (apenas patterns) ─────────────────────────────
         const discSims = Math.min(5_000, MAX_SIMULATIONS);
 
-        console.log(`   ⚗️  Fase 1: descoberta de hit_rates (${discSims} sims)...`);
+        logger.info(`Fase 1: descoberta de hit_rates (${discSims} sims)...`);
 
         const rawRates: Record<string, number> = discSims > 5_000
             ? await discoverInWorker(patterns, [], discSims, numTickets, numBalls)
             : discoverHitRates(patterns, [], discSims, numTickets, numBalls);
 
         // ── Fase 2: Geração hierárquica de combos ─────────────────────────
-        console.log(`   🔗 Fase 2: gerando combos (hierarquia n_of_type > any_of > all_of)...`);
+        logger.info(`Fase 2: gerando combos (hierarquia n_of_type > any_of > all_of)...`);
 
         const patternInfo: PatternInfo[] = patterns.map(p => ({
             pattern_id:   p.pattern_id,
@@ -1135,7 +1136,7 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
         });
 
         allAlerts.push(...genAlerts);
-        console.log(`   ✔  Fase 2: ${generatedCombos.length} combos gerados.`);
+        logger.info(`Fase 2: ${generatedCombos.length} combos gerados.`);
 
         const combos = generatedCombos.length > 0 ? generatedCombos : [];
 
@@ -1143,14 +1144,14 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
         const masterPattern = patterns.find(p => p.pattern_type === 'master');
         const masterWeight = masterPattern ? masterPattern.weight : null;
         if (masterWeight !== null) {
-            console.log(`   🚫 MASTER "${masterPattern!.name}" = ${masterWeight} — usado como teto dos combos.`);
+            logger.info(`MASTER "${masterPattern!.name}" = ${masterWeight} — usado como teto dos combos.`);
         }
 
         // ── Fase 3: Precificação por dificuldade ──────────────────────────
         // Usa as hit_rates descobertas para precificar cada combo baseado
         // na dificuldade relativa vs. os patterns individuais.
         // PATTERN WEIGHTS NÃO SÃO MODIFICADOS — permanecem como o usuário definiu.
-        console.log(`   💰 Fase 3: precificando ${combos.length} combos por dificuldade...`);
+        logger.info(`Fase 3: precificando ${combos.length} combos por dificuldade...`);
 
         const pricedCombos = combos.length > 0
             ? priceCombosByDifficulty(combos, patternInfo, rawRates, masterWeight)
@@ -1161,7 +1162,7 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
 
         // ── Fase 4: Validação ───────────────────────────────────────────-
         // Simula com pattern weights ORIGINAIS + combos precificados.
-        console.log(`   🎲 Fase 4: validação Monte Carlo (${SUGGEST_VALIDATION} rodadas)...`);
+        logger.info(`Fase 4: validação Monte Carlo (${SUGGEST_VALIDATION} rodadas)...`);
 
         const isFirstfull = draw_mode === 'firstfull';
         const validationInput: SimulationInput = {
@@ -1223,21 +1224,20 @@ export async function suggestCombos(req: Request, res: Response): Promise<void> 
             computed_at:     new Date().toISOString(),
         };
 
-        console.log(
-            `✅ [Suggest] "${gametype_name}" concluído em ${result.duration_ms}ms — ` +
+        logger.info({ tag: 'Suggest' }, `"${gametype_name}" concluído em ${result.duration_ms}ms — ` +
             `RTP: ${result.validation.rtp_pct}, Viável: ${result.is_viable}, ` +
             `${result.combos.length} combos sugeridos`
         );
 
         const patternLog = Object.entries(finalPatternWeights).map(([n, w]) => `${n}=${w}`).join(', ');
         const comboLog   = pricedCombos.map(c => `${c.name}=${c.weight}`).join(', ');
-        console.log(`   📋 Patterns: ${patternLog}\n   📋 Combos: ${comboLog}`);
+        logger.info(`Patterns: ${patternLog}\n   📋 Combos: ${comboLog}`);
 
         res.status(200).json(result);
 
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[Suggest] Erro:', err);
+        logger.error({ err: err, tag: 'Suggest' }, 'Erro');
         res.status(500).json({ error: `Erro durante sugestão: ${msg}` });
     }
 }
@@ -1355,8 +1355,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
         max_balls:       numBalls,
     };
 
-    console.log(
-        `🎲 [MonteCarlo] Iniciando "${gametype_name}": ` +
+    logger.info({ tag: 'MonteCarlo' }, `Iniciando "${gametype_name}": ` +
         `${numSims} rodadas × ${numTickets} tickets...`
     );
 
@@ -1381,8 +1380,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
             computed_at: new Date().toISOString(),
         };
 
-        console.log(
-            `✅ [MonteCarlo] "${gametype_name}" concluído em ${duration_ms}ms — ` +
+        logger.info({ tag: 'MonteCarlo' }, `"${gametype_name}" concluído em ${duration_ms}ms — ` +
             `RTP: ${finalResult.rtp_pct}, GGR: ${finalResult.ggr_pct}, ` +
             `Viável: ${finalResult.is_viable}`
         );
@@ -1391,7 +1389,7 @@ export async function simulateWeights(req: Request, res: Response): Promise<void
 
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[MonteCarlo] Erro durante simulação:', err);
+        logger.error({ err: err, tag: 'MonteCarlo' }, 'Erro durante simulação');
         res.status(500).json({ error: `Erro durante a simulação: ${msg}` });
     }
 }

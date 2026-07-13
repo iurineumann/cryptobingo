@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Plus, Trash2, ChevronDown, ChevronRight, Building2 } from 'lucide-react';
 import { getAuthToken, createDelegation, removeDelegation } from '../../services/api';
 import { hasAnyPermission } from '../../utils/permissionMatcher';
+import { API_BASE } from '@/config/env';
 
 interface SponsorsAdminProps {
     readonly permissions: string[];
@@ -143,7 +144,7 @@ function CreateOrgModal({
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch('/api/v1/admin/users?limit=100', {
+        fetch(`${API_BASE}/admin/users?limit=100`, {
             headers: { 'Authorization': `Bearer ${getAuthToken()}` },
         })
             .then(res => res.json())
@@ -161,7 +162,7 @@ function CreateOrgModal({
         setSaving(true);
         setError(null);
         try {
-            const res = await fetch('/api/v1/admin/sponsor-orgs', {
+            const res = await fetch(`${API_BASE}/admin/sponsor-orgs`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -274,7 +275,7 @@ export default function SponsorsAdmin({ permissions }: SponsorsAdminProps) {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/admin/sponsor-orgs', {
+            const res = await fetch(`${API_BASE}/admin/sponsor-orgs`, {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${getAuthToken()}`,

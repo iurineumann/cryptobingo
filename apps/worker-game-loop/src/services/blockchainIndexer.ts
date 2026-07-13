@@ -3,6 +3,7 @@ import { Name, UInt64 } from '@wharfkit/antelope';
 import { Pool } from 'pg';
 import { redisClient } from './redis';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
+import { logger } from './logger';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const INDEXER_INTERVAL_MS = parseInt(process.env.INDEXER_INTERVAL_MS ?? '15000', 10);
@@ -140,7 +141,7 @@ async function indexGames(): Promise<void> {
     const lastGame = games[games.length - 1];
     await saveCursor(lastGame.game_id);
 
-    console.log(
+    logger.info(
         `[Indexer] ${games.length} jogo(s) indexado(s) (até ${lastGame.game_id})`
     );
 }
@@ -149,7 +150,7 @@ let running = false;
 
 export async function startBlockchainIndexer(): Promise<void> {
     await ensureTables();
-    console.log(`[Indexer] Iniciado (intervalo: ${INDEXER_INTERVAL_MS}ms)`);
+    logger.info({ tag: 'Indexer' }, `Iniciado (intervalo: ${INDEXER_INTERVAL_MS}ms)`)
 
     const poll = async () => {
         if (running) return;
@@ -157,7 +158,7 @@ export async function startBlockchainIndexer(): Promise<void> {
         try {
             await indexGames();
         } catch (err) {
-            console.error('[Indexer] Erro na indexação:', err);
+            logger.error({ err, tag: 'Indexer' }, 'Erro na indexação:')
         } finally {
             running = false;
         }

@@ -1,9 +1,11 @@
 import { useParams, useNavigate } from 'react-router';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const APP_URL = 'https://app.cryptobingo.bet';
 
 export default function ReferralRedirect() {
+    const { t } = useTranslation();
     const { code } = useParams();
     const navigate = useNavigate();
 
@@ -17,7 +19,7 @@ export default function ReferralRedirect() {
 
     return (
         <div className="flex items-center justify-center min-h-screen">
-            <p className="text-lg text-gray-400">Redirecionando...</p>
+            <p className="text-lg text-gray-400">{t('redirect.redirecting')}</p>
         </div>
     );
 }

@@ -10,6 +10,7 @@
 import { rpcClient } from '@cryptobingo/blockchain-core';
 import { getAssetMutableData, buildAttributeMap } from './atomicSchema';
 import { executeSetAssetData } from './blockchain';
+import { logger } from './logger';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const ATOMIC_ACCOUNT   = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
@@ -78,12 +79,12 @@ export async function decrementNftUse(
     const { decoded, format } = await getAssetMutableData(owner, assetId, collection);
     const cur = decoded[usesField];
     if (cur === undefined || cur === null) {
-        console.warn(`⚠️ [consumable] campo "${usesField}" ausente em asset ${assetId}`);
+        logger.warn({ tag: 'consumable' }, `campo "${usesField}" ausente em asset ${assetId}`)
         return false;
     }
     const curNum = typeof cur === 'string' ? parseInt(cur, 10) : Number(cur);
     if (isNaN(curNum) || curNum <= 0) {
-        console.warn(`⚠️ [consumable] asset ${assetId} já sem usos restantes`);
+        logger.warn({ tag: 'consumable' }, `asset ${assetId} já sem usos restantes`)
         return false;
     }
 
@@ -94,7 +95,7 @@ export async function decrementNftUse(
         await executeSetAssetData(owner, assetId, collection, attributeMap);
         return true;
     } catch (e: any) {
-        console.warn(`⚠️ [consumable] setassetdata falhou asset ${assetId}: ${e?.message ?? e}`);
+        logger.warn({ tag: 'consumable' }, `setassetdata falhou asset ${assetId}: ${e?.message ?? e}`)
         return false;
     }
 }
@@ -127,7 +128,7 @@ export async function decrementUsedNfts(owner: string, usedNftIds: string[]): Pr
 
             await decrementNftUse(owner, assetId, collection, consumable.usesField);
         } catch (e: any) {
-            console.warn(`⚠️ [consumable] decrementUsedNfts falhou asset ${assetId}: ${e?.message ?? e}`);
+            logger.warn({ tag: 'consumable' }, `decrementUsedNfts falhou asset ${assetId}: ${e?.message ?? e}`)
         }
     }
 }

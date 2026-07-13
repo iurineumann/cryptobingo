@@ -7,7 +7,7 @@
 //
 // Ref: SPEC.md §4, ADR-007 (Slow Reveal)
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
@@ -23,9 +23,11 @@ import {
   groupTicketsByCategory, isCombinationSatisfied,
   computePatternUserProximity,
   getCombinationCells, computeCombinationProximity, detectComboWinsForTicket,
+  buildPatternTypeMaps,
   type CombinationRuleInput, type ExtendedRule,
 } from '../ticketUtils';
 import { fetchPublicGametypeMetadata, fetchGamePrizeTransactions } from '../../services/api';
+import { trackEvent } from '~/services/analytics';
 
 function parseHexMatrix(hex: string): number[] {
   const bytes: number[] = [];
@@ -72,6 +74,7 @@ export interface GameRoomState {
   winners: WinnerPayload[]; isAborted: boolean; abortReason: string | null;
   wsStatus: string; wsEverConnected: boolean; goldenBall: GoldenBallInfo | null; goldenMultiplierProgress: GoldenMultiplierProgress | null; clearedStages: ClearedStage[];
   prizeStatuses: Record<string, import('../../hooks/useSlowReveal').PrizeStatus>;
+  apiPrizes: import('@cryptobingo/shared-types').PrizeTx[];
   drawMode: string | null;
   gameStages: StageRule[];
   // derivados
@@ -119,6 +122,12 @@ export function useGameRoomState(
   const [gameCombinations, setGameCombinations] = useState<CombinationRuleInput[]>([]);
   const [gameStages, setGameStages] = useState<StageRule[]>([]);
   const [localDrawMode, setLocalDrawMode] = useState<string | null>(null);
+  // Prêmios da API (GET /games/:id/prizes) — fonte de verdade para
+  // jogos arquivados MULTI_MATCH onde o WS não re-emite eventos.
+  // Mantido em estado dedicado (além de prizeStatuses, que é hidratado
+  // assincronamente) para que localWinners NÃO dependa exclusivamente
+  // do timing da hidratação — evita "No winners" em jogo já pago.
+  const [apiPrizes, setApiPrizes] = useState<import('@cryptobingo/shared-types').PrizeTx[]>([]);
   const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
   const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
 
@@ -161,7 +170,7 @@ export function useGameRoomState(
   const {
     drawnBalls, lastBall, isDrawing, winners, isAborted, abortReason, wsStatus,
     isGameEnded, goldenBall, goldenMultiplierProgress, clearedStages, drawMode,
-    prizeStatuses, wsEverConnected, hydratePrizeStatuses,
+    prizeStatuses, wsEverConnected, wsReceivedBalls, hydratePrizeStatuses,
   } = useSlowReveal(gameId);
 
   const timeRemaining = useMemo(() => {
@@ -185,22 +194,34 @@ export function useGameRoomState(
     [game?.status, drawnBalls.length],
   );
 
+  // Só usamos o fallback quando o reveal ao vivo NÃO vai mais acontecer:
+  //  - isGameEnded (WS confirmou fim do reveal), OU
+  //  - wsReceivedBalls (recebemos bolas ao vivo e o reveal parou), OU
+  //  - jogo já 'archived' (entramos depois do término — visualização histórica).
+  // Enquanto conectados a um jogo 'drawn' sem bolas nem game_ended, ESPERAMOS
+  // (não mostramos o resultado final) — corrige flash do resultado logo após o lock.
+  const showFallback = useMemo(() =>
+    isStaticFinalState && (isGameEnded || wsReceivedBalls || (game?.status ?? '') === 'archived'),
+    [isStaticFinalState, isGameEnded, wsReceivedBalls, game?.status],
+  );
+
   const fallbackBalls = useMemo((): typeof drawnBalls => {
-    if (!isStaticFinalState || !game) return [];
+    if (!showFallback || !game) return [];
     const raw = game.drawn_balls;
     const arr: number[] = Array.isArray(raw) ? raw : parseHexMatrix(raw as unknown as string);
     return arr
       .slice(0, maxBalls)
       .filter(b => b !== 0)
       .map((num, idx) => ({ order: idx + 1, number: num, timestamp: '' }));
-  }, [isStaticFinalState, game, maxBalls]);
+  }, [showFallback, game, maxBalls]);
 
   // Hidrata prizeStatuses da API p/ jogos encerrados onde WS não re-emite eventos
   useEffect(() => {
-    if (!gameId || !isStaticFinalState) return;
+    if (!gameId || !showFallback) return;
     fetchGamePrizeTransactions(gameId)
       .then(res => {
-        hydratePrizeStatuses(res.items.map(p => ({
+        setApiPrizes(res.items ?? []);
+        hydratePrizeStatuses((res.items ?? []).map(p => ({
           ticketId: p.ticketId,
           winLabel: p.winLabel,
           transactionId: p.transactionId ?? '',
@@ -208,7 +229,7 @@ export function useGameRoomState(
           currency: p.currency,
         })));
       })
-      .catch(() => { /* silencioso — fallback apenas */ });
+      .catch((err) => { console.error('[GameRoom] Falha ao hidratar prêmios:', err); });
   }, [gameId, isStaticFinalState, hydratePrizeStatuses]);
 
   const effectiveBalls = drawnBalls.length > 0 ? drawnBalls : fallbackBalls;
@@ -223,10 +244,11 @@ export function useGameRoomState(
   // drawMode final: prefere on-chain (disponível desde o load), fallback WS game_ended
   const resolvedDrawMode = localDrawMode ?? drawMode;
 
-  // Jogo efetivamente encerrado: via WS ou por status archived/drawn.
-  // Só considera staticFinalState após WS ter conectado ao menos 1x (evita flash
-  // do resultado final antes do slow reveal começar — entre closing e live).
-  const isEffectiveGameEnded = isGameEnded || (isStaticFinalState && wsEverConnected);
+  // Jogo efetivamente encerrado: via WS (game_ended) ou por fallback estático
+  // (showFallback — reveal ao vivo não vai mais acontecer). Não basta wsEverConnected:
+  // o socket conecta ANTES das bolas chegarem, então conectado+status drawn sem bolas
+  // ainda é reveal em andamento → não mostramos o resultado final ainda.
+  const isEffectiveGameEnded = isGameEnded || showFallback;
 
   // Status efetivo para exibição: enquanto o slow reveal estiver ativo (bolas chegando
   // via WS mas jogo ainda não encerrado), mostra "drawing" independentemente do status
@@ -250,32 +272,48 @@ export function useGameRoomState(
   // NOSONAR — business logic complexity inherent to prize aggregation, extracted where practical
   const localWinners = useMemo(() => {
     if (winners.length > 0 || !isStaticFinalState) return winners;
-    if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
+    const mode = localDrawMode ?? drawMode;
+    // MULTI_MATCH: vencedores vêm dos estágios (WS/PrizePipeline/API),
+    // não de padrões individuais nem de drawnSet — não bloquear por eles.
+    if (mode !== 'multimatch') {
+      if (!gamePatterns.length || !playerTickets.length || drawnSet.size === 0) return winners;
+    } else if (!playerTickets.length) {
+      return winners;
+    }
 
     // MULTI_MATCH: vencedores vêm exclusivamente dos estágios via WS/PrizePipeline.
     // Não computar padrões individuais — isso marcaria cartelas como vencedoras
     // sem terem completado estágio.
-    const mode = localDrawMode ?? drawMode;
     if (mode === 'multimatch') {
-      // Tenta reconstruir de prizeStatuses (API hydrated) quando disponível
+      // Tenta reconstruir de prizeStatuses (API hydrated) quando disponível.
+      // Fallback: apiPrizes (estado dedicado populado pelo MESMO fetch)
+      // — garante que o jogo arquivado mostre os vencedores pagos mesmo
+      // se a hidratação de prizeStatuses não tiver refletido ainda.
+      const stageResults: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
+      const seen = new Set<string>();
+      const pushStage = (ticketId: string, winLabel: string, amount: string, currency: string) => {
+        if (!winLabel?.startsWith('stage_')) return;
+        const dedupKey = `${ticketId}:${winLabel}`;
+        if (seen.has(dedupKey)) return;
+        seen.add(dedupKey);
+        stageResults.push({
+          ticket_id: ticketId,
+          win_pattern: winLabel,
+          payouts: amount ? [`${amount} ${currency ?? ''}`.trim()] : [],
+        });
+      };
       const psKeys = Object.keys(prizeStatuses);
       if (psKeys.length > 0) {
-        const stageResults: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }> = [];
-        const seen = new Set<string>();
         for (const [key, ps] of Object.entries(prizeStatuses)) {
           const [ticketId, winLabel] = key.split(':');
-          if (!winLabel?.startsWith('stage_')) continue;
-          const dedupKey = `${ticketId}:${winLabel}`;
-          if (seen.has(dedupKey)) continue;
-          seen.add(dedupKey);
-          stageResults.push({
-            ticket_id: ticketId,
-            win_pattern: winLabel,
-            payouts: ps.amount ? [`${ps.amount} ${ps.currency ?? ''}`.trim()] : [],
-          });
+          pushStage(ticketId, winLabel, (ps as any)?.amount ?? '', (ps as any)?.currency ?? '');
         }
-        if (stageResults.length > 0) return stageResults;
+      } else if (apiPrizes.length > 0) {
+        for (const p of apiPrizes) {
+          pushStage(p.ticketId, p.winLabel, p.amount, p.currency);
+        }
       }
+      if (stageResults.length > 0) return stageResults;
       return [];
     }
 
@@ -321,7 +359,7 @@ export function useGameRoomState(
       }
     }
     return result;
-  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet, drawMode, localDrawMode, prizeStatuses]);
+  }, [winners, isStaticFinalState, gamePatterns, playerTickets, drawnSet, drawMode, localDrawMode, prizeStatuses, apiPrizes]);
 
   // constrói mapa ticket_id → prize + patternName + patternCount + totalPrize
   const winnerMap = useMemo(() => {
@@ -357,16 +395,10 @@ export function useGameRoomState(
   }, [gamePatterns]);
 
   // mapa patternId → nome  e  nome → tipo — usados para resolver cláusulas de combinação
-  const { patternNameById, patternTypeByName } = useMemo(() => {
-    const byId   = new Map<string, string>();
-    const byType = new Map<string, string>();
-    for (const p of gamePatterns) {
-      if (p.id) byId.set(p.id, p.name);
-      const r = extendedRules.find(r => r.pattern_id === p.id);
-      if (r) byType.set(p.name, r.type);
-    }
-    return { patternNameById: byId, patternTypeByName: byType };
-  }, [gamePatterns, extendedRules]);
+  const { patternNameById, patternTypeByName } = useMemo(
+    () => buildPatternTypeMaps(gamePatterns, extendedRules),
+    [gamePatterns, extendedRules],
+  );
 
   // vitórias do próprio jogador: combinações primeiro, depois padrões individuais
   // padrões absorvidos por combinações são excluídos da listagem individual
@@ -617,8 +649,19 @@ export function useGameRoomState(
 
       const loadedGame = gameRes.rows[0] as BlockchainGameState | undefined;
 
-      // Busca max_balls do gametype (fallback = 75 para jogos sem gametype)
-      const gametypeId = (loadedGame as any)?.gametype_id;
+      // Sala é fonte de verdade do gametype_id — buscar antes dos patterns
+      let roomData: EnrichedRoom | undefined;
+      const roomIdToFetch = loadedGame?.room_id && loadedGame.room_id !== '0'
+        ? loadedGame.room_id
+        : roomId;
+      if (roomIdToFetch) {
+        try {
+          const mod = await import('../../services/api');
+          roomData = await mod.fetchRoom(roomIdToFetch);
+        } catch { /* silencioso */ }
+      }
+
+      const gametypeId = roomData?.gametype_id ?? (loadedGame as any)?.gametype_id;
       if (gametypeId && String(gametypeId) !== '0') {
         try {
           const gtRes = await session.client.v1.chain.get_table_rows({
@@ -633,7 +676,6 @@ export function useGameRoomState(
             if (gt.draw_mode) setLocalDrawMode(gt.draw_mode);
           }
         } catch { /* mantém default 75 */ }
-        // Busca patterns e combinações deste gametype
         try {
           const [patterns, meta] = await Promise.all([
             fetchGamePatterns(session, String(gametypeId)),
@@ -645,37 +687,30 @@ export function useGameRoomState(
           if (meta.stages?.length) setGameStages(meta.stages);
         } catch { /* patterns/combos indisponíveis */ }
       }
-      if (loadedGame && loadedGame.room_id && loadedGame.room_id !== '0') {
-        try {
-          const { fetchRoom } = await import('../../services/api');
-          const roomData = await fetchRoom(loadedGame.room_id);
-          setRoom(roomData);
-          // Se o jogo atual terminou, busca o current_game_id da sala
-          if (['archived', 'aborted'].includes(loadedGame.status)) {
-            const nextId = String(roomData.current_game_id);
-            if (nextId !== '0' && nextId !== gameId) {
+
+      if (roomData) {
+        setRoom(roomData);
+        if (loadedGame && ['archived', 'aborted'].includes(loadedGame.status)) {
+          const nextId = String(roomData.current_game_id);
+          if (nextId !== '0' && nextId !== gameId) {
+            try {
               const nextRes = await session.client.v1.chain.get_table_rows({
                 code: CONTRACT, scope: CONTRACT, table: 'games',
                 lower_bound: UInt64.from(nextId), upper_bound: UInt64.from(nextId), limit: 1, json: true,
               });
               if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
-            }
+            } catch { /* silencioso */ }
           }
-        } catch { /* silencioso */ }
-      } else if (roomId) {
-        try {
-          const { fetchRoom } = await import('../../services/api');
-          const roomData = await fetchRoom(roomId);
-          setRoom(roomData);
-          if (roomData.current_game_id && String(roomData.current_game_id) !== '0' && String(roomData.current_game_id) !== gameId) {
+        } else if (roomData.current_game_id && String(roomData.current_game_id) !== '0' && String(roomData.current_game_id) !== gameId) {
+          try {
             const nextRes = await session.client.v1.chain.get_table_rows({
               code: CONTRACT, scope: CONTRACT, table: 'games',
               lower_bound: UInt64.from(String(roomData.current_game_id)),
               upper_bound: UInt64.from(String(roomData.current_game_id)), limit: 1, json: true,
             });
             if (nextRes.rows.length) setNextGame(nextRes.rows[0] as BlockchainGameState);
-          }
-        } catch { /* silencioso */ }
+          } catch { /* silencioso */ }
+        }
       }
 
       // A tabela `tickets` tem scope=game_id (todas as cartelas da partida, de todos
@@ -702,6 +737,14 @@ export function useGameRoomState(
     const interval = setInterval(loadGame, 15_000);
     return () => clearInterval(interval);
   }, [loadGame]);
+
+  const hasTrackedRoomEnter = useRef(false);
+  useEffect(() => {
+    if (game && !loadingGame && gameId && !hasTrackedRoomEnter.current) {
+      hasTrackedRoomEnter.current = true;
+      trackEvent('room_enter', { game_id: gameId });
+    }
+  }, [game, loadingGame, gameId]);
 
   // ── Derivações visuais ────────────────────────────────────────────────────
   const col   = lastDrawn != null ? getCol(lastDrawn) : 'N';
@@ -734,6 +777,6 @@ export function useGameRoomState(
     adjustedPatternWinCount, allGameCombinationWinCount, completedCombinationsPerTicket,
     combinationCells, patternProximityMap, combinationProximityMap, sortedPatterns,
     groupedTickets, currencySymbol, ticketPrice, col, color, hasBanners, now, loadGame,
-    hydratePrizeStatuses,
+    hydratePrizeStatuses, apiPrizes,
   };
 }

@@ -1,0 +1,132 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "worker-critical",
+      "folder": "CryptoBingo",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "worker-stopped",
+          "title": "Worker processamento parado",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "rate(worker_events_processed_total[5m])",
+                "intervalMs": 60000,
+                "maxDataPoints": 100
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "math",
+                "expression": "$A == 0"
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "conditions": [
+                  {
+                    "evaluator": { "type": "gt", "params": [0] },
+                    "query": { "params": ["B"] },
+                    "reducer": { "type": "last" },
+                    "operator": { "type": "and" }
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "2m",
+          "noDataState": "Alerting",
+          "execErrState": "Alerting",
+          "annotations": {
+            "summary": "Worker parado por 2+ minutos",
+            "description": "Nenhum evento processado nos ultimos 5 minutos"
+          },
+          "labels": { "severity": "critical", "team": "platform" }
+        },
+        {
+          "uid": "worker-dlq-growing",
+          "title": "DLQ crescendo rapidamente",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 600, "to": 0 },
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "rate(worker_dlq_messages_total[15m])",
+                "intervalMs": 60000,
+                "maxDataPoints": 100
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "threshold",
+                "conditions": [
+                  {
+                    "evaluator": { "type": "gt", "params": [5] },
+                    "query": { "params": ["A"] },
+                    "reducer": { "type": "last" },
+                    "operator": { "type": "and" }
+                  }
+                ]
+              }
+            }
+          ],
+          "for": "5m",
+          "annotations": {
+            "summary": "DLQ crescendo (+5 msg/min)",
+            "description": "Dead letter queue acumulando mensagens nao processadas"
+          },
+          "labels": { "severity": "warning", "team": "platform" }
+        },
+        {
+          "uid": "worker-rtp-out-of-range",
+          "title": "RTP fora do range esperado",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 86400, "to": 0 },
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "prize_rtp_ratio",
+                "intervalMs": 60000,
+                "maxDataPoints": 100
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "type": "math",
+                "expression": "$A < 0.75 || $A > 0.95"
+              }
+            }
+          ],
+          "for": "30m",
+          "annotations": {
+            "summary": "RTP fora do range (75-95%)",
+            "description": "RTP atual {{ $values.A }} — risco de inflacao ou perda de receita"
+          },
+          "labels": { "severity": "warning", "team": "economy" }
+        }
+      ]
+    }
+  ]
+}

@@ -9,8 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
-
-const ATOMIC_API   = import.meta.env.VITE_ATOMIC_API        ?? '/api/v1/atomic';
+import { ATOMIC_API } from '@/config/env';
 const COLLECTION   = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo1';
 const EXPLORER_URL = import.meta.env.VITE_EXPLORER_URL      ?? 'https://wax.bloks.io';
 

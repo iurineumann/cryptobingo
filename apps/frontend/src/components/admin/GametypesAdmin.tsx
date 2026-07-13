@@ -231,8 +231,34 @@ export default function GametypesAdmin() {
         setError(null);
     };
 
+    // ADR-051: validação semântica draw_mode × campos antes do submit (fail-fast na UI).
+    // O contrato é o guarda final (creategame recusa multimatch sem stages), mas a UI
+    // deve impedir o envio inconsistente com mensagem clara ao admin.
+    const validateGametype = (): string | null => {
+        const hasMasterRule = Object.values(selectedRules).some(
+            (r) => r.type === 'master' && r.weight && parseFloat(r.weight) > 0,
+        );
+        if (drawMode === 'multimatch' && stages.length === 0) {
+            return t('admin.gametypes_error_multimatch_no_stages');
+        }
+        if (drawMode === 'fixed') {
+            const mb = parseInt(maxBalls) || 0;
+            if (mb < 1 || mb > 75) return t('admin.gametypes_error_fixed_maxballs');
+        }
+        if (drawMode === 'firstfull' && !hasMasterRule) {
+            return t('admin.gametypes_error_firstfull_no_master');
+        }
+        if (drawMode === 'goldenball') {
+            const gb = parseInt(goldenBallAfter) || 0;
+            if (gb < 1 || gb > 73) return t('admin.gametypes_error_goldenball_range');
+        }
+        return null;
+    };
+
     const handleUpdate = async () => {
         if (!editingGtId) return;
+        const validationError = validateGametype();
+        if (validationError) { setError(validationError); return; }
         const toHundredths = (v: string) => Math.round(parseFloat(v) * 100);
         const rules = Object.entries(selectedRules)
             .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0)
@@ -277,6 +303,8 @@ export default function GametypesAdmin() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name) return;
+        const validationError = validateGametype();
+        if (validationError) { setError(validationError); return; }
         const toHundredths = (v: string) => Math.round(parseFloat(v) * 100);
         const rules = Object.entries(selectedRules)
             .filter(([_, v]) => v.weight && parseFloat(v.weight) > 0)

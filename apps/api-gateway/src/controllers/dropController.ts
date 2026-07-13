@@ -1,13 +1,17 @@
 import { Request, Response } from 'express';
-import { Session } from '@wharfkit/session';
+import { Session, type SessionOptions } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
+import { APIClient, UInt64 } from '@wharfkit/antelope';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import { UInt64 } from '@wharfkit/antelope';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID         = process.env.CHAIN_ID!;
 const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+
+const SHARED_CLIENT = new APIClient({ url: RPC_URL });
 
 // ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 function getAdminSession(): Session {
@@ -16,7 +20,7 @@ function getAdminSession(): Session {
         permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
-    });
+    }, { client: SHARED_CLIENT } as SessionOptions);
 }
 
 // ==========================================
@@ -34,7 +38,7 @@ export async function listDeposits(req: Request, res: Response): Promise<void> {
         res.status(200).json({ deposits: response.rows });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao listar depósitos:', err);
+        logger.error({ err: err, tag: 'DropCtrl' }, 'Erro ao listar depósitos');
         res.status(503).json({ error: `Nó blockchain indisponível: ${msg}` });
     }
 }
@@ -61,7 +65,7 @@ export async function getDeposit(req: Request, res: Response): Promise<void> {
         res.status(200).json(response.rows[0]);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao buscar depósito:', err);
+        logger.error({ err: err, tag: 'DropCtrl' }, 'Erro ao buscar depósito');
         res.status(503).json({ error: `Nó blockchain indisponível: ${msg}` });
     }
 }
@@ -86,7 +90,7 @@ export async function listAllocations(req: Request, res: Response): Promise<void
         res.status(200).json({ allocations: rows });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao listar alocações:', err);
+        logger.error({ err: err, tag: 'DropCtrl' }, 'Erro ao listar alocações');
         res.status(503).json({ error: `Nó blockchain indisponível: ${msg}` });
     }
 }
@@ -157,14 +161,14 @@ export async function allocateDrop(req: Request, res: Response): Promise<void> {
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [DropCtrl] Alocação criada — deposit ${deposit_id} → room ${room_id}. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'DropCtrl' }, `Alocação criada — deposit ${deposit_id} → room ${room_id}. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        'Alocação criada com sucesso.',
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao alocar:', err);
+        logger.error({ err: err, tag: 'DropCtrl' }, 'Erro ao alocar');
         res.status(500).json({ error: `Erro ao alocar: ${msg}` });
     }
 }
@@ -214,14 +218,14 @@ export async function deallocateDrop(req: Request, res: Response): Promise<void>
             }],
         }, { broadcast: true });
 
-        console.log(`✅ [DropCtrl] Alocação #${alloc_id} removida. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'DropCtrl' }, `Alocação #${alloc_id} removida. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        'Alocação removida com sucesso.',
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[DropCtrl] Erro ao desalocar:', err);
+        logger.error({ err: err, tag: 'DropCtrl' }, 'Erro ao desalocar');
         res.status(500).json({ error: `Erro ao desalocar: ${msg}` });
     }
 }

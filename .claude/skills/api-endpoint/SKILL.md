@@ -60,3 +60,6 @@ Pacote `@cryptobingo/api-gateway` (Express + TS). Testes: `npx jest <arquivo>`. 
 - Rota admin sem `requireRole('admin')` → bypass de autorização.
 - Gravar em Mongo sem sincronizar/invalidar o que o worker lê on-chain → drift.
 - Esquecer de atualizar `openapi.yaml` → spec desatualizada.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

@@ -1,0 +1,22 @@
+{
+  "name": "cryptobingo-oracle-daemon",
+  "version": "1.0.0",
+  "description": "ORNG Oracle Daemon para WAX — atende bingogamerng na testnet",
+  "private": true,
+  "main": "orng-oracle.ts",
+  "scripts": {
+    "start": "ts-node orng-oracle.ts",
+    "build": "tsc",
+    "start:js": "node dist/orng-oracle.js"
+  },
+  "dependencies": {
+    "@wharfkit/session": "^1.6.1",
+    "@wharfkit/wallet-plugin-privatekey": "^1.1.0",
+    "applicationinsights": "^2.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

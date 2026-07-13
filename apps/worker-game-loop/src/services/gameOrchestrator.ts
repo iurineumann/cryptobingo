@@ -37,10 +37,11 @@ import {
     io,
     type WinnerPayload,
 } from './broadcaster';
-import { executeCloseGame }                                          from './blockchain';
+import { executeCloseGame, executeAbortGame }                         from './blockchain';
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
 import { sendGameSummaryMessage }                                    from './chatSystemHelper';
+import { logger } from './logger';
 import {
     gameResolutionTotal,
     gameResolutionDuration,
@@ -259,7 +260,7 @@ async function orchestrateMultiMatch(
  * após o reveal completo e todos os pagamentos.
  */
 export async function orchestrateGame(gameId: string): Promise<void> {
-    console.log(`\n🎬 [Orquestrador] Iniciando orquestração do jogo ${gameId}...`);
+    logger.info({ tag: 'Orquestrador' }, `Iniciando orquestração do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
     if (!game) throw new Error(`[Orquestrador] Jogo ${gameId} não encontrado.`);
@@ -285,10 +286,22 @@ export async function orchestrateGame(gameId: string): Promise<void> {
             maxBalls        = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
             goldenBallAfter = gt.golden_ball_after ?? 0;
             baseMultiplier  = gt.base_multiplier ?? 1;
+
+            // ADR-051 / L4.2: MULTI_MATCH exige stages não-vazios. Sem defesa, o
+            // orquestrador revelaria todas as 75 bolas e deixaria o jogo travado em drawn.
+            if (drawMode === 'multimatch') {
+                const stages = Array.isArray(gt.stages) ? gt.stages : [];
+                if (stages.length === 0) {
+                    logger.error({ tag: 'Orquestrador' },
+                        `Jogo ${gameId}: gametype ${gametypeId} é MULTI_MATCH mas stages=[] (inválido). Abortando.`);
+                    await executeAbortGame(gameId, 'MULTI_MATCH sem stages definidos (config invalida)');
+                    return;
+                }
+            }
         }
     }
 
-    console.log(`🔍 [Orquestrador] Modo: ${drawMode} | Bolas: ${maxBalls} | Gametype: ${gametypeId}`);
+    logger.info({ tag: 'Orquestrador' }, `Modo: ${drawMode} | Bolas: ${maxBalls} | Gametype: ${gametypeId}`)
 
     const drawnBalls = game.drawn_balls;
     let totalWinners = 0;
@@ -316,7 +329,7 @@ export async function orchestrateGame(gameId: string): Promise<void> {
                 break;
 
             default:
-                console.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`);
+                logger.warn(`[Orquestrador] draw_mode desconhecido: ${drawMode}. Usando standard.`)
                 totalWinners = await orchestrateStandard(gameId, drawnBalls, maxBalls, gametypeId, baseMultiplier);
         }
 
@@ -327,6 +340,22 @@ export async function orchestrateGame(gameId: string): Promise<void> {
     } catch (err) {
         resolutionTimer();
         gameResolutionTotal.inc({ draw_mode: drawMode, result: 'failure' });
+        logger.error({ err, tag: 'Orquestrador' }, `Erro ao orquestrar jogo ${gameId}:`);
+        // BUG B (resiliência): se o jogo chegou a DRAWN/PAYING mas falhou o pagamento
+        // (ex: claimcombo inválido), tenta fechar (closegame aceita drawn/paying) para
+        // NÃO deixar zombie. O frontend recebe game_ended e a sala segue.
+        try {
+            const g = await fetchGame(gameId).catch(() => null);
+            if (g && (g.status === 'drawn' || g.status === 'paying')) {
+                await executeCloseGame(gameId);
+                notifyGameEnded(gameId, drawMode, 0);
+                await onGameResolved(gameId).catch(() => {});
+                logger.warn({ tag: 'Orquestrador' }, `Jogo ${gameId} fechado via catch (zombie recovery).`);
+            }
+        }
+        catch (closeErr) {
+            logger.error({ err: closeErr, tag: 'Orquestrador' }, `Falha ao fechar jogo ${gameId} no catch:`);
+        }
         throw err;
     } finally {
         // Garante limpeza do índice e do reveal mesmo em caso de erro parcial
@@ -345,8 +374,8 @@ export async function orchestrateGame(gameId: string): Promise<void> {
 
     // Cria próxima partida da sala (ADR-010) — APÓS o reveal completo
     await onGameResolved(gameId).catch(err =>
-        console.error(`[Orquestrador] onGameResolved error (jogo ${gameId}):`, err)
+        logger.error({ err, tag: 'Orquestrador' }, `onGameResolved error (jogo ${gameId}):`)
     );
 
-    console.log(`✅ [Orquestrador] Jogo ${gameId} totalmente resolvido (modo: ${drawMode}, ${totalWinners} vencedor(es)).`);
+    logger.info({ tag: 'Orquestrador' }, `Jogo ${gameId} totalmente resolvido (modo: ${drawMode}, ${totalWinners} vencedor(es)).`)
 }

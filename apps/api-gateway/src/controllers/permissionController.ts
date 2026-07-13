@@ -3,7 +3,7 @@ import { UserProfile } from '../models/UserProfile';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
 import { logAudit } from '../utils/audit';
-
+import { logger } from '../middleware/logger';
 const ORG_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 function generateOrgId(): string {
@@ -31,7 +31,7 @@ export async function updateUserPermissions(req: Request, res: Response) {
 
     res.json({ wallet_address: updated.wallet_address, permissions: (updated as any).permissions });
   } catch (err) {
-    console.error('[PermissionController] updateUserPermissions:', err);
+    logger.error({ err: err, tag: 'PermissionController' }, 'updateUserPermissions');
     res.status(500).json({ error: 'Erro ao atualizar permissões' });
   }
 }
@@ -42,14 +42,12 @@ export async function listSponsorOrgs(req: Request, res: Response) {
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
 
-    const [orgs, total] = await Promise.all([
-      SponsorOrg.find()
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+    const [allOrgs, total] = await Promise.all([
+      SponsorOrg.find().lean(),
       SponsorOrg.countDocuments(),
     ]);
+    allOrgs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const orgs = allOrgs.slice(skip, skip + limit);
 
     res.json({ orgs, total, page, limit });
   } catch (err) {
@@ -130,7 +128,7 @@ export async function createSponsorOrg(req: Request, res: Response) {
 
     res.status(201).json({ orgId, owner_wallet: wallet, name: name?.trim() || `Org de ${owner_wallet}`, permissionsAutoAssigned });
   } catch (err) {
-    console.error('[PermissionController] createSponsorOrg:', err);
+    logger.error({ err: err, tag: 'PermissionController' }, 'createSponsorOrg');
     res.status(500).json({ error: 'Erro ao criar organização sponsor.' });
   }
 }

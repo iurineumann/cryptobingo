@@ -25,6 +25,7 @@ import {
     collectDefaultMetrics,
 } from 'prom-client';
 import { redisConnected, rabbitConnected } from './connectionState';
+import { logger } from './logger';
 
 const METRICS_PORT = Number.parseInt(process.env.METRICS_PORT ?? '9091', 10);
 
@@ -233,7 +234,7 @@ export function startMetricsServer(): void {
                 res.setHeader('Content-Type', registry.contentType);
                 res.end(await registry.metrics());
             } catch (err) {
-                console.error('[Metrics] Erro ao coletar métricas:', err);
+                logger.error({ err, tag: 'Metrics' }, 'Erro ao coletar métricas:')
                 res.writeHead(500);
                 res.end('Erro ao coletar métricas.');
             }
@@ -265,10 +266,10 @@ export function startMetricsServer(): void {
     });
 
     server.listen(METRICS_PORT, () => {
-        console.log(`📊 [Metrics] Prometheus endpoint em http://localhost:${METRICS_PORT}/metrics`);
+        logger.info({ tag: 'Metrics' }, `Prometheus endpoint em http://localhost:${METRICS_PORT}/metrics`)
     });
 
     server.on('error', (err) => {
-        console.error('❌ [Metrics] Erro no servidor de métricas:', err);
+        logger.error({ err, tag: 'Metrics' }, 'Erro no servidor de métricas:')
     });
 }

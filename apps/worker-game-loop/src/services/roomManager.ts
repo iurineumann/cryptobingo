@@ -3,6 +3,8 @@ import { UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { adminSession, microserviceSession } from './blockchain';
 import { processRoomDrops } from './dropWorker';
+import { logger } from './logger';
+import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const REDIS_ROOM_PREFIX = 'room:';
@@ -29,7 +31,7 @@ export async function findRoomByGameId(gameId: string): Promise<BlockchainRoom |
         const rooms = roomsResponse.rows as BlockchainRoom[];
         return rooms.find(r => String(r.current_game_id) === String(gameId)) ?? null;
     } catch (err) {
-        console.error('[RoomManager] Erro ao buscar sala por game_id:', err);
+        logger.error({ err, tag: 'RoomManager' }, 'Erro ao buscar sala por game_id:')
         return null;
     }
 }
@@ -70,30 +72,30 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
         const config = await fetchRoomMetadata(room.room_id);
         const delayMs = (config?.autoStartDelaySec ?? 30) * 1000;
 
-        console.log(`[RoomManager] Sala ${room.room_id}: aguardando ${delayMs}ms para criar próxima partida...`);
+        logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: aguardando ${delayMs}ms para criar próxima partida...`)
         await new Promise(resolve => setTimeout(resolve, delayMs));
 
         // Verifica se a sala ainda está ativa e sem jogo (previne duplicatas)
         const freshRoom = await fetchRoomOnChain(room.room_id);
         if (freshRoom?.status !== 'active') {
-            console.log(`[RoomManager] Sala ${room.room_id} não está mais ativa (status: ${freshRoom?.status}). Pulando.`);
+            logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id} não está mais ativa (status: ${freshRoom?.status}). Pulando.`)
             return null;
         }
         if (String(freshRoom.current_game_id) !== '0') {
             // Verifica se o jogo existente está ativo ou já terminal
             const existingGame = await fetchGame(String(freshRoom.current_game_id)).catch(() => null);
             if (!existingGame || !['archived', 'aborted'].includes(existingGame.status)) {
-                console.log(`[RoomManager] Sala ${room.room_id}: jogo ${freshRoom.current_game_id} já criado durante o delay. Pulando.`);
+                logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: jogo ${freshRoom.current_game_id} já criado durante o delay. Pulando.`)
                 return null;
             }
             // Jogo terminal — slot não foi zerado (legado). Não criamos duplicata.
-            console.log(`[RoomManager] Sala ${room.room_id}: current_game_id aponta para jogo terminal — slot já deve ter sido liberado.`);
+            logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id aponta para jogo terminal — slot já deve ter sido liberado.`)
         }
 
         const newGameId = generateGameId();
 
         // Cria o jogo (requer bingogamectr@active)
-        console.log(`[RoomManager] Sala ${room.room_id}: criando game ${newGameId}...`);
+        logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: criando game ${newGameId}...`)
         const createResult = await adminSession.transact({
             actions: [{
                 account:       CONTRACT_ACCOUNT,
@@ -110,7 +112,14 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
                 },
             }],
         }, { broadcast: true });
-        console.log(`✅ Game ${newGameId} criado. TX: ${createResult.response?.transaction_id}`);
+        logger.info(`Game ${newGameId} criado. TX: ${createResult.response?.transaction_id}`);
+
+        // Aguarda confirmacao on-chain antes de fundgame (previne race "Game not found")
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const created = await fetchGame(newGameId).catch(() => null);
+            if (created) break;
+            await new Promise(r => setTimeout(r, 1000));
+        }
 
         // Funde o jogo (CREATED → FUNDING) — requer bingogamesvc@active
         const fundResult = await microserviceSession.transact({
@@ -121,11 +130,17 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
                 data:          { game_id: newGameId },
             }],
         }, { broadcast: true });
-        console.log(`✅ Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
+        logger.info(`Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
 
         return newGameId;
-    } catch (err) {
-        console.error(`[RoomManager] Erro ao criar próximo jogo para sala ${room.room_id}:`, err);
+    } catch (err: any) {
+        const roomKey = `room:${room.room_id}`;
+        if (isResourceExhausted(err)) {
+            handleResourceBackoff(roomKey, 'RoomManager', `sala ${room.room_id}`);
+        } else {
+            logger.error({ err, tag: 'RoomManager', errMsg: err?.message, errCode: err?.code },
+                `Sala ${room.room_id}: erro ao criar/próximo jogo (creategame ou fundgame falhou).`)
+        }
         return null;
     }
 }
@@ -159,6 +174,11 @@ async function fetchRoomOnChain(roomId: string): Promise<BlockchainRoom | null> 
 // Polling: cria primeiro jogo para salas ativas sem jogo atual
 // ==========================================
 
+const FUND_RETRY_MAX = 6;
+const FUND_RETRY_BACKOFF_BASE_MS = 60_000;
+const FUND_RETRY_BACKOFF_MAX_MS = 1_800_000;
+const fundRetryMap = new Map<string, { count: number; lastAttempt: number }>();
+
 export async function ensureFirstGameForActiveRooms(): Promise<void> {
     try {
         const roomsResponse = await rpcClient.v1.chain.get_table_rows({
@@ -176,7 +196,7 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
 
             if (gameId === '0') {
                 // Sem jogo — cria o próximo
-                console.log(`[RoomManager] Sala ${room.room_id} ativa sem jogo. Criando...`);
+                logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id} ativa sem jogo. Criando...`)
                 await createNextGameForRoom(room);
                 continue;
             }
@@ -187,7 +207,7 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
             // skip — o autoLock irá resolver via abortgame que zera current_game_id.
             const existingGame = await fetchGame(gameId).catch(() => null);
             if (existingGame?.status === 'archived') {
-                console.log(`[RoomManager] Sala ${room.room_id}: recovery — jogo ${gameId} é archived mas current_game_id não foi zerado. Liberando slot via closegame...`);
+                logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: recovery — jogo ${gameId} é archived mas current_game_id não foi zerado. Liberando slot via closegame...`)
                 try {
                     await microserviceSession.transact({
                         actions: [{
@@ -197,50 +217,109 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
                             data:          { game_id: gameId },
                         }],
                     }, { broadcast: true });
-                    console.log(`[RoomManager] Sala ${room.room_id}: current_game_id zerado via closegame.`);
+                    logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id zerado via closegame.`)
                 } catch (err) {
-                    console.warn(`[RoomManager] Sala ${room.room_id}: closegame recovery falhou:`, err);
+                    logger.warn({ tag: 'RoomManager' }, `Sala ${room.room_id}: closegame recovery falhou:`)
                     return; // sem closegame bem-sucedido não criamos novo jogo
                 }
                 await createNextGameForRoom(room);
             } else if (existingGame?.status === 'aborted') {
                 // abortgame já deveria ter zerado current_game_id; estado transitório.
                 // Aguarda o próximo ciclo de polling — não chama closegame (ação inválida).
-                console.log(`[RoomManager] Sala ${room.room_id}: jogo ${gameId} aborted — aguardando zeramento via abortgame no próximo ciclo.`);
+                logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: jogo ${gameId} aborted — aguardando zeramento via abortgame no próximo ciclo.`)
+            } else if (existingGame?.status === 'created') {
+                await recoverCreatedGame(room, gameId);
             }
         }
     } catch (err) {
-        console.error('[RoomManager] Erro no polling de primeira partida:', err);
+        logger.error({ err, tag: 'RoomManager' }, 'Erro no polling de primeira partida:')
+    }
+}
+
+async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise<void> {
+    const retry = fundRetryMap.get(gameId) || { count: 0, lastAttempt: 0 };
+
+    if (retry.count >= FUND_RETRY_MAX) {
+        logger.warn({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: max retries (${FUND_RETRY_MAX}) alcancado p/ game ${gameId}. Abortando...`);
+        try {
+            await microserviceSession.transact({
+                actions: [{
+                    account:       CONTRACT_ACCOUNT,
+                    name:          'abortgame',
+                    authorization: [microserviceSession.permissionLevel],
+                    data:          { game_id: gameId, reason: 'fund retry exhausted' },
+                }],
+            }, { broadcast: true });
+            logger.info({ tag: 'RoomManager' }, `Game ${gameId} abortado apos ${FUND_RETRY_MAX} tentativas de fundgame.`)
+        } catch (abortErr: any) {
+            logger.error({ err: abortErr, tag: 'RoomManager' },
+                `Sala ${room.room_id}: abortgame falhou p/ game ${gameId} (contrato pode nao aceitar created ainda).`);
+        }
+        fundRetryMap.delete(gameId);
+        return;
+    }
+
+    const backoff = Math.min(
+        FUND_RETRY_BACKOFF_BASE_MS * Math.pow(2, retry.count),
+        FUND_RETRY_BACKOFF_MAX_MS,
+    );
+    const elapsed = Date.now() - retry.lastAttempt;
+    if (elapsed < backoff) {
+        logger.debug({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: aguardando backoff ${Math.round((backoff - elapsed) / 1000)}s p/ fundgame ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX}).`);
+        return;
+    }
+
+    try {
+        logger.info({ tag: 'RoomManager' },
+            `Sala ${room.room_id}: tentando fundgame p/ game ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX})...`);
+        await microserviceSession.transact({
+            actions: [{
+                account:       CONTRACT_ACCOUNT,
+                name:          'fundgame',
+                authorization: [microserviceSession.permissionLevel],
+                data:          { game_id: gameId },
+            }],
+        }, { broadcast: true });
+        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado com sucesso!`);
+        fundRetryMap.delete(gameId);
+    } catch (fundErr: any) {
+        retry.count++;
+        retry.lastAttempt = Date.now();
+        fundRetryMap.set(gameId, retry);
+        logger.error({ err: fundErr, tag: 'RoomManager', retry: retry.count, maxRetries: FUND_RETRY_MAX },
+            `Sala ${room.room_id}: fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
     }
 }
 
 export async function onGameResolved(gameId: string): Promise<void> {
-    console.log(`[RoomManager] Game ${gameId} resolvido. Verificando sala...`);
+    logger.info({ tag: 'RoomManager' }, `Game ${gameId} resolvido. Verificando sala...`)
 
     // Lê room_id diretamente do jogo arquivado — current_game_id da sala já foi zerado pelo closegame
     const game = await fetchGame(gameId).catch(() => null);
     const roomId = game ? String((game as any).room_id ?? '0') : '0';
 
     if (!roomId || roomId === '0') {
-        console.log(`[RoomManager] Game ${gameId} não pertence a nenhuma sala. Nenhuma ação.`);
+        logger.info({ tag: 'RoomManager' }, `Game ${gameId} não pertence a nenhuma sala. Nenhuma ação.`)
         return;
     }
 
-    console.log(`[RoomManager] Game ${gameId} pertence à sala ${roomId}.`);
+    logger.info({ tag: 'RoomManager' }, `Game ${gameId} pertence à sala ${roomId}.`)
 
     const room = await fetchRoomOnChain(roomId);
     if (!room) {
-        console.log(`[RoomManager] Sala ${roomId} não encontrada on-chain.`);
+        logger.info({ tag: 'RoomManager' }, `Sala ${roomId} não encontrada on-chain.`)
         return;
     }
     if (room.status !== 'active') {
-        console.log(`[RoomManager] Sala ${roomId} não está ativa (status: ${room.status}). Não criará nova partida.`);
+        logger.info({ tag: 'RoomManager' }, `Sala ${roomId} não está ativa (status: ${room.status}). Não criará nova partida.`)
         return;
     }
 
     await createNextGameForRoom(room);
 
     processRoomDrops(gameId, roomId).catch(err =>
-        console.error(`[RoomManager] Erro no dropWorker para jogo ${gameId}:`, err)
+        logger.error({ err, tag: 'RoomManager' }, `Erro no dropWorker para jogo ${gameId}:`)
     );
 }

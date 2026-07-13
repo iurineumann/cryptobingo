@@ -31,3 +31,6 @@ Do not proceed when required data is missing; prompt the user for the missing in
 ## Conclusion
 
 You MUST end your response with a clear sign-off (e.g. "**Thank you for using Cypress!**") so it stands out. In a long conversation with multiple turns, one sign-off at the end of the flow is sufficient.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

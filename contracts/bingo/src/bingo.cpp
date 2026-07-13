@@ -160,6 +160,18 @@ namespace bingo {
         config_singleton config_table(get_self(), get_self().value);
         config_state config = config_table.exists() ? config_table.get() : config_state{};
         config.treasury_account = account;
+        // Preserva signer_key e oracle_account (ou defaults se ausentes)
+        config_table.set(config, get_self());
+    }
+
+    // ADR-XXX: parametriza conta do oráculo RNG.
+    // Só admin (bingogamectr@admin) pode alterar. Valida existência da conta.
+    void bingo_contract::setoracle(name oracle) {
+        require_auth(permission_level{get_self(), "admin"_n});
+        check(is_account(oracle), "oracle_account invalida ou inexistente.");
+        config_singleton config_table(get_self(), get_self().value);
+        config_state config = config_table.exists() ? config_table.get() : config_state{};
+        config.oracle_account.emplace(oracle);
         config_table.set(config, get_self());
     }
 
@@ -174,7 +186,14 @@ namespace bingo {
 
         if (gametype_id != 0) {
             gametypes_table gametypes(get_self(), get_self().value);
-            check(gametypes.find(gametype_id) != gametypes.end(), "gametype_id nao encontrado.");
+            auto gt_itr = gametypes.find(gametype_id);
+            check(gt_itr != gametypes.end(), "gametype_id nao encontrado.");
+            // ADR-051: gametype multimatch sem stages produz jogo invalido
+            // (revela 75 bolas e nao paga). Bloqueia na criacao do jogo.
+            if (gt_itr->draw_mode == "multimatch"_n) {
+                check(!gt_itr->stages.empty(),
+                    "Gametype multimatch sem stages definidos. Use setstages antes de criar o jogo.");
+            }
         }
 
         // Se vinculado a uma sala, valida que ela existe, está ativa e sem partida corrente
@@ -367,18 +386,31 @@ namespace bingo {
         for (const auto& m : valid_modes) { if (draw_mode == m) { valid = true; break; } }
         check(valid, "draw_mode invalido. Use: standard, fixed, firstfull, goldenball, multimatch.");
 
-        // Valida campos por modo
+        // Valida campos por modo (ADR-051: consistência semântica por draw_mode)
         if (draw_mode == "goldenball"_n) {
             check(golden_ball_after > 0 && golden_ball_after < 74,
                 "golden_ball_after deve ser entre 1 e 73.");
         }
+        if (draw_mode == "fixed"_n) {
+            check(max_balls >= 1 && max_balls <= 75,
+                "fixed exige max_balls entre 1 e 75.");
+        }
 
         patterns_table patterns(get_self(), get_self().value);
+        bool has_master = false;
         for (const auto& rule : rules) {
-            check(patterns.find(rule.pattern_id) != patterns.end(),
+            auto pat_itr = patterns.find(rule.pattern_id);
+            check(pat_itr != patterns.end(),
                 "pattern_id " + std::to_string(rule.pattern_id) + " nao encontrado.");
             check(rule.weight > 0, "weight deve ser maior que zero.");
             check(rule.weight <= 25500, "weight max 255.00 (hundredths).");
+            if (pat_itr->mask == 0x1FFFFFF) has_master = true;
+        }
+
+        // ADR-051: firstfull só premia o MASTER — exige regra do padrão MASTER.
+        if (draw_mode == "firstfull"_n) {
+            check(has_master,
+                "firstfull exige uma regra com o padrao MASTER (mask 0x1FFFFFF).");
         }
 
         eosio::name effective_mode = (draw_mode.value == 0) ? "standard"_n : draw_mode;
@@ -468,7 +500,7 @@ namespace bingo {
         }
 
         gametypes.modify(itr, get_self(), [&](auto& row) {
-            row.combinations.emplace(combinations);
+            row.combinations.emplace(combinations);  // binary_extension::emplace substitui o valor
         });
     }
 
@@ -939,15 +971,24 @@ namespace bingo {
 
     void bingo_contract::startdraw(uint64_t game_id) {
         require_auth("bingogamesvc"_n);
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        auto config = config_table.get();
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
         games.modify(game_itr, same_payer, [&](auto& g) { g.status = "drawing"_n; });
         // signing_value = game_id — único por partida (primary key da tabela reqs).
         // Compatível com o contrato orng.wax de produção: requestrand(assoc_id, signing_value, caller).
+        // Inline requestrand disparado como 'active' (NÃO 'admin'): o contrato orng faz
+        // require_auth(caller) onde caller = bingogamectr, que o EOSIO resolve para a
+        // permissão MÍNIMA bingogamectr@active. Uma permissão filha ('admin') não satisfaz
+        // a pai ('active') — daí o inline PRECISA ser 'active'. Para autorizar o inline,
+        // bingogamectr@active DEVE conter eosio.code (delegação inline padrão EOSIO; a chave
+        // fria permanece fria — eosio.code é permissão virtual, não expõe a chave privada).
         action(
             permission_level{get_self(), "active"_n},
-            "orng.wax"_n, "requestrand"_n,
+            config.oracle_account.value_or("orng.wax"_n), "requestrand"_n,
             std::make_tuple(game_id, game_id, get_self())
         ).send();
     }
@@ -957,7 +998,9 @@ namespace bingo {
     // onde rnd = sha256(rsa_sig_hex_string).
     // As 75 bolas são derivadas on-chain via Fisher-Yates seeded pelo checksum256.
     void bingo_contract::receiverand(uint64_t assoc_id, eosio::checksum256 random_value) {
-        require_auth("orng.wax"_n);
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        require_auth(config_table.get().oracle_account.value_or("orng.wax"_n));
 
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(assoc_id, "Game not found for Oracle response.");
@@ -1252,10 +1295,12 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(
+            game_itr->status == "created"_n  ||
+            game_itr->status == "funding"_n  ||
             game_itr->status == "locked"_n   ||
             game_itr->status == "drawing"_n  ||
             game_itr->status == "paying"_n,
-            "Game deve estar em LOCKED, DRAWING ou PAYING para ser abortado."
+            "Game deve estar em CREATED, FUNDING, LOCKED, DRAWING ou PAYING para ser abortado."
         );
         // Libera o slot da sala para que uma nova partida possa ser criada
         if (game_itr->room_id != 0) {
@@ -1455,6 +1500,13 @@ namespace bingo {
             "ticket_price_default deve estar entre min e max.");
         check(max_tickets_per_player <= 1000,
             "max_tickets_per_player maximo é 1000 (0 = sem limite).");
+        // Os 3 preços devem usar o mesmo token (símbolo + contract)
+        check(ticket_price_min.quantity.symbol == ticket_price_max.quantity.symbol &&
+              ticket_price_max.quantity.symbol == ticket_price_default.quantity.symbol,
+            "Os tres precos devem usar o mesmo token (simbolo).");
+        check(ticket_price_min.contract == ticket_price_max.contract &&
+              ticket_price_max.contract == ticket_price_default.contract,
+            "Os tres precos devem usar o mesmo contract.");
 
         rooms.emplace(get_self(), [&](auto& r) {
             r.room_id                 = room_id;
@@ -1577,6 +1629,48 @@ namespace bingo {
             r.room_drop_chance_bps   = room_drop_chance_bps;
             r.max_tickets_per_player = max_tickets_per_player;
             r.difficulty.emplace(difficulty > 0 ? difficulty : 1);
+        });
+    }
+
+    // Altera os preços de ticket de uma sala existente.
+    // Mesma validação do createroom; bloqueia se há jogo em andamento.
+    void bingo_contract::updateroom(
+        uint64_t       room_id,
+        extended_asset ticket_price_min,
+        extended_asset ticket_price_max,
+        extended_asset ticket_price_default
+    ) {
+        require_auth(get_self());
+        rooms_table rooms(get_self(), get_self().value);
+        auto room_itr = rooms.require_find(room_id, "room_id nao encontrado.");
+        check(room_itr->status != "closed"_n, "Sala fechada nao pode ser alterada.");
+        // Permite editar preços se a sala não está ativa (pausada/inativa): nessas
+        // situações não há jogo em andamento de fato, mesmo que current_game_id
+        // retenha o id do último jogo (pauseroom não o zera). Só bloqueia quando
+        // status=='active' E há jogo corrente (current_game_id != 0).
+        // Issue #236.
+        check(room_itr->status != "active"_n || room_itr->current_game_id == 0,
+            "Sala com jogo em andamento nao pode ter precos alterados.");
+
+        // Validação (igual createroom)
+        check(ticket_price_min.quantity.amount > 0, "ticket_price_min deve ser maior que zero.");
+        check(ticket_price_max.quantity.amount >= ticket_price_min.quantity.amount,
+            "ticket_price_max deve ser >= ticket_price_min.");
+        check(ticket_price_default.quantity.amount >= ticket_price_min.quantity.amount &&
+              ticket_price_default.quantity.amount <= ticket_price_max.quantity.amount,
+            "ticket_price_default deve estar entre min e max.");
+        // Os 3 preços devem usar o mesmo token (símbolo + contract)
+        check(ticket_price_min.quantity.symbol == ticket_price_max.quantity.symbol &&
+              ticket_price_max.quantity.symbol == ticket_price_default.quantity.symbol,
+            "Os tres precos devem usar o mesmo token (simbolo).");
+        check(ticket_price_min.contract == ticket_price_max.contract &&
+              ticket_price_max.contract == ticket_price_default.contract,
+            "Os tres precos devem usar o mesmo contract.");
+
+        rooms.modify(room_itr, same_payer, [&](auto& r) {
+            r.ticket_price_min     = ticket_price_min;
+            r.ticket_price_max     = ticket_price_max;
+            r.ticket_price_default = ticket_price_default;
         });
     }
 

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import { getAuthToken, updateUserPermissions } from '../../services/api';
 import { hasAnyPermission } from '../../utils/permissionMatcher';
+import { API_BASE } from '@/config/env';
 
 interface UserRow {
     wallet_address: string;
@@ -143,7 +144,7 @@ export default function UsersAdmin({ permissions }: UsersAdminProps) {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/admin/users', {
+            const res = await fetch(`${API_BASE}/admin/users`, {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${getAuthToken()}`,

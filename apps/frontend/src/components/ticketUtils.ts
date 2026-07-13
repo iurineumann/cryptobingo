@@ -427,6 +427,81 @@ export function isCombinationSatisfied(
   });
 }
 
+// ==========================================
+// MAPA DE TIPOS DE PADRÃO (simple/special/master)
+// ==========================================
+// Constrói patternNameById (id -> nome) e patternTypeByName (nome -> type)
+// a partir dos padrões da sala e das regras estendidas do gametype.
+//
+// NOTA DE CORREÇÃO DE BUG (issue: badge de combinação conta menos padrões
+// simples do que o esperado, ex.: "2x Simples" em vez de "3x Simples"):
+// a comparação de chave ENTRE pattern_id (vem do metadata do gametype, podendo
+// ser number ou string conforme a origem/serialização) e p.id (vem de
+// fetchGamePatterns, sempre string) PRECISA ser normalizada com String(...).
+// Sem isso, quando extendedRules traz pattern_id como number, o find() falha,
+// o padrão não entra em patternTypeByName e a cláusula n_of_type de 'simple'
+// deixa de contabilizá-lo -> subcontagem do combo.
+export interface PatternTypeMaps {
+  patternNameById: Map<string, string>;
+  patternTypeByName: Map<string, string>;
+}
+
+export function buildPatternTypeMaps(
+  patterns: Pattern[],
+  extendedRules: ExtendedRule[],
+): PatternTypeMaps {
+  const patternNameById = new Map<string, string>();
+  const patternTypeByName = new Map<string, string>();
+  for (const p of patterns) {
+    if (p.id) patternNameById.set(p.id, p.name);
+    const r = extendedRules.find(r => String(r.pattern_id) === String(p.id));
+    if (r) patternTypeByName.set(p.name, r.type);
+  }
+  return { patternNameById, patternTypeByName };
+}
+
+// ==========================================
+// COMBINAÇÕES CONCLUÍDAS POR CARTELA
+// ==========================================
+// Versão PURA e testável de completedCombinationsPerTicket (useGameRoomState).
+// Dada a matriz da cartela, as bolas sorteadas, os padrões da sala, as combinações
+// do gametype e os mapas de tipo, retorna as combinações satisfeitas ordenadas
+// por peso decrescente (a [0] é o badge exibido).
+export function getCompletedCombinationsForTicket(
+  matrix: number[],
+  drawnSet: Set<number>,
+  patterns: Pattern[],
+  combinations: CombinationRuleInput[],
+  patternTypeByName: Map<string, string>,
+  patternNameById: Map<string, string>,
+): Array<{ name: string; weight: number }> {
+  const flat: (number | null)[] = [];
+  const B = matrix.slice(0, 5);
+  const I = matrix.slice(5, 10);
+  const Nraw = matrix.slice(10, 14);
+  const G = matrix.slice(14, 19);
+  const O = matrix.slice(19, 24);
+  // FREE SPACE no centro (índice 12) conta como marcado
+  const N = [Nraw[0], Nraw[1], null, Nraw[2], Nraw[3]];
+  for (let r = 0; r < 5; r++) {
+    flat.push(B[r], I[r], N[r], G[r], O[r]);
+  }
+  const doneNames = new Set<string>(
+    patterns
+      .filter(p => p.cells.every((req, i) => !req || flat[i] === null || drawnSet.has(flat[i] as number)))
+      .map(p => p.name),
+  );
+  const doneNamesResolved = new Set<string>();
+  for (const name of doneNames) doneNamesResolved.add(name);
+  for (const [id, name] of patternNameById) {
+    if (doneNames.has(name)) doneNamesResolved.add(id);
+  }
+  return combinations
+    .filter(c => isCombinationSatisfied(c, doneNamesResolved, patternTypeByName))
+    .map(c => ({ name: c.name, weight: c.weight }))
+    .sort((a, b) => b.weight - a.weight);
+}
+
 // ── Utilitários de combinação ─────────────────────────────────────────────────
 
 /**

@@ -42,6 +42,7 @@ const slowRevealState = {
   abortReason: null as string | null,
   wsStatus: 'connected' as const,
   wsEverConnected: true,
+  wsReceivedBalls: false,
   isGameEnded: false,
   goldenBall: null as unknown,
   clearedStages: [] as unknown[],
@@ -122,6 +123,7 @@ describe('GameRoom — caracterização Fase 0', () => {
     slowRevealState.drawnBalls = [];
     slowRevealState.lastBall = null;
     slowRevealState.isGameEnded = false;
+    slowRevealState.wsReceivedBalls = false;
     slowRevealState.winners = [];
     slowRevealState.prizeStatuses = {};
   });
@@ -146,10 +148,16 @@ describe('GameRoom — caracterização Fase 0', () => {
       expect(await screen.findByTestId('gr-ended-overlay')).toBeTruthy();
     });
 
-    it('caminho blockchain: status drawn, isGameEnded=false, drawnBalls vazio (isStaticFinalState)', async () => {
+    it('caminho blockchain arquivado: status archived, isGameEnded=false, drawnBalls vazio (visualização histórica)', async () => {
+      slowRevealState.isGameEnded = false;
+      renderRoom(makeSession('archived'));
+      expect(await screen.findByTestId('gr-ended-overlay')).toBeTruthy();
+    });
+
+    it('NÃO mostra overlay com status drawn + sem bolas WS (reveal ao vivo em andamento — corrige flash pós-lock)', async () => {
       slowRevealState.isGameEnded = false;
       renderRoom(makeSession('drawn'));
-      expect(await screen.findByTestId('gr-ended-overlay')).toBeTruthy();
+      expect(screen.queryByTestId('gr-ended-overlay')).toBeNull();
     });
   });
 

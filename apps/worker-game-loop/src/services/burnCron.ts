@@ -15,6 +15,7 @@ import { redisClient } from './redis';
 import { executeRecordBurn } from './blockchain';
 import { awardBurnXP } from './xpEngine';
 import { syncBurns, BurnCandidate } from './burnSync';
+import { logger } from './logger';
 
 const CONTRACT_ACCOUNT      = process.env.CONTRACT_ACCOUNT    || 'bingogamectr';
 const ATOMIC_ACCOUNT        = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
@@ -182,7 +183,7 @@ async function getWatchPlayers(): Promise<string[]> {
 export async function runBurnSyncCycle(): Promise<{ processed: number; skipped: number }> { // NOSONAR — ciclo de sincronização com múltiplas fases (fetch, dedup, claim, skip); complexidade inerente ao ADR-028 §8
     const templates = await fetchBurnToClaimTemplates();
     if (!templates.length) {
-        console.log('[burnCron] Nenhum template BURN_TO_CLAIM configurado — ciclo pulado.');
+        logger.info({ tag: 'burnCron' }, 'Nenhum template BURN_TO_CLAIM configurado — ciclo pulado.')
         return { processed: 0, skipped: 0 };
     }
 
@@ -200,7 +201,7 @@ export async function runBurnSyncCycle(): Promise<{ processed: number; skipped: 
                 const msg = String(e?.message ?? e);
                 if (/ja registrado/i.test(msg)) skipped++;
                 else {
-                    console.warn(`⚠️ [burnCron] recordburn falhou asset ${burn.assetId}: ${msg}`);
+                    logger.warn({ tag: 'burnCron' }, `recordburn falhou asset ${burn.assetId}: ${msg}`)
                     skipped++;
                 }
             }
@@ -212,19 +213,19 @@ export async function runBurnSyncCycle(): Promise<{ processed: number; skipped: 
                 const recorded = await syncPlayerBurns(owner, templates);
                 processed += recorded.length;
             } catch (e: any) {
-                console.warn(`⚠️ [burnCron] syncPlayerBurns falhou ${owner}: ${e?.message ?? e}`);
+                logger.warn({ tag: 'burnCron' }, `syncPlayerBurns falhou ${owner}: ${e?.message ?? e}`)
             }
         }
     }
 
-    console.log(`🔥 [burnCron] ciclo concluído: ${processed} registrados, ${skipped} já registrados`);
+    logger.info({ tag: 'burnCron' }, `ciclo concluído: ${processed} registrados, ${skipped} já registrados`)
     return { processed, skipped };
 }
 
 export function startBurnSyncCron(): void {
-    console.log(`🔥 [burnCron] iniciado (intervalo: ${BURN_CRON_INTERVAL_MS}ms, modo: ${getApiUrl() ? 'API' : 'dev'})`);
-    runBurnSyncCycle().catch(err => console.error('[burnCron] ciclo inicial falhou:', err));
+    logger.info({ tag: 'burnCron' }, `iniciado (intervalo: ${BURN_CRON_INTERVAL_MS}ms, modo: ${getApiUrl() ? 'API' : 'dev'})`)
+    runBurnSyncCycle().catch(err => logger.error('[burnCron] ciclo inicial falhou:', err));
     setInterval(() => {
-        runBurnSyncCycle().catch(err => console.error('[burnCron] ciclo falhou:', err));
+        runBurnSyncCycle().catch(err => logger.error('[burnCron] ciclo falhou:', err));
     }, BURN_CRON_INTERVAL_MS);
 }

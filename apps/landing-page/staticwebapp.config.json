@@ -1,17 +1,40 @@
 {
     "routes": [
         {
+            "route": "/",
+            "redirect": "/en/",
+            "statusCode": 301
+        },
+        {
             "route": "/api/*",
             "allowedRoles": ["anonymous"]
+        },
+        {
+            "route": "/index.html",
+            "headers": {
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
+        },
+        {
+            "route": "/assets/*",
+            "headers": {
+                "Cache-Control": "public, max-age=31536000, immutable"
+            }
+        },
+        {
+            "route": "/favicon.svg",
+            "headers": {
+                "Cache-Control": "public, max-age=86400"
+            }
         }
     ],
     "navigationFallback": {
-        "rewrite": "/index.html",
-        "exclude": ["/api/*", "/assets/*", "/favicon.svg", "/robots.txt", "/sitemap.xml"]
+        "rewrite": "/en/index.html",
+        "exclude": ["/api/*", "/assets/*"]
     },
     "responseOverrides": {
         "404": {
-            "rewrite": "/index.html"
+            "rewrite": "/en/index.html"
         }
     },
     "globalHeaders": {

@@ -1021,6 +1021,35 @@ describe('ROOM_PRICING — ticket_price_min/max e buytickets com requested_price
 });
 
 // ==========================================
+// SUITE 7.5 — ROOM_TOKEN_MISMATCH (regressão ADR-045)
+// Valida: createroom rejeita token misto (symbol + contract)
+// ==========================================
+
+describe('ROOM_TOKEN_MISMATCH — createroom com token misto', () => {
+
+    const ROOM_ID = randomRoomId();
+
+    test('RTM-0: createroom com min=WAX, default=BINGO → falha', async () => {
+        const min = ExtendedAsset.from({ quantity: '10.0000 WAX',   contract: 'eosio.token' });
+        const max = ExtendedAsset.from({ quantity: '50.0000 WAX',   contract: 'eosio.token' });
+        const def = ExtendedAsset.from({ quantity: '10.0000 BINGO', contract: 'eosio.token' });
+        await expect(
+            transact(bingoSession, 'bingogamectr', 'createroom', {
+                room_id:                ROOM_ID,
+                sponsor:                'bingogamectr',
+                gametype_id:            GAMETYPE_ID_STD,
+                ticket_price_min:       min,
+                ticket_price_max:       max,
+                ticket_price_default:   def,
+                max_tickets_per_player: 5,
+                sponsor_room:           false,
+            })
+        ).rejects.toThrow();
+        console.log('   ✅ createroom com token misto (WAX vs BINGO) → rejeitado');
+    });
+});
+
+// ==========================================
 // SUITE 8 — COMBINAÇÕES (ADR-016)
 // Valida: setcombos (registro on-chain), claimcombo (payout = price ×
 // base_multiplier × combo_weight / 100) e validação de combo_id inexistente.
@@ -1567,4 +1596,69 @@ describe('FSM — nft_id no hash da signature [ADR-028 §6]', () => {
     afterAll(async () => {
         try { await transact(microSession, 'bingogamectr', 'abortgame', { game_id: g }); } catch { /* best-effort */ }
     });
+});
+
+// ==========================================
+// ORACLE_CONFIG — setoracle auth + validação + integração startdraw
+// ==========================================
+describe('ORACLE_CONFIG — setoracle (ADR-XXX)', () => {
+
+    test('OC-0: setoracle com admin (bingogamectr@admin) → sucesso', async () => {
+        await transact(bingoSession, 'bingogamectr', 'setoracle', { oracle: 'orng.wax' });
+        console.log('   ✅ setoracle com admin aceito');
+    });
+
+    test('OC-1: setoracle com active (bingogamectr@active) → rejeitado', async () => {
+        await expect(
+            transact(bingoActiveSession, 'bingogamectr', 'setoracle', { oracle: 'orng.wax' })
+        ).rejects.toThrow();
+        console.log('   ✅ setoracle sem admin rejeitado');
+    });
+
+    test('OC-2: setoracle com conta inexistente → rejeitado', async () => {
+        await expect(
+            transact(bingoSession, 'bingogamectr', 'setoracle', { oracle: 'naoexiste1234' })
+        ).rejects.toThrow();
+        console.log('   ✅ setoracle com conta inválida rejeitado');
+    });
+
+    test('OC-3: startdraw dispara requestrand no oracle configurado (orng.wax)', async () => {
+        // Oracle já configurado como orng.wax em OC-0.
+        // signer_key tem bug no bootstrap (usa bingoKey em vez de microserviceKey).
+        // Corrige runtime para que buytickets não falhe.
+        await transact(bingoActiveSession, 'bingogamectr', 'setconfig', { signer_key: microserviceKey.toPublic().toString() });
+        // Seed patterns + gametype (necessário para creategame)
+        const row0Mask = Number(MASK_ROW0);
+        const row1Mask = Number(MASK_ROW1);
+        try { await transact(bingoSession, 'bingogamectr', 'addpattern', { pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: row0Mask }); } catch { /* idempotente */ }
+        try { await transact(bingoSession, 'bingogamectr', 'addpattern', { pattern_id: PATTERN_ID_ROW1, name: 'ROW_1', mask: row1Mask }); } catch { /* idempotente */ }
+        try { await transact(bingoSession, 'bingogamectr', 'addgametype', {
+            gametype_id: GAMETYPE_ID_STD, name: 'Standard', base_multiplier: 1,
+            rules: [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+            draw_mode: 'standard', max_balls: 35, golden_ball_after: 0, master_weight_ovrd: 0,
+        }); } catch { /* idempotente */ }
+
+        const g = UInt64.from(randomGameName());
+        const price = ExtendedAsset.from({ quantity: '5.0000 WAX', contract: 'eosio.token' });
+        await transact(bingoSession, 'bingogamectr', 'creategame', { game_id: g, ticket_price: price, gametype_id: GAMETYPE_ID_STD, room_id: UInt64.from(0) });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: g });
+        await transact(playerSession, 'eosio.token', 'transfer', { from: 'jogador1', to: 'bingogamectr', quantity: '50.0000 WAX', memo: 'deposit' });
+
+        const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+        const owner   = Name.from('jogador1');
+        const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+        const gameBuf = Serializer.encode({ type: 'uint64', object: g }).array;
+        const ownBuf  = Serializer.encode({ type: 'name',   object: owner }).array;
+        const sig = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+
+        await transact(playerSession, 'bingogamectr', 'buytickets', {
+            buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+            nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+        });
+        await transact(microSession, 'bingogamectr', 'lockgame', { game_id: g });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: g });
+        expect(await getGameStatus(g.toString())).toBe('drawing');
+        await waitForDrawn(g.toString());
+        console.log('   ✅ startdraw → drawing → drawn com oracle parametrizado');
+    }, 90_000);
 });

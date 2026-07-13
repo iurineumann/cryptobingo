@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { PrizeTx } from '../models/PrizeTx';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 export async function listGamePrizes(req: Request, res: Response): Promise<void> {
     const { gameId } = req.params as Record<string, string>;
@@ -17,7 +19,7 @@ export async function listGamePrizes(req: Request, res: Response): Promise<void>
 
         res.status(200).json({ items, total: items.length, gameId });
     } catch (err) {
-        console.error('[Prize] Erro ao listar prêmios:', err);
+        logger.error({ err: err, tag: 'Prize' }, 'Erro ao listar prêmios');
         res.status(500).json({ error: 'Erro ao listar prêmios.' });
     }
 }

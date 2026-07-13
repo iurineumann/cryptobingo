@@ -1,0 +1,224 @@
+{
+  "locale": {
+    "en": "English",
+    "pt": "Português",
+    "zh": "中文"
+  },
+  "nav": {
+    "ideas": "Ideas",
+    "testnet": "Testnet",
+    "faq": "FAQ",
+    "blog": "Blog",
+    "tutorials": "Tutorials",
+    "github": "GitHub",
+    "telegram": "Telegram",
+    "twitter": "X/Twitter",
+    "discord": "Discord"
+  },
+  "hero": {
+    "badge": "BINGO GameFi on WAX",
+    "title": "Win real prizes with provably fair draws every game",
+    "subtitle": "CryptoBingo brings classic BINGO to Web3. Every draw verifiable on WAX blockchain, prizes in crypto and NFTs.",
+    "cta_text": "Play Now",
+    "learn_more": "Learn More",
+    "next_draw": "Next draw in {{time}}"
+  },
+  "features": {
+    "section_tag": "Why CryptoBingo",
+    "section_title": "Built for Trust, Designed for Fun",
+    "items": [
+      {
+        "title": "Provably Fair",
+        "description": "Every draw is verified on-chain using cryptographic randomness."
+      },
+      {
+        "title": "Built on WAX",
+        "description": "Lightning-fast transactions, zero gas fees, carbon-neutral blockchain."
+      },
+      {
+        "title": "Real Prizes",
+        "description": "Win crypto tokens and NFT rewards. 85% return-to-player."
+      }
+    ]
+  },
+  "roadmap": {
+    "title": "Roadmap",
+    "description": "Our journey to bring BINGO to the blockchain",
+    "progress_label": "{{pct}}% Complete",
+    "milestones": "milestones",
+    "items": [
+      {
+        "date": "July 2026",
+        "title": "MVP Testnet",
+        "description": "Core game mechanics live on WAX testnet. Single game mode, basic UI, community testing."
+      },
+      {
+        "date": "August 2026",
+        "title": "Open Beta",
+        "description": "Expanded game modes, NFT integration, mobile-responsive UI, ideas forum."
+      },
+      {
+        "date": "September 2026",
+        "title": "Mainnet Launch",
+        "description": "Full feature set, sponsor marketplace, advanced analytics, governance."
+      }
+    ]
+  },
+  "newsletter": {
+    "title": "Stay Updated",
+    "description": "Get the latest news, game updates, and community events.",
+    "placeholder": "Enter your email",
+    "submit": "Subscribe",
+    "sending": "Sending...",
+    "thanks": "You're subscribed! Check your inbox.",
+    "reward": "🎉 You earned 50 XP + 1 free ticket for signing up!",
+    "cta": "Start Playing",
+    "error": "Something went wrong.",
+    "invalid_email": "Please enter a valid email address."
+  },
+  "footer": {
+    "tagline": "BINGO GameFi on WAX blockchain",
+    "product": "Product",
+    "community": "Community",
+    "legal": "Legal",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "risk_disclaimer": "Risk Disclaimer",
+    "responsible_gaming": "Responsible Gaming",
+    "aml": "AML Policy",
+    "dispute": "Dispute Resolution",
+    "game_rules": "Game Rules",
+    "copyright": "© 2026 CryptoBingo. All rights reserved."
+  },
+  "faq": {
+    "title": "FAQ",
+    "description": "Frequently asked questions about CryptoBingo"
+  },
+  "press_kit": {
+    "title": "Press Kit",
+    "description": "Brand assets, screenshots, and guidelines for media coverage",
+    "brand_title": "Brand Assets",
+    "brand_desc": "Download CryptoBingo brand assets for media and promotional use",
+    "download_logo": "Download Logo (.zip)",
+    "download_icon": "Download Icon (.zip)",
+    "download_screenshots": "Download Screenshots (.zip)",
+    "guidelines_title": "Brand Guidelines",
+    "guidelines_desc": "Guidelines for using CryptoBingo brand assets",
+    "do_title": "Do",
+    "do_1": "Use the CryptoBingo logo in its original colors",
+    "do_2": "Maintain clear space around the logo",
+    "do_3": "Use the wordmark with the dot symbol",
+    "dont_title": "Don't",
+    "dont_1": "Alter the logo colors or proportions",
+    "dont_2": "Add effects, shadows, or outlines",
+    "dont_3": "Place on low-contrast backgrounds",
+    "media_title": "Media Contact",
+    "media_desc": "For press inquiries, interview requests, and media partnerships:",
+    "media_email": "press@cryptobingo.bet",
+    "screenshots_title": "Screenshots & Media"
+  },
+  "tokenomics": {
+    "title": "Tokenomics",
+    "description": "CryptoBingo economic model — RTP 85%, transparent treasury, sustainable rewards",
+    "rtp_label": "Return to Player",
+    "rtp_value": "85%",
+    "ggr_label": "Gross Gaming Revenue",
+    "ggr_value": "15%",
+    "supply_title": "Token Distribution",
+    "utility_title": "Token Utility",
+    "staking_title": "Staking Rewards",
+    "staking_desc": "Stake WUF tokens to earn a share of platform revenue",
+    "buyback_title": "Buyback & Burn",
+    "buyback_desc": "A portion of GGR is used to buy back and burn WUF, reducing supply",
+    "governance_title": "Governance",
+    "governance_desc": "WUF holders vote on game parameters, weights, and treasury allocations",
+    "liquidity_title": "Liquidity Pool",
+    "liquidity_desc": "Listed on major WAX DEXes with locked liquidity",
+    "swap_cta": "Buy WUF on Swap",
+    "swap_url": "https://test.cryptobingo.bet/swap"
+  },
+  "redirect": {
+    "redirecting": "Redirecting..."
+  },
+  "how_it_works": {
+    "section_tag": "How It Works",
+    "section_title": "Transparent BINGO on the Blockchain",
+    "section_desc": "Traditional bingo asks you to trust luck. CryptoBingo lets you trust the code.",
+    "step1_label": "Before",
+    "step1_title": "Traditional Black Box",
+    "step1_desc": "In regular bingo, draws happen in closed systems. You can't verify if they were fair.",
+    "step2_label": "After",
+    "step2_title": "Verifiable On-Chain Draw",
+    "step2_desc": "Every ball drawn is generated by an RSA-SHA256 oracle and recorded on the WAX blockchain. Anyone can verify.",
+    "step3_label": "Bridge",
+    "step3_title": "Play with Confidence",
+    "step3_desc": "Connect your WAX wallet, buy tickets, and watch every result revealed in real-time on-chain."
+  },
+  "trust_bar": {
+    "built_on_wax": "Built on WAX",
+    "audited": "Audited ✅",
+    "provably_fair": "Provably Fair ✅",
+    "view_contract": "View Contract",
+    "players_count": "Growing Community"
+  },
+  "stats": {
+    "games_played": "Games Played",
+    "prizes_paid": "Prizes Paid",
+    "active_players": "Active Players",
+    "rtp": "Current RTP",
+    "loading": "Live stats — testnet active"
+  },
+  "content": {
+    "readTime": "{{count}} min read",
+    "relatedPosts": "Related Posts",
+    "relatedTutorials": "Related Tutorials",
+    "previous": "← Previous",
+    "next": "Next →"
+  },
+  "blog": {
+    "back": "← Back to Blog"
+  },
+  "tutorial": {
+    "step": "Step {{current}} of {{total}}",
+    "previous": "← Previous",
+    "next": "Next →"
+  },
+  "tutorials": {
+    "coming_soon": "Tutorials coming soon!",
+    "back": "Back to tutorials"
+  },
+  "wallet": {
+    "title": "Connect Your Wallet",
+    "desc": "Connect your WAX wallet to play, win, and withdraw — all on-chain, all verifiable.",
+    "value_secure_title": "Secure & Verifiable",
+    "value_secure_desc": "All transactions signed in your wallet. Every draw verified on-chain.",
+    "value_instant_title": "Instant Play",
+    "value_instant_desc": "No deposits, no waiting. Buy tickets directly with your WAX balance.",
+    "value_withdraw_title": "Auto Withdrawals",
+    "value_withdraw_desc": "Winnings sent straight to your wallet. No manual claims needed.",
+    "step1": "Install Anchor or WAX Cloud Wallet",
+    "step2": "Connect to CryptoBingo",
+    "step3": "Buy tickets and play"
+  },
+  "activity_feed": {
+    "title": "Latest Wins",
+    "item_prize": "{{prize}} WUF",
+    "pending": "Pending..."
+  },
+  "seo": {
+    "home_title": "CryptoBingo — On-Chain BINGO GameFi on WAX",
+    "home_desc": "Play decentralized BINGO on WAX blockchain. Provably fair, real prizes, 85% RTP. Buy tickets, win crypto and NFTs.",
+    "faq_title": "FAQ — CryptoBingo",
+    "faq_desc": "Frequently asked questions about CryptoBingo Bingo GameFi on WAX blockchain.",
+    "blog_title": "Blog — CryptoBingo",
+    "blog_desc": "News, updates, and articles about CryptoBingo Bingo GameFi on WAX.",
+    "tutorials_title": "Tutorials — CryptoBingo",
+    "tutorials_desc": "Learn how to play, create wallets, and use CryptoBingo.",
+    "press_kit_title": "Press Kit — CryptoBingo",
+    "press_kit_desc": "Brand assets, screenshots, and guidelines",
+    "tokenomics_title": "Tokenomics — CryptoBingo",
+    "tokenomics_desc": "Economic model, RTP 85%, token distribution, and treasury",
+    "whitepaper_title": "Whitepaper — CryptoBingo",
+    "whitepaper_desc": "Technical whitepaper — architecture, RNG, RTP, and economic model"
+  }
+}

@@ -9,6 +9,7 @@ import type { MongoNftCache }     from '@cryptobingo/shared-types';
 import { Session }                from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { Checksum256 }            from '@wharfkit/antelope';
+import { logger } from '../middleware/logger';
 
 const ATOMICAPI_PROXY_BASE = process.env.ATOMICAPI_PROXY_URL ?? 'https://wax.api.atomicassets.io';
 const ATOMIC_CONTRACT      = 'atomicassets';
@@ -233,7 +234,7 @@ export async function getMyNfts(req: Request, res: Response): Promise<void> {
         res.status(200).json({ assets, cached: false });
 
     } catch (err) {
-        console.error('[NFTCtrl] Erro ao buscar NFTs:', err);
+        logger.error({ err: err, tag: 'NFTCtrl' }, 'Erro ao buscar NFTs');
         res.status(503).json({ error: 'Erro ao buscar NFTs. Tente novamente.' });
     }
 }
@@ -332,7 +333,7 @@ export async function getEligibleDiscountNfts(req: Request, res: Response): Prom
         res.status(200).json({ nfts: eligible });
 
     } catch (err) {
-        console.error('[NFTCtrl] Erro ao buscar NFTs elegíveis:', err);
+        logger.error({ err: err, tag: 'NFTCtrl' }, 'Erro ao buscar NFTs elegíveis');
         res.status(503).json({ error: 'Erro ao buscar NFTs elegíveis.' });
     }
 }
@@ -401,7 +402,7 @@ async function getOwnedBurnCandidates(
 }
 
 // ==========================================
-// GET /api/v1/atomic/*splat
+// GET /api/v1/atomic/*
 // Proxy para AtomicAssets REST API (evita CORS do navegador).
 // Retransmite resposta original (status + headers + body).
 // ==========================================
@@ -416,7 +417,7 @@ export async function getAtomicAssets(req: Request, res: Response): Promise<void
             .set('Content-Type', atomicRes.headers.get('content-type') ?? 'application/json')
             .send(body);
     } catch (err) {
-        console.error('[NFTCtrl] Erro ao acessar AtomicAssets API:', err);
+        logger.error({ err: err, tag: 'NFTCtrl' }, 'Erro ao acessar AtomicAssets API');
         res.status(502).json({ error: 'Falha ao acessar API AtomicAssets pelo proxy.' });
     }
 }
@@ -468,7 +469,7 @@ export async function syncBurns(req: Request, res: Response): Promise<void> {
                 if (/ja registrado/i.test(msg)) {
                     recorded.push(c.assetId); // já registrado = idempotente, conta como sucesso
                 } else {
-                    console.warn(`⚠️ [syncBurns] recordburn falhou ${c.assetId}: ${msg}`);
+                    logger.warn({ tag: 'syncBurns' }, `recordburn falhou ${c.assetId}: ${msg}`);
                     failed.push(c.assetId);
                 }
             }
@@ -477,7 +478,7 @@ export async function syncBurns(req: Request, res: Response): Promise<void> {
         const status = failed.length > 0 && recorded.length === 0 ? 502 : 200;
         res.status(status).json({ recorded: recorded.length, asset_ids: recorded, failed });
     } catch (err) {
-        console.error('[NFTCtrl] Erro ao sincronizar queimas:', err);
+        logger.error({ err: err, tag: 'NFTCtrl' }, 'Erro ao sincronizar queimas');
         res.status(503).json({ error: 'Erro ao sincronizar queimas.' });
     }
 }

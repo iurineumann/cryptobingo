@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasPermission } from '../permissionMatcher';
+import { hasPermission, hasAnyPermission } from '../permissionMatcher';
 
 describe('permissionMatcher (frontend)', () => {
   it('deve casar exato', () => {
@@ -14,5 +14,22 @@ describe('permissionMatcher (frontend)', () => {
   it('deve passar com null/undefined (bypass)', () => {
     expect(hasPermission(null, 'admin.users.manage')).toBe(true);
     expect(hasPermission(undefined, 'admin.users.manage')).toBe(true);
+  });
+});
+
+describe('hasAnyPermission', () => {
+  it('deve bypassar tudo para contract_admin', () => {
+    expect(hasAnyPermission([], ['admin.dashboard.view'], 'contract_admin')).toBe(true);
+    expect(hasAnyPermission([], ['admin.rooms.manage'], 'contract_admin')).toBe(true);
+    expect(hasAnyPermission([], ['admin.nonexistent.xyz'], 'contract_admin')).toBe(true);
+  });
+
+  it('deve retornar false para role normal sem permissões', () => {
+    expect(hasAnyPermission([], ['admin.dashboard.view'])).toBe(false);
+    expect(hasAnyPermission([], ['admin.rooms.manage'])).toBe(false);
+  });
+
+  it('deve retornar true quando tem a permissão', () => {
+    expect(hasAnyPermission(['admin.dashboard.view'], ['admin.dashboard.view'])).toBe(true);
   });
 });

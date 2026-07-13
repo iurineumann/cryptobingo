@@ -6,7 +6,7 @@ import { redisClient } from '../database/redis';
 import { Content } from '../models/Content';
 import { translateNewsContent } from '../services/translation';
 import type { ContentItem } from '@cryptobingo/shared-types';
-
+import { logger } from '../middleware/logger';
 const TTL_SECONDS = 120;
 const CACHE_PREFIX = 'content';
 
@@ -74,12 +74,12 @@ export async function listContent(req: Request, res: Response): Promise<void> {
         const filter = { type, active: true };
         const [items, total] = await Promise.all([
             Content.find(filter)
-                .sort({ pinned: -1, sort_order: 1 })
                 .skip(offset)
                 .limit(limit)
                 .lean(),
             Content.countDocuments(filter),
         ]);
+        items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
         const payload = {
             items: items.map(docToContentItem),
@@ -90,7 +90,7 @@ export async function listContent(req: Request, res: Response): Promise<void> {
         redisClient.setEx(cacheKey, TTL_SECONDS, JSON.stringify(payload)).catch(() => {});
         res.status(200).json(payload);
     } catch (err) {
-        console.error('[Content] Erro ao listar:', err);
+        logger.error({ err: err, tag: 'Content' }, 'Erro ao listar');
         res.status(500).json({ error: 'Erro ao listar conteúdo.' });
     }
 }
@@ -127,7 +127,7 @@ export async function getContentItem(req: Request, res: Response): Promise<void>
         redisClient.setEx(cacheKey, TTL_SECONDS, JSON.stringify(payload)).catch(() => {});
         res.status(200).json(payload);
     } catch (err) {
-        console.error('[Content] Erro ao buscar item:', err);
+        logger.error({ err: err, tag: 'Content' }, 'Erro ao buscar item');
         res.status(500).json({ error: 'Erro ao buscar conteúdo.' });
     }
 }
@@ -176,7 +176,7 @@ export async function createContentItem(req: Request, res: Response): Promise<vo
         await invalidateCache();
         res.status(201).json(docToContentItem(typeof item.toObject === 'function' ? item.toObject() : item));
     } catch (err) {
-        console.error('[Content] Erro ao criar:', err);
+        logger.error({ err: err, tag: 'Content' }, 'Erro ao criar');
         res.status(500).json({ error: 'Erro ao criar conteúdo.' });
     }
 }
@@ -188,7 +188,7 @@ async function autoTranslate(
     try {
         return await translateNewsContent(title, content, 'pt', ['en-US', 'zh-CN']);
     } catch (err) {
-        console.warn('[Content] Tradução automática falhou:', err);
+        logger.warn({ err: err, tag: 'Content' }, 'Tradução automática falhou');
         return {};
     }
 }
@@ -223,7 +223,7 @@ export async function updateContentItem(req: Request, res: Response): Promise<vo
         await invalidateCache();
         res.status(200).json(docToContentItem(doc));
     } catch (err) {
-        console.error('[Content] Erro ao atualizar:', err);
+        logger.error({ err: err, tag: 'Content' }, 'Erro ao atualizar');
         res.status(500).json({ error: 'Erro ao atualizar conteúdo.' });
     }
 }
@@ -245,7 +245,7 @@ export async function deleteContentItem(req: Request, res: Response): Promise<vo
         await invalidateCache();
         res.status(200).json({ deleted: true });
     } catch (err) {
-        console.error('[Content] Erro ao deletar:', err);
+        logger.error({ err: err, tag: 'Content' }, 'Erro ao deletar');
         res.status(500).json({ error: 'Erro ao deletar conteúdo.' });
     }
 }

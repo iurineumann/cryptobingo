@@ -55,6 +55,7 @@ jobs:
         app:
           - api-gateway
           - worker-game-loop
+          - oracle-daemon
           - frontend
           - swap-ui
       fail-fast: false
@@ -132,7 +133,8 @@ jobs:
               -g ${{ env.AZURE_RG }} \
               -n api-gateway \
               --container-name api-gateway \
-              --image ${{ env.IMAGE_NS }}/cryptobingo-api-gateway:testnet
+              --image ${{ env.IMAGE_NS }}/cryptobingo-api-gateway:testnet \
+              --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CS }} APPLICATIONINSIGHTS_SAMPLING_RATIO=0.2 APPLICATIONINSIGHTS_ENABLED=true
 
       # ── Worker ───────────────────────────────────────────────────
       - name: Deploy Worker
@@ -144,7 +146,29 @@ jobs:
               -g ${{ env.AZURE_RG }} \
               -n worker-game-loop \
               --container-name worker-game-loop \
-              --image ${{ env.IMAGE_NS }}/cryptobingo-worker-game-loop:testnet
+              --image ${{ env.IMAGE_NS }}/cryptobingo-worker-game-loop:testnet \
+              --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CS }} APPLICATIONINSIGHTS_SAMPLING_RATIO=0.1 APPLICATIONINSIGHTS_ENABLED=true
+
+      # ── Oracle Daemon ───────────────────────────────────────────────
+      - name: Deploy Oracle Daemon
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp update \
+              -g ${{ env.AZURE_RG }} \
+              -n oracle-daemon \
+              --container-name oracle-daemon \
+              --image ${{ env.IMAGE_NS }}/cryptobingo-oracle-daemon:testnet \
+              --set-env-vars \
+                RPC_URL=${{ needs.resolve-env.outputs.rpc_url }} \
+                CHAIN_ID=${{ needs.resolve-env.outputs.chain_id }} \
+                ORNG_ACCOUNT=bingogamerng \
+                ORNG_POLL_INTERVAL_MS=2000 \
+                ORNG_WAX_KEY=secretref:orng-wax-key \
+                ORNG_RSA_PRIVATE_KEY=secretref:orng-rsa-key \
+                APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CS }} \
+                APPLICATIONINSIGHTS_ENABLED=true
 
       # ── Frontend (Static Web App) ────────────────────────────────
       - uses: pnpm/action-setup@v4

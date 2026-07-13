@@ -1,8 +1,500 @@
 {
-  "____comment": "bingo.abi v2.0 \u2014 gerado por cdt-cpp 4.0.1 + revis\u00e3o manual. Atualizado com Rooms (ADR-010) e Drop Vault (ADR-011).",
+  "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
   "version": "eosio::abi/1.2",
   "types": [],
   "structs": [
+    {
+      "name": "abortgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "activateroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "addgametype",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "base_multiplier",
+          "type": "uint8"
+        },
+        {
+          "name": "rules",
+          "type": "pattern_rule[]"
+        },
+        {
+          "name": "draw_mode",
+          "type": "name"
+        },
+        {
+          "name": "max_balls",
+          "type": "uint8"
+        },
+        {
+          "name": "golden_ball_after",
+          "type": "uint8"
+        },
+        {
+          "name": "master_weight_ovrd",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "addpattern",
+      "base": "",
+      "fields": [
+        {
+          "name": "pattern_id",
+          "type": "uint64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "mask",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "allocatedrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "caller",
+          "type": "name"
+        },
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "quantity_per_drop",
+          "type": "extended_asset"
+        },
+        {
+          "name": "nft_asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "drop_chance_bps",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "buytickets",
+      "base": "",
+      "fields": [
+        {
+          "name": "buyer",
+          "type": "name"
+        },
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "matrices",
+          "type": "bytes[]"
+        },
+        {
+          "name": "signatures",
+          "type": "signature[]"
+        },
+        {
+          "name": "nft_id",
+          "type": "uint64"
+        },
+        {
+          "name": "requested_price",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "claimcombo",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "combo_id",
+          "type": "uint64"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "claimstage",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "stage",
+          "type": "uint8"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "win_pattern_mask",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "claimwin",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "win_pattern_mask",
+          "type": "uint64"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
+        },
+        {
+          "name": "boost_nft_ids",
+          "type": "uint64[]$"
+        }
+      ]
+    },
+    {
+      "name": "cleargame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "max_rows",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "closecmpgn",
+      "base": "",
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "closegame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "closeroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "combo_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "combo_id",
+          "type": "uint64"
+        },
+        {
+          "name": "weight",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "confignft",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "collection_name",
+          "type": "name"
+        },
+        {
+          "name": "rules",
+          "type": "nft_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "creategame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price",
+          "type": "extended_asset"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "createroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "sponsor",
+          "type": "name"
+        },
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price_min",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_max",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_default",
+          "type": "extended_asset"
+        },
+        {
+          "name": "max_tickets_per_player",
+          "type": "uint32"
+        },
+        {
+          "name": "sponsor_room",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "deallocdrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "caller",
+          "type": "name"
+        },
+        {
+          "name": "alloc_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delgametype",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delnftconf",
+      "base": "",
+      "fields": [
+        {
+          "name": "template_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delpattern",
+      "base": "",
+      "fields": [
+        {
+          "name": "pattern_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "execdrop",
+      "base": "",
+      "fields": [
+        {
+          "name": "alloc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "winner",
+          "type": "name"
+        },
+        {
+          "name": "quantity",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "fundgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "linkcampaign",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "lockgame",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "nft_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "type",
+          "type": "uint8"
+        },
+        {
+          "name": "value_origin",
+          "type": "uint8"
+        },
+        {
+          "name": "fixed_value",
+          "type": "uint16"
+        },
+        {
+          "name": "schema_field",
+          "type": "string"
+        },
+        {
+          "name": "max_uses",
+          "type": "uint8"
+        },
+        {
+          "name": "grant_duration_sec",
+          "type": "uint32"
+        },
+        {
+          "name": "condition",
+          "type": "uint8"
+        },
+        {
+          "name": "room_ids",
+          "type": "uint64[]"
+        }
+      ]
+    },
     {
       "name": "pattern_rule",
       "base": "",
@@ -18,6 +510,306 @@
       ]
     },
     {
+      "name": "pauseroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "receiverand",
+      "base": "",
+      "fields": [
+        {
+          "name": "assoc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "random_value",
+          "type": "checksum256"
+        }
+      ]
+    },
+    {
+      "name": "reclaimasset",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "deposit_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "recordburn",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "asset_id",
+          "type": "uint64"
+        },
+        {
+          "name": "template_id",
+          "type": "uint64"
+        },
+        {
+          "name": "collection",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "refundticket",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "setcampaign",
+      "base": "",
+      "fields": [
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "payout_per_game",
+          "type": "extended_asset"
+        },
+        {
+          "name": "leftover_policy",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "setcombos",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "combinations",
+          "type": "combo_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "setconfig",
+      "base": "",
+      "fields": [
+        {
+          "name": "signer_key",
+          "type": "public_key"
+        }
+      ]
+    },
+    {
+      "name": "setoracle",
+      "base": "",
+      "fields": [
+        {
+          "name": "oracle",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "setroommeta",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "room_drop_chance_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "max_tickets_per_player",
+          "type": "uint32"
+        },
+        {
+          "name": "difficulty",
+          "type": "uint8$"
+        }
+      ]
+    },
+    {
+      "name": "setroomnft",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "nft_template_allowlist",
+          "type": "uint64[]"
+        },
+        {
+          "name": "campaign_id",
+          "type": "uint64"
+        },
+        {
+          "name": "house_fee_bps",
+          "type": "uint16"
+        },
+        {
+          "name": "estimated_monthly_tickets",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "setstages",
+      "base": "",
+      "fields": [
+        {
+          "name": "gametype_id",
+          "type": "uint64"
+        },
+        {
+          "name": "stages",
+          "type": "stage_rule[]"
+        }
+      ]
+    },
+    {
+      "name": "settreasury",
+      "base": "",
+      "fields": [
+        {
+          "name": "account",
+          "type": "name"
+        }
+      ]
+    },
+    {
+      "name": "stage_rule",
+      "base": "",
+      "fields": [
+        {
+          "name": "stage",
+          "type": "uint8"
+        },
+        {
+          "name": "patterns_required",
+          "type": "uint8"
+        },
+        {
+          "name": "weight",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "startdraw",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "sweepggr",
+      "base": "",
+      "fields": [
+        {
+          "name": "token_contract",
+          "type": "name"
+        },
+        {
+          "name": "sym",
+          "type": "symbol_code"
+        }
+      ]
+    },
+    {
+      "name": "updateroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_price_min",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_max",
+          "type": "extended_asset"
+        },
+        {
+          "name": "ticket_price_default",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "userlogin",
+      "base": "",
+      "fields": [
+        {
+          "name": "nonce_data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "base": "",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "name"
+        },
+        {
+          "name": "amount",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
+      "name": "withdrawroom",
+      "base": "",
+      "fields": [
+        {
+          "name": "room_id",
+          "type": "uint64"
+        },
+        {
+          "name": "amount",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
       "name": "config_state",
       "base": "",
       "fields": [
@@ -28,20 +820,10 @@
         {
           "name": "treasury_account",
           "type": "name"
-        }
-      ]
-    },
-    {
-      "name": "extended_asset",
-      "base": "",
-      "fields": [
-        {
-          "name": "quantity",
-          "type": "asset"
         },
         {
-          "name": "contract",
-          "type": "name"
+          "name": "oracle_account",
+          "type": "name$"
         }
       ]
     },
@@ -114,58 +896,6 @@
       ]
     },
     {
-      "name": "ggr_pool_row",
-      "base": "",
-      "fields": [
-        {
-          "name": "ggr",
-          "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "settreasury",
-      "base": "",
-      "fields": [
-        {
-          "name": "account",
-          "type": "name"
-        }
-      ]
-    },
-    {
-      "name": "sweepggr",
-      "base": "",
-      "fields": [
-        {
-          "name": "token_contract",
-          "type": "name"
-        },
-        {
-          "name": "sym",
-          "type": "symbol_code"
-        }
-      ]
-    },
-    {
-      "name": "setcampaign",
-      "base": "",
-      "fields": [
-        {
-          "name": "campaign_id",
-          "type": "uint64"
-        },
-        {
-          "name": "payout_per_game",
-          "type": "extended_asset"
-        },
-        {
-          "name": "leftover_policy",
-          "type": "name"
-        }
-      ]
-    },
-    {
       "name": "ticket_record",
       "base": "",
       "fields": [
@@ -192,44 +922,6 @@
         {
           "name": "price",
           "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "nft_rule",
-      "base": "",
-      "fields": [
-        {
-          "name": "type",
-          "type": "uint8"
-        },
-        {
-          "name": "value_origin",
-          "type": "uint8"
-        },
-        {
-          "name": "fixed_value",
-          "type": "uint16"
-        },
-        {
-          "name": "schema_field",
-          "type": "string"
-        },
-        {
-          "name": "max_uses",
-          "type": "uint8"
-        },
-        {
-          "name": "grant_duration_sec",
-          "type": "uint32"
-        },
-        {
-          "name": "condition",
-          "type": "uint8"
-        },
-        {
-          "name": "room_ids",
-          "type": "uint64[]"
         }
       ]
     },
@@ -318,28 +1010,6 @@
         {
           "name": "grant_until",
           "type": "time_point"
-        }
-      ]
-    },
-    {
-      "name": "recordburn",
-      "base": "",
-      "fields": [
-        {
-          "name": "owner",
-          "type": "name"
-        },
-        {
-          "name": "asset_id",
-          "type": "uint64"
-        },
-        {
-          "name": "template_id",
-          "type": "uint64"
-        },
-        {
-          "name": "collection",
-          "type": "name"
         }
       ]
     },
@@ -676,660 +1346,12 @@
       ]
     },
     {
-      "name": "abortgame",
+      "name": "ggr_pool_row",
       "base": "",
       "fields": [
         {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "reason",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "activateroom",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "addgametype",
-      "base": "",
-      "fields": [
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        },
-        {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "base_multiplier",
-          "type": "uint8"
-        },
-        {
-          "name": "rules",
-          "type": "pattern_rule[]"
-        },
-        {
-          "name": "draw_mode",
-          "type": "name"
-        },
-        {
-          "name": "max_balls",
-          "type": "uint8"
-        },
-        {
-          "name": "golden_ball_after",
-          "type": "uint8"
-        },
-        {
-          "name": "master_weight_ovrd",
-          "type": "uint16"
-        }
-      ]
-    },
-    {
-      "name": "addpattern",
-      "base": "",
-      "fields": [
-        {
-          "name": "pattern_id",
-          "type": "uint64"
-        },
-        {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "mask",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "allocatedrop",
-      "base": "",
-      "fields": [
-        {
-          "name": "caller",
-          "type": "name"
-        },
-        {
-          "name": "deposit_id",
-          "type": "uint64"
-        },
-        {
-          "name": "room_id",
-          "type": "uint64"
-        },
-        {
-          "name": "quantity_per_drop",
+          "name": "ggr",
           "type": "extended_asset"
-        },
-        {
-          "name": "nft_asset_id",
-          "type": "uint64"
-        },
-        {
-          "name": "drop_chance_bps",
-          "type": "uint16"
-        }
-      ]
-    },
-    {
-      "name": "buytickets",
-      "base": "",
-      "fields": [
-        {
-          "name": "buyer",
-          "type": "name"
-        },
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "matrices",
-          "type": "bytes[]"
-        },
-        {
-          "name": "signatures",
-          "type": "signature[]"
-        },
-        {
-          "name": "nft_id",
-          "type": "uint64"
-        },
-        {
-          "name": "requested_price",
-          "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "claimwin",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ball_count",
-          "type": "uint8"
-        },
-        {
-          "name": "win_pattern_mask",
-          "type": "uint64"
-        },
-        {
-          "name": "golden_multiplier",
-          "type": "uint16"
-        },
-        {
-          "name": "boost_nft_ids",
-          "type": "uint64[]$"
-        }
-      ]
-    },
-    {
-      "name": "cleargame",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "max_rows",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "closecmpgn",
-      "base": "",
-      "fields": [
-        {
-          "name": "campaign_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "closeroom",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "creategame",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_price",
-          "type": "extended_asset"
-        },
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        },
-        {
-          "name": "room_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "createroom",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        },
-        {
-          "name": "sponsor",
-          "type": "name"
-        },
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_price_min",
-          "type": "extended_asset"
-        },
-        {
-          "name": "ticket_price_max",
-          "type": "extended_asset"
-        },
-        {
-          "name": "ticket_price_default",
-          "type": "extended_asset"
-        },
-        {
-          "name": "max_tickets_per_player",
-          "type": "uint32"
-        },
-        {
-          "name": "sponsor_room",
-          "type": "bool"
-        }
-      ]
-    },
-    {
-      "name": "deallocdrop",
-      "base": "",
-      "fields": [
-        {
-          "name": "caller",
-          "type": "name"
-        },
-        {
-          "name": "alloc_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "delgametype",
-      "base": "",
-      "fields": [
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "confignft",
-      "base": "",
-      "fields": [
-        {
-          "name": "template_id",
-          "type": "uint64"
-        },
-        {
-          "name": "collection_name",
-          "type": "name"
-        },
-        {
-          "name": "rules",
-          "type": "nft_rule[]"
-        }
-      ]
-    },
-    {
-      "name": "delnftconf",
-      "base": "",
-      "fields": [
-        {
-          "name": "template_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "delpattern",
-      "base": "",
-      "fields": [
-        {
-          "name": "pattern_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "execdrop",
-      "base": "",
-      "fields": [
-        {
-          "name": "alloc_id",
-          "type": "uint64"
-        },
-        {
-          "name": "winner",
-          "type": "name"
-        },
-        {
-          "name": "quantity",
-          "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "fundgame",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "linkcampaign",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "campaign_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "lockgame",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "pauseroom",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "receiverand",
-      "base": "",
-      "fields": [
-        {
-          "name": "assoc_id",
-          "type": "uint64"
-        },
-        {
-          "name": "random_value",
-          "type": "checksum256"
-        }
-      ]
-    },
-    {
-      "name": "reclaimasset",
-      "base": "",
-      "fields": [
-        {
-          "name": "owner",
-          "type": "name"
-        },
-        {
-          "name": "deposit_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "refundticket",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "setconfig",
-      "base": "",
-      "fields": [
-        {
-          "name": "signer_key",
-          "type": "public_key"
-        }
-      ]
-    },
-    {
-      "name": "setroommeta",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        },
-        {
-          "name": "room_drop_chance_bps",
-          "type": "uint16"
-        },
-        {
-          "name": "max_tickets_per_player",
-          "type": "uint32"
-        },
-        {
-          "name": "difficulty",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "setroomnft",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        },
-        {
-          "name": "nft_template_allowlist",
-          "type": "uint64[]"
-        },
-        {
-          "name": "campaign_id",
-          "type": "uint64"
-        },
-        {
-          "name": "house_fee_bps",
-          "type": "uint16"
-        },
-        {
-          "name": "estimated_monthly_tickets",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "withdrawroom",
-      "base": "",
-      "fields": [
-        {
-          "name": "room_id",
-          "type": "uint64"
-        },
-        {
-          "name": "amount",
-          "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "startdraw",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "withdraw",
-      "base": "",
-      "fields": [
-        {
-          "name": "owner",
-          "type": "name"
-        },
-        {
-          "name": "amount",
-          "type": "extended_asset"
-        }
-      ]
-    },
-    {
-      "name": "userlogin",
-      "base": "",
-      "fields": [
-        {
-          "name": "nonce_data",
-          "type": "bytes"
-        }
-      ]
-    },
-    {
-      "name": "closegame",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        }
-      ]
-    },
-    {
-      "name": "stage_rule",
-      "base": "",
-      "fields": [
-        {
-          "name": "stage",
-          "type": "uint8"
-        },
-        {
-          "name": "patterns_required",
-          "type": "uint8"
-        },
-        {
-          "name": "weight",
-          "type": "uint16"
-        }
-      ]
-    },
-    {
-      "name": "combo_rule",
-      "base": "",
-      "fields": [
-        {
-          "name": "combo_id",
-          "type": "uint64"
-        },
-        {
-          "name": "weight",
-          "type": "uint16"
-        }
-      ]
-    },
-    {
-      "name": "setcombos",
-      "base": "",
-      "fields": [
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        },
-        {
-          "name": "combinations",
-          "type": "combo_rule[]"
-        }
-      ]
-    },
-    {
-      "name": "claimcombo",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ball_count",
-          "type": "uint8"
-        },
-        {
-          "name": "combo_id",
-          "type": "uint64"
-        },
-        {
-          "name": "golden_multiplier",
-          "type": "uint16"
-        }
-      ]
-    },
-    {
-      "name": "setstages",
-      "base": "",
-      "fields": [
-        {
-          "name": "gametype_id",
-          "type": "uint64"
-        },
-        {
-          "name": "stages",
-          "type": "stage_rule[]"
-        }
-      ]
-    },
-    {
-      "name": "claimstage",
-      "base": "",
-      "fields": [
-        {
-          "name": "game_id",
-          "type": "uint64"
-        },
-        {
-          "name": "ticket_id",
-          "type": "uint64"
-        },
-        {
-          "name": "stage",
-          "type": "uint8"
-        },
-        {
-          "name": "ball_count",
-          "type": "uint8"
-        },
-        {
-          "name": "win_pattern_mask",
-          "type": "uint64"
         }
       ]
     }
@@ -1366,6 +1388,16 @@
       "ricardian_contract": ""
     },
     {
+      "name": "claimcombo",
+      "type": "claimcombo",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "claimstage",
+      "type": "claimstage",
+      "ricardian_contract": ""
+    },
+    {
       "name": "claimwin",
       "type": "claimwin",
       "ricardian_contract": ""
@@ -1381,8 +1413,18 @@
       "ricardian_contract": ""
     },
     {
+      "name": "closegame",
+      "type": "closegame",
+      "ricardian_contract": ""
+    },
+    {
       "name": "closeroom",
       "type": "closeroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "confignft",
+      "type": "confignft",
       "ricardian_contract": ""
     },
     {
@@ -1406,18 +1448,8 @@
       "ricardian_contract": ""
     },
     {
-      "name": "confignft",
-      "type": "confignft",
-      "ricardian_contract": ""
-    },
-    {
       "name": "delnftconf",
       "type": "delnftconf",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "recordburn",
-      "type": "recordburn",
       "ricardian_contract": ""
     },
     {
@@ -1461,13 +1493,33 @@
       "ricardian_contract": ""
     },
     {
+      "name": "recordburn",
+      "type": "recordburn",
+      "ricardian_contract": ""
+    },
+    {
       "name": "refundticket",
       "type": "refundticket",
       "ricardian_contract": ""
     },
     {
+      "name": "setcampaign",
+      "type": "setcampaign",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setcombos",
+      "type": "setcombos",
+      "ricardian_contract": ""
+    },
+    {
       "name": "setconfig",
       "type": "setconfig",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "setoracle",
+      "type": "setoracle",
       "ricardian_contract": ""
     },
     {
@@ -1481,48 +1533,8 @@
       "ricardian_contract": ""
     },
     {
-      "name": "withdrawroom",
-      "type": "withdrawroom",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "startdraw",
-      "type": "startdraw",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "withdraw",
-      "type": "withdraw",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "userlogin",
-      "type": "userlogin",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "closegame",
-      "type": "closegame",
-      "ricardian_contract": ""
-    },
-    {
       "name": "setstages",
       "type": "setstages",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "claimstage",
-      "type": "claimstage",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "setcombos",
-      "type": "setcombos",
-      "ricardian_contract": ""
-    },
-    {
-      "name": "claimcombo",
-      "type": "claimcombo",
       "ricardian_contract": ""
     },
     {
@@ -1531,23 +1543,54 @@
       "ricardian_contract": ""
     },
     {
+      "name": "startdraw",
+      "type": "startdraw",
+      "ricardian_contract": ""
+    },
+    {
       "name": "sweepggr",
       "type": "sweepggr",
       "ricardian_contract": ""
     },
     {
-      "name": "setcampaign",
-      "type": "setcampaign",
+      "name": "updateroom",
+      "type": "updateroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "userlogin",
+      "type": "userlogin",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "withdraw",
+      "type": "withdraw",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "withdrawroom",
+      "type": "withdrawroom",
       "ricardian_contract": ""
     }
   ],
   "tables": [
     {
+      "name": "config",
+      "type": "config_state",
+      "index_type": "i64",
+      "key_names": [
+        "signer_key"
+      ],
+      "key_types": [
+        "public_key"
+      ]
+    },
+    {
       "name": "balances",
       "type": "balance_record",
       "index_type": "i64",
       "key_names": [
-        "sym_code"
+        "balance"
       ],
       "key_types": [
         "uint64"
@@ -1590,8 +1633,12 @@
       "name": "nftseq",
       "type": "nft_seq",
       "index_type": "i64",
-      "key_names": [],
-      "key_types": []
+      "key_names": [
+        "next_burn_id"
+      ],
+      "key_types": [
+        "uint64"
+      ]
     },
     {
       "name": "nftburns",
@@ -1675,7 +1722,7 @@
       "type": "drop_state",
       "index_type": "i64",
       "key_names": [
-        "pk"
+        "next_deposit_id"
       ],
       "key_types": [
         "uint64"
@@ -1704,18 +1751,11 @@
       ]
     },
     {
-      "name": "config",
-      "type": "config_state",
-      "index_type": "i64",
-      "key_names": [],
-      "key_types": []
-    },
-    {
       "name": "ggrpool",
       "type": "ggr_pool_row",
       "index_type": "i64",
       "key_names": [
-        "sym_code"
+        "ggr"
       ],
       "key_types": [
         "uint64"

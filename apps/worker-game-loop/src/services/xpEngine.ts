@@ -1,6 +1,7 @@
 import { rpcClient, fetchGame } from '@cryptobingo/blockchain-core';
 import { PlayerProgression } from '../models/playerProgression';
 import { getRarity } from './atomicSchema';
+import { logger } from './logger';
 import {
     checkWinAchievements, checkComboAchievements,
     checkPurchaseAchievements, checkGamesPlayedAchievements,
@@ -102,7 +103,7 @@ async function recalcLevel(wallet: string): Promise<void> {
             );
         }
     } catch (err) {
-        console.error(`[XP] Erro ao recalcular level de ${wallet}:`, err);
+        logger.error({ err, tag: 'XP' }, `Erro ao recalcular level de ${wallet}:`)
     }
 }
 
@@ -119,7 +120,7 @@ export async function awardPlayerXP(wallet: string, amount: number): Promise<voi
         { $inc: { 'progression.xp': totalAmount, 'progression.games_played': 1 } },
         { upsert: true },
     ).catch(err => {
-        console.error(`[XP] Erro ao incrementar XP de ${wallet}:`, err);
+        logger.error({ err, tag: 'XP' }, `Erro ao incrementar XP de ${wallet}:`)
         xpErrorsTotal.inc({ type: 'game' });
     });
     await recalcLevel(wallet);
@@ -210,7 +211,7 @@ export async function awardTicketPurchaseXP(gameId: string): Promise<void> {
     let totalAwarded = 0;
     for (const [wallet, count] of perOwner) {
         await awardPlayerXP(wallet, count * 1).catch(err => {
-            console.error(`[XP] Erro ao conceder XP de compra para ${wallet}:`, err);
+            logger.error({ err, tag: 'XP' }, `Erro ao conceder XP de compra para ${wallet}:`)
             xpErrorsTotal.inc({ type: 'purchase' });
         });
         await PlayerProgression.updateOne(

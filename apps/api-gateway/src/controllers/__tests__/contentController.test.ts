@@ -15,7 +15,6 @@ jest.mock('../../database/redis', () => ({
 jest.mock('../../models/Content', () => {
     const mockChain = () => {
         const chain: any = {
-            sort:  jest.fn().mockReturnThis(),
             skip:  jest.fn().mockReturnThis(),
             limit: jest.fn().mockReturnThis(),
             lean:  jest.fn(),
@@ -145,7 +144,6 @@ describe('listContent', () => {
                 return a.sort_order - b.sort_order;
             });
         const mockChain = {
-            sort:  jest.fn().mockReturnThis(),
             skip:  jest.fn().mockReturnThis(),
             limit: jest.fn().mockReturnThis(),
             lean:  jest.fn().mockResolvedValue(activeDocs),
@@ -156,7 +154,6 @@ describe('listContent', () => {
         await listContent(req, res);
 
         expect(mockFind).toHaveBeenCalledWith({ type: 'faq', active: true });
-        expect(mockChain.sort).toHaveBeenCalledWith({ pinned: -1, sort_order: 1 });
         expect(res.status).toHaveBeenCalledWith(200);
 
         const jsonArg = (res.json as jest.Mock).mock.calls[0][0];

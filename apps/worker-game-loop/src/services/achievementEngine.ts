@@ -1,5 +1,6 @@
 import { PlayerProgression } from '../models/playerProgression';
 import { achievementsUnlockedTotal } from './metrics';
+import { logger } from './logger';
 
 const ACHIEVEMENTS = [
     { id: 'first_win',    label: 'Primeira Vitória',        desc: 'Ganhe sua primeira partida',               icon: '🏆' },
@@ -62,13 +63,13 @@ async function unlock(wallet: string, achievementId: string): Promise<boolean> {
             { $push: { achievements: { id: achievementId, unlocked_at: new Date() } } },
         );
         if (res.modifiedCount > 0) {
-            console.log(`🏅 [Achievement] ${wallet} desbloqueou: ${achievementId}`);
+            logger.info({ tag: 'Achievement' }, `${wallet} desbloqueou: ${achievementId}`)
             achievementsUnlockedTotal.inc({ achievement_id: achievementId });
             return true;
         }
         return false;
     } catch (err) {
-        console.error(`[Achievement] Erro ao desbloquear ${achievementId} para ${wallet}:`, err);
+        logger.error({ err, tag: 'Achievement' }, `Erro ao desbloquear ${achievementId} para ${wallet}:`)
         return false;
     }
 }

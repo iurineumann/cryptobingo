@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { SponsorOrg } from '../models/SponsorOrg';
 import { SponsorDelegation } from '../models/SponsorDelegation';
-
+import { logger } from '../middleware/logger';
 export async function getMyOrg(req: Request, res: Response) {
   try {
     const wallet = (req as any).user?.wallet;
@@ -21,7 +21,7 @@ export async function getMyOrg(req: Request, res: Response) {
 
     res.json({ ...org, delegations });
   } catch (err) {
-    console.error('[SponsorPerm] getMyOrg:', err);
+    logger.error({ err: err, tag: 'SponsorPerm' }, 'getMyOrg');
     res.status(500).json({ error: 'Erro ao buscar organização' });
   }
 }
@@ -36,13 +36,12 @@ export async function listMyDelegations(req: Request, res: Response) {
       return;
     }
 
-    const delegations = await SponsorDelegation.find({ orgId: org.orgId })
-      .sort({ createdAt: -1 })
-      .lean();
+    const delegations = await SponsorDelegation.find({ orgId: org.orgId }).lean();
+    delegations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     res.json({ orgId: org.orgId, delegations });
   } catch (err) {
-    console.error('[SponsorPerm] listMyDelegations:', err);
+    logger.error({ err: err, tag: 'SponsorPerm' }, 'listMyDelegations');
     res.status(500).json({ error: 'Erro ao listar delegações' });
   }
 }
@@ -77,7 +76,7 @@ export async function createMyDelegation(req: Request, res: Response) {
 
     res.status(201).json(delegation);
   } catch (err) {
-    console.error('[SponsorPerm] createMyDelegation:', err);
+    logger.error({ err: err, tag: 'SponsorPerm' }, 'createMyDelegation');
     res.status(500).json({ error: 'Erro ao criar delegação' });
   }
 }
@@ -100,7 +99,7 @@ export async function removeMyDelegation(req: Request, res: Response) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[SponsorPerm] removeMyDelegation:', err);
+    logger.error({ err: err, tag: 'SponsorPerm' }, 'removeMyDelegation');
     res.status(500).json({ error: 'Erro ao remover delegação' });
   }
 }

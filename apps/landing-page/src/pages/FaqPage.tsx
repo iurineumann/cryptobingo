@@ -1,32 +1,43 @@
-import { useLoaderData } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useLoaderData, useParams } from 'react-router-dom';
 import { loadFAQItems } from '../../lib/content';
 import type { FAQItem } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
-export async function loader(): Promise<{ items: FAQItem[] }> {
-  return { items: loadFAQItems() };
+export async function loader({ params }: { params: { locale?: string } }): Promise<{ items: FAQItem[] }> {
+  const locale = params.locale || 'en';
+  return { items: loadFAQItems(locale) };
 }
 
 export default function FaqPage() {
+  const { t } = useTranslation();
   const { items } = useLoaderData<typeof loader>();
+  const { locale } = useParams();
+  const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
-      <Seo title="FAQ — CryptoBingo" description="Perguntas frequentes sobre o CryptoBingo Bingo GameFi na WAX." canonical="/faq" />
+      <Seo title={t('faq.title')} description={t('faq.description')} canonical={`/${lang}/faq`} />
       <Header />
-      <main className="max-w-3xl mx-auto px-4 py-20">
+      <main id="main-content" className="max-w-3xl mx-auto px-4 py-20">
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-          FAQ
+          {t('faq.title')}
         </h1>
         <p className="text-slate-400 mb-12">
-          Perguntas frequentes sobre o CryptoBingo
+          {t('faq.description')}
         </p>
         <div className="space-y-4">
           {items.map((item) => (
             <details
               key={item.slug}
+              onToggle={(e) => {
+                const action = (e.target as HTMLDetailsElement).open ? 'open' : 'close';
+                trackEvent('faq_toggle', { question_slug: item.slug, action });
+              }}
               className="group bg-surface-800 rounded-xl border border-surface-700/50 overflow-hidden"
             >
               <summary className="flex items-center justify-between p-5 cursor-pointer hover:bg-surface-750 transition-colors list-none">

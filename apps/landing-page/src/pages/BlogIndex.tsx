@@ -1,46 +1,115 @@
-import { Link, useLoaderData } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useLoaderData, useParams, Link } from 'react-router-dom';
 import { loadBlogPosts } from '../../lib/content';
-import type { BlogPost } from '../../lib/content';
+import type { BlogPost as BlogPostType } from '../../lib/content';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Seo from '@/components/Seo';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { TagFilter } from '@/components/TagFilter';
+import { Pagination } from '@/components/Pagination';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
-export async function loader(): Promise<{ posts: BlogPost[] }> {
-  return { posts: loadBlogPosts() };
+export async function loader({ params, request }: { params: { locale?: string }; request: Request }): Promise<{
+  posts: BlogPostType[];
+  totalPages: number;
+  currentPage: number;
+  activeTag: string | null;
+  allTags: string[];
+}> {
+  const locale = params.locale || 'en';
+  const url = new URL(request.url);
+  const tag = url.searchParams.get('tag');
+  const page = parseInt(url.searchParams.get('page') || '1', 10);
+  const posts = loadBlogPosts(locale);
+  const filtered = tag ? posts.filter(p => p.tags?.includes(tag)) : posts;
+  const pageSize = 12;
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const allTags = [...new Set(posts.flatMap(p => p.tags || []))];
+  return { posts: paged, totalPages, currentPage: page, activeTag: tag, allTags };
+}
+
+function formatDate(dateStr: string, locale: string): string {
+  const d = new Date(dateStr);
+  const fmt = locale === 'pt' ? 'pt-BR' : locale === 'zh' ? 'zh-CN' : 'en-US';
+  return d.toLocaleDateString(fmt, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export default function BlogIndex() {
-  const { posts } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
+  const { posts, totalPages, currentPage, activeTag, allTags } = useLoaderData<typeof loader>();
+  const { locale } = useParams();
+  const lang = locale || 'en';
+  const { trackEvent } = useAnalytics(lang);
 
   return (
     <>
-      <Seo title="Blog — CryptoBingo" description="Novidades, atualizações e artigos sobre o CryptoBingo Bingo GameFi na WAX." canonical="/blog" />
+      <Seo title={t('seo.blog_title')} description={t('seo.blog_desc')} canonical={`/${lang}/blog`} />
       <Header />
-      <main className="max-w-4xl mx-auto px-4 py-20">
-        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Blog</h1>
-        <p className="text-slate-400 mb-12">Novidades e atualizações do CryptoBingo</p>
-        <div className="grid gap-8">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-20">
+        <Breadcrumbs
+          segments={[
+            { label: t('nav.home'), href: `/${lang}` },
+            { label: t('nav.blog') },
+          ]}
+        />
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-8">
+          {t('seo.blog_title')}
+        </h1>
+
+        {allTags.length > 0 && (
+          <TagFilter tags={allTags} activeTag={activeTag} basePath={`/${lang}/blog`} />
+        )}
+
+        <div data-testid="blog-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {posts.map((post) => (
             <Link
               key={post.slug}
-              to={`/blog/${post.slug}`}
-              className="block bg-surface-800 rounded-xl border border-surface-700/50 p-6 hover:border-surface-500 transition-all hover:-translate-y-0.5"
+              to={`/${lang}/blog/${post.slug}`}
+              onClick={() => trackEvent('blog_click', { post_slug: post.slug, post_title: post.title })}
+              className="group block bg-surface-800 rounded-xl border border-surface-700/50 hover:border-surface-500 transition-all overflow-hidden"
             >
-              <time className="text-xs text-slate-500">
-                {new Date(post.date).toLocaleDateString('pt-BR')}
-              </time>
-              <h2 className="text-xl font-semibold text-white mt-1 mb-2">{post.title}</h2>
-              <p className="text-sm text-slate-400">{post.description}</p>
-              <div className="flex gap-2 mt-3">
-                {post.tags.map((tag: string) => (
-                  <span key={tag} className="text-xs bg-brand-500/10 text-brand-300 px-2 py-0.5 rounded-full">
-                    {tag}
-                  </span>
-                ))}
+              <div className="aspect-video bg-surface-700 overflow-hidden">
+                {post.cover ? (
+                  <img
+                    src={post.cover}
+                    alt={post.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-500 text-lg font-semibold">
+                    {post.title.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div className="p-5">
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {post.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <h2 className="text-lg font-semibold text-white mb-2 group-hover:text-brand-300 transition-colors">
+                  {post.title}
+                </h2>
+                <p className="text-slate-400 text-sm mb-3 line-clamp-2">{post.description}</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>{formatDate(post.date, lang)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{post.author}</span>
+                </div>
               </div>
             </Link>
           ))}
         </div>
+
+        <Pagination current={currentPage} total={totalPages} basePath={`/${lang}/blog`} />
       </main>
       <Footer />
     </>

@@ -104,3 +104,6 @@ Depois rode o harness (ver skill/seção Harness do CLAUDE.md) com o oracle daem
 
 Commit do contrato inclui: `bingo.hpp`, `bingo.cpp`, `bingo.abi`, `bingo.wasm` (+ `bingo_generated.abi`).
 Toda mudança de comportamento on-chain → ADR em `docs/adr/`.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

@@ -1,6 +1,5 @@
 import type { MongoUserProfile, PatternType } from '@cryptobingo/shared-types';
-
-const API_BASE = import.meta.env.VITE_API_GATEWAY_URL + '/api/v1';
+import { API_BASE } from '@/config/env';
 
 let _token: string | null = localStorage.getItem('cb_jwt');
 
@@ -735,6 +734,12 @@ export async function updateRoomMetadata(roomId: string, data: Partial<RoomMetad
 export async function updateRoomSettings(roomId: string, data: {
     room_drop_chance_bps?: number;
     max_tickets_per_player?: number;
+    ticket_price_min_quantity?: string;
+    ticket_price_min_contract?: string;
+    ticket_price_max_quantity?: string;
+    ticket_price_max_contract?: string;
+    ticket_price_default_quantity?: string;
+    ticket_price_default_contract?: string;
 }): Promise<{ transaction_id: string }> {
     const res = await fetch(`${API_BASE}/rooms/${roomId}/settings`, {
         method: 'PUT', headers: authHeaders(),
@@ -791,6 +796,32 @@ export async function setRoomNftConfig(roomId: string, data: {
         body: JSON.stringify(data),
     });
     return handleResponse(res);
+}
+
+// ==========================================
+// LOBBY AGREGADO (Issue #268)
+// ==========================================
+
+export interface LobbyResponse {
+    games:     import('@cryptobingo/shared-types').BlockchainGameState[];
+    rooms:     EnrichedRoom[];
+    gametypes: import('@cryptobingo/shared-types').BlockchainGametype[];
+}
+
+export interface LobbyMeResponse {
+    balances:      import('@cryptobingo/shared-types').BlockchainBalance[];
+    myTickets:     Record<string, number>;
+    playerRoomIds: string[];
+}
+
+export async function fetchLobby(): Promise<LobbyResponse> {
+    const res = await fetch(`${API_BASE}/lobby`, { headers: publicHeaders() });
+    return handleResponse<LobbyResponse>(res);
+}
+
+export async function fetchLobbyMe(): Promise<LobbyMeResponse> {
+    const res = await fetch(`${API_BASE}/lobby/me`, { headers: authHeaders() });
+    return handleResponse<LobbyMeResponse>(res);
 }
 
 // ==========================================

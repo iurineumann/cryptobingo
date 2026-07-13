@@ -110,7 +110,7 @@ describe('fetch histórico', () => {
         renderHook(() => useChat({ roomId: 'room-fetch', walletAddress: WALLET }));
         await act(async () => { resolveHistory([]); });
         expect(mockFetch).toHaveBeenCalledWith(
-            expect.stringContaining('/api/v1/rooms/room-fetch/chat'),
+            expect.stringContaining('/api/v1/rooms/room-fetch/chat'), // API_BASE já inclui /api/v1; useChat monta /rooms (sem duplicar)
             expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }),
         );
     });

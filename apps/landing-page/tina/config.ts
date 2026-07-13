@@ -24,27 +24,27 @@ export default defineConfig({
     collections: [
       {
         name: "page",
-        label: "Páginas",
+        label: "Pages",
         path: "content/pages",
         format: "mdx",
         fields: [
           {
             type: "string",
             name: "title",
-            label: "Título",
+            label: "Title",
             isTitle: true,
             required: true,
           },
           {
             type: "rich-text",
             name: "body",
-            label: "Conteúdo",
+            label: "Content",
             isBody: true,
           },
           {
             type: "string",
             name: "description",
-            label: "Descrição (SEO)",
+            label: "Description (SEO)",
             ui: { component: "textarea" },
           },
           {
@@ -63,36 +63,36 @@ export default defineConfig({
           {
             type: "string",
             name: "title",
-            label: "Título",
+            label: "Title",
             isTitle: true,
             required: true,
           },
           {
             type: "string",
             name: "description",
-            label: "Resumo",
+            label: "Summary",
             ui: { component: "textarea" },
           },
           {
             type: "datetime",
             name: "date",
-            label: "Data",
+            label: "Date",
             required: true,
           },
           {
             type: "image",
             name: "cover",
-            label: "Imagem de capa",
+            label: "Cover Image",
           },
           {
             type: "string",
             name: "author",
-            label: "Autor",
+            label: "Author",
           },
           {
             type: "rich-text",
             name: "body",
-            label: "Conteúdo",
+            label: "Content",
             isBody: true,
           },
           {
@@ -112,32 +112,59 @@ export default defineConfig({
           {
             type: "string",
             name: "question",
-            label: "Pergunta",
+            label: "Question",
             isTitle: true,
             required: true,
           },
           {
             type: "rich-text",
             name: "answer",
-            label: "Resposta",
+            label: "Answer",
             isBody: true,
           },
           {
             type: "number",
             name: "order",
-            label: "Ordem",
+            label: "Order",
           },
           {
             type: "string",
             name: "category",
-            label: "Categoria",
+            label: "Category",
             options: ["general", "gameplay", "tech", "economy"],
           },
         ],
       },
       {
+        name: "tutorial",
+        label: "Tutorials",
+        path: "content/tutorial",
+        format: "mdx",
+        fields: [
+          {
+            type: "string",
+            name: "title",
+            label: "Title",
+            isTitle: true,
+            required: true,
+          },
+          {
+            type: "string",
+            name: "description",
+            label: "Description",
+            ui: { component: "textarea" },
+          },
+          {
+            type: "rich-text",
+            name: "body",
+            label: "Content",
+            isBody: true,
+          },
+        ],
+      },
+      {
         name: "settings",
-        label: "Configurações",
+        label: "Settings",
         path: "content/settings",
         format: "json",
         fields: [
@@ -146,14 +173,34 @@ export default defineConfig({
             name: "hero",
             label: "Hero",
             fields: [
-              { type: "string", name: "title" },
               {
-                type: "string",
-                name: "subtitle",
-                ui: { component: "textarea" },
+                type: "object",
+                name: "title",
+                fields: [
+                  { type: "string", name: "en", label: "English" },
+                  { type: "string", name: "pt", label: "Português" },
+                  { type: "string", name: "zh", label: "中文" },
+                ],
               },
-              { type: "string", name: "cta_text", label: "Botão CTA" },
-              { type: "string", name: "cta_link", label: "Link CTA" },
+              {
+                type: "object",
+                name: "subtitle",
+                fields: [
+                  { type: "string", name: "en", label: "English", ui: { component: "textarea" } },
+                  { type: "string", name: "pt", label: "Português", ui: { component: "textarea" } },
+                  { type: "string", name: "zh", label: "中文", ui: { component: "textarea" } },
+                ],
+              },
+              {
+                type: "object",
+                name: "cta_text",
+                fields: [
+                  { type: "string", name: "en", label: "English" },
+                  { type: "string", name: "pt", label: "Português" },
+                  { type: "string", name: "zh", label: "中文" },
+                ],
+              },
+              { type: "string", name: "cta_link", label: "CTA Link" },
             ],
           },
           {
@@ -162,11 +209,23 @@ export default defineConfig({
             label: "Features",
             list: true,
             fields: [
-              { type: "string", name: "title" },
               {
-                type: "string",
+                type: "object",
+                name: "title",
+                fields: [
+                  { type: "string", name: "en" },
+                  { type: "string", name: "pt" },
+                  { type: "string", name: "zh" },
+                ],
+              },
+              {
+                type: "object",
                 name: "description",
-                ui: { component: "textarea" },
+                fields: [
+                  { type: "string", name: "en", ui: { component: "textarea" } },
+                  { type: "string", name: "pt", ui: { component: "textarea" } },
+                  { type: "string", name: "zh", ui: { component: "textarea" } },
+                ],
               },
               { type: "string", name: "icon" },
             ],
@@ -174,7 +233,7 @@ export default defineConfig({
           {
             type: "object",
             name: "social",
-            label: "Redes Sociais",
+            label: "Social",
             fields: [
               { type: "string", name: "telegram" },
               { type: "string", name: "discord" },

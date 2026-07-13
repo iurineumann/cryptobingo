@@ -491,6 +491,10 @@
     "gametypes_empty": "Nenhum tipo de jogo criado ainda.",
     "gametypes_error_load": "Falha ao carregar tipos de jogo.",
     "gametypes_error_no_rules": "Selecione ao menos um padrão com peso.",
+    "gametypes_error_multimatch_no_stages": "MULTI_MATCH exige ao menos um estágio (stages). Adicione estágios antes de salvar.",
+    "gametypes_error_fixed_maxballs": "Modo FIXED exige max_balls entre 1 e 75.",
+    "gametypes_error_firstfull_no_master": "Modo FIRST_FULL exige uma regra com o padrão MASTER.",
+    "gametypes_error_goldenball_range": "Modo GOLDEN_BALL exige golden_ball_after entre 1 e 73.",
     "gametypes_error_too_many_rules": "Máximo de 12 padrões por gametype ({count} selecionados). Remova alguns e tente novamente.",
     "gametypes_error_create": "Falha ao criar tipo de jogo.",
     "gametypes_confirm_delete": "Excluir game type #{{id}}?",
@@ -1084,6 +1088,15 @@
     "claim": "Resgatar",
     "week_warrior": "Semana Guerreira",
     "reward_ticket": "1 Cartela Grátis"
+  },
+  "share_win": {
+    "text": "Acabei de ganhar {{amount}} no @CryptoBingo! 🎰💰",
+    "section_title": "Compartilhar vitória",
+    "twitter_label": "X",
+    "telegram_label": "Telegram",
+    "discord_label": "Discord",
+    "copy_label": "Copiar link",
+    "copy_success": "Link copiado!"
   },
   "settings": {
     "title": "Configurações",

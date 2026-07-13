@@ -23,3 +23,6 @@ Verifique SEMPRE:
 - **Acessibilidade/estado:** sem flicker por loading mal-condicionado; aria-labels onde aplicável.
 
 Pode rodar `npx tsc --noEmit` e `pnpm --filter @cryptobingo/frontend test` (vitest). Conciso e técnico; priorize correção funcional, i18n completo e consistência visual com o design system.
+
+ANTES DE TRABALHAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

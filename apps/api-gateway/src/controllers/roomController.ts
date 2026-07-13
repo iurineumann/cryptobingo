@@ -1,15 +1,19 @@
 import { Request, Response } from 'express';
-import { Session } from '@wharfkit/session';
+import { Session, type SessionOptions } from '@wharfkit/session';
 import { WalletPluginPrivateKey } from '@wharfkit/wallet-plugin-privatekey';
 import { rpcClient } from '@cryptobingo/blockchain-core';
-import { Name, UInt64 } from '@wharfkit/antelope';
+import { APIClient, Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import RoomMetadataModel from '../models/RoomMetadata';
+import { logger } from '../middleware/logger';
+import { getRequestId } from '../middleware/requestId';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT      || 'bingogamectr';
 const MICROSERVICE_KEY = process.env.MICROSERVICE_PRIVATE_KEY!;
 const CHAIN_ID         = process.env.CHAIN_ID!;
 const RPC_URL          = process.env.RPC_URL               || 'http://127.0.0.1:8888';
+
+const SHARED_CLIENT = new APIClient({ url: RPC_URL });
 
 // ADR-026: assina como bingogamectr@admin com a chave do bingogamesvc
 function getAdminSession(): Session {
@@ -18,7 +22,7 @@ function getAdminSession(): Session {
         permission:   'admin',
         chain:        { id: CHAIN_ID, url: RPC_URL },
         walletPlugin: new WalletPluginPrivateKey(MICROSERVICE_KEY),
-    });
+    }, { client: SHARED_CLIENT } as SessionOptions);
 }
 
 // ==========================================
@@ -50,7 +54,7 @@ export async function listRooms(_req: Request, res: Response): Promise<void> {
 
         res.status(200).json({ rooms: enriched });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao listar salas:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao listar salas');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -78,7 +82,7 @@ export async function getRoom(req: Request, res: Response): Promise<void> {
         const metadata = await RoomMetadataModel.findOne({ room_id: roomId }).lean();
         res.status(200).json({ ...room, metadata: metadata ?? null });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao buscar sala:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao buscar sala');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -152,14 +156,14 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
             { upsert: true }
         );
 
-        console.log(`✅ [RoomCtrl] Sala ${room_id} criada. TX: ${result.response?.transaction_id}`);
+        logger.info({ tag: 'RoomCtrl' }, `Sala ${room_id} criada. TX: ${result.response?.transaction_id}`);
         res.status(200).json({
             message:        `Sala ${room_id} criada com sucesso.`,
             transaction_id: result.response?.transaction_id,
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[RoomCtrl] Erro ao criar sala:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao criar sala');
         res.status(500).json({ error: `Erro ao criar sala: ${msg}` });
     }
 }
@@ -195,7 +199,7 @@ export async function upsertRoomMetadata(req: Request, res: Response): Promise<v
         res.status(200).json(updated);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[RoomCtrl] Erro ao atualizar metadados:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao atualizar metadados');
         res.status(500).json({ error: `Erro ao atualizar metadados: ${msg}` });
     }
 }
@@ -281,23 +285,51 @@ export async function closeRoom(req: Request, res: Response): Promise<void> {
 export async function updateRoomSettings(req: Request, res: Response): Promise<void> {
     const { roomId } = req.params as Record<string, string>;
     const {
-        room_drop_chance_bps, max_tickets_per_player,
+        room_drop_chance_bps, max_tickets_per_player, difficulty,
+        ticket_price_min_quantity, ticket_price_min_contract,
+        ticket_price_max_quantity, ticket_price_max_contract,
+        ticket_price_default_quantity, ticket_price_default_contract,
     } = req.body;
 
     try {
         const session = getAdminSession();
-        const result = await session.transact({
-            actions: [{
+        const actions: any[] = [{
+            account:       CONTRACT_ACCOUNT,
+            name:          'setroommeta',
+            authorization: [session.permissionLevel],
+            data: {
+                room_id:                UInt64.from(roomId),
+                room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
+                max_tickets_per_player: max_tickets_per_player ?? 10,
+                difficulty:             difficulty ?? 1,
+            },
+        }];
+
+        // Atualiza preços da sala (acao updateroom) quando informados
+        if (ticket_price_min_quantity || ticket_price_max_quantity || ticket_price_default_quantity) {
+            actions.push({
                 account:       CONTRACT_ACCOUNT,
-                name:          'setroommeta',
-                authorization: [session.permissionLevel],
+                name:          'updateroom',
+                authorization: [{ actor: CONTRACT_ACCOUNT, permission: 'active' }],
                 data: {
-                    room_id:                UInt64.from(roomId),
-                    room_drop_chance_bps:   room_drop_chance_bps ?? 10000,
-                    max_tickets_per_player: max_tickets_per_player ?? 10,
+                    room_id: UInt64.from(roomId),
+                    ticket_price_min: {
+                        quantity: ticket_price_min_quantity,
+                        contract: ticket_price_min_contract,
+                    },
+                    ticket_price_max: {
+                        quantity: ticket_price_max_quantity,
+                        contract: ticket_price_max_contract,
+                    },
+                    ticket_price_default: {
+                        quantity: ticket_price_default_quantity,
+                        contract: ticket_price_default_contract,
+                    },
                 },
-            }],
-        }, { broadcast: true });
+            });
+        }
+
+        const result = await session.transact({ actions }, { broadcast: true });
 
         res.status(200).json({
             message:        `Configurações da sala ${roomId} atualizadas.`,
@@ -345,7 +377,7 @@ export async function listSponsorRooms(req: Request, res: Response): Promise<voi
 
         res.status(200).json({ rooms: enriched });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao listar salas do sponsor:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao listar salas do sponsor');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }
@@ -418,7 +450,7 @@ export async function getRoomTreasury(req: Request, res: Response): Promise<void
         }
         res.status(200).json({ treasury: response.rows[0] });
     } catch (err) {
-        console.error('[RoomCtrl] Erro ao buscar treasury:', err);
+        logger.error({ err: err, tag: 'RoomCtrl' }, 'Erro ao buscar treasury');
         res.status(503).json({ error: 'Nó blockchain indisponível.' });
     }
 }

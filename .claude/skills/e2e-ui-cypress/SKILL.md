@@ -110,3 +110,6 @@ arquivo.**
 - [ ] Fixtures reusam shapes de `shared-types`; nada de lógica de domínio reimplementada.
 - [ ] Tier 1 verde; se tocou frontend, `tsc --noEmit` + vitest verdes (sem regressão).
 - [ ] Revisão pré-PR delegada a `e2e-reviewer` (+ `frontend-reviewer` se tocou o frontend).
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

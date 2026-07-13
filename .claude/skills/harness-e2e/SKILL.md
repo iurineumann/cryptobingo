@@ -69,3 +69,6 @@ Espelhe um `describe` existente (ex.: Standard/MULTI_MATCH/COMBINAÇÕES). Fluxo
 - `waitForDrawn` depende do oracle; use timeout do teste ≥ `attempts×2s + folga`.
 - gametype ids no harness: 1–4 e 8 já usados; escolha um livre para suites novos.
 - Verificar action deployada: `get_abi` de `bingogamectr`.
+
+ANTES DE USAR: busque RAG (mcp-rag_rag_search) com tags ['cryptobingo','session-summary','adr'] p/ contexto.
+CAVEMAN MODE FULL. Output ultra-compressed. Drop articles/filler/pleasantries/hedging. Fragments OK. Technical terms exact. Code/commits/security write normal.

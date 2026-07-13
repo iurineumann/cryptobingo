@@ -1,12 +1,16 @@
 // apps/api-gateway/src/index.ts
 // Hardening de produção: Helmet, CORS restrito, rate limiting por rota, RBAC.
 
+import dotenv from 'dotenv';
+dotenv.config();
+
+require('./instrumentation');
+
 import { createServer } from "node:http";
 import { Server as SocketIoServer } from "socket.io";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import dotenv from "dotenv";
 import { connectMongo, connectPostgres } from "./database";
 import { connectRedis } from "./database/redis";
 import { requireAuth } from "./middleware/auth";
@@ -67,6 +71,7 @@ import {
   getGamesHistory,
   syncGameToLedger,
   getGameStatsBatchHandler,
+  getPlatformSummaryHandler,
 } from "./controllers/statisticsController";
 import { ensureLedgerTables } from "./database/ledger";
 import {
@@ -104,6 +109,7 @@ import {
   setRoomNft,
   getRoomTreasury,
 } from "./controllers/roomController";
+import { getLobby, getLobbyMe } from "./controllers/lobbyController";
 import {
   listDeposits,
   getDeposit,
@@ -124,6 +130,7 @@ import {
 } from "./controllers/internalChatController";
 import { startMetricsServer, metricsMiddleware } from "./services/metrics";
 import { setupChatSocket } from "./socket/chatSocket";
+import { setupBroadcastSocket } from "./socket/broadcastSocket";
 import { setIo } from "./socket";
 import {
   getLeaderboardGlobal,
@@ -131,6 +138,9 @@ import {
   getLeaderboardXp,
 } from "./controllers/leaderboardController";
 import { createCorsOptions, getAllowedOrigins } from "./cors";
+import { requestIdMiddleware } from "./middleware/requestId";
+import { logger } from "./middleware/logger";
+import pinoHttp from "pino-http";
 
 import {
   listContent,
@@ -155,8 +165,6 @@ import {
   createMyDelegation,
   removeMyDelegation,
 } from "./controllers/sponsorPermissionController";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -197,6 +205,7 @@ async function bootstrap(): Promise<void> {
   });
   setIo(io);
   setupChatSocket(io);
+  await setupBroadcastSocket(io);
 
   httpServer.listen(PORT, () => {
     console.log("=============================================");
@@ -218,6 +227,10 @@ function registerMiddleware(): void {
   // Métricas Prometheus — antes de todos os handlers para capturar 100% das requisições
   app.use(metricsMiddleware);
 
+  // Request ID + Logger estruturado (pino) — antes de tudo para capturar req/res completas
+  app.use(requestIdMiddleware);
+  app.use(pinoHttp({ logger, quietReqLogger: true }));
+
   // Helmet — headers de segurança HTTP
   // crossOriginResourcePolicy desabilitado para compatibilidade com Wharfkit (CDN de scripts)
   app.use(
@@ -235,7 +248,6 @@ function registerMiddleware(): void {
 
   // Body parser
   app.use(express.json({ limit: "1mb" })); // Limite explícito — previne body too large attacks
-
   // Header de segurança adicional (não coberto pelo Helmet)
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -426,6 +438,10 @@ function registerRoutes(): void {
   );
   app.get("/api/v1/rooms/:roomId/treasury", playerLimiter, getRoomTreasury);
 
+  // ── Lobby agregado (Issue #268) ────────────────────────────────────────
+  app.get("/api/v1/lobby", playerLimiter, getLobby);
+  app.get("/api/v1/lobby/me", playerLimiter, requireAuth, getLobbyMe);
+
   // ── Admin: Monte Carlo ─────────────────────────────────────────────────
   app.post(
     "/api/v1/admin/simulate-weights",
@@ -453,6 +469,7 @@ function registerRoutes(): void {
   app.get("/api/v1/statistics/rtp", getRtpStatistics);
   app.get("/api/v1/statistics/games", getGamesHistory);
   app.get("/api/v1/statistics/games/batch", getGameStatsBatchHandler);
+  app.get("/api/v1/statistics/summary", getPlatformSummaryHandler);
 
   // ── Admin: Ledger sync (JWT + admin) ──────────────────────────────────────
   app.post(
@@ -738,7 +755,6 @@ function registerRoutes(): void {
   app.use((_req, res) => {
     res.status(404).json({ error: "Rota não encontrada." });
   });
-
   // ── Error handler global ──────────────────────────────────────────────────
   // Captura erros do CORS e demais middlewares sem vazar stack traces
   app.use(

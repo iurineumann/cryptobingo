@@ -72,12 +72,12 @@ import FaqPage          from './components/FaqPage';
 import NewsPage         from './components/NewsPage';
 import PrivacyPage      from './components/PrivacyPage';
 import PublicLayout     from './components/PublicLayout';
-import ContentPage      from './components/content/ContentPage';
 import TutorialsPage    from './pages/TutorialsPage';
 import HowItWorksPage   from './pages/HowItWorksPage';
 import SponsorsPage     from './pages/SponsorsPage';
 import UserSettingsPage from './components/UserSettingsPage';
 import { useAnalytics } from './hooks/useAnalytics';
+import { trackEvent } from '~/services/analytics';
 
 // ── DEV LOGIN (tree-shaken em produção) ──────────────────────────────────────
 interface DevAccount {
@@ -271,7 +271,14 @@ function AppRoot() {
     const [restoringSession, setRestoringSession] = useState(true);
     const [showAchievements, setShowAchievements] = useState(false);
 
-    const userPermissions: string[] = (profile as any)?.permissions ?? [];
+    // role admin/contract_admin implica todas as permissões de admin.
+    // O backend RBAC também trata esses roles como admin.*, então o front
+    // deve refletir o mesmo para não esconder botões de ação.
+    const basePerms: string[] = (profile as any)?.permissions ?? [];
+    const userPermissions: string[] =
+        profile && (profile.role === 'admin' || profile.role === 'contract_admin')
+            ? Array.from(new Set(['admin.*', ...basePerms]))
+            : basePerms;
 
     const isAdmin = !!(
         profile && (
@@ -340,6 +347,7 @@ function AppRoot() {
             if (!authenticated) throw new Error(t('auth.auth_failed') ?? 'Falha na autenticação');
             setSession(newSession);
             await loadProfile();
+            trackEvent('login', { method: 'wharfkit' });
             navigate('/lobby');
         } catch (err) {
             setError(err instanceof Error ? err.message : t('errors.generic') ?? 'Erro');

@@ -491,6 +491,10 @@
     "gametypes_empty": "No game types created yet.",
     "gametypes_error_load": "Failed to load game types.",
     "gametypes_error_no_rules": "Select at least one pattern with weight.",
+    "gametypes_error_multimatch_no_stages": "MULTI_MATCH requires at least one stage. Add stages before saving.",
+    "gametypes_error_fixed_maxballs": "FIXED mode requires max_balls between 1 and 75.",
+    "gametypes_error_firstfull_no_master": "FIRST_FULL mode requires a rule with the MASTER pattern.",
+    "gametypes_error_goldenball_range": "GOLDEN_BALL mode requires golden_ball_after between 1 and 73.",
     "gametypes_error_too_many_rules": "Maximum 12 patterns per gametype ({count} selected). Remove some and try again.",
     "gametypes_error_create": "Failed to create game type.",
     "gametypes_confirm_delete": "Delete game type #{{id}}?",
@@ -1084,6 +1088,15 @@
     "claim": "Claim",
     "week_warrior": "Week Warrior",
     "reward_ticket": "1 Free Ticket"
+  },
+  "share_win": {
+    "text": "I just won {{amount}} on @CryptoBingo! 🎰💰",
+    "section_title": "Share your win",
+    "twitter_label": "X",
+    "telegram_label": "Telegram",
+    "discord_label": "Discord",
+    "copy_label": "Copy link",
+    "copy_success": "Link copied!"
   },
   "settings": {
     "title": "Settings",

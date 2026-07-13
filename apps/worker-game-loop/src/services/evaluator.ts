@@ -28,6 +28,7 @@ import { decrementUsedNfts } from './consumableService';
 import { awardWinXP, awardComboXP } from './xpEngine';
 import { checkStageWinAchievement } from './achievementEngine';
 import { Pool } from 'pg';
+import { logger } from './logger';
 
 let pgPool: Pool | null = null;
 function getPgPool(): Pool {
@@ -55,7 +56,7 @@ async function recordClaimWin(
             [txHash, walletAddress, gameId, amount, currency, `Ticket #${ticketId}`]
         );
     } catch (err) {
-        console.error('[Evaluator] Failed to record claim win:', err);
+        logger.error({ err, tag: 'Evaluator' }, 'Failed to record claim win:')
     }
 }
 
@@ -104,7 +105,7 @@ export interface WinResult {
  * decide se uma COMBINAÇÃO satisfeita tem peso maior — e, em caso afirmativo,
  * promove o WinResult para o tier de combinação (max_weight global, ADR-005).
  */
-function selectBestPayout(
+export function selectBestPayout(
     ticket:          BlockchainTicketRecord,
     winningPatterns: PatternEntry[],
     comboCtx:        ComboContext | null,
@@ -195,7 +196,7 @@ export async function findAllWinners(
     masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
-    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
+    const comboCtx = await fetchComboContext(gametypeId, patterns); // ADR-016: nomes on-chain alinhados
 
     const winners:    WinResult[] = [];
     let lowerBound:   string | undefined = undefined;
@@ -249,7 +250,7 @@ async function findAllWinnersWithIndex(
     masterWeightOvrd = 0,
 ): Promise<WinResult[]> {
     const patterns = await fetchGametypePatterns(gametypeId);
-    const comboCtx = await fetchComboContext(gametypeId); // ADR-016
+    const comboCtx = await fetchComboContext(gametypeId, patterns); // ADR-016: nomes on-chain alinhados
 
     const stateMap = new Map<string, number>();
 
@@ -457,7 +458,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
         }
     }
 
-    console.log(`🎯 [MULTI_MATCH] Pré-computando cutoffs sequenciais: ${allTickets.length} tickets, ${stages.length} estágios.`);
+    logger.info({ tag: 'MULTI_MATCH' }, `Pré-computando cutoffs sequenciais: ${allTickets.length} tickets, ${stages.length} estágios.`)
 
     const results: StageCutoffResult[] = [];
     let prevCutoff = 0;
@@ -488,7 +489,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
         }
 
         results.push({ stage: stageDef.stage, patterns_required: stageDef.patterns_required, weight: stageDef.weight, cutoffBall, winners });
-        console.log(
+        logger.info(
             cutoffBall <= drawnBalls.length
                 ? `   Stage ${stageDef.stage}: cutoff bola ${cutoffBall}, ${winners.length} vencedor(es)`
                 : `   Stage ${stageDef.stage}: sem vencedores`
@@ -540,7 +541,7 @@ export async function payMultiMatchStage(
             notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, winLabel);
         }).catch(err => {
             prizePersistTotal.labels({ result: 'error' }).inc();
-            console.error('[PrizePipeline] Erro ao persistir PrizeTx stage:', err);
+            logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir PrizeTx stage:')
         });
 
         saveBuyInTx({
@@ -550,7 +551,7 @@ export async function payMultiMatchStage(
         }).then(() => {
             buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
         }).catch(err => {
-            console.error('[PrizePipeline] Erro ao persistir BuyInTx stage:', err);
+            logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir BuyInTx stage:')
         });
     }
 }
@@ -567,14 +568,14 @@ async function processMultiMatchWinners(
     const cutoffs = await preComputeMultiMatchCutoffs(gameId, drawnBalls, gametypeId);
     for (const result of cutoffs) {
         if (result.winners.length > 0) {
-            console.log(`🏆 [MULTI_MATCH] Pagando estágio ${result.stage} (${result.winners.length} vencedor(es), bola ${result.cutoffBall}).`);
+            logger.info({ tag: 'MULTI_MATCH' }, `Pagando estágio ${result.stage} (${result.winners.length} vencedor(es), bola ${result.cutoffBall}).`)
             await payMultiMatchStage(gameId, result);
         } else {
-            console.log(`⏭️  [MULTI_MATCH] Estágio ${result.stage}: sem vencedores.`);
+            logger.info({ tag: 'MULTI_MATCH' }, `Estágio ${result.stage}: sem vencedores.`)
         }
     }
     await executeCloseGame(gameId);
-    console.log(`✅ [MULTI_MATCH] Jogo ${gameId} resolvido.`);
+    logger.info({ tag: 'MULTI_MATCH' }, `Jogo ${gameId} resolvido.`)
 }
 
 /**
@@ -585,7 +586,7 @@ async function processMultiMatchWinners(
  * ADR-005 Fase 2: passa o win_pattern_mask do padrão de maior weight.
  */
 export async function processAllGameWinners(gameId: string): Promise<void> { // NOSONAR — motor de resolução FSM com 5 draw modes e liquidação on-chain; complexidade inerente ao domínio do contrato
-    console.log(`\n🧠 [Avaliador] Iniciando resolução do jogo ${gameId}...`);
+    logger.info({ tag: 'Avaliador' }, `Iniciando resolução do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
     if (!game) throw new Error(`[Avaliador] Jogo ${gameId} não encontrado.`);
@@ -622,7 +623,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     let goldenBallNum: number    = 0;
     let goldenMultiplierGlobal   = 0;
 
-    console.log(
+    logger.info(
         `🔍 [Avaliador] Modo: ${drawMode} | Bolas: ${maxBalls} | ` +
         `Estratégia: ${hasIndex ? 'Índice O(1)' : 'RPC O(n)'} | ` +
         `Gametype: ${gametypeId}`
@@ -631,7 +632,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     // ── MULTI_MATCH: orquestrador gerencia payout por estágio.
     // Esta função só valida estado e limpa índice — sem liquidar.
     if (drawMode === 'multimatch') {
-        console.log(`🎯 [MULTI_MATCH] Estado validado. Liquidado pelo orquestrador por estágio.`);
+        logger.info({ tag: 'MULTI_MATCH' }, `Estado validado. Liquidado pelo orquestrador por estágio.`)
         if (hasIndex) await deleteIndex(gameId);
         return;
     }
@@ -642,14 +643,14 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     let effectiveBalls = game.drawn_balls.slice(0, maxBalls);
 
     if (drawMode === 'fixed') {
-        console.log(`📌 [FIXED] Usando ${effectiveBalls.length} bolas explícitas (de ${game.drawn_balls.length}).`);
+        logger.info({ tag: 'FIXED' }, `Usando ${effectiveBalls.length} bolas explícitas (de ${game.drawn_balls.length}).`)
 
     } else if (drawMode === 'firstfull') {
         // FIRST_FULL: varre com o baralho completo do oracle para encontrar o cutoff
         // (MASTER pode exigir mais de max_balls bolas — usamos as 75 disponíveis)
         const cutoff = await findFirstFullCutoff(gameId, game.drawn_balls);
         effectiveBalls = game.drawn_balls.slice(0, cutoff);
-        console.log(`🃏 [FIRST_FULL] Cutoff na bola ${cutoff} (de ${game.drawn_balls.length} disponíveis). Avaliando MASTER apenas.`);
+        logger.info({ tag: 'FIRST_FULL' }, `Cutoff na bola ${cutoff} (de ${game.drawn_balls.length} disponíveis). Avaliando MASTER apenas.`)
 
     } else if (drawMode === 'goldenball') {
         // GOLDEN_BALL: a fase normal usa as primeiras maxBalls bolas (já aplicadas acima).
@@ -659,7 +660,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
         goldenMultiplierGlobal = deriveGoldenMultiplier(game.drawn_balls, ga);
         // effectiveBalls inclui a fase normal + a golden ball
         effectiveBalls         = game.drawn_balls.slice(0, ga + 1);
-        console.log(
+        logger.info(
             `🌟 [GOLDEN_BALL] Fase normal: ${maxBalls} bolas. ` +
             `Bola dourada: ${goldenBallNum} (pos ${ga}). ` +
             `Multiplicador: ×${goldenMultiplierGlobal}`
@@ -682,9 +683,9 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
 
     // ── Submete pagamentos ───────────────────────────────────────────────────
     if (winners.length === 0) {
-        console.log(`😔 [Avaliador] Nenhum vencedor no jogo ${gameId}.`);
+        logger.info({ tag: 'Avaliador' }, `Nenhum vencedor no jogo ${gameId}.`)
     } else {
-        console.log(`🎉 [Avaliador] ${winners.length} vencedor(es) no jogo ${gameId}!`);
+        logger.info({ tag: 'Avaliador' }, `${winners.length} vencedor(es) no jogo ${gameId}!`)
 
         for (const { ticket, patternName, patternMask, weight, comboId } of winners) {
             // GOLDEN_BALL: verifica se a bola dourada está coberta pelo padrão vencedor
@@ -696,7 +697,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
 
             const isCombo = comboId !== undefined;
             const patternDesc = isCombo ? `combinação: ${patternName} (#${comboId})` : `padrão: ${patternName}`;
-            console.log(
+            logger.info(
                 `${isCombo ? '🔗' : '🏆'} [Avaliador] Liquidando #${ticket.ticket_id} ` +
                 `(${ticket.owner}, ${patternDesc}, weight: ${weight}` +
                 (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
@@ -706,23 +707,65 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
             let boostNftIds: string[] = [];
             let txHash: string | undefined;
             if (isCombo) {
-                txHash = await executeClaimCombo(
-                    gameId,
-                    ticket.ticket_id,
-                    effectiveBalls.length,
-                    comboId as number,
-                    appliedMultiplier,
-                );
+                try {
+                    txHash = await executeClaimCombo(
+                        gameId,
+                        ticket.ticket_id,
+                        effectiveBalls.length,
+                        comboId as number,
+                        appliedMultiplier,
+                    );
+                }
+                catch (comboErr) {
+                    // BUG B (resiliência) + DRIFT GUARD: claimcombo falha (ex: gametype
+                    // sem combos on-chain, dessincronizado do api-gateway) → tenta pagar
+                    // por padrão (fallback claimwin) em vez de abortar o jogo inteiro.
+                    // Se a causa for DRIFT (combo existe off-chain mas não on-chain), isso
+                    // SUBPAGA o vencedor — emite alerta CRÍTICO p/ reconciliação (setcombos).
+                    const msg = comboErr instanceof Error ? comboErr.message : String(comboErr);
+                    const isDrift = /combinacoes definidas|combo_id nao encontrado/i.test(msg);
+                    if (isDrift) {
+                        logger.error(
+                            { err: comboErr, tag: 'Avaliador', gameId, gametypeId, comboId, ticketId: ticket.ticket_id, alert: 'COMBO_DRIFT' },
+                            `⚠️ DRIFT on-chain: combo #${comboId} do gametype ${gametypeId} NÃO existe no contrato — vencedor #${ticket.ticket_id} será SUBPAGO como padrão. Rode setcombos p/ sincronizar.`,
+                        );
+                    } else {
+                        logger.error({ err: comboErr, tag: 'Avaliador' }, `claimcombo falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}); tentando claimwin por padrão:`);
+                    }
+                    try {
+                        boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
+                        txHash = await executeClaimWin(
+                            gameId,
+                            ticket.ticket_id,
+                            effectiveBalls.length,
+                            patternMask,
+                            appliedMultiplier,
+                            boostNftIds,
+                        );
+                    }
+                    catch (winErr) {
+                        logger.error({ err: winErr, tag: 'Avaliador' }, `claimwin fallback falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
+                        continue;
+                    }
+                }
             } else {
                 boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
-                txHash = await executeClaimWin(
-                    gameId,
-                    ticket.ticket_id,
-                    effectiveBalls.length,
-                    patternMask,
-                    appliedMultiplier,
-                    boostNftIds,
-                );
+                try {
+                    txHash = await executeClaimWin(
+                        gameId,
+                        ticket.ticket_id,
+                        effectiveBalls.length,
+                        patternMask,
+                        appliedMultiplier,
+                        boostNftIds,
+                    );
+                }
+                catch (claimErr) {
+                    // BUG B (resiliência): um claimwin individual falha → logar e
+                    // CONTINUAR com os demais vencedores, em vez de abortar o jogo.
+                    logger.error({ err: claimErr, tag: 'Avaliador' }, `claimwin falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
+                    continue;
+                }
             }
 
             if (txHash) {
@@ -769,7 +812,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                     notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, patternName);
                 }).catch(err => {
                     prizePersistTotal.labels({ result: 'error' }).inc();
-                    console.error('[PrizePipeline] Erro ao persistir PrizeTx:', err);
+                    logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir PrizeTx:')
                 });
 
                 saveBuyInTx({
@@ -779,7 +822,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 }).then(() => {
                     buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
                 }).catch(err => {
-                    console.error('[PrizePipeline] Erro ao persistir BuyInTx:', err);
+                    logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir BuyInTx:')
                 });
             }
         }
@@ -789,30 +832,30 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     if (hasIndex) await deleteIndex(gameId);
 
     await executeCloseGame(gameId);
-    console.log(`✅ [Avaliador] Resolução do jogo ${gameId} concluída (modo: ${drawMode}).`);
+    logger.info({ tag: 'Avaliador' }, `Resolução do jogo ${gameId} concluída (modo: ${drawMode}).`)
 }
 
 /**
  * Varredura por jogador — para consultas do api-gateway.
  */
 export async function processGameWinners(gameId: string, playerWallet: string): Promise<void> {
-    console.log(`\n🧠 [Avaliador] Auditoria do jogo ${gameId} para ${playerWallet}...`);
+    logger.info({ tag: 'Avaliador' }, `Auditoria do jogo ${gameId} para ${playerWallet}...`);
 
     const game = await fetchGame(gameId);
     if (!game) throw new Error(`Jogo ${gameId} não encontrado.`);
     if (game.status !== 'drawn') {
-        console.log(`⚠️ [Avaliador] Jogo ${gameId} não sorteado. Status: ${game.status}`);
+        logger.info({ tag: 'Avaliador' }, `Jogo ${gameId} não sorteado. Status: ${game.status}`)
         return;
     }
 
     const gametypeId  = (game as any).gametype_id?.toString();
     if (!gametypeId || gametypeId === '0') {
-        console.warn(`⚠️ [Avaliador] Jogo ${gameId} sem gametype_id válido. Pulando auditoria.`);
+        logger.warn({ tag: 'Avaliador' }, `Jogo ${gameId} sem gametype_id válido. Pulando auditoria.`)
         return;
     }
     const tickets     = await fetchPlayerTickets(gameId, playerWallet);
     if (!tickets.length) {
-        console.log(`ℹ️ [Avaliador] ${playerWallet} não tem cartelas neste jogo.`);
+        logger.info({ tag: 'Avaliador' }, `${playerWallet} não tem cartelas neste jogo.`);
         return;
     }
 
@@ -829,14 +872,14 @@ export async function processGameWinners(gameId: string, playerWallet: string): 
     }
 
     if (!winningTickets.length) {
-        console.log(`😔 [Avaliador] Nenhuma cartela premiada para ${playerWallet}.`);
+        logger.info({ tag: 'Avaliador' }, `Nenhuma cartela premiada para ${playerWallet}.`)
         return;
     }
 
-    console.log(`🎉 [Avaliador] ${playerWallet} tem ${winningTickets.length} cartela(s) premiada(s)!`);
+    logger.info({ tag: 'Avaliador' }, `${playerWallet} tem ${winningTickets.length} cartela(s) premiada(s)!`)
 
     for (const { ticket, patternName, patternMask } of winningTickets) {
-        console.log(`🏆 [Avaliador] Cartela #${ticket.ticket_id} — padrão: ${patternName}`);
+        logger.info({ tag: 'Avaliador' }, `Cartela #${ticket.ticket_id} — padrão: ${patternName}`)
         await executeClaimWin(gameId, ticket.ticket_id, game.drawn_balls.length, patternMask);
     }
 }

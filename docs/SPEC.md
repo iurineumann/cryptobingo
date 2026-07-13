@@ -284,7 +284,8 @@ $$Prize = \frac{prize\_pool \times 85}{100}$$
 * `activateroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. `inactive | paused → active`.
 * `pauseroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. `active → paused`.
 * `closeroom(uint64_t room_id)` — Auth: `admin | sponsor@active`. Valida ausência de jogo ativo antes de fechar.
-* `setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player)` — Atualiza configurações on-chain da sala.
+* `setroommeta(uint64_t room_id, uint16_t room_drop_chance_bps, uint32_t max_tickets_per_player, uint8_t difficulty)` — Atualiza configurações on-chain da sala (exige `bingogamectr@admin`). `difficulty` opcional no ABI (uint8$).
+* `updateroom(uint64_t room_id, extended_asset ticket_price_min, extended_asset ticket_price_max, extended_asset ticket_price_default)` — **Auth: `bingogamectr@active`** (ADR-045). Altera apenas os 3 preços de cartela de uma sala existente; mesma validação do `createroom`; bloqueia se `status == "closed"` ou `current_game_id != 0`. Backend assina como `bingogamectr@active` com a chave `bingogamesvc`.
 
 ---
 
@@ -582,7 +583,7 @@ cd /tmp/fa-prod
 jq '{name,version,main,dependencies}' ../apps/landing-page/api/package.json > package.json
 npm install
 mkdir -p _lib ideas votes admin
-cp <api-dir>/{host.json,index.js,stats.js,subscribe.js} ./
+cp <api-dir>/{host.json,index.js,stats.js,stats_game.js,subscribe.js} ./
 cp <api-dir>/_lib/*.js _lib/
 cp <api-dir>/ideas/*.js ideas/
 cp <api-dir>/votes/*.js votes/

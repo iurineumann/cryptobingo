@@ -21,8 +21,10 @@ export function hasPermission(
 
 export function hasAnyPermission(
   userPermissions: string[] | null | undefined,
-  requiredPermissions: string[]
+  requiredPermissions: string[],
+  role?: string
 ): boolean {
+  if (role === 'contract_admin') return true;
   if (!userPermissions) return true;
   return requiredPermissions.some((p) => hasPermission(userPermissions, p));
 }

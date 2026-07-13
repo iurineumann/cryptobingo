@@ -1,0 +1,115 @@
+---
+title: "CryptoBingo Whitepaper"
+description: "Technical whitepaper — architecture, RNG, RTP, and economic model"
+---
+
+## Abstract
+
+CryptoBingo is a decentralized BINGO GameFi protocol deployed on the WAX/Antelope blockchain. This whitepaper describes the system architecture, cryptographic randomness mechanism, prize pipeline, economic model, and security considerations.
+
+## 1. Architecture
+
+### 1.1 Smart Contract Layer
+
+The core game logic runs in an on-chain smart contract (`bingogamectr`) written in C++ using the Antelope CDT framework. The contract handles:
+
+- Game lifecycle: create, fund, lock, draw, settle, close
+- Ticket issuance and tracking
+- Pattern matching and prize calculation
+- Treasury management and GGR sweeps
+
+### 1.2 Off-Chain Services
+
+- **Worker Game Loop**: Node.js service resolving draws, computing winners, and executing payouts via RabbitMQ message queues
+- **API Gateway**: REST API for frontend, JWT-authenticated, RBAC-scoped
+- **Oracle Daemon**: RSA-SHA256 signing service for provably fair randomness
+
+### 1.3 Data Layer
+
+- **WAX Blockchain**: Source of truth for game state, balances, and settlements
+- **MongoDB**: Off-chain metadata (game configuration, user profiles, prize history)
+- **Redis**: Caching layer for active game state and session management
+
+## 2. Random Number Generation
+
+### 2.1 Commitment Scheme
+
+Each draw follows a commit-reveal pattern:
+
+1. Worker requests random seed from oracle
+2. Oracle generates seed `S`, computes `H = SHA-256(S)`, stores `(request_id, H)` on-chain
+3. Draw executes using numbers derived from `H`
+4. Oracle reveals `S` on-chain
+5. Anyone verifies `SHA-256(S) == H`
+
+### 2.2 RSA-SHA256 Oracle
+
+The oracle uses RSA-2048 key pairs. Each commitment is signed with the oracle's private key. The public key is embedded in the contract for signature verification.
+
+## 3. Prize Pipeline
+
+### 3.1 Prize Calculation
+
+Prizes follow the formula:
+
+```
+prize = ticket_price × base_multiplier × (weight / 100) × golden_multiplier
+```
+
+Where:
+- `weight` is the pattern/combination weight in hundredths (100 = 1.0×)
+- `base_multiplier` is game-type specific
+- `golden_multiplier` applies when golden ball is active (2.0×)
+
+### 3.2 Max Weight Rule (ADR-005)
+
+Per ADR-005, when a card completes multiple patterns, only the highest weight pattern (or combination multiplier) is paid. This prevents prize inflation from stacked pattern completions.
+
+### 3.3 Payout Flow
+
+Prizes flow through three on-chain actions:
+- `claimwin` — standard pattern prizes
+- `claimcombo` — combination pattern prizes
+- `claimstage` — multi-match stage prizes
+
+Each action is called by the worker with `bingogamesvc@active` authority and validated against stored game-type configurations.
+
+## 4. Economic Model
+
+### 4.1 RTP and GGR
+
+- **Target RTP**: 85%
+- **GGR (Gross Gaming Revenue)**: 15%
+- GGR is swept periodically to the treasury contract via `sweepggr`
+
+### 4.2 Weight Calibration
+
+Pattern weights are calibrated via Monte Carlo simulation to achieve the target 85% RTP. Weights are stored in hundredths (max 255 = 2.55×) and adjust per game type.
+
+### 4.3 Treasury
+
+The treasury contract accumulates GGR and supports:
+- Token buyback and burn
+- Liquidity provision
+- Development funding
+- Community rewards
+
+## 5. Security
+
+- All contract actions are permissioned (ADR-026)
+- Oracle key rotation supported
+- Circuit breaker: `pauseroom` stops game creation
+- Rate-limited prize claims
+- Formal verification of core math functions
+
+## 6. Governance
+
+Future governance will transition to a DAO model where WUF token holders vote on:
+- Game type parameters
+- Weight adjustments
+- Treasury allocations
+- Protocol upgrades
+
+---
+
+*Version 1.0 — Last updated June 2026*

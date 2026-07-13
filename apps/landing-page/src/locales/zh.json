@@ -1,0 +1,224 @@
+{
+  "locale": {
+    "en": "English",
+    "pt": "Português",
+    "zh": "中文"
+  },
+  "nav": {
+    "ideas": "创意",
+    "testnet": "测试网",
+    "faq": "常见问题",
+    "blog": "博客",
+    "tutorials": "教程",
+    "github": "GitHub",
+    "telegram": "Telegram",
+    "twitter": "X/Twitter",
+    "discord": "Discord"
+  },
+  "hero": {
+    "badge": "WAX上的BINGO GameFi",
+    "title": "每局游戏均可验证公平，赢取真实奖品",
+    "subtitle": "CryptoBingo将经典BINGO带入Web3。每次开奖均在WAX区块链上可验证，奖品为加密货币和NFT。",
+    "cta_text": "开始游戏",
+    "learn_more": "了解更多",
+    "next_draw": "下次开奖 {{time}}"
+  },
+  "features": {
+    "section_tag": "为什么选择CryptoBingo",
+    "section_title": "为信任而建，为乐趣而设计",
+    "items": [
+      {
+        "title": "可验证公平",
+        "description": "每次开奖都使用加密随机性在链上验证。"
+      },
+      {
+        "title": "基于WAX构建",
+        "description": "闪电般快速的交易，零gas费用，碳中和区块链。"
+      },
+      {
+        "title": "真实奖品",
+        "description": "赢取加密货币代币和NFT奖励。85%的玩家回报率。"
+      }
+    ]
+  },
+  "roadmap": {
+    "title": "路线图",
+    "description": "将BINGO带入区块链的旅程",
+    "progress_label": "已完成{{pct}}%",
+    "milestones": "里程碑",
+    "items": [
+      {
+        "date": "2026年7月",
+        "title": "MVP测试网",
+        "description": "核心游戏机制在WAX测试网上运行。单人模式，基本UI，社区测试。"
+      },
+      {
+        "date": "2026年8月",
+        "title": "公开测试",
+        "description": "扩展游戏模式，NFT集成，响应式UI，创意论坛。"
+      },
+      {
+        "date": "2026年9月",
+        "title": "主网上线",
+        "description": "完整功能集，赞助商市场，高级分析，治理。"
+      }
+    ]
+  },
+  "newsletter": {
+    "title": "保持更新",
+    "description": "获取最新新闻、游戏更新和社区活动。",
+    "placeholder": "输入您的邮箱",
+    "submit": "订阅",
+    "sending": "发送中...",
+    "thanks": "订阅成功！请查看您的收件箱。",
+    "reward": "🎉 您获得了 50 XP + 1 张免费门票！",
+    "cta": "开始游戏",
+    "error": "出了点问题。",
+    "invalid_email": "请输入有效的邮箱地址。"
+  },
+  "footer": {
+    "tagline": "WAX区块链上的BINGO GameFi",
+    "product": "产品",
+    "community": "社区",
+    "legal": "法律",
+    "terms": "服务条款",
+    "privacy": "隐私政策",
+    "risk_disclaimer": "风险声明",
+    "responsible_gaming": "负责任博彩",
+    "aml": "反洗钱政策",
+    "dispute": "争议解决",
+    "game_rules": "游戏规则",
+    "copyright": "© 2026 CryptoBingo. 保留所有权利。"
+  },
+  "faq": {
+    "title": "常见问题",
+    "description": "关于CryptoBingo的常见问题"
+  },
+  "press_kit": {
+    "title": "媒体资料包",
+    "description": "品牌资产、截图和媒体报道指南",
+    "brand_title": "品牌资产",
+    "brand_desc": "下载CryptoBingo品牌资产用于媒体和推广用途",
+    "download_logo": "下载标志 (.zip)",
+    "download_icon": "下载图标 (.zip)",
+    "download_screenshots": "下载截图 (.zip)",
+    "guidelines_title": "品牌指南",
+    "guidelines_desc": "使用CryptoBingo品牌资产的指南",
+    "do_title": "正确做法",
+    "do_1": "使用原始颜色的CryptoBingo标志",
+    "do_2": "在标志周围保持清晰空间",
+    "do_3": "使用带点符号的文字商标",
+    "dont_title": "错误做法",
+    "dont_1": "更改标志颜色或比例",
+    "dont_2": "添加效果、阴影或轮廓",
+    "dont_3": "放置在低对比度背景上",
+    "media_title": "媒体联系",
+    "media_desc": "媒体咨询、采访请求和媒体合作：",
+    "media_email": "press@cryptobingo.bet",
+    "screenshots_title": "截图与媒体"
+  },
+  "tokenomics": {
+    "title": "代币经济",
+    "description": "CryptoBingo经济模型 — 85%回报率，透明资金库，可持续奖励",
+    "rtp_label": "玩家回报率",
+    "rtp_value": "85%",
+    "ggr_label": "博彩总收入",
+    "ggr_value": "15%",
+    "supply_title": "代币分配",
+    "utility_title": "代币用途",
+    "staking_title": "质押奖励",
+    "staking_desc": "质押WUF代币，赚取平台收入分成",
+    "buyback_title": "回购与销毁",
+    "buyback_desc": "部分GGR用于回购和销毁WUF，减少供应量",
+    "governance_title": "治理",
+    "governance_desc": "WUF持有者投票决定游戏参数、权重和资金库分配",
+    "liquidity_title": "流动性池",
+    "liquidity_desc": "在主流WAX DEX上市，流动性锁定",
+    "swap_cta": "在Swap购买WUF",
+    "swap_url": "https://test.cryptobingo.bet/swap"
+  },
+  "redirect": {
+    "redirecting": "重定向中..."
+  },
+  "how_it_works": {
+    "section_tag": "运作方式",
+    "section_title": "区块链上的透明宾果",
+    "section_desc": "传统宾果让你相信运气。CryptoBingo让你相信代码。",
+    "step1_label": "之前",
+    "step1_title": "传统黑箱",
+    "step1_desc": "在普通宾果中，开奖在封闭系统中进行。你无法验证是否公平。",
+    "step2_label": "之后",
+    "step2_title": "可验证的链上开奖",
+    "step2_desc": "每个抽出的号码由RSA-SHA256预言机生成并记录在WAX区块链上。任何人都可以验证。",
+    "step3_label": "连接",
+    "step3_title": "放心游玩",
+    "step3_desc": "连接你的WAX钱包，购买彩票，实时观看每个结果在链上揭晓。"
+  },
+  "trust_bar": {
+    "built_on_wax": "基于WAX构建",
+    "audited": "已审计 ✅",
+    "provably_fair": "可验证公平 ✅",
+    "view_contract": "查看合约",
+    "players_count": "社区在成长"
+  },
+  "stats": {
+    "games_played": "已进行游戏",
+    "prizes_paid": "已支付奖品",
+    "active_players": "活跃玩家",
+    "rtp": "当前RTP",
+    "loading": "实时统计 — 测试网已激活"
+  },
+  "content": {
+    "readTime": "{{count}} 分钟阅读",
+    "relatedPosts": "相关文章",
+    "relatedTutorials": "相关教程",
+    "previous": "← 上一步",
+    "next": "下一步 →"
+  },
+  "blog": {
+    "back": "← 返回博客"
+  },
+  "tutorial": {
+    "step": "第 {{current}} 步，共 {{total}} 步",
+    "previous": "← 上一步",
+    "next": "下一步 →"
+  },
+  "tutorials": {
+    "coming_soon": "教程即将推出！",
+    "back": "返回教程"
+  },
+  "wallet": {
+    "title": "连接您的钱包",
+    "desc": "连接您的WAX钱包即可游戏、赢奖和提现 — 全链上，全可验证。",
+    "value_secure_title": "安全可靠",
+    "value_secure_desc": "所有交易均在钱包中签名。每次开奖均在链上验证。",
+    "value_instant_title": "即开即玩",
+    "value_instant_desc": "无需存款，无需等待。直接用您的WAX余额购买彩票。",
+    "value_withdraw_title": "自动提现",
+    "value_withdraw_desc": "奖金直接发送到您的钱包，无需手动领取。",
+    "step1": "安装Anchor或WAX Cloud Wallet",
+    "step2": "连接到CryptoBingo",
+    "step3": "购买彩票并开始游戏"
+  },
+  "activity_feed": {
+    "title": "最新获胜",
+    "item_prize": "{{prize}} WUF",
+    "pending": "等待中..."
+  },
+  "seo": {
+    "home_title": "CryptoBingo — WAX链上BINGO GameFi",
+    "home_desc": "在WAX区块链上玩去中心化BINGO。可验证公平，真实奖品，85%回报率。购买彩票，赢取加密货币和NFT。",
+    "faq_title": "常见问题 — CryptoBingo",
+    "faq_desc": "关于CryptoBingo Bingo GameFi在WAX区块链上的常见问题。",
+    "blog_title": "博客 — CryptoBingo",
+    "blog_desc": "关于CryptoBingo Bingo GameFi在WAX上的新闻、更新和文章。",
+    "tutorials_title": "教程 — CryptoBingo",
+    "tutorials_desc": "学习如何游玩、创建钱包和使用CryptoBingo。",
+    "press_kit_title": "媒体资料 — CryptoBingo",
+    "press_kit_desc": "品牌资产、截图和指南",
+    "tokenomics_title": "代币经济 — CryptoBingo",
+    "tokenomics_desc": "经济模型、RTP 85%、代币分配和国库",
+    "whitepaper_title": "白皮书 — CryptoBingo",
+    "whitepaper_desc": "技术白皮书 — 架构、RNG、RTP和经济模型"
+  }
+}

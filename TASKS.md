@@ -122,3 +122,12 @@
 - [x] Testes (harness, e2e-ui fixtures) atualizados
 - [x] Documentação (CLAUDE.md, SPEC.md, ADRs, skills) atualizada
 - [x] ADR-023 criado documentando o mapeamento de contas mainnet
+
+## Épico 7: Edição de Salas (updateroom) + Correções de Auth/ABI/CSP — Sessão 2026-07-09
+- [x] **Contrato `updateroom`** (ADR-045): action `updateroom(room_id, ticket_price_min, ticket_price_max, ticket_price_default)` — altera apenas os 3 preços de cartela; mesma validação do `createroom`; bloqueia se `status=="closed"` ou `current_game_id != 0`; `require_auth(get_self())` (active).
+- [x] **Correção de auth (descoberta cdt 4.0.1)**: `require_auth(permission_level{get_self(),"admin"_n})` é otimizado pelo cdt para `require_auth(get_self())`. `updateroom` exige `bingogamectr@active`; `bingogamesvc@active` linkado como satisfator de `bingogamectr@active` (além de `admin`). ADR-026 corrigido (errata).
+- [x] **Backend `updateRoomSettings`** (`PUT /api/v1/rooms/{roomId}/settings`): monta `setroommeta` (admin) + `updateroom` (active) com a mesma sessão `bingogamectr`/chave `bingogamesvc`; aceita `difficulty` e os 3 pares `{quantity, contract}` de preço.
+- [x] **ABI manual reconstruído** (regra do projeto): `contracts/bingo/bingo.abi` mantido à mão com 17 tabelas (rooms + 16) + 42 actions; `setroommeta.difficulty` marcado `uint8$` (opcional). Deployado na testnet (TX `bb08e242`). Corrige `GET /api/v1/rooms` que quebrava com "Nó blockchain indisponível" (ABI anterior sem tabelas).
+- [x] **CSP do lobby**: `staticwebapp.config.json` `connect-src` libera os 4 presets de RPC do dropdown (`waxtestnet.greymass.com`, `wax-testnet.eosphere.io`, `testnet.waxsweden.org`, `testnet.wax.eosusa.io`). Deployado em `test.cryptobingo.bet`.
+- [x] **ADR-045** criado; **ADR-026** com errata; **CLAUDE.md** (seção auth), **SPEC.md** §2.4, **openapi.yaml** `/rooms/{id}/settings` atualizados.
+- [x] **RAG**: reindexados `docs/adr/**` (ADR-045 + ADR-026) e ingerido session-summary com tags `['cryptobingo','session-summary','adr']`.

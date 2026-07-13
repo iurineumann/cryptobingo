@@ -1,6 +1,6 @@
 # ADR-008: FSM Completa — Estado CREATED, Campanhas B2B e Garbage Collection
 
-**Data:** 2026-05-26
+**Data:** 2026-05-26 · **Errata (v2):** 2026-07-07
 **Status:** Aceito
 **Autores:** Célula de Engenharia CryptoBingo
 
@@ -38,10 +38,12 @@ críticos no contrato C++ que bloqueiam o lançamento:
 - Agendar rodadas futuras sem abri-las imediatamente para vendas
 - O worker controla o timing via cron/scheduler sem mexer no contrato
 
-### 2. `abortgame(reason)` — LOCKED|DRAWING → ABORTED
+### 2. `abortgame(reason)` — CREATED|LOCKED|DRAWING → ABORTED
 
 Aceita auth de `bingogamesvc` (timeout automático) ou `get_self()` (halt manual admin).
 Seta `end_time` para base de auditoria. Após abort, `refundticket()` fica liberado.
+(v2: `CREATED` adicionado em 2026-07-07 via ADR-008-errata — permitindo escape de jogos
+`created` cujo `fundgame` nunca foi chamado ou falhou.)
 
 ### 3. `refundticket(game_id, ticket_id)` — Callable por qualquer conta
 

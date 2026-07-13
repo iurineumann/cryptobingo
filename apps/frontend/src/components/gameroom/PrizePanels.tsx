@@ -14,6 +14,7 @@ import type { EnrichedRoom } from '../../services/api';
 import type { GoldenBallInfo, GoldenMultiplierProgress, ClearedStage } from '../../hooks/useSlowReveal';
 import { Button } from '@/components/ui/button';
 import { sumPayoutsByCurrency, countWinners } from './prizeFormat';
+import { ShareWinButton } from './ShareWinButton';
 
 // Helper puro — formata ms para contagem regressiva legível (ex: "2m 30s")
 function fmtCountdown(ms: number): string {
@@ -46,6 +47,7 @@ function getEndedStatusText(
 }
 
 export interface PrizePanelsProps {
+  readonly gameId: string;
   readonly hasBanners: boolean;
   readonly goldenBall: GoldenBallInfo | null;
   readonly goldenMultiplierProgress: GoldenMultiplierProgress | null;
@@ -65,7 +67,7 @@ export interface PrizePanelsProps {
 }
 
 export default function PrizePanels({
-  hasBanners, goldenBall, goldenMultiplierProgress, clearedStages,
+  gameId, hasBanners, goldenBall, goldenMultiplierProgress, clearedStages,
   isEffectiveGameEnded, isStaticFinalState,
   playerWinEntries, localWinners, playerTickets,
   nextGame, nextGameTimer, game, room, now,
@@ -184,6 +186,14 @@ export default function PrizePanels({
                       </div>
                     )}
                   </div>
+                )}
+
+                {playerWinEntries.length > 0 && (
+                  <ShareWinButton
+                    amount={playerWinEntries.reduce((s, e) => s + e.total, 0)}
+                    gameId={gameId}
+                    gameUrl={`${window.location.origin}/game/${gameId}`}
+                  />
                 )}
 
                 {roomPrize && (
