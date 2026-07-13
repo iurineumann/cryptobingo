@@ -109,6 +109,7 @@ import {
   setRoomNft,
   getRoomTreasury,
 } from "./controllers/roomController";
+import { getLobby, getLobbyMe } from "./controllers/lobbyController";
 import {
   listDeposits,
   getDeposit,
@@ -436,6 +437,10 @@ function registerRoutes(): void {
     setRoomNft,
   );
   app.get("/api/v1/rooms/:roomId/treasury", playerLimiter, getRoomTreasury);
+
+  // ── Lobby agregado (Issue #268) ────────────────────────────────────────
+  app.get("/api/v1/lobby", playerLimiter, getLobby);
+  app.get("/api/v1/lobby/me", playerLimiter, requireAuth, getLobbyMe);
 
   // ── Admin: Monte Carlo ─────────────────────────────────────────────────
   app.post(

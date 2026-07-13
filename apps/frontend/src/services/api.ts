@@ -799,6 +799,32 @@ export async function setRoomNftConfig(roomId: string, data: {
 }
 
 // ==========================================
+// LOBBY AGREGADO (Issue #268)
+// ==========================================
+
+export interface LobbyResponse {
+    games:     import('@cryptobingo/shared-types').BlockchainGameState[];
+    rooms:     EnrichedRoom[];
+    gametypes: import('@cryptobingo/shared-types').BlockchainGametype[];
+}
+
+export interface LobbyMeResponse {
+    balances:      import('@cryptobingo/shared-types').BlockchainBalance[];
+    myTickets:     Record<string, number>;
+    playerRoomIds: string[];
+}
+
+export async function fetchLobby(): Promise<LobbyResponse> {
+    const res = await fetch(`${API_BASE}/lobby`, { headers: publicHeaders() });
+    return handleResponse<LobbyResponse>(res);
+}
+
+export async function fetchLobbyMe(): Promise<LobbyMeResponse> {
+    const res = await fetch(`${API_BASE}/lobby/me`, { headers: authHeaders() });
+    return handleResponse<LobbyMeResponse>(res);
+}
+
+// ==========================================
 // DROP VAULT (ADR-011)
 // ==========================================
 
