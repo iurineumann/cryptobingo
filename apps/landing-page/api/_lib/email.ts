@@ -1,83 +1,90 @@
-import { EmailClient } from '@azure/communication-email';
-import type { EmailMessage } from '@azure/communication-email';
+import nodemailer from 'nodemailer';
 
-const conn = process.env.ACS_CONNECTION_STRING;
-const sender = process.env.ACS_SENDER ?? '';
-const adminEmail = process.env.ADMIN_EMAIL ?? '';
+const smtpHost = process.env.SMTP_HOST ?? '';
+const smtpPort = parseInt(process.env.SMTP_PORT ?? '587', 10);
+const smtpSecure = process.env.SMTP_SECURE === 'true';
+const smtpUser = process.env.SMTP_USER ?? '';
+const smtpPass = process.env.SMTP_PASS ?? '';
+const smtpSender = process.env.SMTP_SENDER ?? '';
 
-function getClient(): EmailClient {
-  if (!conn) throw new Error('ACS_CONNECTION_STRING not set');
-  return new EmailClient(conn);
+let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
+
+function getTransporter(): ReturnType<typeof nodemailer.createTransport> {
+  if (!transporter) {
+    if (!smtpHost) throw new Error('SMTP_HOST not set');
+    transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      ...(smtpUser ? { auth: { user: smtpUser, pass: smtpPass } } : {}),
+    });
+  }
+  return transporter;
 }
 
 export function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendMessage(message: EmailMessage): Promise<void> {
-  const client = getClient();
-  const poller = await client.beginSend(message);
-  await poller.pollUntilDone();
+async function sendMessage(to: string, subject: string, text: string): Promise<void> {
+  const t = getTransporter();
+  await t.sendMail({
+    from: smtpSender,
+    to,
+    subject,
+    text,
+  });
 }
 
 export async function sendVoteCode(to: string, code: string, ideaTitle: string): Promise<void> {
-  await sendMessage({
-    senderAddress: sender,
-    content: {
-      subject: 'Your CryptoBingo verification code',
-      plainText: [
-        `Hello,`,
-        ``,
-        `Your verification code to vote on "${ideaTitle}" is:`,
-        ``,
-        `  ${code}`,
-        ``,
-        `This code expires in 15 minutes.`,
-        ``,
-        `— CryptoBingo Team`,
-      ].join('\n'),
-    },
-    recipients: { to: [{ address: to }] },
-  });
+  await sendMessage(
+    to,
+    'Your CryptoBingo verification code',
+    [
+      'Hello,',
+      '',
+      `Your verification code to vote on "${ideaTitle}" is:`,
+      '',
+      `  ${code}`,
+      '',
+      'This code expires in 15 minutes.',
+      '',
+      '— CryptoBingo Team',
+    ].join('\n'),
+  );
 }
 
 export async function sendAdminCode(to: string, code: string): Promise<void> {
-  await sendMessage({
-    senderAddress: sender,
-    content: {
-      subject: 'CryptoBingo admin login code',
-      plainText: [
-        `Hello,`,
-        ``,
-        `Your admin login code is:`,
-        ``,
-        `  ${code}`,
-        ``,
-        `This code expires in 15 minutes.`,
-        ``,
-        `— CryptoBingo Team`,
-      ].join('\n'),
-    },
-    recipients: { to: [{ address: to }] },
-  });
+  await sendMessage(
+    to,
+    'CryptoBingo admin login code',
+    [
+      'Hello,',
+      '',
+      'Your admin login code is:',
+      '',
+      `  ${code}`,
+      '',
+      'This code expires in 15 minutes.',
+      '',
+      '— CryptoBingo Team',
+    ].join('\n'),
+  );
 }
 
 export async function sendWelcome(to: string): Promise<void> {
-  await sendMessage({
-    senderAddress: sender,
-    content: {
-      subject: 'Welcome to CryptoBingo!',
-      plainText: [
-        `Thanks for subscribing!`,
-        ``,
-        `You'll be the first to know about CryptoBingo updates,`,
-        `new features, and launch announcements.`,
-        ``,
-        `— CryptoBingo Team`,
-      ].join('\n'),
-    },
-    recipients: { to: [{ address: to }] },
-  });
+  await sendMessage(
+    to,
+    'Welcome to CryptoBingo!',
+    [
+      'Thanks for subscribing!',
+      '',
+      "You'll be the first to know about CryptoBingo updates,",
+      'new features, and launch announcements.',
+      '',
+      '— CryptoBingo Team',
+    ].join('\n'),
+  );
 }
 
 export async function sendNewsletter(
@@ -85,11 +92,7 @@ export async function sendNewsletter(
   subject: string,
   body: string
 ): Promise<void> {
-  await sendMessage({
-    senderAddress: sender,
-    content: { subject, plainText: body },
-    recipients: { to: [{ address: to }] },
-  });
+  await sendMessage(to, subject, body);
 }
 
 export async function logEmail(to: string, subject: string, type: string): Promise<void> {
