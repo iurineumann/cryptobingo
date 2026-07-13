@@ -172,6 +172,9 @@ describe('createNextGameForRoom', () => {
             ok: true,
             json: async () => ({ metadata: { auto_start_delay_sec: 1 } }),
         } as any);
+        // Após creategame (mockado), a confirmação on-chain deve achar o jogo
+        // criado — sem isso o loop de poll (até 10s) estoura o timeout do jest.
+        mockFetchGame.mockResolvedValue({ game_id: '0', status: 'created' } as any);
 
         const promise = createNextGameForRoom(makeRoom('1', '0') as any);
         await jest.advanceTimersByTimeAsync(2_000); // avança 2s
