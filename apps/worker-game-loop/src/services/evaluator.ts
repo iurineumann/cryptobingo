@@ -716,14 +716,23 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 );
             } else {
                 boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
-                txHash = await executeClaimWin(
-                    gameId,
-                    ticket.ticket_id,
-                    effectiveBalls.length,
-                    patternMask,
-                    appliedMultiplier,
-                    boostNftIds,
-                );
+                try {
+                    txHash = await executeClaimWin(
+                        gameId,
+                        ticket.ticket_id,
+                        effectiveBalls.length,
+                        patternMask,
+                        appliedMultiplier,
+                        boostNftIds,
+                    );
+                }
+                catch (claimErr) {
+                    // BUG B (resiliência): um claimwin individual falha (ex: combo sem
+                    // config no contrato) → logar e CONTINUAR com os demais vencedores,
+                    // em vez de abortar o jogo inteiro (jogo zombie em drawn).
+                    logger.error({ err: claimErr, tag: 'Avaliador' }, `claimwin falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
+                    continue;
+                }
             }
 
             if (txHash) {

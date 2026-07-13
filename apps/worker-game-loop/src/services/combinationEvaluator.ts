@@ -122,9 +122,20 @@ export async function fetchComboContext(
             clauses:  c.clauses ?? [],
         }));
 
+        // FONTE-DE-VERDADE ON-CHAIN: se o contrato retornou `combinations` vazio, o
+        // gametype NÃO tem combos. NÃO usar fail-stale (incidente jogo 1783965535490:
+        // gametype 1 sem combos mas o avaliador achava "3x Simples #2" de lastGoodCtx
+        // obsoleto → claimcombo falhava com "Gametype nao tem combinacoes definidas"
+        // → jogo zombie em drawn). O fail-stale só é seguro em falha de REDE (abaixo).
+        if (combos.length === 0) {
+            cache.delete(gametypeId);
+            lastGoodCtx.delete(gametypeId);
+            return empty;
+        }
+
         const ctx: ComboContext = { combos, patternTypeByName, patternNameById };
         cache.set(gametypeId, { ctx, expires: Date.now() + COMBO_CACHE_TTL_MS });
-        lastGoodCtx.set(gametypeId, ctx); // fail-stale: mantém último contexto válido
+        lastGoodCtx.set(gametypeId, ctx); // fail-stale: mantém último contexto válido (só quando há combos reais)
         return ctx;
     } catch {
         // Fail-stale: se o api-gateway falhou, usa o último contexto bem-sucedido
