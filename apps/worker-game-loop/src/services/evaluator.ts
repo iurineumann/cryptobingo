@@ -707,13 +707,36 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
             let boostNftIds: string[] = [];
             let txHash: string | undefined;
             if (isCombo) {
-                txHash = await executeClaimCombo(
-                    gameId,
-                    ticket.ticket_id,
-                    effectiveBalls.length,
-                    comboId as number,
-                    appliedMultiplier,
-                );
+                try {
+                    txHash = await executeClaimCombo(
+                        gameId,
+                        ticket.ticket_id,
+                        effectiveBalls.length,
+                        comboId as number,
+                        appliedMultiplier,
+                    );
+                }
+                catch (comboErr) {
+                    // BUG B (resiliência): claimcombo falha (ex: gametype sem combos
+                    // on-chain, dessincronizado do api-gateway) → tenta pagar por padrão
+                    // (fallback claimwin) em vez de abortar o jogo inteiro.
+                    logger.error({ err: comboErr, tag: 'Avaliador' }, `claimcombo falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}); tentando claimwin por padrão:`);
+                    try {
+                        boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
+                        txHash = await executeClaimWin(
+                            gameId,
+                            ticket.ticket_id,
+                            effectiveBalls.length,
+                            patternMask,
+                            appliedMultiplier,
+                            boostNftIds,
+                        );
+                    }
+                    catch (winErr) {
+                        logger.error({ err: winErr, tag: 'Avaliador' }, `claimwin fallback falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
+                        continue;
+                    }
+                }
             } else {
                 boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
                 try {
@@ -727,9 +750,8 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                     );
                 }
                 catch (claimErr) {
-                    // BUG B (resiliência): um claimwin individual falha (ex: combo sem
-                    // config no contrato) → logar e CONTINUAR com os demais vencedores,
-                    // em vez de abortar o jogo inteiro (jogo zombie em drawn).
+                    // BUG B (resiliência): um claimwin individual falha → logar e
+                    // CONTINUAR com os demais vencedores, em vez de abortar o jogo.
                     logger.error({ err: claimErr, tag: 'Avaliador' }, `claimwin falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
                     continue;
                 }
