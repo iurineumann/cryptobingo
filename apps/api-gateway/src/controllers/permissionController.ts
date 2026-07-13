@@ -16,20 +16,59 @@ function generateOrgId(): string {
 export async function updateUserPermissions(req: Request, res: Response) {
   try {
     const { wallet } = req.params;
-    const { permissions } = req.body;
+    let { permissions } = req.body;
 
-    const updated = await UserProfile.findOneAndUpdate(
-      { wallet_address: wallet },
-      { $set: { permissions } },
-      { new: true }
-    ).lean();
+    if (!Array.isArray(permissions)) {
+      res.status(400).json({ error: 'permissions deve ser um array de strings.' });
+      return;
+    }
+    permissions = permissions.map((p: unknown) => String(p));
 
-    if (!updated) {
+    const existing = await UserProfile.findOne({ wallet_address: wallet }).lean();
+    if (!existing) {
       res.status(404).json({ error: 'Usuário não encontrado' });
       return;
     }
 
-    res.json({ wallet_address: updated.wallet_address, permissions: (updated as any).permissions });
+    const oldRole = (existing as any).role ?? 'player';
+    const oldPerms: string[] = (existing as any).permissions ?? [];
+
+    // Invariante role↔perm (ADR-036): admin.* nas permissions implica role admin,
+    // e ausência de admin.* em role admin rebaixa para player. Evita estado órfão
+    // (ex: permissions admin.* mas role player — o bug do cworldcntrct).
+    let nextRole = oldRole;
+    if (permissions.includes('admin.*') && oldRole === 'player') {
+      nextRole = 'admin';
+    } else if (!permissions.includes('admin.*') && oldRole === 'admin') {
+      nextRole = 'player';
+    }
+
+    const updated = await UserProfile.findOneAndUpdate(
+      { wallet_address: wallet },
+      { $set: { permissions, role: nextRole } },
+      { new: true }
+    ).lean();
+
+    await logAudit({
+      actor: (req as any).user?.wallet ?? 'system',
+      action: 'perm.update',
+      target: `wallet:${wallet}`,
+      details: {
+        oldPermissions: oldPerms,
+        newPermissions: permissions,
+        oldRole,
+        newRole: nextRole,
+        roleChanged: oldRole !== nextRole,
+      },
+      ip: req.ip,
+      userAgent: req.headers?.['user-agent'] as string,
+    });
+
+    res.json({
+      wallet_address: updated!.wallet_address,
+      role: (updated as any).role,
+      permissions: (updated as any).permissions,
+    });
   } catch (err) {
     logger.error({ err: err, tag: 'PermissionController' }, 'updateUserPermissions');
     res.status(500).json({ error: 'Erro ao atualizar permissões' });
