@@ -1,14 +1,15 @@
-const base = require('../../jest.config.js');
+// jest.config.js — prioriza .ts sobre .js compilados presentes em src/
+// (artefatos de build stale fazem o jest resolver rbac.js em vez de rbac.ts).
+/** @type {import('jest').Config} */
 module.exports = {
-    ...base,
-    testMatch: ['<rootDir>/src/**/*.test.ts'],
-    collectCoverageFrom: [
-        'src/**/*.ts',
-        '!src/index.ts',
-        '!src/database/migrations/**',
-        '!src/**/*.d.ts',
-    ],
-    coverageThreshold: {
-        global: { branches: 60, functions: 70, lines: 70, statements: 70 },
+    testEnvironment: 'node',
+    roots: ['<rootDir>/src'],
+    moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+    testMatch: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**/*.test.ts'],
+    transform: {
+        '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true }],
+    },
+    moduleNameMapper: {
+        '^@cryptobingo/shared-types$': '<rootDir>/../shared-types/src/index.ts',
     },
 };

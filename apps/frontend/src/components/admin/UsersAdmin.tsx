@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
-import { getAuthToken, updateUserPermissions } from '../../services/api';
+import { getAuthToken, updateUserPermissions, assignUserRole } from '../../services/api';
 import { hasAnyPermission } from '../../utils/permissionMatcher';
 import { API_BASE } from '@/config/env';
+
+const ROLE_OPTIONS = ['player', 'moderator', 'sponsor', 'admin'] as const;
 
 interface UserRow {
     wallet_address: string;
@@ -141,6 +143,16 @@ export default function UsersAdmin({ permissions }: UsersAdminProps) {
 
     const canManage = hasAnyPermission(permissions, ['admin.*', 'admin.users.manage']);
 
+    const changeRole = async (wallet: string, role: string) => {
+        try {
+            await assignUserRole(wallet, role);
+            await load();
+        } catch (err) {
+            console.error('[UsersAdmin]', err);
+            setError(t('errors.generic'));
+        }
+    };
+
     const load = async () => {
         setLoading(true);
         try {
@@ -197,6 +209,19 @@ export default function UsersAdmin({ permissions }: UsersAdminProps) {
                                             <span className={`cb-badge text-xs ${roleBadgeClass(u.role)}`}>{u.role}</span>
                                         ) : (
                                             <span className="text-[--cb-text-tertiary]">—</span>
+                                        )}
+                                        {canManage && (
+                                            <select
+                                                data-testid={`role-select-${u.wallet_address}`}
+                                                className="cb-input cb-input-xs ml-2"
+                                                value={u.role ?? 'player'}
+                                                onChange={(e) => changeRole(u.wallet_address, e.target.value)}
+                                                aria-label={`Role de ${u.wallet_address}`}
+                                            >
+                                                {ROLE_OPTIONS.map(r => (
+                                                    <option key={r} value={r}>{r}</option>
+                                                ))}
+                                            </select>
                                         )}
                                     </td>
                                     <td className="py-2 pr-4">
