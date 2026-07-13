@@ -1,9 +1,10 @@
 import pg from 'pg';
 
+const dbUrl = process.env.DATABASE_URL ?? '';
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
   max: 5,
-  ssl: { rejectUnauthorized: false },
+  ssl: dbUrl.includes('sslmode') ? { rejectUnauthorized: false } : false,
 });
 
 export async function query<T = Record<string, unknown>>(

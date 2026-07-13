@@ -7,8 +7,13 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "outDir": "dist",
+    "paths": {
+      "@azure/functions": ["./azure-functions-shim"]
+    }
   },
-  "include": ["*.ts", "_lib/*.ts", "ideas/*.ts", "votes/*.ts", "admin/*.ts", "index.ts"],
-  "exclude": ["node_modules"]
+  "include": ["*.ts", "_lib/*.ts", "ideas/*.ts", "votes/*.ts", "admin/*.ts", "index.ts", "server.ts", "azure-functions-shim.ts"],
+  "exclude": ["node_modules", "dist"]
 }

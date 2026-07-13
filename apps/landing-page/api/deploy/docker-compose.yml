@@ -1,0 +1,46 @@
+# landing-api (VPS Docker) — composição com nginx (TLS Let's Encrypt já emitido no VPS)
+# Rede `cryptobingo` é a mesma dos DBs (postgres/mongo/redis) do VPS.
+# nginx usa o cert já emitido em /etc/letsencrypt/live/cryptobingo.bet (mount do host).
+
+services:
+  landing-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: cryptobingo-landing-api:latest
+    container_name: landing-api
+    restart: unless-stopped
+    networks:
+      - cryptobingo
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DATABASE_URL: "postgres://cryptobingo:CbPg2026vpsSafe@postgres:5432/cryptobingo"
+      SMTP_HOST: "mail.cryptobingo.bet"
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: "cryptobingo"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_SENDER: "contact@cryptobingo.bet"
+      ADMIN_EMAIL: "admin@cryptobingo.bet"
+      GATEWAY_URL: "https://test-api.cryptobingo.bet"
+    # sem 'ports' — só acessível na rede Docker (nginx faz o proxy)
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: landing-api-nginx
+    restart: unless-stopped
+    networks:
+      - cryptobingo
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/landing-api.conf:/etc/nginx/conf.d/landing-api.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - landing-api
+
+networks:
+  cryptobingo:
+    external: true
