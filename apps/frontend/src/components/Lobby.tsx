@@ -8,10 +8,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation }                from 'react-i18next';
 import { useNavigate }                   from 'react-router-dom';
-import { Name, Session }                 from '@wharfkit/session';
-import { UInt64 }                        from '@wharfkit/antelope';
+import { Session }                       from '@wharfkit/session';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
-import { fetchRooms, type EnrichedRoom } from '../services/api';
+import { fetchLobby, fetchLobbyMe, type EnrichedRoom } from '../services/api';
 import Seo                               from './Seo';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
@@ -27,7 +26,6 @@ interface LobbyProps {
     readonly onReplayGame?: (gameId: string) => void;
 }
 
-const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
@@ -478,37 +476,21 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
         return () => clearInterval(id);
     }, []);
 
-    // ── Carrega dados do blockchain ───────────────────────────────────────────
+    // ── Carrega dados via API agregada (Issue #268) ─────────────────────────
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const actorScope = Name.from(session.actor).value.toString();
-
-            const [balRes, gamesRes, roomsData, gametypesRes] = await Promise.all([
-                session.client.v1.chain.get_table_rows({
-                    code: CONTRACT, scope: actorScope,
-                    table: 'balances', limit: 20, json: true,
-                }),
-                session.client.v1.chain.get_table_rows({
-                    code: CONTRACT, scope: CONTRACT,
-                    table: 'games', limit: 50, reverse: true, json: true,
-                }),
-                fetchRooms().catch(() => ({ rooms: [] as EnrichedRoom[] })),
-                session.client.v1.chain.get_table_rows({
-                    code: CONTRACT, scope: CONTRACT,
-                    table: 'gametypes', limit: 50, json: true,
-                }).catch(() => ({ rows: [] })),
+            const [lobbyData, lobbyMeData] = await Promise.all([
+                fetchLobby(),
+                fetchLobbyMe().catch(() => null),
             ]);
 
-            const loadedGames = gamesRes.rows as BlockchainGameState[];
-            setBalances(balRes.rows as BlockchainBalance[]);
-            setGames(loadedGames);
-            setActiveRooms(roomsData.rooms.filter(r => r.status === 'active'));
+            setGames(lobbyData.games);
+            setActiveRooms(lobbyData.rooms.filter(r => r.status === 'active'));
 
-            // Constrói mapa de gametypes para cálculo de prêmio máximo por cartela
             const gtMap = new Map<string, { base_multiplier: number; max_win_weight: number }>();
-            for (const gt of gametypesRes.rows as Array<any>) {
-                const rules: Array<{ weight: number }> = gt.rules ?? [];
+            for (const gt of lobbyData.gametypes) {
+                const rules = gt.rules ?? [];
                 const max_win_weight = rules.length > 0 ? Math.max(...rules.map(r => r.weight)) : 0;
                 gtMap.set(String(gt.gametype_id), {
                     base_multiplier: Number(gt.base_multiplier) || 1,
@@ -517,62 +499,17 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
             }
             setGametypeMap(gtMap);
 
-            // ── Tickets do jogador nas salas em funding ──────────────────────
-            const fundingGames = loadedGames.filter(g =>
-                g.status === 'funding' && g.room_id && g.room_id !== '0'
-            );
-            if (fundingGames.length > 0) {
-                const results = await Promise.allSettled(
-                    fundingGames.map(g =>
-                        session.client.v1.chain.get_table_rows({
-                            code: CONTRACT, scope: UInt64.from(g.game_id),
-                            table: 'tickets', limit: 200,
-                            lower_bound: Name.from(session.actor).value,
-                            upper_bound: Name.from(session.actor).value,
-                            index_position: 'secondary', key_type: 'i64', json: true,
-                        })
-                    )
-                );
-                const ticketMap = new Map<string, number>();
-                results.forEach((r, i) => {
-                    if (r.status === 'fulfilled') {
-                        ticketMap.set(String(fundingGames[i].room_id), r.value.rows.length);
-                    }
-                });
-                setMyTickets(ticketMap);
-            }
-
-            // ── Salas onde o jogador já participou (histórico) ───────────────
-            const replayCandidates = loadedGames.filter(g =>
-                ['archived', 'drawn'].includes(g.status) &&
-                g.room_id && g.room_id !== '0'
-            );
-            if (replayCandidates.length > 0) {
-                const results = await Promise.allSettled(
-                    replayCandidates.map(g =>
-                        session.client.v1.chain.get_table_rows({
-                            code: CONTRACT, scope: UInt64.from(g.game_id),
-                            table: 'tickets', limit: 1,
-                            lower_bound: Name.from(session.actor).value,
-                            upper_bound: Name.from(session.actor).value,
-                            index_position: 'secondary', key_type: 'i64', json: true,
-                        })
-                    )
-                );
-                const participated = new Set<string>();
-                results.forEach((r, i) => {
-                    if (r.status === 'fulfilled' && r.value.rows.length > 0) {
-                        participated.add(String(replayCandidates[i].room_id));
-                    }
-                });
-                setPlayerRoomIds(participated);
+            if (lobbyMeData) {
+                setBalances(lobbyMeData.balances);
+                setMyTickets(new Map(Object.entries(lobbyMeData.myTickets)));
+                setPlayerRoomIds(new Set(lobbyMeData.playerRoomIds));
             }
         } catch (err) {
             console.error('[Lobby]', err);
         } finally {
             setLoading(false);
         }
-    }, [session]);
+    }, []);
 
     // ── Smart polling: rápido quando há jogo ativo ────────────────────────────
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
