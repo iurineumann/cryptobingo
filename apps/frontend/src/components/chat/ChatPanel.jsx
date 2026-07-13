@@ -1,0 +1,124 @@
+import { useState, useEffect, useRef } from 'react';
+import { useChat } from '../../hooks/useChat';
+import { X } from 'lucide-react';
+import { SystemChatMessage } from './SystemChatMessage';
+export default function ChatPanel({ roomId, roomName, walletAddress, onClose }) {
+    const { messages, loading, sendMessage } = useChat({ roomId, walletAddress });
+    const [input, setInput] = useState('');
+    const listRef = useRef(null);
+    useEffect(() => {
+        if (listRef.current) {
+            listRef.current.scrollTop = listRef.current.scrollHeight;
+        }
+    }, [messages]);
+    const handleSend = () => {
+        if (!input.trim())
+            return;
+        sendMessage(input);
+        setInput('');
+    };
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+    if (loading) {
+        return (<aside className="gr-chat" style={{ borderLeft: '1px solid var(--cb-border-default)', width: '300px', display: 'flex', flexDirection: 'column', background: 'var(--cb-bg-base)' }}>
+                <div className="flex items-center justify-center flex-1">
+                    <span className="cb-spinner w-6 h-6"/>
+                </div>
+            </aside>);
+    }
+    const truncateWallet = (w) => w.length > 10 ? `${w.slice(0, 4)}...${w.slice(-4)}` : w;
+    return (<aside className="gr-chat" style={{
+            borderLeft: '1px solid var(--cb-border-default)',
+            width: '300px',
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'var(--cb-bg-base)',
+        }}>
+            {/* Header */}
+            <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0.75rem', borderBottom: '1px solid var(--cb-border-default)',
+        }}>
+                <span className="font-bold text-sm text-[--cb-text-primary]">
+                    {roomName}
+                </span>
+                <button className="cb-btn cb-btn-ghost cb-btn-sm" onClick={onClose} aria-label="Fechar chat"><X className="size-4 shrink-0"/></button>
+            </div>
+
+            {/* Messages */}
+            <div ref={listRef} style={{
+            flex: 1, overflowY: 'auto', padding: '0.5rem',
+            display: 'flex', flexDirection: 'column', gap: '0.25rem',
+        }}>
+                {messages.length === 0 && (<p className="text-xs text-[--cb-text-tertiary] text-center py-8">
+                        Nenhuma mensagem ainda. Seja o primeiro!
+                    </p>)}
+                {messages.map(msg => {
+            const isDrop = msg.message_type === 'system_drop';
+            const isSystem = msg.message_type === 'system_draw' || msg.message_type === 'system_status';
+            const isOwn = msg.wallet_address === walletAddress;
+            if (isSystem) {
+                return (<div key={msg.id} style={{
+                        padding: '0.3rem 0.5rem',
+                        borderRadius: '0.5rem',
+                        background: 'var(--cb-bg-elevated)',
+                        border: '1px solid var(--cb-border-default)',
+                        alignSelf: 'center',
+                        maxWidth: '95%',
+                        textAlign: 'center',
+                    }}>
+                                <p style={{
+                        fontSize: '0.7rem',
+                        color: 'var(--cb-text-secondary)',
+                        wordBreak: 'break-word',
+                    }}>
+                                    <SystemChatMessage message={msg.message}/>
+                                </p>
+                            </div>);
+            }
+            return (<div key={msg.id} style={{
+                    padding: '0.35rem 0.5rem',
+                    borderRadius: '0.5rem',
+                    background: isDrop
+                        ? 'var(--cb-brand)'
+                        : isOwn
+                            ? 'var(--cb-bg-elevated)'
+                            : 'transparent',
+                    maxWidth: '90%',
+                    alignSelf: isOwn ? 'flex-end' : 'flex-start',
+                }}>
+                            <div style={{
+                    display: 'flex', alignItems: 'center', gap: '0.25rem',
+                    fontSize: '0.6rem', fontWeight: 600,
+                    color: isDrop ? 'var(--cb-text-on-brand)' : 'var(--cb-text-tertiary)',
+                    marginBottom: '0.15rem',
+                }}>
+                                <span>{isOwn ? 'Você' : truncateWallet(msg.wallet_address)}</span>
+                            </div>
+                            <p style={{
+                    fontSize: '0.75rem', color: isDrop ? 'var(--cb-text-on-brand)' : 'var(--cb-text-primary)',
+                    wordBreak: 'break-word',
+                }}>
+                                {isDrop ? `Drop! ${msg.message}` : msg.message}
+                            </p>
+                        </div>);
+        })}
+            </div>
+
+            {/* Input */}
+            <div style={{
+            display: 'flex', gap: '0.5rem', padding: '0.5rem',
+            borderTop: '1px solid var(--cb-border-default)',
+        }}>
+                <input className="cb-input" style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.6rem' }} placeholder="Digite sua mensagem..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} maxLength={500}/>
+                <button className="cb-btn cb-btn-primary cb-btn-sm" onClick={handleSend} disabled={!input.trim()}>
+                    Enviar
+                </button>
+            </div>
+        </aside>);
+}
+//# sourceMappingURL=ChatPanel.js.map

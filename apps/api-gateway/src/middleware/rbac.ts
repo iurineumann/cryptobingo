@@ -16,13 +16,18 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserProfile }                     from '../models/UserProfile';
 import type { UserRole }                   from '@cryptobingo/shared-types';
+import { hasPermission }                   from '../utils/permissionMatcher';
 
 /**
  * Middleware RBAC — verifica se o usuário autenticado possui o role exigido.
  *
  * Deve ser aplicado APÓS `requireAuth` (que injeta `req.user.wallet`).
- * Consulta o MongoDB para obter o role atual — não persiste no JWT
+ * Consulta o MongoDB para obter o role/permissions atuais — não persiste no JWT
  * para permitir revogação imediata de privilégios.
+ *
+ * Equivalência role↔permission (ADR-036): `admin.*` nas permissions é tratado
+ * como role `admin` (super admin). Assim um usuário pode receber acesso admin
+ * via permission OU via role, sem inconsistência entre as duas camadas.
  *
  * Retorna 403 se o role for insuficiente.
  * Retorna 404 se o perfil não existir (nunca fez login).
@@ -38,10 +43,10 @@ export function requireRole(...roles: UserRole[]) {
         }
 
         try {
-            // Busca o perfil no MongoDB para obter o role atual
+            // Busca o perfil no MongoDB para obter o role/permissions atuais
             const profile = await UserProfile.findOne(
                 { wallet_address: wallet },
-                { role: 1 }
+                { role: 1, permissions: 1 }
             ).lean();
 
             if (!profile) {
@@ -50,11 +55,22 @@ export function requireRole(...roles: UserRole[]) {
             }
 
             const userRole = (profile as any).role as UserRole ?? 'player';
+            const userPerms: string[] = (profile as any).permissions ?? [];
 
             // contract_admin tem acesso a qualquer role (superset)
-            if (userRole !== 'contract_admin' && !roles.includes(userRole)) {
+            const isContractAdmin = userRole === 'contract_admin';
+            // admin.* nas permissions == role admin (ADR-036)
+            const hasAdminWildcard = hasPermission(userPerms, 'admin.*');
+            const effectiveAdmin = isContractAdmin || hasAdminWildcard;
+
+            const roleOk =
+                isContractAdmin ||
+                roles.includes(userRole) ||
+                (effectiveAdmin && roles.includes('admin'));
+
+            if (!roleOk) {
                 console.warn(
-                    `[RBAC] Acesso negado: ${wallet} (role: ${userRole}) ` +
+                    `[RBAC] Acesso negado: ${wallet} (role: ${userRole}, perms: ${userPerms.join(',') || '-'}) ` +
                     `tentou acessar rota que exige: ${roles.join(' | ')}`
                 );
                 res.status(403).json({
@@ -63,8 +79,9 @@ export function requireRole(...roles: UserRole[]) {
                 return;
             }
 
-            // Injeta o role no request para uso nos controllers (opcional)
+            // Injeta o role/permissions no request para uso nos controllers
             (req as any).userRole = userRole;
+            (req as any).userPermissions = userPerms;
             next();
 
         } catch (err) {

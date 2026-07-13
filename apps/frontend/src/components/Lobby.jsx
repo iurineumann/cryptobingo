@@ -1,0 +1,441 @@
+// apps/frontend/src/components/Lobby.tsx
+// Lobby centrado em salas — card por sala com prize pool em destaque,
+// contagem de tickets do jogador, countdown animado e indicador ao vivo.
+//
+// Design: classes lobby-* definidas em globals.design.css
+// Ref: ADR-007, ADR-010, SPEC.md §1.1–1.2
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { fetchLobby, fetchLobbyMe } from '../services/api';
+import Seo from './Seo';
+import { X } from 'lucide-react';
+import BuyTicketModal from './BuyTicketModal';
+import RoomHistoryPanel from './RoomHistoryPanel';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+const AUTO_LOCK_SEC = 60;
+const REVEAL_INTERVAL_MS = 3000;
+const SLOW_REVEAL_WINDOW = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
+const POLL_NORMAL_MS = 4_000; // salas idle
+const POLL_ACTIVE_MS = 1_000; // quando há funding ou drawing
+const STATUS_DOT = {
+    created: 'var(--cb-text-tertiary)',
+    funding: 'var(--cb-success)',
+    locked: 'var(--cb-accent)',
+    drawing: 'var(--color-danger-500)',
+    drawn: 'var(--cb-success)',
+    archived: 'var(--cb-text-tertiary)',
+    aborted: 'var(--cb-danger)',
+};
+function fmtCountdown(ms) {
+    if (ms <= 0)
+        return '0s';
+    const s = Math.ceil(ms / 1000);
+    if (s < 60)
+        return `${s}s`;
+    const secPart = s % 60 > 0 ? `${s % 60}s` : '';
+    return `${Math.floor(s / 60)}m ${secPart}`.trim();
+}
+function splitAmount(quantity) {
+    const parts = quantity.trim().split(' ');
+    return { amount: parts[0] ?? '0', symbol: parts.slice(1).join(' ') };
+}
+// ── RoomCardHead: nome da sala + status badges ─────────────────────────
+function RoomCardHead({ room, isDrawing, isFunding, statusLabel, hasMyTickets, myCount, displayStatus, currentGame, t, }) {
+    const hasNftDrop = room.metadata?.drops?.some(d => d.template_id != null) ?? false;
+    const hasTokenDrop = room.metadata?.drops?.some(d => d.amount != null) ?? false;
+    return (<div className="lobby-card-head">
+            <div>
+                {room.metadata?.name
+            ? <p className="lobby-card-name">{room.metadata.name}</p>
+            : <span className="lobby-card-id">{t('lobby.room_label')} #{room.room_id}</span>}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+                {isDrawing ? (<span className="lobby-card-live" data-testid={`lobby-status-${room.room_id}`}>AO VIVO</span>) : (<Badge variant="secondary" className={isFunding ? 'text-success-400' : ''} data-testid={`lobby-status-${room.room_id}`}>
+                        {currentGame && <span className="lobby-status-dot" style={{ background: STATUS_DOT[displayStatus] }}/>}
+                        {statusLabel}
+                    </Badge>)}
+                {hasMyTickets && (<span className="lobby-card-mine">
+                        {t('lobby.my_tickets', { count: myCount })}
+                    </span>)}
+                {hasNftDrop && (<Badge variant="outline" className="text-violet-400 border-violet-400/30 bg-violet-400/10">
+                        🎁 {t('lobby.drop_nft')}
+                    </Badge>)}
+                {hasTokenDrop && (<Badge variant="outline" className="text-yellow-300 border-yellow-400/30 bg-yellow-400/10">
+                        💰 {t('lobby.drop_token')}
+                    </Badge>)}
+            </div>
+        </div>);
+}
+// ── RoomCardStats: grid de preço, prêmio máximo, tickets vendidos ──────
+function RoomCardStats({ room, currentGame, gametypeMap, hasMyTickets, myCount, t, }) {
+    const ticketsSold = (() => {
+        if (!currentGame)
+            return null;
+        const pool = Number.parseFloat(currentGame.total_wagered?.quantity?.split(' ')[0] ?? '0');
+        const price = Number.parseFloat(currentGame.ticket_price?.quantity?.split(' ')[0] ?? '0');
+        return pool > 0 && price > 0 ? Math.round(pool / price) : null;
+    })();
+    const priceDisplay = (() => {
+        const min = room.ticket_price_min?.quantity;
+        const max = room.ticket_price_max?.quantity;
+        const def = room.ticket_price_default?.quantity ?? currentGame?.ticket_price?.quantity;
+        if (min && max) {
+            const minAmt = splitAmount(min).amount;
+            const maxAmt = splitAmount(max).amount;
+            const sym = splitAmount(min).symbol;
+            if (minAmt === maxAmt)
+                return def ?? `${minAmt} ${sym}`;
+            return `${minAmt}–${maxAmt} ${sym}`;
+        }
+        return def ?? '—';
+    })();
+    const gtInfo = gametypeMap.get(String(room.gametype_id));
+    const maxPrizeVal = (() => {
+        if (!gtInfo || gtInfo.max_win_weight === 0)
+            return 0;
+        const qty = room.ticket_price_max?.quantity ?? room.ticket_price_default?.quantity;
+        if (!qty)
+            return 0;
+        const priceAmt = Number.parseFloat(splitAmount(qty).amount) || 0;
+        return priceAmt * gtInfo.base_multiplier * gtInfo.max_win_weight / 100;
+    })();
+    const priceSymbol = splitAmount(room.ticket_price_default?.quantity ?? '').symbol;
+    const hasSponsor = (currentGame?.sponsor_pool?.length ?? 0) > 0;
+    return (<dl className="lobby-card-stats">
+            <div>
+                <dt>{t('lobby.price')}</dt>
+                <dd className="font-mono" style={{ fontSize: '0.8rem' }}>{priceDisplay}</dd>
+            </div>
+            <div>
+                <dt>{t('lobby.max_prize_label')}</dt>
+                <dd className={maxPrizeVal > 0 ? 'prize' : ''}>
+                    {maxPrizeVal > 0 ? maxPrizeVal.toFixed(4) : '—'}
+                    {maxPrizeVal > 0 && <span className="unit"> {priceSymbol}{hasSponsor ? ' ✨' : ''}</span>}
+                </dd>
+            </div>
+            <div>
+                <dt>{t('lobby.buy_tickets')}</dt>
+                <dd style={{ color: hasMyTickets ? 'var(--cb-brand)' : undefined }}>
+                    {hasMyTickets ? myCount : '—'}
+                </dd>
+            </div>
+            {ticketsSold != null && ticketsSold > 0 && (<div>
+                    <dt>🎫 {t('replay.col_tickets_sold')}</dt>
+                    <dd>{ticketsSold}</dd>
+                </div>)}
+        </dl>);
+}
+// ── RoomCardStatus: countdown / status info ────────────────────────────
+function RoomCardStatus({ isFunding, isIdle, room, now, currentGame, t, }) {
+    const closeAt = currentGame ? Number(currentGame.game_id) + AUTO_LOCK_SEC * 1000 : 0;
+    const remaining = closeAt - now;
+    const isUrgent = remaining > 0 && remaining < 15_000;
+    return (<>
+            {isFunding && remaining > 0 && (<span className={`lobby-card-ticker${isUrgent ? ' is-urgent' : ''}`} data-testid={`lobby-ticker-${room.room_id}`}>
+                    ⏱ {t('lobby.closes_in', { time: fmtCountdown(remaining) })}
+                </span>)}
+            {isFunding && remaining <= 0 && (<span className="lobby-card-ticker is-urgent" data-testid={`lobby-ticker-${room.room_id}`}>
+                    {t('lobby.starts_soon')}
+                </span>)}
+            {isIdle && (<span className="lobby-card-scheduled">
+                    ⏳ {t('lobby.next_game_soon')}
+                </span>)}
+        </>);
+}
+// ── RoomCardDescription: descrição truncada + popover ──────────────────
+const DESC_MAX_CHARS = 80;
+function RoomCardDescription({ room, t, }) {
+    const desc = room.metadata?.description;
+    if (!desc)
+        return null;
+    const isLong = desc.length > DESC_MAX_CHARS;
+    const short = isLong ? desc.slice(0, DESC_MAX_CHARS).trimEnd() + '…' : desc;
+    if (!isLong) {
+        return (<p className="lobby-card-desc" data-testid={`lobby-desc-${room.room_id}`}>
+                {desc}
+            </p>);
+    }
+    return (<Popover>
+            <PopoverTrigger className="lobby-card-desc cursor-pointer" data-testid={`lobby-desc-${room.room_id}`} onClick={e => e.stopPropagation()}>
+                {short}
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" sideOffset={6} className="max-w-xs text-xs leading-relaxed">
+                {desc}
+            </PopoverContent>
+        </Popover>);
+}
+// ── RoomCardActions: botões de ação ─────────────────────────────────────
+function RoomCardActions({ isFunding, isDrawing, isIdle, navGameId, currentGame, room, onEnterRoom, onNavigate, playerRoomIds, t, }) {
+    const canBuy = isFunding && !!onEnterRoom;
+    const canWatch = isDrawing && !!onEnterRoom;
+    return (<div className="lobby-card-actions">
+            <div className="lobby-card-actions-row">
+                {canBuy && (<Button variant="default" className="flex-1" data-testid={`lobby-buy-${room.room_id}`} onClick={() => onEnterRoom(room.room_id, currentGame.game_id)} aria-label={t('lobby.buy_aria', { id: room.room_id })}>
+                        {t('lobby.buy_tickets')}
+                    </Button>)}
+                {canWatch && (<Button variant="outline" className="flex-1" data-testid={`lobby-watch-${room.room_id}`} onClick={() => onEnterRoom(room.room_id, currentGame.game_id)} aria-label={t('lobby.watch_aria', { id: room.room_id })}>
+                        👁 {t('lobby.watch_live')}
+                    </Button>)}
+                {!canBuy && !canWatch && navGameId && (<Button variant="outline" className="flex-1" onClick={() => onEnterRoom(room.room_id, navGameId)} aria-label={t('lobby.enter_room_aria', { id: room.room_id })}>
+                        📊 {t('lobby.view_results')}
+                    </Button>)}
+                {!canBuy && !canWatch && !navGameId && !isIdle && (<span style={{ flex: 1, display: 'flex', alignItems: 'center', fontSize: '0.78rem', color: 'var(--cb-text-tertiary)', gap: '0.4rem' }}>
+                        ⏳ {t('lobby.no_game_yet')}
+                    </span>)}
+            </div>
+
+            <Button variant="ghost" size="sm" className="justify-start gap-1.5 text-xs" data-testid={`lobby-history-${room.room_id}`} onClick={e => { e.stopPropagation(); onNavigate(`/room/${room.room_id}/history`); }} aria-label={t('lobby.replay_aria', { id: room.room_id })}>
+                📋 {t('lobby.history')}
+                {playerRoomIds.has(String(room.room_id)) && (<span style={{ fontSize: '0.65rem', color: 'var(--cb-brand)', marginLeft: '0.2rem' }}>★</span>)}
+            </Button>
+        </div>);
+}
+// ── RoomCard: sub-component extraído p/ reduzir complexidade cognitiva (S3776) ─
+// ── RoomCard: sub-component extraído p/ reduzir complexidade cognitiva (S3776) ─
+function RoomCard({ room, currentGame, displayStatus, myTickets, gametypeMap, now, onEnterRoom, onNavigate, playerRoomIds, t, }) {
+    const isFunding = displayStatus === 'funding';
+    const isDrawing = displayStatus === 'drawing';
+    const isIdle = !currentGame;
+    const myCount = myTickets.get(String(room.room_id)) ?? 0;
+    const hasMyTickets = myCount > 0;
+    const navGameId = currentGame?.game_id
+        ?? (String(room.current_game_id) === '0' ? null : String(room.current_game_id))
+        ?? '';
+    const roomName = room.metadata?.name || `${t('lobby.room_label')} #${room.room_id}`;
+    const statusLabel = currentGame
+        ? t(`lobby.${displayStatus}`, displayStatus)
+        : t('lobby.room_waiting');
+    const cardClass = [
+        'lobby-card',
+        isFunding ? 'is-funding' : '',
+        isDrawing ? 'is-drawing' : '',
+        isIdle ? 'is-idle' : '',
+        hasMyTickets ? 'is-watching' : '',
+    ].filter(Boolean).join(' ');
+    return (<a href="#" data-testid={`lobby-card-${room.room_id}`} className={cardClass} style={{ cursor: onEnterRoom && navGameId ? 'pointer' : 'default', textDecoration: 'none', color: 'inherit', display: 'block' }} onClick={e => {
+            e.preventDefault();
+            if (onEnterRoom && navGameId && !e.target.closest('button')) {
+                onEnterRoom(room.room_id, navGameId);
+            }
+        }} aria-label={`${roomName}, ${statusLabel}`}>
+            <RoomCardHead room={room} isDrawing={isDrawing} isFunding={isFunding} statusLabel={statusLabel} hasMyTickets={hasMyTickets} myCount={myCount} displayStatus={displayStatus} currentGame={currentGame} t={t}/>
+            <RoomCardDescription room={room} t={t}/>
+            <RoomCardStats room={room} currentGame={currentGame} gametypeMap={gametypeMap} hasMyTickets={hasMyTickets} myCount={myCount} t={t}/>
+            <RoomCardStatus isFunding={isFunding} isIdle={isIdle} room={room} now={now} currentGame={currentGame} t={t}/>
+            <RoomCardActions isFunding={isFunding} isDrawing={isDrawing} isIdle={isIdle} navGameId={navGameId} currentGame={currentGame} room={room} onEnterRoom={onEnterRoom} onNavigate={onNavigate} playerRoomIds={playerRoomIds} t={t}/>
+        </a>);
+}
+export default function Lobby({ session, onEnterRoom, onReplayGame }) {
+    const { t } = useTranslation();
+    const navigate = useNavigate();
+    const [balances, setBalances] = useState([]);
+    const [games, setGames] = useState([]);
+    const [activeRooms, setActiveRooms] = useState([]);
+    // roomId → número de tickets do jogador naquela sala (funding only)
+    const [myTickets, setMyTickets] = useState(new Map());
+    // roomIds onde o jogador participou (para mostrar botão Histórico)
+    const [playerRoomIds, setPlayerRoomIds] = useState(new Set());
+    // gametypeId → { base_multiplier, max_win_weight } para cálculo do prêmio máximo por cartela
+    const [gametypeMap, setGametypeMap] = useState(new Map());
+    const [loading, setLoading] = useState(false);
+    const [selectedGame, setSelectedGame] = useState(null);
+    const [historyRoomId, setHistoryRoomId] = useState(null);
+    const [now, setNow] = useState(Date.now());
+    // ── Tick 1s para countdowns ───────────────────────────────────────────────
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1_000);
+        return () => clearInterval(id);
+    }, []);
+    // ── Carrega dados via API agregada (Issue #268) ─────────────────────────
+    const loadData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [lobbyData, lobbyMeData] = await Promise.all([
+                fetchLobby(),
+                fetchLobbyMe().catch(() => null),
+            ]);
+            setGames(lobbyData.games);
+            setActiveRooms(lobbyData.rooms.filter(r => r.status === 'active'));
+            const gtMap = new Map();
+            for (const gt of lobbyData.gametypes) {
+                const rules = gt.rules ?? [];
+                const max_win_weight = rules.length > 0 ? Math.max(...rules.map(r => r.weight)) : 0;
+                gtMap.set(String(gt.gametype_id), {
+                    base_multiplier: Number(gt.base_multiplier) || 1,
+                    max_win_weight,
+                });
+            }
+            setGametypeMap(gtMap);
+            if (lobbyMeData) {
+                setBalances(lobbyMeData.balances);
+                setMyTickets(new Map(Object.entries(lobbyMeData.myTickets)));
+                setPlayerRoomIds(new Set(lobbyMeData.playerRoomIds));
+            }
+        }
+        catch (err) {
+            console.error('[Lobby]', err);
+        }
+        finally {
+            setLoading(false);
+        }
+    }, []);
+    // ── Smart polling: rápido quando há jogo ativo ────────────────────────────
+    const pollRef = useRef(null);
+    const hasActiveGame = useMemo(() => games.some(g => ['funding', 'drawing', 'locked', 'drawn'].includes(g.status)), [games]);
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
+    useEffect(() => {
+        if (pollRef.current)
+            clearInterval(pollRef.current);
+        const interval = hasActiveGame ? POLL_ACTIVE_MS : POLL_NORMAL_MS;
+        pollRef.current = setInterval(loadData, interval);
+        return () => { if (pollRef.current)
+            clearInterval(pollRef.current); };
+    }, [loadData, hasActiveGame]);
+    const handlePurchaseSuccess = useCallback(() => {
+        setTimeout(loadData, 1_500);
+    }, [loadData]);
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function isWithinSlowReveal(gameId) {
+        return Date.now() - Number(gameId) < SLOW_REVEAL_WINDOW;
+    }
+    function resolveDisplayStatus(g) {
+        if (g.status === 'drawn')
+            return 'drawing';
+        if (g.status === 'archived' && isWithinSlowReveal(g.game_id))
+            return 'drawing';
+        return g.status;
+    }
+    // Jogo "relevante" para exibição de uma sala — exclui aborted e archived fora da janela
+    function currentGameForRoom(room) {
+        return games.find(g => {
+            if (String(g.room_id) !== String(room.room_id))
+                return false;
+            if (g.status === 'aborted')
+                return false;
+            if (g.status === 'archived' && !isWithinSlowReveal(g.game_id))
+                return false;
+            return true;
+        });
+    }
+    // Apenas jogos em funding sem sala são exibidos como cards avulsos
+    const orphanGames = games.filter(g => (!g.room_id || String(g.room_id) === '0') && g.status === 'funding');
+    const isEmpty = activeRooms.length === 0 && orphanGames.length === 0;
+    // ── Render ────────────────────────────────────────────────────────────────
+    return (<section className="page-lobby" aria-label="Lobby de Jogos">
+            <Seo title="Salas de Jogo" description="Compre cartelas e jogue Bingo on-chain na CryptoBingo. Salas ao vivo com prêmios em WAX e sorteios verificáveis."/>
+            {/* ── Header ── */}
+            <div className="lobby-header">
+                <div className="lobby-header-left">
+                    <h2 className="lobby-header-title">🎮 {t('lobby.title')}</h2>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    {/* Saldo */}
+                    {balances.length > 0 && (<div className="lobby-wallet-chip" aria-label={t('lobby.balance_aria')}>
+                            <span className="symbol" aria-hidden="true">◆</span>
+                            {balances.map((b, i) => (<span key={b.balance.quantity} style={i > 0 ? { borderLeft: '1px solid var(--cb-border-subtle)', paddingLeft: '0.5rem', marginLeft: '0.25rem' } : {}}>
+                                    {b.balance.quantity}
+                                </span>))}
+                        </div>)}
+                    {/* Refresh */}
+                    <Button variant="ghost" size="sm" className="w-9 h-9 p-0 rounded-lg" onClick={loadData} disabled={loading} aria-label={t('lobby.refresh_aria')} title={t('common.refresh')}>
+                        {loading
+            ? <span className="cb-spinner" style={{ width: '1rem', height: '1rem' }}/>
+            : <span aria-hidden="true">↻</span>}
+                    </Button>
+                </div>
+            </div>
+
+            {/* ── Empty state ── */}
+            {isEmpty ? (<div className="lobby-empty">
+                    {loading ? (<>
+                            <span className="cb-spinner" style={{ width: '2.5rem', height: '2.5rem', borderWidth: '3px' }}/>
+                            <span className="lobby-empty-sub">{t('lobby.loading_rooms')}</span>
+                        </>) : (<>
+                            <span className="lobby-empty-icon" aria-hidden="true">🎱</span>
+                            <span className="lobby-empty-title">{t('lobby.no_active_rooms')}</span>
+                            <span className="lobby-empty-sub">{t('lobby.check_back')}</span>
+                            <Button variant="outline" size="sm" onClick={loadData} className="mt-2">
+                                ↻ {t('lobby.refresh')}
+                            </Button>
+                        </>)}
+                </div>) : (<div className="lobby-grid">
+
+                    {/* ── Cards de salas ativas ── */}
+                    {activeRooms.map(room => {
+                const currentGame = currentGameForRoom(room);
+                const displayStatus = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
+                return (<RoomCard key={`r-${room.room_id}`} room={room} currentGame={currentGame} displayStatus={displayStatus} myTickets={myTickets} gametypeMap={gametypeMap} now={now} onEnterRoom={onEnterRoom} onNavigate={(path) => navigate(path)} playerRoomIds={playerRoomIds} t={t}/>);
+            })}
+
+                    {/* ── Jogos sem sala / legados (fallback) ── */}
+                    {orphanGames.map(game => {
+                const isFunding = game.status === 'funding';
+                const tpSplit = splitAmount(game.ticket_price.quantity);
+                const orphanGt = gametypeMap.get(String(game.gametype_id));
+                const orphanMax = orphanGt && orphanGt.max_win_weight > 0
+                    ? (Number.parseFloat(tpSplit.amount) || 0) * orphanGt.base_multiplier * orphanGt.max_win_weight / 100
+                    : 0;
+                return (<article key={game.game_id} className={`lobby-card${isFunding ? ' is-funding' : ''}`} aria-label={`${t('lobby.room_label')} #${game.game_id}`}>
+                                <div className="lobby-card-head">
+                                    <div>
+                                        <span className="lobby-card-id">#{game.game_id}</span>
+                                        <p className="lobby-card-name">{t('lobby.room_label')}</p>
+                                    </div>
+                                    <Badge variant="secondary" className={isFunding ? 'text-success-400' : ''}>
+                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }}/>{t(`lobby.${game.status}`, game.status)}
+                                    </Badge>
+                                </div>
+
+                                <dl className="lobby-card-stats">
+                                    <div>
+                                        <dt>{t('lobby.price')}</dt>
+                                        <dd>{tpSplit.amount}<span className="unit">{tpSplit.symbol}</span></dd>
+                                    </div>
+                                    <div>
+                                        <dt>{t('lobby.max_prize_label')}</dt>
+                                        <dd className={orphanMax > 0 ? 'prize' : ''}>
+                                            {orphanMax > 0 ? orphanMax.toFixed(4) : '—'}
+                                            {orphanMax > 0 && <span className="unit"> {tpSplit.symbol}</span>}
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                {isFunding && (<div className="lobby-card-actions">
+                                        <Button variant="default" className="w-full" onClick={() => setSelectedGame(game)}>
+                                            {t('lobby.buy_tickets')}
+                                        </Button>
+                                    </div>)}
+                            </article>);
+            })}
+
+                </div>)}
+
+            {/* ── Modal de compra (jogos sem sala) ── */}
+            {selectedGame && (<BuyTicketModal gameId={selectedGame.game_id} ticketPrice={selectedGame.ticket_price} session={session} onClose={() => setSelectedGame(null)} onSuccess={handlePurchaseSuccess}/>)}
+
+            {/* ── Modal de histórico da sala ── */}
+            <Dialog open={historyRoomId !== null} onOpenChange={(open) => !open && setHistoryRoomId(null)}>
+                <DialogContent className="max-w-[44rem] max-h-[85dvh] overflow-hidden flex flex-col" showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {t('replay.room_history_title')} #{historyRoomId}
+                        </DialogTitle>
+                        <DialogClose render={<Button variant="ghost" size="icon" className="absolute top-3 right-3"/>} onClick={() => setHistoryRoomId(null)}>
+                            <X className="size-4 shrink-0"/>
+                            <span className="sr-only">{t('common.close')}</span>
+                        </DialogClose>
+                    </DialogHeader>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+                        {historyRoomId && (<RoomHistoryPanel roomId={historyRoomId} session={session} onViewReplay={gameId => { setHistoryRoomId(null); onReplayGame?.(gameId); }} onBack={() => setHistoryRoomId(null)}/>)}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </section>);
+}
+//# sourceMappingURL=Lobby.js.map

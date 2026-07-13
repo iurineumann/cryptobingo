@@ -1131,6 +1131,16 @@ export async function updateUserPermissions(wallet: string, permissions: string[
     if (!res.ok) throw new Error('Falha ao atualizar permissões');
 }
 
+export async function assignUserRole(wallet: string, role: string): Promise<{ wallet_address: string; role: string; permissions: string[] }> {
+    const res = await fetch(`${API_BASE}/admin/rbac/assign`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ wallet, role }),
+    });
+    if (!res.ok) throw new Error('Falha ao atribuir role');
+    return res.json();
+}
+
 export async function fetchSponsorOrgs(page = 1, limit = 20): Promise<any> {
     const res = await fetch(`${API_BASE}/admin/sponsor-orgs?page=${page}&limit=${limit}`, {
         headers: authHeaders(),
