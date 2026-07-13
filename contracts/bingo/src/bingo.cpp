@@ -1056,6 +1056,25 @@ namespace bingo {
             "Game deve estar em DRAWN ou PAYING para pagar vencedores."
         );
 
+        // ADR-030: permite pagar jogo arquivado SEM pagamento (total_paid==0),
+        // para recover vencedores de jogos que viraram 'archived' sem pagar
+        // (ex: worker arquivou no catch antes de liquidar os vencedores por padrão).
+        bool archived_unpaid = game_itr->status == "archived"_n && game_itr->total_paid == 0;
+        check(
+            game_itr->status == "drawn"_n
+         || game_itr->status == "paying"_n
+         || archived_unpaid,
+            "Game deve estar em DRAWN, PAYING ou ARCHIVED(não pago) para pagar vencedores."
+        );
+
+        // Transição archived→paying ao retomar pagamento de jogo arquivado não pago
+        if (archived_unpaid) {
+            games.modify(game_itr, same_payer, [&](auto& g) {
+                g.status = "paying"_n;
+            });
+            game_itr = games.find(game_id);
+        }
+
         // Transição drawn → paying na primeira chamada
         if (game_itr->status == "drawn"_n) {
             games.modify(game_itr, same_payer, [&](auto& g) {
@@ -1295,10 +1314,6 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(
-            game_itr->status == "created"_n  ||
-            game_itr->status == "funding"_n  ||
-            game_itr->status == "locked"_n   ||
-            game_itr->status == "drawing"_n  ||
             game_itr->status == "paying"_n,
             "Game deve estar em CREATED, FUNDING, LOCKED, DRAWING ou PAYING para ser abortado."
         );
