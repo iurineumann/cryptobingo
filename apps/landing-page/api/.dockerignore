@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+.env.*
+.git
+.gitignore
+.hermes
+*.md
+host.json
+*.map
+*.tsbuildinfo
+node_modules/.cache
+coverage

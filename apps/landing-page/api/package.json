@@ -2,16 +2,24 @@
   "name": "cryptobingo-landing-api",
   "version": "1.0.0",
   "private": true,
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "_moduleAliases": {
+    "@azure/functions": "dist/azure-functions-shim.js"
   },
   "dependencies": {
-    "@azure/functions": "^4.8.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "module-alias": "^2.2.3",
     "nodemailer": "^6.10.1",
     "pg": "^8.13.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.11.0",
