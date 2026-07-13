@@ -340,6 +340,22 @@ export async function orchestrateGame(gameId: string): Promise<void> {
     } catch (err) {
         resolutionTimer();
         gameResolutionTotal.inc({ draw_mode: drawMode, result: 'failure' });
+        logger.error({ err, tag: 'Orquestrador' }, `Erro ao orquestrar jogo ${gameId}:`);
+        // BUG B (resiliência): se o jogo chegou a DRAWN/PAYING mas falhou o pagamento
+        // (ex: claimcombo inválido), tenta fechar (closegame aceita drawn/paying) para
+        // NÃO deixar zombie. O frontend recebe game_ended e a sala segue.
+        try {
+            const g = await fetchGame(gameId).catch(() => null);
+            if (g && (g.status === 'drawn' || g.status === 'paying')) {
+                await executeCloseGame(gameId);
+                notifyGameEnded(gameId, drawMode, 0);
+                await onGameResolved(gameId).catch(() => {});
+                logger.warn({ tag: 'Orquestrador' }, `Jogo ${gameId} fechado via catch (zombie recovery).`);
+            }
+        }
+        catch (closeErr) {
+            logger.error({ err: closeErr, tag: 'Orquestrador' }, `Falha ao fechar jogo ${gameId} no catch:`);
+        }
         throw err;
     } finally {
         // Garante limpeza do índice e do reveal mesmo em caso de erro parcial
