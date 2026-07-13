@@ -109,3 +109,64 @@ describe('bestSatisfiedCombo — max_weight entre combinações aninhadas', () =
         expect(bestSatisfiedCombo(['ROW_0', 'ROW_1'], emptyCtx)).toBeNull();
     });
 });
+
+// ==========================================
+// REGRESSÃO — incidente jogo 1783899157059 (sala 10)
+// ==========================================
+// O worker pagou apenas ROW_3 (padrão único, weight 100) em vez do combo
+// "3x Simples" (weight 600), porque fetchComboContext falhou-open (api-gateway
+// instável pós-restauração) e retornou contexto VAZIO -> bestSatisfiedCombo null
+// -> prêmio rebaixado silenciosamente. O fix torna o fetchComboContext fail-stale:
+// mantém o último contexto bem-sucedido.
+describe('fetchComboContext — fail-stale (regressão #1783899157059)', () => {
+    const { fetchComboContext, clearComboCache } = require('./combinationEvaluator');
+
+    // combos reais do gametype 1 ("N Simples", n_of_type simple)
+    const combosGt1 = [
+        { combo_id: 0, name: '5x Simples', weight: 1500, clauses: [{ type: 'n_of_type', pattern_type: 'simple', count: 5 }] },
+        { combo_id: 1, name: '4x Simples', weight: 1000, clauses: [{ type: 'n_of_type', pattern_type: 'simple', count: 4 }] },
+        { combo_id: 2, name: '3x Simples', weight: 600,  clauses: [{ type: 'n_of_type', pattern_type: 'simple', count: 3 }] },
+        { combo_id: 3, name: '2x Simples', weight: 300,  clauses: [{ type: 'n_of_type', pattern_type: 'simple', count: 2 }] },
+    ];
+    const setupGt1 = () => {
+        // api-gateway retorna combos + rules (todos simple)
+        const okJson = {
+            patterns: combosGt1.map((_, i) => ({ pattern_id: String(i + 1), name: `P${i + 1}`, mask: '1', weight: 100 })),
+            rules: combosGt1.map((_, i) => ({ pattern_id: String(i + 1), weight: 100, type: 'simple' })),
+            combinations: combosGt1,
+        };
+        return okJson;
+    };
+
+    beforeEach(() => { clearComboCache(); jest.resetModules(); });
+    afterEach(() => { clearComboCache(); });
+
+    it('mantém o último contexto válido quando o api-gateway falha (não rebaixa prêmio)', async () => {
+        const okJson = setupGt1();
+        // 1º fetch: sucesso -> popula lastGoodCtx
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => okJson }) as any;
+        const first = await fetchComboContext('1');
+        expect(first.combos.length).toBe(4);
+
+        // 2º fetch: api-gateway cai (erro de rede) -> deve usar fail-stale, NÃO vazio
+        global.fetch = jest.fn().mockRejectedValue(new Error('api-gateway down')) as any;
+        const second = await fetchComboContext('1');
+        expect(second.combos.length).toBe(4);
+        expect(second.patternTypeByName.size).toBeGreaterThan(0);
+    });
+
+    it('com contexto válido, 3 padrões simples promovem para "3x Simples" mesmo após falha do gateway', async () => {
+        const okJson = setupGt1();
+        global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => okJson }) as any;
+        const ctxOk = await fetchComboContext('1');
+        // simula a cartela do incidente: 3 padrões simples
+        const won = ['ROW_3', 'DIAG_TL_BR', 'DIAG_TR_BL'];
+        // patternTypeByName precisa classificar esses nomes como simple
+        for (const n of won) ctxOk.patternTypeByName.set(n, 'simple');
+        const best = bestSatisfiedCombo(won, ctxOk);
+        expect(best).not.toBeNull();
+        expect(best!.name).toBe('3x Simples');
+        expect(best!.weight).toBe(600);
+    });
+});
+

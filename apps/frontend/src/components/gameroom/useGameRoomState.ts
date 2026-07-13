@@ -23,6 +23,7 @@ import {
   groupTicketsByCategory, isCombinationSatisfied,
   computePatternUserProximity,
   getCombinationCells, computeCombinationProximity, detectComboWinsForTicket,
+  buildPatternTypeMaps,
   type CombinationRuleInput, type ExtendedRule,
 } from '../ticketUtils';
 import { fetchPublicGametypeMetadata, fetchGamePrizeTransactions } from '../../services/api';
@@ -370,16 +371,10 @@ export function useGameRoomState(
   }, [gamePatterns]);
 
   // mapa patternId → nome  e  nome → tipo — usados para resolver cláusulas de combinação
-  const { patternNameById, patternTypeByName } = useMemo(() => {
-    const byId   = new Map<string, string>();
-    const byType = new Map<string, string>();
-    for (const p of gamePatterns) {
-      if (p.id) byId.set(p.id, p.name);
-      const r = extendedRules.find(r => r.pattern_id === p.id);
-      if (r) byType.set(p.name, r.type);
-    }
-    return { patternNameById: byId, patternTypeByName: byType };
-  }, [gamePatterns, extendedRules]);
+  const { patternNameById, patternTypeByName } = useMemo(
+    () => buildPatternTypeMaps(gamePatterns, extendedRules),
+    [gamePatterns, extendedRules],
+  );
 
   // vitórias do próprio jogador: combinações primeiro, depois padrões individuais
   // padrões absorvidos por combinações são excluídos da listagem individual
