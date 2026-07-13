@@ -717,10 +717,21 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                     );
                 }
                 catch (comboErr) {
-                    // BUG B (resiliência): claimcombo falha (ex: gametype sem combos
-                    // on-chain, dessincronizado do api-gateway) → tenta pagar por padrão
-                    // (fallback claimwin) em vez de abortar o jogo inteiro.
-                    logger.error({ err: comboErr, tag: 'Avaliador' }, `claimcombo falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}); tentando claimwin por padrão:`);
+                    // BUG B (resiliência) + DRIFT GUARD: claimcombo falha (ex: gametype
+                    // sem combos on-chain, dessincronizado do api-gateway) → tenta pagar
+                    // por padrão (fallback claimwin) em vez de abortar o jogo inteiro.
+                    // Se a causa for DRIFT (combo existe off-chain mas não on-chain), isso
+                    // SUBPAGA o vencedor — emite alerta CRÍTICO p/ reconciliação (setcombos).
+                    const msg = comboErr instanceof Error ? comboErr.message : String(comboErr);
+                    const isDrift = /combinacoes definidas|combo_id nao encontrado/i.test(msg);
+                    if (isDrift) {
+                        logger.error(
+                            { err: comboErr, tag: 'Avaliador', gameId, gametypeId, comboId, ticketId: ticket.ticket_id, alert: 'COMBO_DRIFT' },
+                            `⚠️ DRIFT on-chain: combo #${comboId} do gametype ${gametypeId} NÃO existe no contrato — vencedor #${ticket.ticket_id} será SUBPAGO como padrão. Rode setcombos p/ sincronizar.`,
+                        );
+                    } else {
+                        logger.error({ err: comboErr, tag: 'Avaliador' }, `claimcombo falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}); tentando claimwin por padrão:`);
+                    }
                     try {
                         boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
                         txHash = await executeClaimWin(
