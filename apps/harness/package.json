@@ -11,7 +11,7 @@
     "@wharfkit/antelope": "^1.0.0",
     "@wharfkit/session": "^1.0.0",
     "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
-    "dotenv": "^17.4.2"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",
