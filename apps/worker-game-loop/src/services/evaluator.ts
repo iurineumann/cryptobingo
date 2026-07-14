@@ -655,7 +655,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     } else if (drawMode === 'goldenball') {
         // GOLDEN_BALL: a fase normal usa as primeiras maxBalls bolas (já aplicadas acima).
         // A bola dourada é a próxima após o sorteio normal.
-        const ga = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : game.drawn_balls.length - 1;
         goldenBallNum          = game.drawn_balls[ga] ?? 0;
         goldenMultiplierGlobal = deriveGoldenMultiplier(game.drawn_balls, ga);
         // effectiveBalls inclui a fase normal + a golden ball

@@ -139,7 +139,7 @@ async function orchestrateGoldenBall(
     gametypeId:     string,
     baseMultiplier  = 1,
 ): Promise<number> {
-    const ga          = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
+    const ga          = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1;
     const totalReveal = ga + 1;
     const normalBalls = drawnBalls.slice(0, ga);
     const goldenNum   = drawnBalls[ga] ?? 0;
