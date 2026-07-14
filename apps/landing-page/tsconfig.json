@@ -19,5 +19,11 @@
     }
   },
   "include": ["src/**/*", "app/**/*", "lib/**/*"],
-  "exclude": ["node_modules", "src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": [
+    "node_modules",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.js",
+    "app/**/*.js"
+  ]
 }
