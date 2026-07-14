@@ -348,7 +348,7 @@ function deriveGoldenMultiplier(drawnBalls: number[], goldenBallAfter: number): 
  * Verifica se um número de bola (1-75) está coberto pelo padrão vencedor
  * de uma cartela específica.
  */
-function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, patternMask: bigint): boolean {
+export function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, patternMask: bigint): boolean {
     for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
         if (bitIndex === 12) continue;
         const matrixIndex = bitIndex < 12 ? bitIndex : bitIndex - 1;

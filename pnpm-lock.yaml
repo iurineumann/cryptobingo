@@ -10,6 +10,7 @@ overrides:
   form-data: '>=4.0.6'
   '@babel/core': ^7.29.6
   qs: '>=6.15.2'
+  dotenv: 16.4.5
 
 importers:
 
@@ -49,8 +50,8 @@ importers:
         specifier: ^2.8.5
         version: 2.8.6
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: 16.4.5
+        version: 16.4.5
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -267,8 +268,8 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(vitest@4.1.9)
       dotenv:
-        specifier: ^17
-        version: 17.4.2
+        specifier: 16.4.5
+        version: 16.4.5
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -309,8 +310,8 @@ importers:
         specifier: ^1.0.0
         version: 1.1.0(@wharfkit/session@1.6.1)
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: 16.4.5
+        version: 16.4.5
     devDependencies:
       '@types/jest':
         specifier: ^29.0.0
@@ -571,8 +572,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
       dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
+        specifier: 16.4.5
+        version: 16.4.5
       jsonwebtoken:
         specifier: ^9.0.0
         version: 9.0.3
@@ -2618,7 +2619,7 @@ packages:
     dependencies:
       commander: 11.1.0
       conf: 10.2.0
-      dotenv: 17.4.2
+      dotenv: 16.4.5
       eciesjs: 0.4.18
       enquirer: 2.4.1
       env-paths: 2.2.1
@@ -7793,7 +7794,7 @@ packages:
       clipanion: 3.2.1(typanion@3.13.0)
       cors: 2.8.6
       crypto-js: 4.2.0
-      dotenv: 16.6.1
+      dotenv: 16.4.5
       esbuild: 0.24.2
       fs-extra: 11.3.5
       graphql: 15.8.0
@@ -12044,13 +12045,8 @@ packages:
       type-fest: 4.41.0
     dev: true
 
-  /dotenv@16.6.1:
-    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
-    engines: {node: '>=12'}
-    dev: false
-
-  /dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+  /dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
     engines: {node: '>=12'}
 
   /dunder-proto@1.0.1:
