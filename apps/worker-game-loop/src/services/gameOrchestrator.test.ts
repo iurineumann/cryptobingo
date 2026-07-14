@@ -269,6 +269,46 @@ describe('orchestrateGame — goldenball', () => {
         await orchestrateGame('1');
         expect(mockStartReveal).toHaveBeenCalledTimes(2);
     });
+
+    it('T2 — ga fallback goldenBallAfter=0 usa drawnBalls.length-1 (não maxBalls)', async () => {
+        jest.clearAllMocks();
+        const drawnBalls37 = Array.from({ length: 37 }, (_, i) => i + 1);
+        mockFetchGame.mockResolvedValue(makeGame({ gametype_id: '3', drawn_balls: drawnBalls37 }));
+        mockGetTableRows.mockResolvedValue({
+            rows: [{ gametype_id: '3', draw_mode: 'goldenball', max_balls: 35, golden_ball_after: 0, base_multiplier: 100, rules: [], stages: [] }],
+            more: false,
+        });
+        mockDeriveGolden.mockReturnValue(2);
+        mockFindAllWinners.mockResolvedValue([]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+        const findAllArgs = mockFindAllWinners.mock.calls[0];
+        const effectiveBalls = findAllArgs![1] as number[];
+        // After fix: ga = 36 (37-1), effectiveBalls = 37
+        // Before fix: ga = 35 (maxBalls), effectiveBalls = 36
+        expect(effectiveBalls.length).toBe(drawnBalls37.length); // 37
+        expect(effectiveBalls.length).not.toBe(36); // não truncado
+    });
+
+    it('T5 — goldenBallAfter=39 (40 bolas) mantém comportamento', async () => {
+        jest.clearAllMocks();
+        const drawnBalls40 = Array.from({ length: 40 }, (_, i) => i + 1);
+        mockFetchGame.mockResolvedValue(makeGame({ gametype_id: '3', drawn_balls: drawnBalls40 }));
+        mockGetTableRows.mockResolvedValue({
+            rows: [{ gametype_id: '3', draw_mode: 'goldenball', max_balls: 35, golden_ball_after: 39, base_multiplier: 100, rules: [], stages: [] }],
+            more: false,
+        });
+        mockDeriveGolden.mockReturnValue(2);
+        mockFindAllWinners.mockResolvedValue([]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+        const findAllArgs = mockFindAllWinners.mock.calls[0];
+        const effectiveBalls = findAllArgs![1] as number[];
+        // goldenBallAfter=39 → ga=39, effectiveBalls = 40
+        expect(effectiveBalls.length).toBe(40);
+    });
 });
 
 // ── multimatch ────────────────────────────────────────────────────────────────
