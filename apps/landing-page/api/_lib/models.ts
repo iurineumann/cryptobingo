@@ -135,6 +135,13 @@ export async function createAdminSession(
 export async function getAdminSessionByToken(
   token: string
 ): Promise<AdminSession | null> {
+  // Token malformado (não-UUID) é falha de autenticação, não erro de banco.
+  // Valida antes de consultar para não disparar string_to_uuid no PG (500).
+  const uuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      token
+    );
+  if (!uuid) return null;
   return queryOne<AdminSession>(
     `SELECT * FROM admin_sessions
      WHERE token = $1 AND expires_at > NOW()`,
