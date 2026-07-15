@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { LogOut, Send } from 'lucide-react';
-import { getIdeas, adminUpdateIdeaStatus, adminSendNewsletter, type Idea } from '@/lib/api';
+import {
+    getIdeas,
+    adminUpdateIdeaStatus,
+    adminSendNewsletter,
+    getSubscribers,
+    type Idea,
+    type Subscriber,
+    type SubscribersResponse,
+} from '@/lib/api';
 import { clearAdminToken } from '@/lib/store';
 
 const STATUS_OPTIONS: Idea['status'][] = ['pending', 'approved', 'rejected', 'implemented'];
@@ -90,6 +98,21 @@ export default function AdminDashboard() {
     const [sending, setSending] = useState(false);
     const [sentCount, setSentCount] = useState<number | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+    const [subTotal, setSubTotal] = useState(0);
+    const [subPage, setSubPage] = useState(0);
+    const [subLoading, setSubLoading] = useState(true);
+    const SUB_PAGE_SIZE = 20;
+
+    useEffect(() => {
+        getSubscribers(SUB_PAGE_SIZE, subPage * SUB_PAGE_SIZE)
+            .then((res: SubscribersResponse) => {
+                setSubscribers(res.subscribers);
+                setSubTotal(res.total);
+            })
+            .catch(() => {})
+            .finally(() => setSubLoading(false));
+    }, [subPage]);
 
     useEffect(() => {
         getIdeas()
@@ -195,6 +218,76 @@ export default function AdminDashboard() {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div className="bg-surface-800 rounded-xl border border-surface-700/50 overflow-hidden mb-10">
+                <div className="px-6 py-4 border-b border-surface-700/50">
+                    <h3 className="text-lg font-semibold text-white">Newsletter Subscribers</h3>
+                    <p className="text-sm text-secondary mt-1">{subTotal} subscriber{subTotal === 1 ? '' : 's'}</p>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-surface-700/50 text-left text-secondary">
+                                <th className="px-4 py-3 font-medium">Email</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Subscribed At</th>
+                                <th className="px-4 py-3 font-medium">Unsubscribed At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {subLoading ? (
+                                <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-secondary">Loading...</td>
+                                </tr>
+                            ) : subscribers.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-secondary">No subscribers yet.</td>
+                                </tr>
+                            ) : (
+                                subscribers.map((s) => (
+                                    <tr key={s.id} className="border-b border-surface-700/50 hover:bg-surface-750 transition">
+                                        <td className="px-4 py-3 text-white">{s.email}</td>
+                                        <td className="px-4 py-3">
+                                            {s.active ? (
+                                                <span className="text-success-400">Active</span>
+                                            ) : (
+                                                <span className="text-danger-400">Unsubscribed</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-secondary">{new Date(s.created_at).toLocaleDateString()}</td>
+                                        <td className="px-4 py-3 text-secondary">
+                                            {s.unsubscribed_at ? new Date(s.unsubscribed_at).toLocaleDateString() : '—'}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                {subTotal > SUB_PAGE_SIZE && (
+                    <div className="flex items-center justify-between px-6 py-3 border-t border-surface-700/50">
+                        <p className="text-sm text-secondary">
+                            Page {subPage + 1} of {Math.ceil(subTotal / SUB_PAGE_SIZE)}
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setSubPage((p) => Math.max(0, p - 1))}
+                                disabled={subPage === 0}
+                                className="px-3 py-1.5 text-sm rounded-lg bg-surface-700 text-white hover:bg-surface-600 transition disabled:opacity-50"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={() => setSubPage((p) => p + 1)}
+                                disabled={(subPage + 1) * SUB_PAGE_SIZE >= subTotal}
+                                className="px-3 py-1.5 text-sm rounded-lg bg-surface-700 text-white hover:bg-surface-600 transition disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="bg-surface-800 rounded-xl p-6 border border-surface-700/50">
