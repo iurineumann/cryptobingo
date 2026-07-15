@@ -66,7 +66,7 @@ async function saveCursor(gameId: string): Promise<void> {
     } catch { }
 }
 
-async function indexGames(): Promise<void> {
+export async function indexGames(): Promise<void> {
     const lastCursor = await getLastCursor();
 
     const response = await rpcClient.v1.chain.get_table_rows({
@@ -95,13 +95,14 @@ async function indexGames(): Promise<void> {
                     code: CONTRACT_ACCOUNT,
                     scope: Name.from(UInt64.from(String(game.game_id))),
                     table: 'tickets',
-                    limit: 1,
+                    limit: 1000,
                     json: true,
                     reverse: false,
                 });
-                totalTickets = ticketRes.rows.length > 0
-                    ? parseInt(ticketRes.rows[ticketRes.rows.length - 1].ticket_id) || 0
-                    : 0;
+                // Contagem real de tickets emitidos no jogo. NUNCA usar ticket_id
+                // (uint64 ~2.45e17) como contagem: estoura INTEGER (int32) no INSERT
+                // e é semanticamente errado. Capado em 1000 p/ jogos muito grandes.
+                totalTickets = ticketRes.rows.length;
             } catch { }
         }
 
