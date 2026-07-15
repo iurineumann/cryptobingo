@@ -100,6 +100,7 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [newsletterSubject, setNewsletterSubject] = useState('');
     const [newsletterBody, setNewsletterBody] = useState('');
+    const [newsletterPreheader, setNewsletterPreheader] = useState('');
     const [sending, setSending] = useState(false);
     const [sentResult, setSentResult] = useState<{ id: number; sent: number } | null>(null);
     const [sentError, setSentError] = useState(false);
@@ -163,11 +164,12 @@ export default function AdminDashboard() {
     async function handleSendNewsletter() {
         setSending(true);
         try {
-            const result = await adminSendNewsletter(newsletterSubject, newsletterBody);
+            const result = await adminSendNewsletter(newsletterSubject, newsletterBody, newsletterPreheader || undefined);
             setSentResult({ id: result.id, sent: result.sent });
             setSentError(false);
             setNewsletterSubject('');
             setNewsletterBody('');
+            setNewsletterPreheader('');
             const nlRes = await getNewsletters();
             setNewsletters(nlRes.newsletters);
         } catch {
@@ -383,6 +385,19 @@ export default function AdminDashboard() {
                                     placeholder="Write your newsletter content..."
                                     rows={5}
                                     className="w-full px-4 py-2.5 rounded-xl bg-surface-700 border border-surface-600 text-white placeholder:text-tertiary focus:outline-none focus:border-brand-500 resize-y"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="newsletter-preheader" className="block text-sm text-secondary mb-1">
+                                    Preheader <span className="text-tertiary">(optional — Gmail preview text)</span>
+                                </label>
+                                <input
+                                    id="newsletter-preheader"
+                                    type="text"
+                                    value={newsletterPreheader}
+                                    onChange={(e) => setNewsletterPreheader(e.target.value)}
+                                    placeholder="Resumo curto que aparece na caixa de entrada"
+                                    className="w-full px-4 py-2.5 rounded-xl bg-surface-700 border border-surface-600 text-white placeholder:text-tertiary focus:outline-none focus:border-brand-500"
                                 />
                             </div>
                             <button

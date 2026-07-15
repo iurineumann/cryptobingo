@@ -196,13 +196,14 @@ export async function getSubscribers(
 
 export async function adminSendNewsletter(
     subject: string,
-    body: string
+    body: string,
+    preheader?: string,
 ): Promise<{ id: number; sent: number; failed: number }> {
     const token = getAdminToken();
     if (!token) throw new Error('Not authenticated');
     return apiRequest<{ id: number; sent: number; failed: number }>('/admin/newsletter', {
         method: 'POST',
-        body: JSON.stringify({ subject, body }),
+        body: JSON.stringify({ subject, body, preheader }),
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
