@@ -258,7 +258,7 @@ export async function getPlatformSummary(): Promise<PlatformSummary> {
                ticket_symbol AS token,
                COUNT(*)::int AS total_games,
                COALESCE(SUM(total_paid_out), 0) AS total_paid_out,
-               COALESCE(SUM(ticket_price * total_tickets), 0) AS total_wagered
+               COALESCE(SUM(total_wagered), 0)  AS total_wagered
              FROM games_history
              WHERE status IN ('archived', 'aborted')
              GROUP BY ticket_symbol
