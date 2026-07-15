@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Gamepad2, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getGameStats, type GameStats } from '@/lib/api';
@@ -23,13 +23,17 @@ export default function StatsBar() {
             .catch(() => setStats(null));
     }, []);
 
-    const targets = stats
-        ? [
-              stats.totals.total_games,
-              stats.totals.total_players,
-              ...stats.by_token.flatMap((t) => [t.total_prizes, Math.round(t.avg_rtp_pct)]),
-          ]
-        : [];
+    const targets = useMemo<number[]>(
+        () =>
+            stats
+                ? [
+                      stats.totals.total_games,
+                      stats.totals.total_players,
+                      ...stats.by_token.flatMap((t) => [t.total_prizes, Math.round(t.avg_rtp_pct)]),
+                  ]
+                : [],
+        [stats],
+    );
 
     useEffect(() => {
         if (!ref.current || hasAnimated) return;
