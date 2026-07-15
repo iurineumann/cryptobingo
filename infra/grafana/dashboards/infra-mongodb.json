@@ -26,7 +26,7 @@
       "title": "Conexões Correntes",
       "type": "stat",
       "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
-      "targets": [{ "expr": "mongodb_ss_connections{state=\"current\"}", "legendFormat": "current", "refId": "A" }],
+      "targets": [{ "expr": "mongodb_ss_connections{conn_type=\"current\"}", "legendFormat": "current", "refId": "A" }],
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
         "defaults": {
@@ -39,7 +39,7 @@
       "title": "Conexões Disponíveis",
       "type": "stat",
       "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
-      "targets": [{ "expr": "mongodb_ss_connections{state=\"available\"}", "legendFormat": "available", "refId": "A" }],
+      "targets": [{ "expr": "mongodb_ss_connections{conn_type=\"available\"}", "legendFormat": "available", "refId": "A" }],
       "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": { "defaults": { "unit": "short" } }
     },
@@ -54,19 +54,19 @@
     },
     {
       "id": 5,
-      "title": "Tamanho DB (cryptobingo_edge)",
+      "title": "Tamanho DB (cryptobingo)",
       "type": "stat",
       "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
-      "targets": [{ "expr": "mongodb_dbstats_dataSize{database=\"cryptobingo_edge\"}", "legendFormat": "data size", "refId": "A" }],
+      "targets": [{ "expr": "mongodb_dbstats_dataSize{database=\"cryptobingo\"}", "legendFormat": "data size", "refId": "A" }],
       "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": { "defaults": { "unit": "bytes" } }
     },
     {
       "id": 6,
-      "title": "Índices (cryptobingo_edge)",
+      "title": "Índices (cryptobingo)",
       "type": "stat",
       "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
-      "targets": [{ "expr": "sum(mongodb_dbstats_indexes{database=\"cryptobingo_edge\"})", "legendFormat": "índices", "refId": "A" }],
+      "targets": [{ "expr": "sum(mongodb_dbstats_indexes{database=\"cryptobingo\"})", "legendFormat": "índices", "refId": "A" }],
       "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": { "defaults": { "unit": "short" } }
     },
@@ -92,8 +92,8 @@
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "mongodb_ss_connections{state=\"current\"}", "legendFormat": "current", "refId": "A" },
-        { "expr": "mongodb_ss_connections{state=\"available\"}", "legendFormat": "available", "refId": "B" }
+        { "expr": "mongodb_ss_connections{conn_type=\"current\"}", "legendFormat": "current", "refId": "A" },
+        { "expr": "mongodb_ss_connections{conn_type=\"available\"}", "legendFormat": "available", "refId": "B" }
       ],
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 } }
@@ -114,11 +114,11 @@
     },
     {
       "id": 10,
-      "title": "Documentos por Collection (cryptobingo_edge)",
+      "title": "Documentos no DB (cryptobingo)",
       "type": "bargauge",
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "mongodb_collstats_storageStats_count{database=\"cryptobingo_edge\"}", "legendFormat": "{{collection}}", "refId": "A" }
+        { "expr": "mongodb_dbstats_objects{database=\"cryptobingo\"}", "legendFormat": "{{database}}", "refId": "A" }
       ],
       "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "displayMode": "gradient" },
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
