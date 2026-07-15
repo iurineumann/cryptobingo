@@ -26,10 +26,15 @@ async function ensureTables(): Promise<void> {
             total_wagered   NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_paid_out  NUMERIC(18,4)  NOT NULL DEFAULT 0,
             ggr             NUMERIC(18,4)  NOT NULL DEFAULT 0,
-            rtp_pct         NUMERIC(6,4)   NOT NULL DEFAULT 0,
+            rtp_pct         NUMERIC(18,4)  NOT NULL DEFAULT 0,
             resolved_at     TIMESTAMPTZ,
             created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
         );
+
+        -- Corrige schema legado: rtp_pct era NUMERIC(6,4) e estourava quando
+        -- totalPaidOut/totalWagered era grande (RTP > 100% com jackpot/sponsor).
+        -- Idempotente: ALTER para o mesmo tipo é no-op em tabelas já corrigidas.
+        ALTER TABLE games_history ALTER COLUMN rtp_pct TYPE NUMERIC(18,4);
 
         CREATE TABLE IF NOT EXISTS transactions_ledger (
             id              UUID           NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -113,7 +118,11 @@ export async function indexGames(): Promise<void> {
             : null;
 
         const ggr = totalWagered - totalPaidOut;
-        const rtpPct = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
+        // RTP real (fração). Jogos com prêmio >> aposta (jackpot/sponsor) podem
+        // passar de 100%; totalWagered muito pequeno gera valor absurdo -> NaN/Infinity.
+        // Guard finito; a coluna rtp_pct é NUMERIC(18,4) (suporta RTP alto).
+        const rawRtp = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
+        const rtpPct = Number.isFinite(rawRtp) ? rawRtp : 0;
 
         await pgPool.query(
             `INSERT INTO games_history
