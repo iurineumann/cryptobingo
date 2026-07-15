@@ -1,0 +1,21 @@
+# Promtail — coleta logs do Postfix (mail.log) do host e envia ao Loki.
+# Label job=mail para filtrar no dashboard infra-email-postfix.
+# O arquivo /var/log/mail.log é montado via bind mount no container.
+
+server:
+  http_listen_port: 9081
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions-mail.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: mail
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: mail
+          __path__: /var/log/mail.log

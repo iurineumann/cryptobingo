@@ -1,6 +1,6 @@
 import { app, HttpRequest } from '@azure/functions';
 import { getAdminSessionByToken, getActiveSubscribers } from '../_lib/models.js';
-import { sendNewsletter, logEmail } from '../_lib/email.js';
+import { sendNewsletter } from '../_lib/email.js';
 import { ok, badRequest, unauthorized, serverError } from '../_lib/response.js';
 
 app.http('adminNewsletter', {
@@ -31,7 +31,6 @@ app.http('adminNewsletter', {
       for (const sub of subscribers) {
         try {
           await sendNewsletter(sub.email, body.subject, body.body);
-          await logEmail(sub.email, body.subject, 'newsletter');
           sent.push(sub.email);
         } catch (e) {
           console.error(`[newsletter] failed for ${sub.email}:`, e);

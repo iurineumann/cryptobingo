@@ -91,6 +91,30 @@ services:
       - loki_data:/loki
     networks: [cb-back]
 
+  # ─── Postfix Exporter (porta 9559) — métricas do serviço de e-mail ───
+  postfix-exporter:
+    image: tbobi/postfix-exporter:latest
+    container_name: postfix-exporter
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:9559:9559'
+    volumes:
+      - /var/log/mail.log:/var/log/mail.log:ro
+    networks: [cb-back]
+
+  # ─── 2º Postgres Exporter (porta 9188) — db cryptobingo, métricas de email_log ───
+  postgres-exporter-cryptobingo:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-cryptobingo
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: 'postgresql://cryptobingo:${PG_APP_PW}@postgres:5432/cryptobingo?sslmode=disable'
+    command:
+      - '--extend.query-path=/etc/postgres-exporter/queries.yml'
+    volumes:
+      - ./infra-monitoring/postgres-cryptobingo/queries.yml:/etc/postgres-exporter/queries.yml:ro
+    networks: [cb-back]
+
   # ─── Promtail: coleta logs dos containers Docker e envia ao Loki ───
   promtail:
     image: grafana/promtail:2.9.8
@@ -102,6 +126,19 @@ services:
       - ./infra-monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks: [cb-back]
+
+  # ─── Promtail mail.log: coleta logs do Postfix (host) e envia ao Loki ───
+  promtail-mail:
+    image: grafana/promtail:2.9.8
+    container_name: promtail-mail
+    restart: unless-stopped
+    command:
+      - '-config.file=/etc/promtail/maillog-config.yml'
+    volumes:
+      - ./infra-monitoring/promtail/maillog-config.yml:/etc/promtail/maillog-config.yml:ro
+      - /var/log/mail.log:/var/log/mail.log:ro
     depends_on: [loki]
     networks: [cb-back]
 
