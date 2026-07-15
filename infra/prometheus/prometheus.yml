@@ -52,11 +52,14 @@ scrape_configs:
       - targets: ['mongodb-exporter:9216']
     scrape_interval: 15s
 
-  # ── PostgreSQL Cryptobingo (postgres-exporter-cryptobingo — porta 9188) ────────
-  # Expõe métricas custom do email_log (queries.yml)
+  # ── PostgreSQL Cryptobingo (postgres-exporter-cryptobingo — porta 9187 interna) ──
+  # Expõe métricas custom do email_log (queries.yml).
+  # Porta interna do container é 9187 (padrão do postgres-exporter); o Prometheus
+  # está na mesma rede Docker (cb-back) e acessa pela porta interna, não pelo
+  # mapeamento host (9188).
   - job_name: 'postgres_cryptobingo_email'
     static_configs:
-      - targets: ['postgres-exporter-cryptobingo:9188']
+      - targets: ['postgres-exporter-cryptobingo:9187']
     scrape_interval: 15s
 
   # ── Postfix (saúde do serviço de e-mail) ───────────────────────────────────────
