@@ -66,10 +66,18 @@ Retorna automaticamente todos os caminhos estáticos definidos em `routes.ts` (s
 `concurrency: 4` acelera build para muitos paths. Disponível via `prerender.paths + prerender.concurrency`. Em versões anteriores (`v7.9-7.12`) chamava-se `unstable_concurrency`.
 
 ### Restrições com `ssr: false`
-
 - `actions`/`headers` **proibidos** em todas as rotas (sem runtime server)
-- `loader` só funciona em paths incluídos no `prerender`
 - Se loader está em rota pai com filhos, TODOS os filhos precisam estar no prerender (senão `loaderData` indeterminado) — ou usar `clientLoader` nos filhos
+
+> **CryptoBingo — fonte de slugs (ADR-040):** os slugs dinâmicos de blog/tutorial/page
+> vêm do `content/slugs.json` do **submodule `content/`** (cryptobingo-tina.git), formato
+> `{type:{canonicalId:{locale:slug}}}`. O `prerenderPaths()` em `react-router.config.ts`
+> lê esse índice via `getSlugsForType(type, locale)`. O `generate-sitemap.mjs` lê a MESMA
+> fonte (fix/304, PR #305) → sitemap e prerender geram URLs idênticas (slugs traduzidos).
+> Se o submodule não for inicializado, `content/slugs.json` ausente → desde fix/300 (PR #307)
+> o `react-router.config.ts` LANÇA erro claro (`content/slugs.json AUSENTE … git submodule update --init`)
+> em vez do erro genérico de loader. Deploy é **manual** (`scripts/deploy-landing.sh`), pois
+> GitHub Actions estão bloqueadas em free tier.
 
 ### SPA Fallback
 

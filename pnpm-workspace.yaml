@@ -5,3 +5,7 @@ packages:
   - 'packages/*'
   # Opcional: ignorar a pasta de contratos se o pnpm tentar ler algo lá
   - '!contracts/**'
+
+# Overrides de segurança (pnpm v9+ lê daqui; v8 lê de package.json)
+overrides:
+  dotenv: 16.4.5

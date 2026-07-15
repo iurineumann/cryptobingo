@@ -73,6 +73,11 @@
     "thanks": "Inscrito! Verifique sua caixa de entrada.",
     "reward": "🎉 Você ganhou 50 XP + 1 ticket grátis por se inscrever!",
     "cta": "Começar a Jogar",
+    "sent_history": "Newsletters enviadas",
+    "recipients": "Destinatários",
+    "received": "Recebeu",
+    "not_received": "Não recebeu",
+    "send_pending": "Enviar para quem falta",
     "error": "Algo deu errado.",
     "invalid_email": "Insira um endereço de email válido."
   },
@@ -166,6 +171,8 @@
     "prizes_paid": "Prêmios Pagos",
     "active_players": "Jogadores Ativos",
     "rtp": "RTP Atual",
+    "token_prizes": "Prêmios {{token}}",
+    "token_rtp": "RTP {{token}}",
     "loading": "Estatísticas reais — testnet ativa"
   },
   "content": {

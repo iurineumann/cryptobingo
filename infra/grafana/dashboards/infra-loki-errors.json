@@ -1,0 +1,82 @@
+{
+  "id": null,
+  "uid": "cryptobingo-loki-errors",
+  "title": "CryptoBingo — Erros & Alertas (Loki)",
+  "tags": ["cryptobingo", "loki", "errors", "alerts", "infra", "monitoramento"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+        "query": "label_values(container)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Erros (24h)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "sum(count_over_time({container=~\"$container\"} |~ \"(?i)error|fail|exception|fatal|databaseerror\"[24h]))", "legendFormat": "erros 24h", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "OK", "color": "green" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "id": 2,
+      "title": "Serviços com erro (24h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "count(count_over_time({container=~\"$container\"} |~ \"(?i)error|fail|exception|fatal|databaseerror\"[24h]) by (container))", "legendFormat": "serviços", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } } }
+    },
+    {
+      "id": 3,
+      "title": "Erros críticos level:50 (24h)",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "sum(count_over_time({container=~\"$container\"} | json | level=\"50\"[24h]))", "legendFormat": "criticos", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "OK", "color": "green" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "id": 4,
+      "title": "Erros por serviço (1h)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "sum by (container) (count_over_time({container=~\"$container\"} |~ \"(?i)error|fail|exception|fatal|databaseerror\"[1h]))", "legendFormat": "{{container}}", "refId": "A" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] } }
+    },
+    {
+      "id": 5,
+      "title": "Erros recentes",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "{container=~\"$container\"} |~ \"(?i)error|fail|exception|fatal|databaseerror\"", "refId": "A" }],
+      "options": { "showLabels": false, "wrapLogMessage": true, "showTime": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 6,
+      "title": "Logs brutos (todos os serviços)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "{container=~\"$container\"}", "refId": "A" }],
+      "options": { "showLabels": false, "wrapLogMessage": true, "showTime": true, "sortOrder": "Descending", "enableLogDetails": true }
+    }
+  ]
+}

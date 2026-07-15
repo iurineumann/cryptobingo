@@ -25,7 +25,8 @@ import {
     deriveGoldenMultiplierExported as deriveGoldenMultiplier,
     DEFAULT_DRAW_BALLS,
     computePayoutAmount,
-}                                                                    from './evaluator';
+    isBallInPattern,
+} from './evaluator';
 import {
     startSlowReveal,
     endRevealSession,
@@ -67,10 +68,11 @@ function sleep(ms: number): Promise<void> {
 // ==========================================
 
 async function buildWinnerPayloads(
-    gameId:        string,
-    winResults:    Awaited<ReturnType<typeof findAllWinners>>,
-    baseMultiplier = 1,
-    goldenMultiplier = 0,
+    gameId:          string,
+    winResults:      Awaited<ReturnType<typeof findAllWinners>>,
+    baseMultiplier   = 1,
+    goldenNum?:      number,
+    goldenMultiplier?: number,
 ): Promise<WinnerPayload[]> {
     const game = await fetchGame(gameId);
     return winResults.map(w => {
@@ -80,7 +82,10 @@ async function buildWinnerPayloads(
             account: w.ticket.owner, ticket_id: w.ticket.ticket_id,
             win_pattern: w.patternName, payouts: [], winType: 'pattern' as const,
         };
-        const payout = computePayoutAmount(ticketPrice, baseMultiplier, w.weight || 100, goldenMultiplier);
+        const perEntryMultiplier = goldenNum !== undefined && goldenMultiplier !== undefined && goldenMultiplier > 1
+            ? isBallInPattern(w.ticket, goldenNum, w.patternMask) ? goldenMultiplier : 0
+            : 0;
+        const payout = computePayoutAmount(ticketPrice, baseMultiplier, w.weight || 100, perEntryMultiplier);
         return {
             account:     w.ticket.owner,
             ticket_id:   w.ticket.ticket_id,
@@ -139,7 +144,7 @@ async function orchestrateGoldenBall(
     gametypeId:     string,
     baseMultiplier  = 1,
 ): Promise<number> {
-    const ga          = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
+    const ga          = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1;
     const totalReveal = ga + 1;
     const normalBalls = drawnBalls.slice(0, ga);
     const goldenNum   = drawnBalls[ga] ?? 0;
@@ -171,7 +176,7 @@ async function orchestrateGoldenBall(
     const winResults     = await findAllWinners(gameId, effectiveBalls, gametypeId);
 
     if (winResults.length > 0) {
-        const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier, multiplier);
+        const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier, goldenNum, multiplier);
         notifyWinners(gameId, payloads);
     }
 

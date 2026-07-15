@@ -6,7 +6,15 @@ const LOCALES = ['en', 'pt', 'zh'] as const;
 
 function loadSlugsIndex(): Record<string, Record<string, Record<string, string>>> {
   const filePath = path.resolve(process.cwd(), "content", "slugs.json");
-  if (!fs.existsSync(filePath)) return {};
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      "[react-router.config] content/slugs.json AUSENTE. O landing-page depende do " +
+      "submodule content/ (cryptobingo-tina.git, slugs dinamicos ADR-040). " +
+      "Sem ele, o build falha com 'Invalid route exports' no prerender.\n" +
+      "Antes do build, rode: git submodule update --init --recursive\n" +
+      "(Preceito: GitHub Actions BLOQUEADAS em free tier -> deploy manual)"
+    );
+  }
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 

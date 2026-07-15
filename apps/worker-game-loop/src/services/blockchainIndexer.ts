@@ -2,6 +2,7 @@ import { rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import { Pool } from 'pg';
 import { redisClient } from './redis';
+import { SystemToken } from '../models/SystemToken';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 import { logger } from './logger';
 
@@ -12,6 +13,29 @@ const REDIS_CURSOR_KEY = 'indexer:last_game_name';
 const pgPool = new Pool({
     connectionString: process.env.POSTGRES_URL,
 });
+
+// Cache da precisão por símbolo, carregado do cadastro oficial (SystemToken).
+// Evita hardcodar WAX=8 / BINGO=4 e respeita o registry do sistema.
+// Fallback seguro: 4 (padrão eosio) se o token não estiver cadastrado.
+let tokenPrecisionCache: Map<string, number> | null = null;
+
+async function loadTokenPrecision(): Promise<Map<string, number>> {
+    if (tokenPrecisionCache) return tokenPrecisionCache;
+    const map = new Map<string, number>();
+    try {
+        const tokens = await SystemToken.find({}, { symbol: 1, precision: 1, _id: 0 }).lean();
+        for (const t of tokens) map.set(t.symbol, t.precision);
+        logger.info({ tag: 'Indexer', tokens: map.size }, 'Cache de precisão de tokens carregado.');
+    } catch (err) {
+        logger.warn({ tag: 'Indexer', err }, 'Falha ao carregar SystemToken; usando fallback precision=4.');
+    }
+    tokenPrecisionCache = map;
+    return map;
+}
+
+function precisionFor(symbol: string, cache: Map<string, number>): number {
+    return cache.get(symbol) ?? 4;
+}
 
 async function ensureTables(): Promise<void> {
     await pgPool.query(`
@@ -26,10 +50,15 @@ async function ensureTables(): Promise<void> {
             total_wagered   NUMERIC(18,4)  NOT NULL DEFAULT 0,
             total_paid_out  NUMERIC(18,4)  NOT NULL DEFAULT 0,
             ggr             NUMERIC(18,4)  NOT NULL DEFAULT 0,
-            rtp_pct         NUMERIC(6,4)   NOT NULL DEFAULT 0,
+            rtp_pct         NUMERIC(18,4)  NOT NULL DEFAULT 0,
             resolved_at     TIMESTAMPTZ,
             created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
         );
+
+        -- Corrige schema legado: rtp_pct era NUMERIC(6,4) e estourava quando
+        -- totalPaidOut/totalWagered era grande (RTP > 100% com jackpot/sponsor).
+        -- Idempotente: ALTER para o mesmo tipo é no-op em tabelas já corrigidas.
+        ALTER TABLE games_history ALTER COLUMN rtp_pct TYPE NUMERIC(18,4);
 
         CREATE TABLE IF NOT EXISTS transactions_ledger (
             id              UUID           NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -66,7 +95,7 @@ async function saveCursor(gameId: string): Promise<void> {
     } catch { }
 }
 
-async function indexGames(): Promise<void> {
+export async function indexGames(): Promise<void> {
     const lastCursor = await getLastCursor();
 
     const response = await rpcClient.v1.chain.get_table_rows({
@@ -81,12 +110,21 @@ async function indexGames(): Promise<void> {
     const games = response.rows as BlockchainGameState[];
     if (!games.length) return;
 
+    const precisionCache = await loadTokenPrecision();
+
     for (const game of games) {
         const ticketPrice = game.ticket_price;
         const ticketSymbol = ticketPrice.quantity.split(' ')[1] ?? 'WAX';
         const ticketPriceNum = parseFloat(ticketPrice.quantity) || 0;
         const totalWagered = parseFloat(game.total_wagered?.quantity ?? '0') || 0;
-        const totalPaidOut = Math.abs(game.total_paid ?? 0);
+
+        // total_paid vem do contrato em UNIDADES MÍNIMAS (sem casas decimais).
+        // Normaliza para unidades de token usando a precisão do cadastro oficial
+        // (SystemToken): WAX=8, BINGO=4, etc. Sem isso, o RTP fica em
+        // escala errada (ex: 400000% em vez de ~40%).
+        const precision = precisionFor(ticketSymbol, precisionCache);
+        const rawPaid = Math.abs(game.total_paid ?? 0);
+        const totalPaidOut = rawPaid / Math.pow(10, precision);
 
         let totalTickets = 0;
         if (['locked', 'drawing', 'drawn', 'archived', 'aborted'].includes(game.status)) {
@@ -95,13 +133,14 @@ async function indexGames(): Promise<void> {
                     code: CONTRACT_ACCOUNT,
                     scope: Name.from(UInt64.from(String(game.game_id))),
                     table: 'tickets',
-                    limit: 1,
+                    limit: 1000,
                     json: true,
                     reverse: false,
                 });
-                totalTickets = ticketRes.rows.length > 0
-                    ? parseInt(ticketRes.rows[ticketRes.rows.length - 1].ticket_id) || 0
-                    : 0;
+                // Contagem real de tickets emitidos no jogo. NUNCA usar ticket_id
+                // (uint64 ~2.45e17) como contagem: estoura INTEGER (int32) no INSERT
+                // e é semanticamente errado. Capado em 1000 p/ jogos muito grandes.
+                totalTickets = ticketRes.rows.length;
             } catch { }
         }
 
@@ -112,7 +151,11 @@ async function indexGames(): Promise<void> {
             : null;
 
         const ggr = totalWagered - totalPaidOut;
-        const rtpPct = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
+        // RTP real (fração). Jogos com prêmio >> aposta (jackpot/sponsor) podem
+        // passar de 100%; totalWagered muito pequeno gera valor absurdo -> NaN/Infinity.
+        // Guard finito; a coluna rtp_pct é NUMERIC(18,4) (suporta RTP alto).
+        const rawRtp = totalWagered > 0 ? totalPaidOut / totalWagered : 0;
+        const rtpPct = Number.isFinite(rawRtp) ? rawRtp : 0;
 
         await pgPool.query(
             `INSERT INTO games_history

@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
                 '@': path.resolve(__dirname, './src'),
                 '~': path.resolve(__dirname, './src'),
             },
+            // Prioriza .ts/.tsx sobre .js compilados stale presentes em src/
+            // (artefatos de build faziam o vite resolver api.js sem assignUserRole).
+            extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'],
         },
         plugins: [
             tailwindcss(),    // Tailwind v4 — deve vir ANTES do react plugin

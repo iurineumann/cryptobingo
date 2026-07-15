@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":pinVersions",
+    ":dependencyDashboard"
+  ],
+  "docker": {
+    "pinDigests": true
+  },
+  "packageRules": [
+    {
+      "description": "Agrupa updates de imagens base Docker (nginx, redis, postgres, etc)",
+      "matchManagers": ["dockerfile", "docker-compose", "helmfile"],
+      "groupName": "docker base images",
+      "addLabels": ["dependencies", "docker"]
+    },
+    {
+      "description": "Nao auto-atualizar imagens do proprio app (ghcr.io/iurineumann/*) — deploy manual via build+push",
+      "matchPackagePatterns": ["^ghcr.io/iurineumann/"],
+      "enabled": false
+    }
+  ],
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"]
+}

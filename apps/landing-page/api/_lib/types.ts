@@ -62,3 +62,18 @@ export interface SiteStats {
   approved_ideas: number;
   top_idea: { id: number; title: string; upvotes: number } | null;
 }
+
+export interface Newsletter {
+  id: number;
+  subject: string;
+  body: string;
+  created_at: string;
+  sent_at: string | null;
+  sent_count: number;
+}
+
+export interface NewsletterRecipient {
+  email: string;
+  token: string | null;
+  received: boolean;
+}

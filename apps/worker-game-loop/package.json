@@ -16,7 +16,7 @@
     "@wharfkit/session": "^1.0.0",
     "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
     "amqplib": "^2.0.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^16.4.5",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^9.7.1",
     "pg": "^8.22.0",

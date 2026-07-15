@@ -271,8 +271,15 @@ export function useGameRoomState(
   // cruzando as cartelas do jogador com os padrões e as bolas sorteadas.
   // NOSONAR — business logic complexity inherent to prize aggregation, extracted where practical
   const localWinners = useMemo(() => {
-    if (winners.length > 0 || !isStaticFinalState) return winners;
     const mode = localDrawMode ?? drawMode;
+    // MULTI_MATCH: vencedores vêm de estágios (WS prizeStatuses/clearedStages ao vivo
+    // OU apiPrizes/API p/ arquivado) — INDEPENDENTE de isStaticFinalState/drawnSet.
+    // No reveal ao vivo o drawnSet/drawnBalls fica populado, mas os estágios chegam
+    // via stage_cleared/prize_confirmed (não em `winners` de padrão BINGO), então
+    // NÃO podemos retornar cedo por !isStaticFinalState — senão o branch MULTI_MATCH
+    // nunca roda e o banner cai em "No winners" + cartelas não são promovidas.
+    if (winners.length > 0) return winners;
+    if (mode !== 'multimatch' && !isStaticFinalState) return winners;
     // MULTI_MATCH: vencedores vêm dos estágios (WS/PrizePipeline/API),
     // não de padrões individuais nem de drawnSet — não bloquear por eles.
     if (mode !== 'multimatch') {
@@ -311,6 +318,16 @@ export function useGameRoomState(
       } else if (apiPrizes.length > 0) {
         for (const p of apiPrizes) {
           pushStage(p.ticketId, p.winLabel, p.amount, p.currency);
+        }
+      }
+      // Fallback ao vivo: clearedStages (WS stage_cleared) chega ANTES do
+      // prize_confirmed — garante promoção da cartela à seção "Premiadas"
+      // mesmo que prizeStatuses ainda não tenha o amount confirmado.
+      if (stageResults.length === 0 && clearedStages.length > 0) {
+        for (const stage of clearedStages) {
+          for (const w of stage.winners ?? []) {
+            pushStage(w.ticket_id, w.win_pattern, '', '');
+          }
         }
       }
       if (stageResults.length > 0) return stageResults;

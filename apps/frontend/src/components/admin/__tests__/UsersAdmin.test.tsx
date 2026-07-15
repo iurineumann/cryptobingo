@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import UsersAdmin from '../UsersAdmin';
+import * as api from '../../../services/api';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -21,6 +22,9 @@ const mockUsers = {
 describe('UsersAdmin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(api, 'getAuthToken').mockReturnValue('token');
+    vi.spyOn(api, 'updateUserPermissions').mockResolvedValue(undefined);
+    vi.spyOn(api, 'assignUserRole').mockResolvedValue({ wallet_address: 'user2', role: 'admin', permissions: ['admin.*'] });
   });
 
   it('deve listar usuários com role e permissões', async () => {
@@ -61,6 +65,27 @@ describe('UsersAdmin', () => {
     await waitFor(() => {
       const editBtn = screen.getByTestId('edit-perms-user1');
       expect(editBtn).toBeTruthy();
+    });
+  });
+
+  it('deve expor seletor de role e chamar assignUserRole ao trocar', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockUsers,
+    });
+
+    render(React.createElement(UsersAdmin, { permissions: ['admin.users.manage'] }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('role-select-user2')).toBeTruthy();
+    });
+
+    const select = screen.getByTestId('role-select-user2') as HTMLSelectElement;
+    expect(select.value).toBe('player');
+    fireEvent.change(select, { target: { value: 'admin' } });
+
+    await waitFor(() => {
+      expect(api.assignUserRole).toHaveBeenCalledWith('user2', 'admin');
     });
   });
 });

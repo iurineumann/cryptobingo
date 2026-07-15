@@ -57,12 +57,17 @@ export interface AdminConfirmResponse {
     expires_at: string;
 }
 
-export interface GameStats {
+export interface TokenStat {
+    token: string;
     total_games: number;
     total_prizes: number;
-    total_players: number;
     avg_rtp_pct: number;
-    currency: string;
+    total_players: number;
+}
+
+export interface GameStats {
+    totals: { total_games: number; total_players: number };
+    by_token: TokenStat[];
     generated_at: string;
 }
 
@@ -162,18 +167,97 @@ export async function adminUpdateIdeaStatus(
     });
 }
 
-export async function adminSendNewsletter(
-    subject: string,
-    body: string
-): Promise<{ sent: number; failed: number }> {
+export interface Subscriber {
+    id: number;
+    email: string;
+    active: boolean;
+    created_at: string;
+    unsubscribed_at: string | null;
+}
+
+export interface SubscribersResponse {
+    subscribers: Subscriber[];
+    total: number;
+}
+
+export async function getSubscribers(
+    limit: number,
+    offset: number
+): Promise<SubscribersResponse> {
     const token = getAdminToken();
     if (!token) throw new Error('Not authenticated');
-    return apiRequest<{ sent: number; failed: number }>('/admin/newsletter', {
+    const url = `/admin/subscribers?limit=${limit}&offset=${offset}`;
+    return apiRequest<SubscribersResponse>(url, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
+
+export async function adminSendNewsletter(
+    subject: string,
+    body: string,
+    preheader?: string,
+): Promise<{ id: number; sent: number; failed: number }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ id: number; sent: number; failed: number }>('/admin/newsletter', {
         method: 'POST',
-        body: JSON.stringify({ subject, body }),
+        body: JSON.stringify({ subject, body, preheader }),
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
         },
     });
+}
+
+export interface Newsletter {
+    id: number;
+    subject: string;
+    body: string;
+    created_at: string;
+    sent_at: string | null;
+    sent_count: number;
+}
+
+export interface NewsletterRecipient {
+    email: string;
+    token: string | null;
+    received: boolean;
+}
+
+export async function getNewsletters(): Promise<{ newsletters: Newsletter[] }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ newsletters: Newsletter[] }>('/admin/newsletters', {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+}
+
+export async function getNewsletterRecipients(
+    id: number
+): Promise<{ recipients: NewsletterRecipient[] }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ recipients: NewsletterRecipient[] }>(
+        `/admin/newsletters/${id}/recipients`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+}
+
+export async function sendPendingNewsletter(
+    id: number
+): Promise<{ sent: number; failed: number }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ sent: number; failed: number }>(
+        `/admin/newsletters/${id}/send-pending`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
 }

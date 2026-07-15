@@ -22,6 +22,7 @@ jest.mock('./evaluator', () => ({
     payMultiMatchStage:              jest.fn(),
     deriveGoldenMultiplierExported:  jest.fn(),
     computePayoutAmount:             jest.fn().mockReturnValue({ amount: 0, currency: 'BINGO' }),
+    isBallInPattern:                 jest.fn().mockReturnValue(false),
 }));
 jest.mock('./broadcaster', () => ({
     startSlowReveal:    jest.fn().mockResolvedValue(undefined),
@@ -57,7 +58,7 @@ import {
     findAllWinners, processAllGameWinners,
     findFirstFullCutoff, preComputeMultiMatchCutoffs,
     payMultiMatchStage, deriveGoldenMultiplierExported,
-    computePayoutAmount,
+    computePayoutAmount, isBallInPattern,
 } from './evaluator';
 import {
     startSlowReveal, endRevealSession, notifyWinners,
@@ -85,6 +86,7 @@ const mockNotifyEnded       = notifyGameEnded                              as je
 const mockDeleteIndex       = deleteIndex                                  as jest.Mock;
 const mockOnResolved        = onGameResolved                               as jest.Mock;
 const mockComputePayout     = computePayoutAmount                          as jest.Mock;
+const mockIsBallInPattern   = isBallInPattern                              as jest.Mock;
 
 const DRAWN_BALLS = Array.from({ length: 75 }, (_, i) => i + 1);
 
@@ -268,6 +270,84 @@ describe('orchestrateGame — goldenball', () => {
     it('startSlowReveal chamado 2x (bolas normais + golden)', async () => {
         await orchestrateGame('1');
         expect(mockStartReveal).toHaveBeenCalledTimes(2);
+    });
+
+    it('T2 — ga fallback goldenBallAfter=0 usa drawnBalls.length-1 (não maxBalls)', async () => {
+        jest.clearAllMocks();
+        const drawnBalls37 = Array.from({ length: 37 }, (_, i) => i + 1);
+        mockFetchGame.mockResolvedValue(makeGame({ gametype_id: '3', drawn_balls: drawnBalls37 }));
+        mockGetTableRows.mockResolvedValue({
+            rows: [{ gametype_id: '3', draw_mode: 'goldenball', max_balls: 35, golden_ball_after: 0, base_multiplier: 100, rules: [], stages: [] }],
+            more: false,
+        });
+        mockDeriveGolden.mockReturnValue(2);
+        mockFindAllWinners.mockResolvedValue([]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+        const findAllArgs = mockFindAllWinners.mock.calls[0];
+        const effectiveBalls = findAllArgs![1] as number[];
+        // After fix: ga = 36 (37-1), effectiveBalls = 37
+        // Before fix: ga = 35 (maxBalls), effectiveBalls = 36
+        expect(effectiveBalls.length).toBe(drawnBalls37.length); // 37
+        expect(effectiveBalls.length).not.toBe(36); // não truncado
+    });
+
+    it('T5 — goldenBallAfter=39 (40 bolas) mantém comportamento', async () => {
+        jest.clearAllMocks();
+        const drawnBalls40 = Array.from({ length: 40 }, (_, i) => i + 1);
+        mockFetchGame.mockResolvedValue(makeGame({ gametype_id: '3', drawn_balls: drawnBalls40 }));
+        mockGetTableRows.mockResolvedValue({
+            rows: [{ gametype_id: '3', draw_mode: 'goldenball', max_balls: 35, golden_ball_after: 39, base_multiplier: 100, rules: [], stages: [] }],
+            more: false,
+        });
+        mockDeriveGolden.mockReturnValue(2);
+        mockFindAllWinners.mockResolvedValue([]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+        const findAllArgs = mockFindAllWinners.mock.calls[0];
+        const effectiveBalls = findAllArgs![1] as number[];
+        // goldenBallAfter=39 → ga=39, effectiveBalls = 40
+        expect(effectiveBalls.length).toBe(40);
+    });
+
+    it('goldenMultiplier aplicado por entrada — só quando golden ball está no padrão', async () => {
+        mockDeriveGolden.mockReturnValue(5);
+        mockFindAllWinners.mockResolvedValue([
+            { ...makeWinResult('tk_a', 'jogador1'), patternMask: 1n, patternName: 'DIAG_TL_BR' },
+            { ...makeWinResult('tk_b', 'jogador2'), patternMask: 2n, patternName: 'ROW_0' },
+        ]);
+        mockComputePayout
+            .mockReturnValueOnce({ amount: 30, currency: 'BINGO' })
+            .mockReturnValueOnce({ amount: 10, currency: 'BINGO' });
+        mockIsBallInPattern
+            .mockReturnValueOnce(true)
+            .mockReturnValueOnce(false);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+
+        expect(mockComputePayout).toHaveBeenNthCalledWith(1, expect.any(String), 100, 100, 5);
+        expect(mockComputePayout).toHaveBeenNthCalledWith(2, expect.any(String), 100, 100, 0);
+    });
+
+    it('goldenMultiplier=0/1 não multiplica nenhuma entrada (regressão)', async () => {
+        mockDeriveGolden.mockReturnValue(1);
+        mockFindAllWinners.mockResolvedValue([
+            { ...makeWinResult('tk_a', 'jogador1'), patternMask: 1n, patternName: 'DIAG_TL_BR' },
+            { ...makeWinResult('tk_b', 'jogador2'), patternMask: 2n, patternName: 'ROW_0' },
+        ]);
+        mockComputePayout
+            .mockReturnValueOnce({ amount: 5, currency: 'BINGO' })
+            .mockReturnValueOnce({ amount: 5, currency: 'BINGO' });
+        mockIsBallInPattern.mockReturnValue(false);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        await orchestrateGame('1');
+
+        expect(mockComputePayout).toHaveBeenNthCalledWith(1, expect.any(String), 100, 100, 0);
+        expect(mockComputePayout).toHaveBeenNthCalledWith(2, expect.any(String), 100, 100, 0);
     });
 });
 

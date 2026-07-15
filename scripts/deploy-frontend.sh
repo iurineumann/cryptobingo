@@ -61,6 +61,16 @@ cd "$FRONTEND_DIR"
 pnpm build
 echo "✅ Build concluído"
 
+# 4.5. Gate de CSP — impede deploy com domínios de terceiros bloqueados
+#      (ex.: Clarity em connect-src). Falha o deploy se a CSP estiver incompleta.
+echo ""
+echo "=== Validando Content-Security-Policy (gate anti-regressão) ==="
+"$ROOT_DIR/scripts/validate-csp.sh" "$FRONTEND_DIR/staticwebapp.config.json" || {
+    echo "❌ CSP incompleta — corrija staticwebapp.config.json ANTES do deploy."
+    exit 1
+}
+echo "✅ CSP validada"
+
 # Verificar JS compilado — URLs de dev embutidas (VITE_*)
 # NOTA: React Router DOM tem código interno com "http://localhost" (fallback URL).
 # Só verificamos URLs ESPECÍFICAS de dev que viriam de VITE_* env vars erradas.

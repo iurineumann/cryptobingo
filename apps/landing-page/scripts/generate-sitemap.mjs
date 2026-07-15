@@ -9,6 +9,25 @@ const LOCALES = ['en', 'pt', 'zh'];
 const BASE_URL = 'https://www.cryptobingo.bet';
 const OUT_DIR = process.env.OUT_DIR || path.resolve(ROOT, 'build', 'client');
 
+// slugs.json (ADR-040): indice dinamico { type: { canonicalId: { locale: slug } } }
+// O sitemap DEVE usar os slugs TRADUZIDOS (igual ao prerender em react-router.config.ts),
+// senao aponta para URLs inexistentes no site.
+function loadSlugsIndex() {
+  const filePath = path.resolve(ROOT, 'content', 'slugs.json');
+  if (!fs.existsSync(filePath)) return {};
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
+
+const SLUGS_INDEX = loadSlugsIndex();
+
+function getSlugsForType(type, locale) {
+  const entries = SLUGS_INDEX[type];
+  if (!entries) return [];
+  return Object.values(entries)
+    .map(entry => entry[locale])
+    .filter(Boolean);
+}
+
 const ROUTES = [
   { route: '', priority: 1.0, changefreq: 'weekly' },
   { route: 'faq', priority: 0.7, changefreq: 'weekly' },
@@ -28,14 +47,6 @@ const ROUTES = [
   { route: 'dispute-resolution', priority: 0.3, changefreq: 'yearly' },
   { route: 'bug-bounty', priority: 0.4, changefreq: 'monthly' },
 ];
-
-function getBlogSlugs(locale) {
-  const blogDir = path.resolve(ROOT, 'content', 'blog', locale);
-  if (!fs.existsSync(blogDir)) return [];
-  return fs.readdirSync(blogDir)
-    .filter(f => f.endsWith('.md'))
-    .map(f => f.replace(/\.md$/, ''));
-}
 
 function buildUrl(locale, route) {
   const p = route ? `/${route}` : '';
@@ -69,10 +80,17 @@ function generate() {
     }
   }
 
+  // Rotas dinamicas: usar slugs TRADUZIDOS do slugs.json (igual ao prerender).
+  // Sem isso, o sitemap apontaria para slugs canonicos inexistentes no site.
   for (const locale of LOCALES) {
-    const slugs = getBlogSlugs(locale);
-    for (const slug of slugs) {
+    for (const slug of getSlugsForType('blog', locale)) {
       entries.push(urlEntry(locale, `blog/${slug}`, 0.6, 'monthly'));
+    }
+    for (const slug of getSlugsForType('tutorial', locale)) {
+      entries.push(urlEntry(locale, `tutorials/${slug}`, 0.5, 'monthly'));
+    }
+    for (const slug of getSlugsForType('page', locale)) {
+      entries.push(urlEntry(locale, slug, 0.4, 'monthly'));
     }
   }
 

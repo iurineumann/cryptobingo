@@ -10,10 +10,12 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "outDir": "dist",
+    "rootDir": ".",
+    "types": ["jest", "node"],
     "paths": {
       "@azure/functions": ["./azure-functions-shim"]
     }
   },
-  "include": ["*.ts", "_lib/*.ts", "ideas/*.ts", "votes/*.ts", "admin/*.ts", "index.ts", "server.ts", "azure-functions-shim.ts"],
+  "include": ["*.ts", "_lib/*.ts", "ideas/*.ts", "votes/*.ts", "admin/*.ts", "index.ts", "server.ts", "azure-functions-shim.ts", "__tests__/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

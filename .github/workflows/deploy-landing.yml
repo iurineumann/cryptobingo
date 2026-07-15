@@ -24,7 +24,14 @@ jobs:
         working-directory: apps/landing-page
 
     steps:
+      # IMPORTANTE: o landing-page depende do submodule content/ (cryptobingo-tina.git,
+      # com slugs.json de slugs dinamicos ADR-040). Sem o submodule, o build falha:
+      # "Invalid route exports found when prerendering with ssr:false".
+      # Preceito: GitHub Actions BLOQUEADAS em free tier -> deploy SEMPRE manual.
+      # No deploy manual, rodar ANTES do build: git submodule update --init --recursive
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - uses: pnpm/action-setup@v4
         with:
