@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import SponsorsAdmin from '../SponsorsAdmin';
+import { API_BASE } from '@/config/env';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -113,12 +114,14 @@ describe('SponsorsAdmin', () => {
         ok: true,
         json: async () => ({ orgId: 'org_new1', owner_wallet: 'wallet1', name: 'Org Teste', permissionsAutoAssigned: true }),
       });
+      // 4º mock: reload da lista de orgs após criar (createSponsorOrg chama load())
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockOrgs });
 
       screen.getByTestId('btn-submit-org').click();
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenLastCalledWith(
-          `${import.meta.env.VITE_API_GATEWAY_URL}/api/v1/admin/sponsor-orgs`,
+          `${API_BASE}/admin/sponsor-orgs`,
           expect.objectContaining({
             method: 'POST',
             body: expect.stringContaining('wallet1'),
