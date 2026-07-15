@@ -79,4 +79,28 @@ describe('indexGames — total_tickets', () => {
         expect(insertCall).toBeDefined();
         expect((insertCall![1] as any[])[6]).toBe(0);
     });
+
+    it('rtp_pct finito mesmo com prêmio >> aposta (RTP alto, sem NaN/Infinity)', async () => {
+        // Jogo com wagered pequeno e paid grande -> RTP muito alto (ex: jackpot/sponsor)
+        const highRtpGame = gameRow({
+            total_wagered: { quantity: '0.0001 WAX' },
+            total_paid: 150,
+        });
+        mockGetTableRows
+            .mockResolvedValueOnce({ rows: [highRtpGame] })
+            .mockResolvedValueOnce({ rows: [{ ticket_id: '1', owner: 'a', matrix: [], state: 0o2000, game_id: BIG_TICKET_ID }] });
+
+        await expect(indexGames()).resolves.toBeUndefined();
+
+        const insertCall = mockQuery.mock.calls.find((c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO games_history'));
+        expect(insertCall).toBeDefined();
+        const params = insertCall![1] as any[];
+        const rtpPct = params[10]; // $11 = rtp_pct
+
+        expect(Number.isFinite(rtpPct)).toBe(true);
+        expect(rtpPct).not.toBe(Infinity);
+        expect(rtpPct).not.toBeNaN();
+        // 150 / 0.0001 = 1_500_000 -> deve caber em NUMERIC(18,4), nao estourar
+        expect(rtpPct).toBe(1500000);
+    });
 });
