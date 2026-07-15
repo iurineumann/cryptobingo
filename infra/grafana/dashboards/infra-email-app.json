@@ -54,7 +54,7 @@
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "sum by (purpose) (rate(pg_cryptobingo_email_log_by_status[1h]))",
+          "expr": "pg_cryptobingo_email_log_by_purpose",
           "legendFormat": "{{purpose}}",
           "refId": "A"
         }
@@ -68,7 +68,7 @@
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "sum by (purpose) (rate(pg_cryptobingo_email_log_by_status{status=\"failed\"}[1h])) / sum by (purpose) (rate(pg_cryptobingo_email_log_by_status[1h])) * 100",
+          "expr": "sum by (purpose) (pg_cryptobingo_email_log_by_status_purpose{status=\"failed\"}) / sum by (purpose) (pg_cryptobingo_email_log_by_status_purpose) * 100",
           "legendFormat": "{{purpose}}",
           "refId": "A"
         }
