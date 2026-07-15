@@ -1,3 +1,6 @@
+// blockchain.ts é substituído por blockchain.stub.ts em testes (ver jest.config
+// moduleNameMapper) para evitar load de código de produção que cria Sessions
+// on-chain no load do módulo (validação de env + WalletPluginPrivateKey).
 import {
     applyDrawnBalls,
     checkWinPatterns,
