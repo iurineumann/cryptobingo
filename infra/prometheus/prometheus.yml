@@ -59,8 +59,12 @@ scrape_configs:
       - targets: ['postgres-exporter-cryptobingo:9188']
     scrape_interval: 15s
 
-  # ── Postfix (postfix-exporter — porta 9559) ────────────────────────────────────
-  - job_name: 'postfix'
-    static_configs:
-      - targets: ['postfix-exporter:9559']
-    scrape_interval: 15s
+  # ── Postfix (saúde do serviço de e-mail) ───────────────────────────────────────
+  # Sem exporter público disponível; a saúde do Postfix é observada via Loki
+  # (promtail-mail coleta /var/log/mail.log, label job=mail) no dashboard
+  # infra-email-postfix.json (painéis de log/entregas/bounces).
+  # Se um postfix_exporter for disponibilizado, adicionar job aqui:
+  # - job_name: 'postfix'
+  #   static_configs:
+  #     - targets: ['postfix-exporter:9559']
+  #   scrape_interval: 15s
