@@ -197,10 +197,10 @@ export async function getSubscribers(
 export async function adminSendNewsletter(
     subject: string,
     body: string
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ id: number; sent: number; failed: number }> {
     const token = getAdminToken();
     if (!token) throw new Error('Not authenticated');
-    return apiRequest<{ sent: number; failed: number }>('/admin/newsletter', {
+    return apiRequest<{ id: number; sent: number; failed: number }>('/admin/newsletter', {
         method: 'POST',
         body: JSON.stringify({ subject, body }),
         headers: {
@@ -208,4 +208,55 @@ export async function adminSendNewsletter(
             Authorization: `Bearer ${token}`,
         },
     });
+}
+
+export interface Newsletter {
+    id: number;
+    subject: string;
+    body: string;
+    created_at: string;
+    sent_at: string | null;
+    sent_count: number;
+}
+
+export interface NewsletterRecipient {
+    email: string;
+    token: string | null;
+    received: boolean;
+}
+
+export async function getNewsletters(): Promise<{ newsletters: Newsletter[] }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ newsletters: Newsletter[] }>('/admin/newsletters', {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+}
+
+export async function getNewsletterRecipients(
+    id: number
+): Promise<{ recipients: NewsletterRecipient[] }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ recipients: NewsletterRecipient[] }>(
+        `/admin/newsletters/${id}/recipients`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+}
+
+export async function sendPendingNewsletter(
+    id: number
+): Promise<{ sent: number; failed: number }> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    return apiRequest<{ sent: number; failed: number }>(
+        `/admin/newsletters/${id}/send-pending`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
 }
