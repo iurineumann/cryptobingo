@@ -27,11 +27,17 @@ export function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendMessage(to: string, subject: string, text: string, purpose: string): Promise<void> {
+async function sendMessage(
+  to: string,
+  subject: string,
+  text: string,
+  purpose: string,
+  from?: string,
+): Promise<void> {
   const t = getTransporter();
   try {
     await t.sendMail({
-      from: smtpSender,
+      from: from ?? smtpSender,
       to,
       subject,
       text,
@@ -98,12 +104,14 @@ export async function sendWelcome(to: string): Promise<void> {
   );
 }
 
+const newsletterSender = process.env.NEWSLETTER_SENDER ?? 'newsletter@cryptobingo.bet';
+
 export async function sendNewsletter(
   to: string,
   subject: string,
   body: string
 ): Promise<void> {
-  await sendMessage(to, subject, body, 'newsletter');
+  await sendMessage(to, subject, body, 'newsletter', newsletterSender);
 }
 
 export async function logEmail(

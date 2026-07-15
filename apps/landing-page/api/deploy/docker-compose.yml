@@ -28,6 +28,7 @@ services:
       SMTP_USER: "cryptobingo"
       SMTP_PASS: "${SMTP_PASS}"
       SMTP_SENDER: "contact@cryptobingo.bet"
+      NEWSLETTER_SENDER: "${NEWSLETTER_SENDER}"
       ADMIN_EMAIL: "admin@cryptobingo.bet"
       GATEWAY_URL: "https://test-api.cryptobingo.bet"
 
