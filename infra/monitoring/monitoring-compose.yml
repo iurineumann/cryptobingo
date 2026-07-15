@@ -91,19 +91,26 @@ services:
       - loki_data:/loki
     networks: [cb-back]
 
-  # ─── 2º Postgres Exporter (porta 9188) — db cryptobingo, métricas de email_log ───
+  # ─── Email Exporter (porta 9188) — métricas de email_log (db cryptobingo) ───
+  # Exporter próprio (infra/monitoring/email-exporter) — substitui o
+  # postgres-exporter com queries custom (não carregava na v0.15.0).
   postgres-exporter-cryptobingo:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
+    build:
+      context: ./infra-monitoring/email-exporter
+      dockerfile: Dockerfile
+    image: cryptobingo/email-exporter:latest
     container_name: postgres-exporter-cryptobingo
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: 'postgresql://cryptobingo:${PG_APP_PW}@postgres:5432/cryptobingo?sslmode=disable'
-    command:
-      - '--config.file=/etc/postgres-exporter/queries.yml'
+      PGHOST: postgres
+      PGPORT: '5432'
+      PGDATABASE: cryptobingo
+      PGUSER: cryptobingo
+      PGPASSWORD: ${PG_APP_PW}
+      PORT: '9188'
+      POLL_INTERVAL: '15'
     ports:
-      - '9188:9187'
-    volumes:
-      - ./infra-monitoring/postgres-cryptobingo/queries.yml:/etc/postgres-exporter/queries.yml:ro
+      - '9188:9188'
     networks: [cb-back]
 
   # ─── Promtail: coleta logs dos containers Docker e envia ao Loki ───
