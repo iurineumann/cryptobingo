@@ -1,0 +1,111 @@
+{
+  "id": null,
+  "uid": "cryptobingo-email-postfix",
+  "title": "CryptoBingo — Postfix (E-mail Server)",
+  "tags": ["cryptobingo", "postfix", "email", "infra"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "current": { "text": "Prometheus", "value": "PBFA97CFB590B2093" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Fila de E-mails (active)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "postfix_queue_length{queue=\"active\"}", "legendFormat": "active", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 2,
+      "title": "Fila de E-mails (maildrop)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "postfix_queue_length{queue=\"maildrop\"}", "legendFormat": "maildrop", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 3,
+      "title": "E-mails Entregues (total)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "postfix_deliveries_total", "legendFormat": "entregues", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 4,
+      "title": "Erros de Entrega (total)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "postfix_delivery_errors_total", "legendFormat": "erros", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Conexões SMTP Recebidas/s",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "targets": [{ "expr": "rate(postfix_smtp_connections_total[5m])", "legendFormat": "conexões/s", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" } }
+    },
+    {
+      "id": 6,
+      "title": "Tamanho da Fila ao Longo do Tempo",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "postfix_queue_length{queue=\"active\"}", "legendFormat": "active", "refId": "A" },
+        { "expr": "postfix_queue_length{queue=\"deferred\"}", "legendFormat": "deferred", "refId": "B" },
+        { "expr": "postfix_queue_length{queue=\"maildrop\"}", "legendFormat": "maildrop", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" } }
+    },
+    {
+      "id": 7,
+      "title": "Taxa de Entregas vs Erros",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(postfix_deliveries_total[5m])", "legendFormat": "entregues/s", "refId": "A" },
+        { "expr": "rate(postfix_delivery_errors_total[5m])", "legendFormat": "erros/s", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" } }
+    },
+    {
+      "id": 8,
+      "title": "Bounces / Rejeições (Loki)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 10 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "{job=\"mail\"} |~ \"(?i)bounce|reject|undelivered|permission denied\"", "refId": "A" }],
+      "options": { "showLabels": true, "wrapLogMessage": true, "showTime": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 9,
+      "title": "Logs Brutos (Postfix)",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 10 },
+      "datasource": { "type": "loki", "uid": "P8E80F9AEF21F6940" },
+      "targets": [{ "expr": "{job=\"mail\"}", "refId": "A" }],
+      "options": { "showLabels": true, "wrapLogMessage": true, "showTime": true, "sortOrder": "Descending", "enableLogDetails": true }
+    }
+  ]
+}

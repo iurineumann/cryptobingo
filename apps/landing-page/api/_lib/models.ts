@@ -210,10 +210,12 @@ export async function getSubscribersPage(
 export async function logEmail(
   to: string,
   subject: string,
-  purpose: string
+  purpose: string,
+  status: string = 'sent',
+  errorMsg?: string | null,
 ): Promise<void> {
   await query(
-    `INSERT INTO email_log (to_email, subject, purpose) VALUES ($1, $2, $3)`,
-    [to, subject, purpose]
+    `INSERT INTO email_log (to_email, subject, purpose, status, error_msg) VALUES ($1, $2, $3, $4, $5)`,
+    [to, subject, purpose, status, errorMsg ?? null],
   );
 }

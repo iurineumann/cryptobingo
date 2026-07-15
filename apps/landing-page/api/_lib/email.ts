@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { query } from './db.js';
 
 const smtpHost = process.env.SMTP_HOST ?? '';
 const smtpPort = parseInt(process.env.SMTP_PORT ?? '587', 10);
@@ -26,14 +27,21 @@ export function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendMessage(to: string, subject: string, text: string): Promise<void> {
+async function sendMessage(to: string, subject: string, text: string, purpose: string): Promise<void> {
   const t = getTransporter();
-  await t.sendMail({
-    from: smtpSender,
-    to,
-    subject,
-    text,
-  });
+  try {
+    await t.sendMail({
+      from: smtpSender,
+      to,
+      subject,
+      text,
+    });
+    await logEmail(to, subject, purpose, 'sent');
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    await logEmail(to, subject, purpose, 'failed', errMsg);
+    throw e;
+  }
 }
 
 export async function sendVoteCode(to: string, code: string, ideaTitle: string): Promise<void> {
@@ -51,6 +59,7 @@ export async function sendVoteCode(to: string, code: string, ideaTitle: string):
       '',
       '— CryptoBingo Team',
     ].join('\n'),
+    'vote_code',
   );
 }
 
@@ -69,6 +78,7 @@ export async function sendAdminCode(to: string, code: string): Promise<void> {
       '',
       '— CryptoBingo Team',
     ].join('\n'),
+    'admin_code',
   );
 }
 
@@ -84,6 +94,7 @@ export async function sendWelcome(to: string): Promise<void> {
       '',
       '— CryptoBingo Team',
     ].join('\n'),
+    'welcome',
   );
 }
 
@@ -92,10 +103,18 @@ export async function sendNewsletter(
   subject: string,
   body: string
 ): Promise<void> {
-  await sendMessage(to, subject, body);
+  await sendMessage(to, subject, body, 'newsletter');
 }
 
-export async function logEmail(to: string, subject: string, type: string): Promise<void> {
-  const { query } = await import('./db.js');
-  await query(`INSERT INTO email_log (recipient, subject, type) VALUES ($1, $2, $3)`, [to, subject, type]);
+export async function logEmail(
+  to: string,
+  subject: string,
+  purpose: string,
+  status: string = 'sent',
+  errorMsg?: string | null,
+): Promise<void> {
+  await query(
+    `INSERT INTO email_log (to_email, subject, purpose, status, error_msg) VALUES ($1, $2, $3, $4, $5)`,
+    [to, subject, purpose, status, errorMsg ?? null],
+  );
 }

@@ -51,3 +51,16 @@ scrape_configs:
     static_configs:
       - targets: ['mongodb-exporter:9216']
     scrape_interval: 15s
+
+  # ── PostgreSQL Cryptobingo (postgres-exporter-cryptobingo — porta 9188) ────────
+  # Expõe métricas custom do email_log (queries.yml)
+  - job_name: 'postgres_cryptobingo_email'
+    static_configs:
+      - targets: ['postgres-exporter-cryptobingo:9188']
+    scrape_interval: 15s
+
+  # ── Postfix (postfix-exporter — porta 9559) ────────────────────────────────────
+  - job_name: 'postfix'
+    static_configs:
+      - targets: ['postfix-exporter:9559']
+    scrape_interval: 15s
