@@ -41,6 +41,13 @@ echo "✅ submodule content/ presente (slugs.json OK)"
 echo ""
 echo "=== Buildando landing-page (SSG) ==="
 cd "$LANDING_DIR"
+# VITE_API_URL é resolvido em BUILD TIME (api.ts: API_BASE = VITE_API_URL ?? '/api').
+# A ADR-039 previa que o GitHub Actions setava essa env; como o Actions está
+# DESLIGADO (free tier), o deploy MANUAL deve garanti-la. O apps/landing-page/.env
+# tem o valor mas é gitignored → num clone limpo o build cairia no fallback '/api'
+# e o frontend chamaria o SWA (sem backend) → 500. Força sempre a API correta.
+export VITE_API_URL="${VITE_API_URL:-https://landing-api.cryptobingo.bet/api}"
+echo "VITE_API_URL=$VITE_API_URL"
 pnpm build
 echo "✅ Build concluído"
 
