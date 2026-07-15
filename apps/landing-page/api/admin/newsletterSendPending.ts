@@ -1,5 +1,5 @@
 import { app } from '@azure/functions';
-import { getAdminSessionByToken, getNewsletterById, getPendingRecipients, recordNewsletterSend, updateNewsletterSentCount } from '../_lib/models.js';
+import { getAdminSessionByToken, getNewsletterById, getPendingRecipients, ensureSubscriberToken, recordNewsletterSend, updateNewsletterSentCount } from '../_lib/models.js';
 import { sendNewsletter } from '../_lib/email.js';
 import { ok, badRequest, unauthorized, serverError } from '../_lib/response.js';
 
@@ -32,12 +32,13 @@ app.http('adminNewsletterSendPending', {
 
       for (const sub of pending) {
         try {
-          await sendNewsletter(sub.email, newsletter.subject, newsletter.body, sub.token ?? undefined);
-          await recordNewsletterSend(newsletterId, sub.email, sub.token, 'sent');
+          const safeToken = sub.token ?? (await ensureSubscriberToken(sub.email));
+          await sendNewsletter(sub.email, newsletter.subject, newsletter.body, safeToken);
+          await recordNewsletterSend(newsletterId, sub.email, safeToken, 'sent');
           sent.push(sub.email);
         } catch (e) {
           console.error(`[newsletter] send-pending failed for ${sub.email}:`, e);
-          await recordNewsletterSend(newsletterId, sub.email, sub.token, 'failed');
+          await recordNewsletterSend(newsletterId, sub.email, sub.token ?? null, 'failed');
           failed.push(sub.email);
         }
       }

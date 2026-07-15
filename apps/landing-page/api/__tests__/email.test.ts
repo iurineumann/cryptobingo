@@ -37,6 +37,75 @@ describe('logEmail', () => {
   });
 });
 
+describe('renderNewsletterHtml', () => {
+  const OLD_ENV = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...OLD_ENV };
+    process.env.UNSUBSCRIBE_BASE = 'https://landing-api.cryptobingo.bet/api/subscribe';
+  });
+
+  afterAll(() => {
+    process.env = OLD_ENV;
+  });
+
+  function load() {
+    return require('../_lib/email.js') as typeof import('../_lib/email.js');
+  }
+
+  it('deve conter unsubscribe_link com token quando token presente', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('Assunto', 'Corpo', 'abc123');
+    expect(html).toContain('token=abc123');
+    expect(html).not.toContain('cryptobingo.bet/home');
+  });
+
+  it('deve usar unsubscribeBase sem token quando token ausente (nunca fallback home)', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('Assunto', 'Corpo');
+    expect(html).toContain('/api/subscribe');
+    expect(html).not.toContain('token=');
+    expect(html).not.toContain('cryptobingo.bet/home');
+  });
+
+  it('deve conter preheader no hidden div', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('S', 'B', 'tok', 'Preview text');
+    expect(html).toContain('Preview text');
+  });
+
+  it('deve renderizar preheader vazio quando omitido', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('S', 'B', 'tok');
+    expect(html).not.toContain('{{preheader}}');
+    expect(html).toContain('mso-hide:all;');
+  });
+
+  it('deve converter body em paragrafos escapados', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('S', 'Linha1\n\nLinha2', 'tok');
+    expect(html).toContain('<p');
+    expect(html).toContain('Linha1');
+    expect(html).toContain('Linha2');
+  });
+
+  it('deve escapar HTML no subject e body', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('<script>alert("xss")</script>', 'Body <b>teste</b>', 'tok');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('&lt;b&gt;teste&lt;/b&gt;');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('deve conter ano e data no rodapé', () => {
+    const { renderNewsletterHtml } = load();
+    const html = renderNewsletterHtml('S', 'B', 'tok');
+    const year = String(new Date().getFullYear());
+    expect(html).toContain(year);
+  });
+});
+
 describe('sendMessage / sendWelcome', () => {
   function setupEnv() {
     process.env.SMTP_HOST = 'smtp.test.com';

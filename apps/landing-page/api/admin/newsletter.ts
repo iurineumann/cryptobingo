@@ -1,5 +1,5 @@
 import { app, HttpRequest } from '@azure/functions';
-import { getAdminSessionByToken, getActiveSubscribers, saveNewsletter, recordNewsletterSend, updateNewsletterSentCount } from '../_lib/models.js';
+import { getAdminSessionByToken, getActiveSubscribers, saveNewsletter, ensureSubscriberToken, recordNewsletterSend, updateNewsletterSentCount } from '../_lib/models.js';
 import { sendNewsletter } from '../_lib/email.js';
 import { ok, badRequest, unauthorized, serverError } from '../_lib/response.js';
 
@@ -19,6 +19,7 @@ app.http('adminNewsletter', {
       const body = (await request.json()) as {
         subject?: string;
         body?: string;
+        preheader?: string;
       };
       if (!body.subject?.trim() || !body.body?.trim()) {
         return badRequest('Subject and body are required');
@@ -32,12 +33,13 @@ app.http('adminNewsletter', {
 
       for (const sub of subscribers) {
         try {
-          await sendNewsletter(sub.email, body.subject, body.body, sub.token ?? undefined);
-          await recordNewsletterSend(newsletterId, sub.email, sub.token, 'sent');
+          const safeToken = sub.token ?? (await ensureSubscriberToken(sub.email));
+          await sendNewsletter(sub.email, body.subject, body.body, safeToken, body.preheader);
+          await recordNewsletterSend(newsletterId, sub.email, safeToken, 'sent');
           sent.push(sub.email);
         } catch (e) {
           console.error(`[newsletter] failed for ${sub.email}:`, e);
-          await recordNewsletterSend(newsletterId, sub.email, sub.token, 'failed');
+          await recordNewsletterSend(newsletterId, sub.email, sub.token ?? null, 'failed');
           failed.push(sub.email);
         }
       }

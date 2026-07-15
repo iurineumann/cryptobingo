@@ -291,6 +291,16 @@ export async function getNewsletterById(
   );
 }
 
+export async function ensureSubscriberToken(email: string): Promise<string> {
+  const row = await queryOne<{ token: string }>(
+    `UPDATE subscribers SET token = COALESCE(token, gen_random_uuid()::text)
+     WHERE email = $1 RETURNING token`,
+    [email]
+  );
+  if (row?.token) return row.token;
+  throw new Error(`Subscriber not found: ${email}`);
+}
+
 export async function getPendingRecipients(
   newsletterId: number
 ): Promise<{ email: string; token: string | null }[]> {

@@ -107,30 +107,27 @@ export async function sendWelcome(to: string): Promise<void> {
 }
 
 const newsletterSender = process.env.NEWSLETTER_SENDER ?? 'newsletter@cryptobingo.bet';
-const unsubscribeBase = process.env.UNSUBSCRIBE_BASE ?? 'https://landing-api.cryptobingo.bet/api/subscribe';
 
 export async function sendNewsletter(
   to: string,
   subject: string,
   body: string,
   token?: string,
+  preheader?: string,
 ): Promise<void> {
-  // Headers anti-spam (Gmail bulk sender requirements, RFC 8058):
-  //  - List-Unsubscribe + One-Click Post (obrigatório p/ bulk desde 2024)
-  //  - Precedence: bulk + Feedback-ID (sinais de "boa vizinhança")
+  const unsubUrl = token
+    ? `${unsubscribeBase}?token=${encodeURIComponent(token)}`
+    : `${unsubscribeBase}`;
+
   const headers: Record<string, string> = {
     'Precedence': 'bulk',
     'Feedback-ID': 'cryptobingo-newsletter:cryptobingo.bet',
+    'List-Unsubscribe': `<${unsubUrl}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   };
-  if (token) {
-    const url = `${unsubscribeBase}?token=${encodeURIComponent(token)}`;
-    headers['List-Unsubscribe'] = `<${url}>`;
-    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-  }
 
-  // HTML com branding + preheader + link de descadastro visível.
-  const html = renderNewsletterHtml(subject, body, token);
-  const text = `${body}\n\n— CryptoBingo Team\n\nPara cancelar a inscrição: ${token ? `${unsubscribeBase}?token=${encodeURIComponent(token)}` : 'https://cryptobingo.bet'}`;
+  const html = renderNewsletterHtml(subject, body, token, preheader);
+  const text = `${body}\n\n— CryptoBingo Team\n\nPara cancelar a inscrição: ${unsubUrl}`;
 
   const t = getTransporter();
   try {
@@ -150,32 +147,110 @@ export async function sendNewsletter(
   }
 }
 
-function renderNewsletterHtml(subject: string, body: string, token?: string): string {
+const unsubscribeBase = process.env.UNSUBSCRIBE_BASE ?? 'https://landing-api.cryptobingo.bet/api/subscribe';
+
+const NEWSLETTER_TEMPLATE = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{titulo}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0b0e1a;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="display:none;font-size:1px;color:#f1f5f9;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    {{preheader}}
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0b0e1a;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <!--[if mso]>
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color:#1a1a2e;border-radius:12px;"><tr><td style="padding:40px 32px 0;">
+        <![endif]-->
+        <div style="max-width:600px;width:100%;background-color:#1a1a2e;border-radius:12px;">
+          <!--[if !mso]><!-->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#1a1a2e;border-radius:12px;overflow:hidden;">
+          <!--<![endif]-->
+            <tr>
+              <td style="padding:40px 32px 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding-bottom:20px;border-bottom:2px solid #232744;">
+                      <span style="color:#8b5cf6;font-size:22px;font-weight:700;letter-spacing:-0.03em;">CryptoBingo</span>
+                      <span style="color:#64748b;font-size:13px;font-weight:400;margin-left:8px;">| BINGO GameFi na WAX</span>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding:32px 0 20px;">
+                      <h1 style="margin:0;color:#f1f5f9;font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-0.02em;">{{titulo}}</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 0 36px;color:#c8cbe0;font-size:15px;line-height:1.7;">
+                      {{body}}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 36px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding-top:24px;border-top:1px solid #232744;text-align:center;">
+                      <p style="margin:20px 0 0;color:#64748b;font-size:12px;line-height:1.5;">
+                        Voc\u00ea recebeu este e-mail porque se inscreveu na newsletter da CryptoBingo.
+                      </p>
+                      <p style="margin:16px 0 0;">
+                        <a href="{{unsubscribe_link}}" style="color:#8b5cf6;font-size:12px;text-decoration:underline;">Cancelar inscri\u00e7\u00e3o</a>
+                      </p>
+                      <p style="margin:20px 0 0;color:#475569;font-size:11px;">
+                        &copy; {{ano}} CryptoBingo &middot; {{data}}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          <!--[if !mso]><!-->
+          </table>
+          <!--<![endif]-->
+          <!--[if mso]>
+          </td></tr></table>
+          <![endif]-->
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+export function renderNewsletterHtml(
+  subject: string,
+  body: string,
+  token?: string,
+  preheader?: string,
+): string {
   const unsubUrl = token
     ? `${unsubscribeBase}?token=${encodeURIComponent(token)}`
-    : 'https://cryptobingo.bet';
+    : `${unsubscribeBase}`;
   const paragraphs = body
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
-    .map((l) => `<p>${escapeHtml(l)}</p>`)
+    .map((l) => `<p style="margin:0 0 12px;">${escapeHtml(l)}</p>`)
     .join('\n');
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;background:#0b0e1a;color:#e8eaf2;font-family:Arial,Helvetica,sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:24px;">
-    <h1 style="color:#7c5cff;font-size:22px;margin:0 0 16px;">CryptoBingo</h1>
-    <h2 style="font-size:18px;margin:0 0 16px;">${escapeHtml(subject)}</h2>
-    <div style="font-size:15px;line-height:1.6;">${paragraphs}</div>
-    <hr style="border:none;border-top:1px solid #232744;margin:24px 0;">
-    <p style="font-size:12px;color:#8a90b5;margin:0;">
-      Você recebe este e-mail porque se inscreveu na newsletter da CryptoBingo.<br>
-      <a href="${unsubUrl}" style="color:#7c5cff;">Cancelar inscrição</a>
-    </p>
-  </div>
-</body>
-</html>`;
+  const year = String(new Date().getFullYear());
+  const date = new Date().toLocaleDateString('pt-BR');
+
+  return NEWSLETTER_TEMPLATE
+    .replace('{{titulo}}', escapeHtml(subject))
+    .replace('{{body}}', paragraphs)
+    .replace('{{preheader}}', escapeHtml(preheader ?? ''))
+    .replace('{{unsubscribe_link}}', unsubUrl)
+    .replace('{{ano}}', year)
+    .replace('{{data}}', date);
 }
 
 function escapeHtml(s: string): string {
