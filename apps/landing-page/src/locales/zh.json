@@ -166,6 +166,8 @@
     "prizes_paid": "已支付奖品",
     "active_players": "活跃玩家",
     "rtp": "当前RTP",
+    "token_prizes": "{{token}} 奖品",
+    "token_rtp": "{{token}} RTP",
     "loading": "实时统计 — 测试网已激活"
   },
   "content": {

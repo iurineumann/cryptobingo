@@ -166,6 +166,8 @@
     "prizes_paid": "Prêmios Pagos",
     "active_players": "Jogadores Ativos",
     "rtp": "RTP Atual",
+    "token_prizes": "Prêmios {{token}}",
+    "token_rtp": "RTP {{token}}",
     "loading": "Estatísticas reais — testnet ativa"
   },
   "content": {

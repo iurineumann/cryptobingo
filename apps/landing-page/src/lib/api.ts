@@ -57,12 +57,17 @@ export interface AdminConfirmResponse {
     expires_at: string;
 }
 
-export interface GameStats {
+export interface TokenStat {
+    token: string;
     total_games: number;
     total_prizes: number;
-    total_players: number;
     avg_rtp_pct: number;
-    currency: string;
+    total_players: number;
+}
+
+export interface GameStats {
+    totals: { total_games: number; total_players: number };
+    by_token: TokenStat[];
     generated_at: string;
 }
 

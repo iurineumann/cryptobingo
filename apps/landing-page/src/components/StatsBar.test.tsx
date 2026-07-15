@@ -17,18 +17,20 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('StatsBar', () => {
-  it('renders stat items', () => {
+  it('renders total games and players labels when no data', () => {
     render(<StatsBar />);
     expect(screen.getByText('stats.games_played')).toBeInTheDocument();
-    expect(screen.getByText('stats.prizes_paid')).toBeInTheDocument();
     expect(screen.getByText('stats.active_players')).toBeInTheDocument();
-    expect(screen.getByText('stats.rtp')).toBeInTheDocument();
   });
 
-  it('renders stat values with testids', () => {
+  it('renders loading text when no data', () => {
     render(<StatsBar />);
-    for (let i = 0; i < 4; i++) {
-      expect(screen.getByTestId(`stat-${i}`)).toBeInTheDocument();
-    }
+    expect(screen.getByText('stats.loading')).toBeInTheDocument();
+  });
+
+  it('renders totals section testids', () => {
+    render(<StatsBar />);
+    expect(screen.getByTestId('stat-total-games')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-total-players')).toBeInTheDocument();
   });
 });

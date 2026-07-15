@@ -16,11 +16,14 @@ app.http('stats_game', {
       if (!res.ok) throw new Error(`gateway ${res.status}`);
 
       const summary = await res.json() as {
-        total_games: number;
-        total_prizes: number;
-        total_players: number;
-        avg_rtp_pct: number;
-        currency: string;
+        totals: { total_games: number; total_players: number };
+        by_token: Array<{
+          token: string;
+          total_games: number;
+          total_prizes: number;
+          avg_rtp_pct: number;
+          total_players: number;
+        }>;
         generated_at: string;
       };
 
