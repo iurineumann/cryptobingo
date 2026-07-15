@@ -1,0 +1,92 @@
+{
+  "id": null,
+  "uid": "cryptobingo-email-app",
+  "title": "CryptoBingo — E-mails (App)",
+  "tags": ["cryptobingo", "email", "app", "infra"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total de E-mails",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "pg_cryptobingo_email_log_total", "legendFormat": "total", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 2,
+      "title": "Enviados Hoje",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "pg_cryptobingo_email_log_sent_today", "legendFormat": "hoje", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 3,
+      "title": "Falhas (1h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "pg_cryptobingo_email_log_failed_recent", "legendFormat": "falhas", "refId": "A" }],
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Por Status",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "pg_cryptobingo_email_log_by_status", "legendFormat": "{{status}}", "refId": "A" }],
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 5,
+      "title": "Volume por Propósito (1h)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (purpose) (rate(pg_cryptobingo_email_log_by_status[1h]))",
+          "legendFormat": "{{purpose}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "short" } }
+    },
+    {
+      "id": 6,
+      "title": "Taxa de Erro por Propósito",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (purpose) (rate(pg_cryptobingo_email_log_by_status{status=\"failed\"}[1h])) / sum by (purpose) (rate(pg_cryptobingo_email_log_by_status[1h])) * 100",
+          "legendFormat": "{{purpose}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 8 }, "unit": "percent" } }
+    },
+    {
+      "id": 7,
+      "title": "Últimos Erros",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "targets": [{
+        "expr": "pg_cryptobingo_email_log_by_status{status=\"failed\"}",
+        "legendFormat": "",
+        "refId": "A"
+      }],
+      "options": { "showHeader": true },
+      "fieldConfig": { "defaults": { "custom": { "align": "left" }, "displayName": "Erros" } }
+    }
+  ]
+}

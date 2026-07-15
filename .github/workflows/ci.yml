@@ -113,6 +113,33 @@ jobs:
         run: pnpm audit --audit-level=high
         continue-on-error: true
 
+  # Gate anti-regressão de CSP — falha PR se a Content-Security-Policy do
+  # frontend não cobrir os domínios de terceiros usados em runtime (ex.: Clarity
+  # em connect-src). Evita erros recorrentes de "violates the CSP directive" no
+  # console de produção. Determinístico (não precisa de navegador).
+  validate-csp:
+    name: Validate Frontend CSP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate CSP against required third-party domains
+        run: pnpm validate:csp
+
   # E2E de UI Tier 1 (Cypress determinístico) — bloqueia PR
   e2e-ui:
     name: E2E UI Tier 1 (Cypress)

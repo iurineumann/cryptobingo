@@ -1,0 +1,40 @@
+pg_cryptobingo_email_log_total:
+  query: "SELECT COALESCE(count(*), 0) AS total FROM email_log"
+  metrics:
+    - total:
+        usage: "GAUGE"
+        description: "Total de e-mails no email_log"
+
+pg_cryptobingo_email_log_by_status:
+  query: "SELECT status, COALESCE(count(*), 0) AS total FROM email_log GROUP BY status"
+  metrics:
+    - status:
+        usage: "LABEL"
+        description: "Status do e-mail (sent/failed)"
+    - total:
+        usage: "GAUGE"
+        description: "Contagem por status"
+
+pg_cryptobingo_email_log_by_purpose:
+  query: "SELECT purpose, COALESCE(count(*), 0) AS total FROM email_log GROUP BY purpose"
+  metrics:
+    - purpose:
+        usage: "LABEL"
+        description: "Propósito do e-mail"
+    - total:
+        usage: "GAUGE"
+        description: "Contagem por propósito"
+
+pg_cryptobingo_email_log_failed_recent:
+  query: "SELECT COALESCE(count(*), 0) AS total FROM email_log WHERE status = 'failed' AND created_at > NOW() - INTERVAL '1 hour'"
+  metrics:
+    - total:
+        usage: "GAUGE"
+        description: "E-mails com falha na última hora"
+
+pg_cryptobingo_email_log_sent_today:
+  query: "SELECT COALESCE(count(*), 0) AS total FROM email_log WHERE status = 'sent' AND created_at > CURRENT_DATE"
+  metrics:
+    - total:
+        usage: "GAUGE"
+        description: "E-mails enviados hoje"

@@ -78,35 +78,75 @@ describe('permissionController', () => {
   });
 
   describe('updateUserPermissions', () => {
-    it('deve atualizar permissions do usuário', async () => {
+    it('deve atualizar permissions do usuário (mantendo role admin quando admin.* presente)', async () => {
       req.params = { wallet: 'targetuser' };
-      req.body = { permissions: ['admin.*'] };
-
+      req.body = { permissions: ['admin.*', 'admin.dashboard.view'] };
+      userFindOne.mockReturnValue(queryResult({ role: 'admin', permissions: ['admin.*'] }));
       userFindOneAndUpdate.mockReturnValue(queryResult({
         wallet_address: 'targetuser',
-        permissions: ['admin.*'],
+        role: 'admin',
+        permissions: ['admin.*', 'admin.dashboard.view'],
       }));
 
       await updateUserPermissions(req as Request, res);
 
       expect(userFindOneAndUpdate).toHaveBeenCalledWith(
         { wallet_address: 'targetuser' },
-        { $set: { permissions: ['admin.*'] } },
+        { $set: { permissions: ['admin.*', 'admin.dashboard.view'], role: 'admin' } },
         { new: true }
       );
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ wallet_address: 'targetuser' })
+        expect.objectContaining({ wallet_address: 'targetuser', role: 'admin' })
       );
+    });
+
+    it('INVARIANTE: player + [admin.*] → promove role para admin', async () => {
+      req.params = { wallet: 'targetuser' };
+      req.body = { permissions: ['admin.*'] };
+      userFindOne.mockReturnValue(queryResult({ role: 'player', permissions: [] }));
+      userFindOneAndUpdate.mockReturnValue(queryResult({
+        wallet_address: 'targetuser', role: 'admin', permissions: ['admin.*'],
+      }));
+
+      await updateUserPermissions(req as Request, res);
+
+      expect(userFindOneAndUpdate).toHaveBeenCalledWith(
+        { wallet_address: 'targetuser' },
+        { $set: { permissions: ['admin.*'], role: 'admin' } },
+        { new: true }
+      );
+    });
+
+    it('INVARIANTE: admin sem admin.* → rebaixa role para player', async () => {
+      req.params = { wallet: 'targetuser' };
+      req.body = { permissions: ['admin.dashboard.view'] };
+      userFindOne.mockReturnValue(queryResult({ role: 'admin', permissions: ['admin.*'] }));
+      userFindOneAndUpdate.mockReturnValue(queryResult({
+        wallet_address: 'targetuser', role: 'player', permissions: ['admin.dashboard.view'],
+      }));
+
+      await updateUserPermissions(req as Request, res);
+
+      expect(userFindOneAndUpdate).toHaveBeenCalledWith(
+        { wallet_address: 'targetuser' },
+        { $set: { permissions: ['admin.dashboard.view'], role: 'player' } },
+        { new: true }
+      );
+    });
+
+    it('deve retornar 400 se permissions não for array', async () => {
+      req.params = { wallet: 'targetuser' };
+      req.body = { permissions: 'admin.*' };
+      userFindOne.mockReturnValue(queryResult({ role: 'admin', permissions: ['admin.*'] }));
+      await updateUserPermissions(req as Request, res);
+      expect(res.status).toHaveBeenCalledWith(400);
     });
 
     it('deve retornar 404 se usuário não existe', async () => {
       req.params = { wallet: 'nonexistent' };
       req.body = { permissions: ['admin.*'] };
-
-      userFindOneAndUpdate.mockReturnValue(queryResult(null));
-
+      userFindOne.mockReturnValue(queryResult(null));
       await updateUserPermissions(req as Request, res);
-
       expect(res.status).toHaveBeenCalledWith(404);
     });
   });

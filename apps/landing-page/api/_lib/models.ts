@@ -1,6 +1,7 @@
 import { query, queryOne } from './db.js';
 import type {
   Idea, Vote, Confirmation, AdminSession, Subscriber, SiteStats,
+  Newsletter, NewsletterRecipient,
 } from './types.js';
 
 export async function getStats(): Promise<SiteStats> {
@@ -135,6 +136,13 @@ export async function createAdminSession(
 export async function getAdminSessionByToken(
   token: string
 ): Promise<AdminSession | null> {
+  // Token malformado (não-UUID) é falha de autenticação, não erro de banco.
+  // Valida antes de consultar para não disparar string_to_uuid no PG (500).
+  const uuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      token
+    );
+  if (!uuid) return null;
   return queryOne<AdminSession>(
     `SELECT * FROM admin_sessions
      WHERE token = $1 AND expires_at > NOW()`,
@@ -184,13 +192,127 @@ export async function getActiveSubscribers(): Promise<Subscriber[]> {
   );
 }
 
+export async function getSubscribersPage(
+  limit: number,
+  offset: number
+): Promise<{ subscribers: Subscriber[]; total: number }> {
+  const safeLimit = Math.min(Math.max(1, limit), 100);
+  const safeOffset = Math.max(0, offset);
+  const subscribers = await query<Subscriber>(
+    `SELECT * FROM subscribers ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    [safeLimit, safeOffset]
+  );
+  const count = await queryOne<{ count: number }>(
+    `SELECT COUNT(*)::int AS count FROM subscribers`
+  );
+  return { subscribers, total: count?.count ?? 0 };
+}
+
 export async function logEmail(
   to: string,
   subject: string,
-  purpose: string
+  purpose: string,
+  status: string = 'sent',
+  errorMsg?: string | null,
 ): Promise<void> {
   await query(
-    `INSERT INTO email_log (to_email, subject, purpose) VALUES ($1, $2, $3)`,
-    [to, subject, purpose]
+    `INSERT INTO email_log (to_email, subject, purpose, status, error_msg) VALUES ($1, $2, $3, $4, $5)`,
+    [to, subject, purpose, status, errorMsg ?? null],
+  );
+}
+
+export async function saveNewsletter(
+  subject: string,
+  body: string
+): Promise<number> {
+  const row = await queryOne<{ id: number }>(
+    `INSERT INTO newsletters (subject, body, sent_at, sent_count)
+     VALUES ($1, $2, NOW(), 0) RETURNING id`,
+    [subject, body]
+  );
+  if (!row) throw new Error('Failed to save newsletter');
+  return row.id;
+}
+
+export async function getNewsletters(): Promise<Newsletter[]> {
+  return query<Newsletter>(
+    `SELECT id, subject, body, created_at, sent_at, sent_count
+     FROM newsletters ORDER BY sent_at DESC NULLS LAST, created_at DESC`
+  );
+}
+
+export async function getNewsletterRecipients(
+  newsletterId: number
+): Promise<NewsletterRecipient[]> {
+  return query<NewsletterRecipient>(
+    `SELECT s.email, s.token,
+            CASE WHEN ns.id IS NOT NULL THEN true ELSE false END AS received
+     FROM subscribers s
+     LEFT JOIN newsletter_sends ns
+       ON ns.newsletter_id = $1 AND ns.subscriber_email = s.email
+     WHERE s.active = true
+     ORDER BY s.email`,
+    [newsletterId]
+  );
+}
+
+export async function recordNewsletterSend(
+  newsletterId: number,
+  email: string,
+  token: string | null,
+  status: string
+): Promise<void> {
+  await query(
+    `INSERT INTO newsletter_sends (newsletter_id, subscriber_email, subscriber_token, status)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (newsletter_id, subscriber_email)
+     DO UPDATE SET status = EXCLUDED.status, sent_at = NOW()`,
+    [newsletterId, email, token, status]
+  );
+}
+
+export async function updateNewsletterSentCount(
+  newsletterId: number,
+  count: number
+): Promise<void> {
+  await query(
+    `UPDATE newsletters SET sent_count = $1 WHERE id = $2`,
+    [count, newsletterId]
+  );
+}
+
+export async function getNewsletterById(
+  id: number
+): Promise<Newsletter | null> {
+  return queryOne<Newsletter>(
+    `SELECT id, subject, body, created_at, sent_at, sent_count
+     FROM newsletters WHERE id = $1`,
+    [id]
+  );
+}
+
+export async function ensureSubscriberToken(email: string): Promise<string> {
+  const row = await queryOne<{ token: string }>(
+    `UPDATE subscribers SET token = COALESCE(token, gen_random_uuid()::text)
+     WHERE email = $1 RETURNING token`,
+    [email]
+  );
+  if (row?.token) return row.token;
+  throw new Error(`Subscriber not found: ${email}`);
+}
+
+export async function getPendingRecipients(
+  newsletterId: number
+): Promise<{ email: string; token: string | null }[]> {
+  return query<{ email: string; token: string | null }>(
+    `SELECT s.email, s.token
+     FROM subscribers s
+     WHERE s.active = true
+       AND NOT EXISTS (
+         SELECT 1 FROM newsletter_sends ns
+         WHERE ns.newsletter_id = $1 AND ns.subscriber_email = s.email
+       )
+     ORDER BY s.email`,
+    [newsletterId]
   );
 }

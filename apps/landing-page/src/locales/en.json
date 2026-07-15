@@ -73,6 +73,11 @@
     "thanks": "You're subscribed! Check your inbox.",
     "reward": "🎉 You earned 50 XP + 1 free ticket for signing up!",
     "cta": "Start Playing",
+    "sent_history": "Sent newsletters",
+    "recipients": "Recipients",
+    "received": "Received",
+    "not_received": "Not received",
+    "send_pending": "Send to pending",
     "error": "Something went wrong.",
     "invalid_email": "Please enter a valid email address."
   },
@@ -166,6 +171,8 @@
     "prizes_paid": "Prizes Paid",
     "active_players": "Active Players",
     "rtp": "Current RTP",
+    "token_prizes": "{{token}} Prizes",
+    "token_rtp": "{{token}} RTP",
     "loading": "Live stats — testnet active"
   },
   "content": {

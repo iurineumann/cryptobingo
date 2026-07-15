@@ -272,11 +272,12 @@ function AppRoot() {
     const [showAchievements, setShowAchievements] = useState(false);
 
     // role admin/contract_admin implica todas as permissões de admin.
-    // O backend RBAC também trata esses roles como admin.*, então o front
-    // deve refletir o mesmo para não esconder botões de ação.
+    // Também: permissions contendo admin.* == role admin (ADR-036), então o
+    // front injeta admin.* sintético para não esconder botões de ação.
     const basePerms: string[] = (profile as any)?.permissions ?? [];
+    const hasAdminWild = profile && (profile.role === 'admin' || profile.role === 'contract_admin' || basePerms.includes('admin.*'));
     const userPermissions: string[] =
-        profile && (profile.role === 'admin' || profile.role === 'contract_admin')
+        hasAdminWild
             ? Array.from(new Set(['admin.*', ...basePerms]))
             : basePerms;
 

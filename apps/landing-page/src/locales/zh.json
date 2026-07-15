@@ -73,6 +73,11 @@
     "thanks": "订阅成功！请查看您的收件箱。",
     "reward": "🎉 您获得了 50 XP + 1 张免费门票！",
     "cta": "开始游戏",
+    "sent_history": "已发送的新闻通讯",
+    "recipients": "收件人",
+    "received": "已接收",
+    "not_received": "未接收",
+    "send_pending": "发送给待办人",
     "error": "出了点问题。",
     "invalid_email": "请输入有效的邮箱地址。"
   },
@@ -166,6 +171,8 @@
     "prizes_paid": "已支付奖品",
     "active_players": "活跃玩家",
     "rtp": "当前RTP",
+    "token_prizes": "{{token}} 奖品",
+    "token_rtp": "{{token}} RTP",
     "loading": "实时统计 — 测试网已激活"
   },
   "content": {

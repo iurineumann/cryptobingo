@@ -1,6 +1,11 @@
-# landing-api (VPS Docker) — composição com nginx (TLS Let's Encrypt já emitido no VPS)
-# Rede `cryptobingo` é a mesma dos DBs (postgres/mongo/redis) do VPS.
-# nginx usa o cert já emitido em /etc/letsencrypt/live/cryptobingo.bet (mount do host).
+# landing-api (VPS Docker)
+# Exposto via cryptobingo-nginx (rede cryptobingo_cb-front) que já tem server_block
+# proxy_pass http://landing-api:8080. Por isso o landing-api DEVE estar na rede
+# cryptobingo_cb-front (mesma do nginx) para o DNS Docker resolver o nome.
+# Mas o landing-api TAMBEM precisa da rede cryptobingo (onde está o container
+# postgres) para conectar ao banco. Logo: AMBAS as redes.
+# O nginx interno deste compose foi REMOVIDO (conflitava de porta 80/443 com o
+# cryptobingo-nginx e era redundante).
 
 services:
   landing-api:
@@ -11,36 +16,24 @@ services:
     container_name: landing-api
     restart: unless-stopped
     networks:
-      - cryptobingo
+      - cb-back
+      - cryptobingo_cb-front
     environment:
       NODE_ENV: production
       PORT: "8080"
-      DATABASE_URL: "postgres://cryptobingo:CbPg2026vpsSafe@postgres:5432/cryptobingo"
+      DATABASE_URL: "${DATABASE_URL}"
       SMTP_HOST: "mail.cryptobingo.bet"
       SMTP_PORT: "587"
       SMTP_SECURE: "false"
       SMTP_USER: "cryptobingo"
       SMTP_PASS: "${SMTP_PASS}"
       SMTP_SENDER: "contact@cryptobingo.bet"
+      NEWSLETTER_SENDER: "${NEWSLETTER_SENDER}"
       ADMIN_EMAIL: "admin@cryptobingo.bet"
       GATEWAY_URL: "https://test-api.cryptobingo.bet"
-    # sem 'ports' — só acessível na rede Docker (nginx faz o proxy)
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: landing-api-nginx
-    restart: unless-stopped
-    networks:
-      - cryptobingo
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/landing-api.conf:/etc/nginx/conf.d/landing-api.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - landing-api
 
 networks:
-  cryptobingo:
+  cb-back:
+    external: true
+  cryptobingo_cb-front:
     external: true

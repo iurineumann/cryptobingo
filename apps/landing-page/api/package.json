@@ -5,7 +5,8 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest __tests__ --no-cache"
   },
   "_moduleAliases": {
     "@azure/functions": "dist/azure-functions-shim.js"
@@ -18,11 +19,15 @@
     "pg": "^8.13.0"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.11.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.11",
     "typescript": "~6.0.3"
   }
 }

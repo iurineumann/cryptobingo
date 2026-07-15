@@ -348,7 +348,7 @@ function deriveGoldenMultiplier(drawnBalls: number[], goldenBallAfter: number): 
  * Verifica se um número de bola (1-75) está coberto pelo padrão vencedor
  * de uma cartela específica.
  */
-function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, patternMask: bigint): boolean {
+export function isBallInPattern(ticket: BlockchainTicketRecord, ballNumber: number, patternMask: bigint): boolean {
     for (let bitIndex = 0; bitIndex < 25; bitIndex++) {
         if (bitIndex === 12) continue;
         const matrixIndex = bitIndex < 12 ? bitIndex : bitIndex - 1;
@@ -655,7 +655,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
     } else if (drawMode === 'goldenball') {
         // GOLDEN_BALL: a fase normal usa as primeiras maxBalls bolas (já aplicadas acima).
         // A bola dourada é a próxima após o sorteio normal.
-        const ga = goldenBallAfter > 0 ? goldenBallAfter : maxBalls;
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : game.drawn_balls.length - 1;
         goldenBallNum          = game.drawn_balls[ga] ?? 0;
         goldenMultiplierGlobal = deriveGoldenMultiplier(game.drawn_balls, ga);
         // effectiveBalls inclui a fase normal + a golden ball

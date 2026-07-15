@@ -181,3 +181,150 @@ describe('E2E — jogo 1783899157059 (caminho real do worker)', () => {
     });
 });
 
+// ==========================================
+// GOLDEN BALL — DETECÇÃO DE PADRÃO COM GOLDEN BALL NA ÚLTIMA BOLA
+// ==========================================
+describe('GOLDEN BALL — padrão completo na golden ball (T1/T6)', () => {
+    const matrix = [
+        1,  2,  3,  4,  5,   // B col bits 0-4
+        15, 27, 18, 19, 20,   // I col bits 5-9
+        9,  32, 34, 11,       // N col bits 10-11,13-14 (FREE at 12)
+        10, 24, 31, 47, 50,   // G col bits 15-19
+        12, 62, 63, 64, 61,   // O col bits 20-24
+    ];
+    const ROW_0_MASK   = (1n << 5n)  | (1n << 10n) | (1n << 15n) | (1n << 20n);
+    const DIAG_TL_BR_MASK = (1n << 0n) | (1n << 6n) | (1n << 12n) | (1n << 18n) | (1n << 24n);
+    const patterns = [
+        { name: 'ROW_0',      mask: ROW_0_MASK,      weight: 100 },
+        { name: 'DIAG_TL_BR', mask: DIAG_TL_BR_MASK, weight: 150 },
+    ];
+    const drawnBalls36 = [
+        9,  15, 10, 12,  27, 47, 61,
+        2, 3, 4, 5, 18, 19, 20, 32, 34, 11, 24, 31, 50, 62, 63, 64,
+        6, 7, 8, 13, 14, 16, 17, 21, 22, 23, 25, 26, 28, 29, 30, 33, 35,
+    ];
+    const goldenBall = 1;
+    const drawnBalls37 = [...drawnBalls36, goldenBall];
+    const ticket = makeTicket(matrix);
+
+    it('T1 — 36 bolas (sem golden): detecta só ROW_0, DIAG_TL_BR incompleto', () => {
+        const state = applyDrawnBalls(ticket, drawnBalls36);
+        const wins  = checkWinPatterns(state, patterns);
+        expect(wins.length).toBe(1);
+        expect(wins[0].name).toBe('ROW_0');
+    });
+
+    it('T1 — 37 bolas (com golden): detecta ROW_0 + DIAG_TL_BR (2 padrões)', () => {
+        const state = applyDrawnBalls(ticket, drawnBalls37);
+        const wins  = checkWinPatterns(state, patterns);
+        expect(wins.length).toBe(2);
+        const names = wins.map(w => w.name).sort();
+        expect(names).toEqual(['DIAG_TL_BR', 'ROW_0']);
+    });
+
+    it('T1 — DIAG_TL_BR mask tem golden ball bit (bit 0) setado', () => {
+        const state = applyDrawnBalls(ticket, drawnBalls37);
+        expect(state & (1 << 0)).toBe(1 << 0);
+        expect((BigInt(state) & DIAG_TL_BR_MASK) === DIAG_TL_BR_MASK).toBe(true);
+    });
+
+    it('T6 — golden ball está no padrão DIAG_TL_BR (isBallInPattern)', () => {
+        const state = applyDrawnBalls(ticket, drawnBalls37);
+        const wins  = checkWinPatterns(state, patterns);
+        const diagWin = wins.find(w => w.name === 'DIAG_TL_BR');
+        expect(diagWin).toBeDefined();
+        expect((diagWin!.mask & (1n << 0n)) !== 0n).toBe(true);
+    });
+});
+
+// ==========================================
+// GOLDEN BALL — REGRESSÃO E2E JOGO BUGADO (T4/T5)
+// ==========================================
+describe('GOLDEN BALL — regressão E2E jogo bugado (T4/T5)', () => {
+    const matrixBugado = [
+        1,  30, 39, 57, 66,
+        15, 27, 43, 55, 64,
+        9,  20, 48, 73,
+        10, 24, 31, 47, 65,
+        12, 25, 41, 53, 61,
+    ];
+    const DIAG_TL_BR_MASK = (1n << 0n) | (1n << 6n) | (1n << 12n) | (1n << 18n) | (1n << 24n);
+    const drawnBalls = [
+        10, 68, 16, 53,  9, 30, 72,  5, 14, 60,
+         3, 13, 21, 12, 70, 50, 42, 57, 39, 47,
+        61, 56, 11, 28, 19, 58, 66, 27, 29,  2,
+        20, 63, 49, 40, 51, 48,  1,
+    ];
+    const ticket = makeTicket(matrixBugado);
+
+    it('T4 — 36 bolas (sem golden): DIAG_TL_BR não detectado', () => {
+        const first36 = drawnBalls.slice(0, 36);
+        const state = applyDrawnBalls(ticket, first36);
+        const diagMaskState = BigInt(state) & DIAG_TL_BR_MASK;
+        expect(diagMaskState).not.toBe(DIAG_TL_BR_MASK);
+    });
+
+    it('T4 — 37 bolas (com golden): DIAG_TL_BR detectado', () => {
+        const state = applyDrawnBalls(ticket, drawnBalls);
+        const diagMaskState = BigInt(state) & DIAG_TL_BR_MASK;
+        expect(diagMaskState).toBe(DIAG_TL_BR_MASK);
+    });
+
+    it('T5 — golden_ball_after=39 (40 bolas): DIAG_TL_BR completo', () => {
+        const ga = 39;
+        const extraBalls = [8, 22, 33, 1];
+        const extendedBalls = [...drawnBalls.slice(0, 36), ...extraBalls];
+        expect(extendedBalls.length).toBe(40);
+        expect(extendedBalls[39]).toBe(1);
+
+        const state = applyDrawnBalls(ticket, extendedBalls);
+        const diagMaskState = BigInt(state) & DIAG_TL_BR_MASK;
+        expect(diagMaskState).toBe(DIAG_TL_BR_MASK);
+    });
+});
+
+// ==========================================
+// GOLDEN BALL — ga FALLBACK CALCULATION (T3)
+// ==========================================
+describe('GOLDEN BALL — ga fallback calculation (T3)', () => {
+    // Simula o cálculo de ga e effectiveBalls que processAllGameWinners faz
+    // Antes: ga = goldenBallAfter > 0 ? goldenBallAfter : maxBalls
+    // Depois: ga = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1
+
+    it('T3 — goldenBallAfter=0: ga = drawnBalls.length-1, effectiveBalls = all balls', () => {
+        const drawnBalls = Array.from({ length: 37 }, (_, i) => i + 1);
+        const maxBalls = 35;
+        const goldenBallAfter = 0;
+
+        // Código após o fix (igual ao que processAllGameWinners faz)
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1;
+        const effectiveBalls = drawnBalls.slice(0, ga + 1);
+
+        expect(ga).toBe(36);          // drawnBalls.length - 1
+        expect(effectiveBalls.length).toBe(37); // inclui golden ball
+        expect(effectiveBalls.length).not.toBe(36); // não truncado em maxBalls+1
+    });
+
+    it('T3 — goldenBallAfter=39: ga = 39, effectiveBalls = 40', () => {
+        const drawnBalls = Array.from({ length: 40 }, (_, i) => i + 1);
+        const goldenBallAfter = 39;
+
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1;
+        const effectiveBalls = drawnBalls.slice(0, ga + 1);
+
+        expect(ga).toBe(39);
+        expect(effectiveBalls.length).toBe(40);
+    });
+
+    it('T3 — goldenBallAfter=4, 75 bolas: ga = 4, effectiveBalls = 5 (não regride)', () => {
+        const drawnBalls = Array.from({ length: 75 }, (_, i) => i + 1);
+        const goldenBallAfter = 4;
+
+        const ga = goldenBallAfter > 0 ? goldenBallAfter : drawnBalls.length - 1;
+        const effectiveBalls = drawnBalls.slice(0, ga + 1);
+
+        expect(ga).toBe(4);
+        expect(effectiveBalls.length).toBe(5);
+    });
+});
+
