@@ -102,6 +102,10 @@ describe('useAuth — cache hit', () => {
       walletPlugin: { id: 'wallet-plugin-privatekey' },
     } as any;
 
+    // Modo dev ativo + chave de dev válida para signWithPrivateKey
+    vi.stubEnv('DEV', 'true');
+    vi.stubEnv('VITE_DEV_PRIVATE_KEY', '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyDt1joz1o7o');
+
     const { result } = renderHook(() => useAuth());
 
     let returnValue: boolean | undefined;

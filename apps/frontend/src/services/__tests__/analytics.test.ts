@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { trackEvent, setAdblockDetected } from '../analytics';
+import { API_BASE } from '@/config/env';
 
 describe('trackEvent', () => {
   beforeEach(() => {
@@ -25,7 +26,7 @@ describe('trackEvent', () => {
     trackEvent('test_event', { key: 'value' });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `${import.meta.env.VITE_API_GATEWAY_URL}/api/v1/analytics/event`, {
+      `${API_BASE}/analytics/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'test_event', params: { key: 'value' } }),
