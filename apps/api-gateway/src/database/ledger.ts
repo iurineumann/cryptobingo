@@ -229,56 +229,117 @@ export interface GameStatsBatch {
 // PLATFORM SUMMARY (para landing page e dashboards)
 // ==========================================
 
+export interface PlatformTokenSummary {
+    token:          string;
+    total_games:    number;
+    total_prizes:   number;
+    avg_rtp_pct:    number;
+    total_players:  number;
+}
+
 export interface PlatformSummary {
-    total_games:   number;
-    total_prizes:  number;
-    total_players: number;
-    avg_rtp_pct:   number;
-    currency:      string;
-    generated_at:  string;
+    totals: {
+        total_games:   number;
+        total_players: number;
+    };
+    by_token:     PlatformTokenSummary[];
+    generated_at: string;
 }
 
 /**
  * Resumo agregado da plataforma — queries games_history + transactions_ledger.
  * Usado pela landing page (StatsBar) e dashboards públicos.
+ * ADR-055: retorno multi-token { totals, by_token[] }.
  */
 export async function getPlatformSummary(): Promise<PlatformSummary> {
-    // NOTA: o contrato NÃO popula total_wagered/total_paid_out na tabela on-chain
-    // `games` (verificado 2026-07-15: row archived vem com esses campos zerados),
-    // então games_history.total_paid_out fica 0. Os prêmios REAIS vivem no
-    // transactions_ledger (action_type='claim_win'). Por isso total_prizes é
-    // somado do ledger transacional, não de games_history.total_paid_out.
-    const [gamesRes, playersRes, prizesRes] = await Promise.all([
+    const [gamesRes, prizesRes, playersRes] = await Promise.all([
         pgPool.query(
-            `SELECT COUNT(*)::int AS total_games
+            `SELECT
+               ticket_symbol AS token,
+               COUNT(*)::int AS total_games,
+               COALESCE(SUM(total_paid_out), 0) AS total_paid_out,
+               COALESCE(SUM(ticket_price * total_tickets), 0) AS total_wagered
              FROM games_history
-             WHERE status IN ('archived', 'aborted')`
+             WHERE status IN ('archived', 'aborted')
+             GROUP BY ticket_symbol
+             ORDER BY ticket_symbol`
         ),
         pgPool.query(
-            `SELECT COUNT(DISTINCT wallet_address)::int AS total_players
-             FROM transactions_ledger`
-        ),
-        pgPool.query(
-            `SELECT COALESCE(SUM(amount), 0) AS total_prizes
+            `SELECT
+               currency AS token,
+               COALESCE(SUM(amount), 0) AS total_prizes
              FROM transactions_ledger
-             WHERE action_type = 'claim_win'`
+             WHERE action_type = 'claim_win'
+             GROUP BY currency
+             ORDER BY currency`
+        ),
+        pgPool.query(
+            `SELECT
+               currency AS token,
+               COUNT(DISTINCT wallet_address)::int AS total_players
+             FROM transactions_ledger
+             GROUP BY currency
+             ORDER BY currency`
         ),
     ]);
 
-    const g = gamesRes.rows[0];
-    const p = playersRes.rows[0];
-    const pr = prizesRes.rows[0];
+    const tokenMap = new Map<string, PlatformTokenSummary>();
 
-    return {
-        total_games:   Number(g.total_games),
-        total_prizes:  Math.round(parseFloat(pr.total_prizes)),
-        total_players: Number(p.total_players),
-        // rtp_pct depende de total_wagered, que o contrato não registra na chain
-        // nem no ledger (sem buy_ticket). Fica 0 até termos wagered disponível.
-        avg_rtp_pct:   0,
-        currency:      'WAX',
-        generated_at:  new Date().toISOString(),
-    };
+    for (const row of gamesRes.rows) {
+        const totalWagered = parseFloat(row.total_wagered) || 0;
+        const totalPaidOut = parseFloat(row.total_paid_out) || 0;
+        const avgRtp = totalWagered > 0 ? (totalPaidOut / totalWagered) * 100 : 0;
+
+        tokenMap.set(row.token, {
+            token:         row.token,
+            total_games:   row.total_games,
+            total_prizes:  0,
+            avg_rtp_pct:   Math.round(avgRtp * 100) / 100,
+            total_players: 0,
+        });
+    }
+
+    for (const row of prizesRes.rows) {
+        const t = tokenMap.get(row.token);
+        if (t) {
+            t.total_prizes = Math.round(parseFloat(row.total_prizes));
+        } else {
+            tokenMap.set(row.token, {
+                token:         row.token,
+                total_games:   0,
+                total_prizes:  Math.round(parseFloat(row.total_prizes)),
+                avg_rtp_pct:   0,
+                total_players: 0,
+            });
+        }
+    }
+
+    for (const row of playersRes.rows) {
+        const t = tokenMap.get(row.token);
+        if (t) {
+            t.total_players = row.total_players;
+        } else {
+            tokenMap.set(row.token, {
+                token:         row.token,
+                total_games:   0,
+                total_prizes:  0,
+                avg_rtp_pct:   0,
+                total_players: row.total_players,
+            });
+        }
+    }
+
+    const byToken = Array.from(tokenMap.values());
+
+    const totals = byToken.reduce(
+        (acc, t) => ({
+            total_games:   acc.total_games   + t.total_games,
+            total_players: acc.total_players + t.total_players,
+        }),
+        { total_games: 0, total_players: 0 }
+    );
+
+    return { totals, by_token: byToken, generated_at: new Date().toISOString() };
 }
 
 /**

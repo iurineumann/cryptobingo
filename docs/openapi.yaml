@@ -527,6 +527,44 @@ paths:
                         totalPaidOut: { type: number }
                         rtpPct: { type: number }
 
+  /statistics/summary:
+    get:
+      summary: Resumo agregado da plataforma (multi-token, ADR-055)
+      description: >
+        Retorna total_games/total_players globais + desagregação por token
+        (WAX, BINGO, etc). total_prizes vem do transactions_ledger (claim_win),
+        avg_rtp_pct de games_history. Público, sem autenticação.
+      tags: [Statistics]
+      responses:
+        '200':
+          description: Resumo multi-token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totals:
+                    type: object
+                    properties:
+                      total_games:   { type: integer }
+                      total_players: { type: integer }
+                    required: [total_games, total_players]
+                  by_token:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:         { type: string, example: "WAX" }
+                        total_games:   { type: integer }
+                        total_prizes:  { type: number }
+                        avg_rtp_pct:   { type: number }
+                        total_players: { type: integer }
+                      required: [token, total_games, total_prizes, avg_rtp_pct, total_players]
+                  generated_at:
+                    type: string
+                    format: date-time
+                required: [totals, by_token, generated_at]
+
   # ══════════════════════════════════════════
   # PLAYER — Winnings
   # ══════════════════════════════════════════
