@@ -9,7 +9,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({ t: (k: string, opts?: Record<string, string>) => opts ? `${k}:${JSON.stringify(opts)}` : k }),
 }));
 
 let triggerIntersection: (() => void) | null = null;
@@ -22,10 +22,12 @@ beforeEach(() => {
   rAFId = 0;
   mockGetGameStats.mockReset();
   mockGetGameStats.mockResolvedValue({
-    total_games: 1500000,
-    total_prizes: 500000,
-    total_players: 25000,
-    avg_rtp_pct: 85.3,
+    totals: { total_games: 1500000, total_players: 25000 },
+    by_token: [
+      { token: 'WAX', total_games: 1000000, total_prizes: 300000, avg_rtp_pct: 85.0, total_players: 20000 },
+      { token: 'BINGO', total_games: 500000, total_prizes: 200000, avg_rtp_pct: 86.0, total_players: 5000 },
+    ],
+    generated_at: '2026-07-15T00:00:00Z',
   });
 
   vi.stubGlobal('IntersectionObserver', class {
@@ -58,11 +60,10 @@ function processAllRAF(): void {
 }
 
 describe('StatsBar', () => {
-  test('renders 4 stat items with testids', () => {
+  test('renders totals section with testids', () => {
     render(<StatsBar />);
-    for (let i = 0; i < 4; i++) {
-      expect(screen.getByTestId(`stat-${i}`)).toBeInTheDocument();
-    }
+    expect(screen.getByTestId('stat-total-games')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-total-players')).toBeInTheDocument();
   });
 
   test('calls getGameStats on mount', () => {
@@ -80,7 +81,7 @@ describe('StatsBar', () => {
     mockGetGameStats.mockRejectedValue(new Error('network error'));
     render(<StatsBar />);
     const items = await screen.findAllByText('—');
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(2);
   });
 
   test('shows formatted numbers with K/M suffixes after animation', async () => {
@@ -91,20 +92,8 @@ describe('StatsBar', () => {
     await vi.waitFor(() => expect(rAFcallbacks.length).toBeGreaterThan(0));
     act(() => { processAllRAF(); });
 
-    expect(screen.getByTestId('stat-0').textContent).toContain('1.5M');
-    expect(screen.getByTestId('stat-1').textContent).toContain('500');
-    expect(screen.getByTestId('stat-2').textContent).toContain('25');
-  });
-
-  test('shows RTP with percent suffix', async () => {
-    render(<StatsBar />);
-
-    await vi.waitFor(() => expect(triggerIntersection).not.toBeNull());
-    act(() => { triggerIntersection!(); });
-    await vi.waitFor(() => expect(rAFcallbacks.length).toBeGreaterThan(0));
-    act(() => { processAllRAF(); });
-
-    expect(screen.getByTestId('stat-3').textContent).toContain('85');
+    expect(screen.getByTestId('stat-total-games').textContent).toContain('1.5M');
+    expect(screen.getByTestId('stat-total-players').textContent).toContain('25');
   });
 
   test('does not animate when not intersecting', async () => {
@@ -122,5 +111,19 @@ describe('StatsBar', () => {
     act(() => { triggerNonIntersection!(); });
     const animating = rAFcallbacks.length === 0;
     expect(animating).toBe(true);
+  });
+
+  test('renders per-token sections with WAX and BINGO visible', async () => {
+    render(<StatsBar />);
+
+    await vi.waitFor(() => expect(triggerIntersection).not.toBeNull());
+    act(() => { triggerIntersection!(); });
+    await vi.waitFor(() => expect(rAFcallbacks.length).toBeGreaterThan(0));
+    act(() => { processAllRAF(); });
+
+    expect(screen.getByTestId('stat-token-wax')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-token-bingo')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-token-rtp-wax')).toBeInTheDocument();
+    expect(screen.getByTestId('stat-token-rtp-bingo')).toBeInTheDocument();
   });
 });

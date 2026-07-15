@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Gamepad2, Coins, Users, Percent } from 'lucide-react';
+import { Gamepad2, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getGameStats } from '@/lib/api';
+import { getGameStats, type GameStats } from '@/lib/api';
 
-interface GameStat {
-    icon: typeof Gamepad2;
-    labelKey: string;
-    value: number | null;
-}
-
-function formatCompact(n: number): string {
+function formatCompact(n: number | undefined): string {
+    if (n === undefined) return '—';
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return n.toLocaleString();
@@ -18,31 +13,23 @@ function formatCompact(n: number): string {
 export default function StatsBar() {
     const { t } = useTranslation();
     const ref = useRef<HTMLDivElement>(null);
-    const [statsData, setStatsData] = useState<GameStat[] | null>(null);
-    const [animCounts, setAnimCounts] = useState<number[]>([0, 0, 0, 0]);
+    const [stats, setStats] = useState<GameStats | null>(null);
+    const [animCounts, setAnimCounts] = useState<number[]>([]);
     const [hasAnimated, setHasAnimated] = useState(false);
 
     useEffect(() => {
         getGameStats()
-            .then((data) => {
-                setStatsData([
-                    { icon: Gamepad2, labelKey: 'stats.games_played', value: data.total_games },
-                    { icon: Coins, labelKey: 'stats.prizes_paid', value: data.total_prizes },
-                    { icon: Users, labelKey: 'stats.active_players', value: data.total_players },
-                    { icon: Percent, labelKey: 'stats.rtp', value: Math.round(data.avg_rtp_pct) },
-                ]);
-            })
-            .catch(() => {
-                setStatsData(null);
-            });
+            .then(setStats)
+            .catch(() => setStats(null));
     }, []);
 
-    const displayStats = statsData ?? [
-        { icon: Gamepad2, labelKey: 'stats.games_played', value: null },
-        { icon: Coins, labelKey: 'stats.prizes_paid', value: null },
-        { icon: Users, labelKey: 'stats.active_players', value: null },
-        { icon: Percent, labelKey: 'stats.rtp', value: null },
-    ];
+    const targets = stats
+        ? [
+              stats.totals.total_games,
+              stats.totals.total_players,
+              ...stats.by_token.flatMap((t) => [t.total_prizes, Math.round(t.avg_rtp_pct)]),
+          ]
+        : [];
 
     useEffect(() => {
         if (!ref.current || hasAnimated) return;
@@ -55,23 +42,21 @@ export default function StatsBar() {
                     observer.disconnect();
                 }
             },
-            { threshold: 0.3 }
+            { threshold: 0.3 },
         );
         observer.observe(node);
         return () => observer.disconnect();
-    }, [statsData, hasAnimated]);
+    }, [stats, hasAnimated]);
 
     useEffect(() => {
-        if (!hasAnimated) return;
+        if (!hasAnimated || targets.length === 0) return;
 
-        const targets = displayStats.map((s) => s.value ?? 0);
         const duration = 2000;
         let start: number | null = null;
 
         function step(ts: number) {
             if (!start) start = ts;
-            const elapsed = ts - start;
-            const progress = Math.min(elapsed / duration, 1);
+            const progress = Math.min((ts - start) / duration, 1);
 
             setAnimCounts(targets.map((t) => Math.floor(t * progress)));
 
@@ -83,39 +68,89 @@ export default function StatsBar() {
         }
 
         requestAnimationFrame(step);
-    }, [hasAnimated, statsData]);
+    }, [hasAnimated, targets]);
 
-    const hasData = displayStats[0].value !== null;
+    const hasData = stats !== null;
 
     return (
         <section ref={ref} className="py-12 bg-brand-700">
             <div className="max-w-7xl mx-auto px-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                    {displayStats.map((s, i) => {
-                        const Icon = s.icon;
-                        return (
-                            <div
-                                key={i}
-                                data-testid={`stat-${i}`}
-                                className="flex flex-col items-center text-center"
-                            >
-                                <Icon className="text-white/70 mb-2" size={24} />
-                                <span className="text-2xl font-bold text-white">
-                                    {hasData
-                                        ? (s.labelKey === 'stats.rtp'
-                                            ? `${animCounts[i]}%`
-                                            : formatCompact(animCounts[i]))
-                                        : '—'}
-                                </span>
-                                <span className="text-sm text-brand-200">
-                                    {t(s.labelKey)}
-                                </span>
-                            </div>
-                        );
-                    })}
+                <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div
+                        data-testid="stat-total-games"
+                        className="flex flex-col items-center text-center"
+                    >
+                        <Gamepad2 className="text-white/70 mb-2" size={24} />
+                        <span className="text-2xl font-bold text-white">
+                            {hasData ? formatCompact(animCounts[0]) : '—'}
+                        </span>
+                        <span className="text-sm text-brand-200">
+                            {t('stats.games_played')}
+                        </span>
+                    </div>
+                    <div
+                        data-testid="stat-total-players"
+                        className="flex flex-col items-center text-center"
+                    >
+                        <Users className="text-white/70 mb-2" size={24} />
+                        <span className="text-2xl font-bold text-white">
+                            {hasData ? formatCompact(animCounts[1]) : '—'}
+                        </span>
+                        <span className="text-sm text-brand-200">
+                            {t('stats.active_players')}
+                        </span>
+                    </div>
                 </div>
+
+                {hasData && stats.by_token.length > 0 && (
+                    <div className="border-t border-brand-600 pt-8">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                            {stats.by_token.map((tokenStat, i) => {
+                                const baseIdx = 2 + i * 2;
+                                return (
+                                    <div
+                                        key={tokenStat.token}
+                                        data-testid={`stat-token-${tokenStat.token.toLowerCase()}`}
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <span className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">
+                                            {tokenStat.token}
+                                        </span>
+                                        <span className="text-xl font-bold text-white">
+                                            {formatCompact(animCounts[baseIdx] ?? 0)}
+                                        </span>
+                                        <span className="text-xs text-brand-200">
+                                            {t('stats.token_prizes', { token: tokenStat.token })}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                            {stats.by_token.map((tokenStat, i) => {
+                                const baseIdx = 2 + i * 2;
+                                return (
+                                    <div
+                                        key={`${tokenStat.token}-rtp`}
+                                        data-testid={`stat-token-rtp-${tokenStat.token.toLowerCase()}`}
+                                        className="flex flex-col items-center text-center"
+                                    >
+                                        <span className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">
+                                            {tokenStat.token}
+                                        </span>
+                                        <span className="text-xl font-bold text-white">
+                                            {`${animCounts[baseIdx + 1] ?? 0}%`}
+                                        </span>
+                                        <span className="text-xs text-brand-200">
+                                            {t('stats.token_rtp', { token: tokenStat.token })}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {!hasData && (
-                    <p className="mt-6 text-center text-sm text-brand-300">
+                    <p className="text-center text-sm text-brand-300">
                         {t('stats.loading')}
                     </p>
                 )}
