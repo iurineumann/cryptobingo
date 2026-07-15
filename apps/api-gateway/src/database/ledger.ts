@@ -243,12 +243,14 @@ export interface PlatformSummary {
  * Usado pela landing page (StatsBar) e dashboards públicos.
  */
 export async function getPlatformSummary(): Promise<PlatformSummary> {
-    const [gamesRes, playersRes] = await Promise.all([
+    // NOTA: o contrato NÃO popula total_wagered/total_paid_out na tabela on-chain
+    // `games` (verificado 2026-07-15: row archived vem com esses campos zerados),
+    // então games_history.total_paid_out fica 0. Os prêmios REAIS vivem no
+    // transactions_ledger (action_type='claim_win'). Por isso total_prizes é
+    // somado do ledger transacional, não de games_history.total_paid_out.
+    const [gamesRes, playersRes, prizesRes] = await Promise.all([
         pgPool.query(
-            `SELECT
-                COUNT(*)::int                     AS total_games,
-                COALESCE(SUM(total_paid_out), 0)  AS total_prizes,
-                COALESCE(AVG(rtp_pct) * 100, 0)   AS avg_rtp_pct
+            `SELECT COUNT(*)::int AS total_games
              FROM games_history
              WHERE status IN ('archived', 'aborted')`
         ),
@@ -256,16 +258,24 @@ export async function getPlatformSummary(): Promise<PlatformSummary> {
             `SELECT COUNT(DISTINCT wallet_address)::int AS total_players
              FROM transactions_ledger`
         ),
+        pgPool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total_prizes
+             FROM transactions_ledger
+             WHERE action_type = 'claim_win'`
+        ),
     ]);
 
     const g = gamesRes.rows[0];
     const p = playersRes.rows[0];
+    const pr = prizesRes.rows[0];
 
     return {
         total_games:   Number(g.total_games),
-        total_prizes:  Math.round(parseFloat(g.total_prizes)),
+        total_prizes:  Math.round(parseFloat(pr.total_prizes)),
         total_players: Number(p.total_players),
-        avg_rtp_pct:   Math.round(parseFloat(g.avg_rtp_pct) * 100) / 100,
+        // rtp_pct depende de total_wagered, que o contrato não registra na chain
+        // nem no ledger (sem buy_ticket). Fica 0 até termos wagered disponível.
+        avg_rtp_pct:   0,
         currency:      'WAX',
         generated_at:  new Date().toISOString(),
     };
