@@ -87,6 +87,7 @@ services:
     ports:
       - '127.0.0.1:3100:3100'
     volumes:
+      - ./infra-monitoring/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     networks: [cb-back]
 
