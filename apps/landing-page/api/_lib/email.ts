@@ -33,6 +33,7 @@ async function sendMessage(
   text: string,
   purpose: string,
   from?: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<void> {
   const t = getTransporter();
   try {
@@ -41,6 +42,7 @@ async function sendMessage(
       to,
       subject,
       text,
+      ...(extraHeaders ? { headers: extraHeaders } : {}),
     });
     await logEmail(to, subject, purpose, 'sent');
   } catch (e) {
@@ -105,13 +107,83 @@ export async function sendWelcome(to: string): Promise<void> {
 }
 
 const newsletterSender = process.env.NEWSLETTER_SENDER ?? 'newsletter@cryptobingo.bet';
+const unsubscribeBase = process.env.UNSUBSCRIBE_BASE ?? 'https://landing-api.cryptobingo.bet/api/subscribe';
 
 export async function sendNewsletter(
   to: string,
   subject: string,
-  body: string
+  body: string,
+  token?: string,
 ): Promise<void> {
-  await sendMessage(to, subject, body, 'newsletter', newsletterSender);
+  // Headers anti-spam (Gmail bulk sender requirements, RFC 8058):
+  //  - List-Unsubscribe + One-Click Post (obrigatório p/ bulk desde 2024)
+  //  - Precedence: bulk + Feedback-ID (sinais de "boa vizinhança")
+  const headers: Record<string, string> = {
+    'Precedence': 'bulk',
+    'Feedback-ID': 'cryptobingo-newsletter:cryptobingo.bet',
+  };
+  if (token) {
+    const url = `${unsubscribeBase}?token=${encodeURIComponent(token)}`;
+    headers['List-Unsubscribe'] = `<${url}>`;
+    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+  }
+
+  // HTML com branding + preheader + link de descadastro visível.
+  const html = renderNewsletterHtml(subject, body, token);
+  const text = `${body}\n\n— CryptoBingo Team\n\nPara cancelar a inscrição: ${token ? `${unsubscribeBase}?token=${encodeURIComponent(token)}` : 'https://cryptobingo.bet'}`;
+
+  const t = getTransporter();
+  try {
+    await t.sendMail({
+      from: newsletterSender,
+      to,
+      subject,
+      text,
+      html,
+      headers,
+    });
+    await logEmail(to, subject, 'newsletter', 'sent');
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    await logEmail(to, subject, 'newsletter', 'failed', errMsg);
+    throw e;
+  }
+}
+
+function renderNewsletterHtml(subject: string, body: string, token?: string): string {
+  const unsubUrl = token
+    ? `${unsubscribeBase}?token=${encodeURIComponent(token)}`
+    : 'https://cryptobingo.bet';
+  const paragraphs = body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => `<p>${escapeHtml(l)}</p>`)
+    .join('\n');
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;background:#0b0e1a;color:#e8eaf2;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:24px;">
+    <h1 style="color:#7c5cff;font-size:22px;margin:0 0 16px;">CryptoBingo</h1>
+    <h2 style="font-size:18px;margin:0 0 16px;">${escapeHtml(subject)}</h2>
+    <div style="font-size:15px;line-height:1.6;">${paragraphs}</div>
+    <hr style="border:none;border-top:1px solid #232744;margin:24px 0;">
+    <p style="font-size:12px;color:#8a90b5;margin:0;">
+      Você recebe este e-mail porque se inscreveu na newsletter da CryptoBingo.<br>
+      <a href="${unsubUrl}" style="color:#7c5cff;">Cancelar inscrição</a>
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export async function logEmail(

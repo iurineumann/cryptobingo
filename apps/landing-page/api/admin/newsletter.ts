@@ -30,7 +30,7 @@ app.http('adminNewsletter', {
 
       for (const sub of subscribers) {
         try {
-          await sendNewsletter(sub.email, body.subject, body.body);
+          await sendNewsletter(sub.email, body.subject, body.body, sub.token);
           sent.push(sub.email);
         } catch (e) {
           console.error(`[newsletter] failed for ${sub.email}:`, e);
