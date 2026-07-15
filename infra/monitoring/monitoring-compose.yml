@@ -99,7 +99,7 @@ services:
     environment:
       DATA_SOURCE_NAME: 'postgresql://cryptobingo:${PG_APP_PW}@postgres:5432/cryptobingo?sslmode=disable'
     command:
-      - '--queries.path=/etc/postgres-exporter/queries.yml'
+      - '--config.file=/etc/postgres-exporter/queries.yml'
     ports:
       - '9188:9187'
     volumes:
