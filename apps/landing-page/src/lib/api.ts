@@ -167,6 +167,33 @@ export async function adminUpdateIdeaStatus(
     });
 }
 
+export interface Subscriber {
+    id: number;
+    email: string;
+    active: boolean;
+    created_at: string;
+    unsubscribed_at: string | null;
+}
+
+export interface SubscribersResponse {
+    subscribers: Subscriber[];
+    total: number;
+}
+
+export async function getSubscribers(
+    limit: number,
+    offset: number
+): Promise<SubscribersResponse> {
+    const token = getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    const url = `/admin/subscribers?limit=${limit}&offset=${offset}`;
+    return apiRequest<SubscribersResponse>(url, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
+
 export async function adminSendNewsletter(
     subject: string,
     body: string

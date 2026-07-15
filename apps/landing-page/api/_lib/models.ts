@@ -184,6 +184,22 @@ export async function getActiveSubscribers(): Promise<Subscriber[]> {
   );
 }
 
+export async function getSubscribersPage(
+  limit: number,
+  offset: number
+): Promise<{ subscribers: Subscriber[]; total: number }> {
+  const safeLimit = Math.min(Math.max(1, limit), 100);
+  const safeOffset = Math.max(0, offset);
+  const subscribers = await query<Subscriber>(
+    `SELECT * FROM subscribers ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+    [safeLimit, safeOffset]
+  );
+  const count = await queryOne<{ count: number }>(
+    `SELECT COUNT(*)::int AS count FROM subscribers`
+  );
+  return { subscribers, total: count?.count ?? 0 };
+}
+
 export async function logEmail(
   to: string,
   subject: string,
