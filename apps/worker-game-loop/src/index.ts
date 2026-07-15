@@ -12,13 +12,14 @@ import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
 import { startBurnSyncCron }   from './services/burnCron';
+import { startBlockchainIndexer } from './services/blockchainIndexer';
 import { logger } from './services/logger';
 
 logger.info('=============================================');
 logger.info({ tag: 'Bootstrap' }, 'CryptoBingo: Game Loop Worker Iniciando...');
 logger.info('=============================================');
 
-async function bootstrap(): Promise<void> {
+export async function bootstrap(): Promise<void> {
     // ── Guarda de configuração crítica ────────────────────────────────────────
     if (!process.env.MICROSERVICE_PRIVATE_KEY) {
         logger.error('ERRO CRÍTICO: MICROSERVICE_PRIVATE_KEY não definida no .env');
@@ -39,6 +40,14 @@ async function bootstrap(): Promise<void> {
 
     // ── 3. Redis (Inverted Index) ─────────────────────────────────────────────
     await connectRedis();
+
+    // ── 3b. Blockchain Indexer (popula games_history/ledger p/ stats públicos) ─
+    // Varre a tabela `games` on-chain e sincroniza games_history no PostgreSQL.
+    // Depende do Redis (cursor indexer:last_game_name). Sem isto, games_history
+    // fica vazio e GET /api/stats/game retorna total_games:0 (bug de wiring).
+    startBlockchainIndexer().catch(err =>
+        logger.error({ err, tag: 'Bootstrap' }, 'Erro ao iniciar blockchainIndexer:')
+    );
 
     // ── 4. Servidor WebSocket Broadcaster (porta WS_PORT / 8085) ─────────────
     startBroadcaster();
@@ -81,7 +90,10 @@ async function bootstrap(): Promise<void> {
 }
 
 // NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro
-bootstrap().catch((err) => {
-    logger.error({ err, tag: 'Bootstrap' }, 'Falha crítica:')
-    process.exit(1);
-});
+// Só auto-executa quando é o entrypoint real (evita disparar no import sob testes).
+if (require.main === module) {
+    bootstrap().catch((err) => {
+        logger.error({ err, tag: 'Bootstrap' }, 'Falha crítica:')
+        process.exit(1);
+    });
+}
