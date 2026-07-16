@@ -66,8 +66,10 @@ const GC_BATCH_SIZE = 50;
 import { setRabbitConnected } from './connectionState';
 import { logger } from './logger';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
+import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock } from './gameLock';
+import { publishGameEvent } from './rabbitPublisher';
 
-let connection: ChannelModel;
+export let connection: ChannelModel;
 let channel:    Channel;
 
 // ==========================================
@@ -258,8 +260,16 @@ function consumeMessages(): void {
                 // ── startdraw: LOCKED → DRAWING → aguarda oráculo → orquestra reveal + pagamento ──
                 // ADR-014: ACK imediato antes do reveal (o reveal pode durar ~120s para 35 bolas).
                 // O orquestrador assume o controle: reveal → avalia → paga → próxima partida.
+                //
+                // Idempotência: usa acquireOrchestrationLock para evitar dupla execução de
+                // executeStartDraw em cenário multi-nó (auto-advance + consumer na fila).
                 case 'startdraw': {
-                    await executeStartDraw(gameId);
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (lockAcquired) {
+                        await executeStartDraw(gameId);
+                    } else {
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente).`)
+                    }
 
                     const drawnBalls = await waitForDrawnBalls(gameId);
 
@@ -284,9 +294,6 @@ function consumeMessages(): void {
                             sendDrawStartedMessage(game.room_id).catch(() => {});
                         }
                     }).catch(() => {});
-
-                    // Marca como processado antes — impede dupla execução via autoClaimDrawnGames (race)
-                    processedGames.add(gameId);
 
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
                     orchestrateGame(gameId).catch(err =>
@@ -573,13 +580,20 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
             logger.error({ err, tag: 'AutoAdvance' }, `Erro índice invertido (jogo ${gameId}):`)
         );
 
-        autoStartDraw(gameId).catch(err => {
-            if (isResourceExhausted(err)) {
-                handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+        acquireOrchestrationLock(gameId).then(lockAcquired => {
+            if (!lockAcquired) {
+                logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: lock já existe, pulando.`)
                 return;
             }
-            logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
-            processedGames.delete(gameId);
+            autoStartDraw(gameId).catch(err => {
+                if (isResourceExhausted(err)) {
+                    handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                    return;
+                }
+                logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
+                processedGames.delete(gameId);
+                releaseOrchestrationLock(gameId).catch(() => {});
+            });
         });
     } catch (err) {
         if (isResourceExhausted(err)) {
@@ -677,14 +691,20 @@ export async function autoStartLockedGames(): Promise<void> {
 
 async function processLockedGame(gameId: string): Promise<void> {
     autoAdvanceGamesTotal.inc({ action: 'start_locked' });
-    processedGames.add(gameId);
-    autoStartDraw(gameId).catch(err => {
+
+    const lockAcquired = await acquireOrchestrationLock(gameId);
+    if (!lockAcquired) {
+        logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId} já está sendo processado pela fila.`)
+        return;
+    }
+
+    autoStartDraw(gameId).catch(async (err) => {
         if (isResourceExhausted(err)) {
             handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
             return;
         }
         logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
-        processedGames.delete(gameId);
+        await releaseOrchestrationLock(gameId).catch(() => {});
     });
 }
 
@@ -785,9 +805,14 @@ export async function recoverStuckGames(): Promise<void> {
 
         for (const game of lockedResult.rows as BlockchainGameState[]) {
             const gameId = String(game.game_id);
-            if (game.status === 'locked' && !processedGames.has(gameId)) {
-                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em LOCKED. Iniciando sorteio...`)
-                await autoStartDraw(gameId);
+            if (game.status === 'locked') {
+                const lockAcquired = await acquireOrchestrationLock(gameId);
+                if (lockAcquired) {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em LOCKED. Iniciando sorteio...`)
+                    await autoStartDraw(gameId);
+                } else {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} já sendo processado.`)
+                }
             }
         }
     } catch (err) {
@@ -804,24 +829,7 @@ export async function autoStartDraw(gameId: string): Promise<void> {
 
     try {
         await executeStartDraw(gameId);
-
-        const drawnBalls = await waitForDrawnBalls(gameId);
-
-        if (!drawnBalls) {
-            logger.error({ tag: 'AutoAdvance' }, `Timeout do oráculo para jogo ${gameId}. Abortando.`)
-            await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
-            notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
-            return;
-        }
-
-        logger.info({ tag: 'AutoAdvance' }, `Oráculo respondeu (jogo ${gameId}). Orquestrando...`)
-        fetchGame(gameId).then(game => {
-            if (game?.room_id && game.room_id !== '0') {
-                sendDrawStartedMessage(game.room_id).catch(() => {});
-            }
-        }).catch(() => {});
-
-        await orchestrateGame(gameId);
+        await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
     } catch (err) {
         if (isResourceExhausted(err)) {
             handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
