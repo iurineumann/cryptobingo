@@ -983,6 +983,7 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "locked"_n, "Game is not in LOCKED status.");
+        check(game_itr->total_wagered.quantity.amount > 0, "Cannot start draw without tickets.");
         games.modify(game_itr, same_payer, [&](auto& g) { g.status = "drawing"_n; });
         // signing_value = game_id — único por partida (primary key da tabela reqs).
         // Compatível com o contrato orng.wax de produção: requestrand(assoc_id, signing_value, caller).
