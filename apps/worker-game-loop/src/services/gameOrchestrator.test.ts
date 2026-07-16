@@ -36,6 +36,10 @@ jest.mock('./broadcaster', () => ({
     notifyGameAborted:  jest.fn(),
     io: { to: jest.fn().mockReturnValue({ emit: jest.fn() }) },
 }));
+jest.mock('./payoutSaga', () => ({
+    setPayoutPlan:    jest.fn().mockResolvedValue(undefined),
+    triggerCloseGame: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('./blockchain', () => ({
     executeCloseGame: jest.fn().mockResolvedValue('tx-close'),
     executeClaimWin:  jest.fn().mockResolvedValue('tx-claim'),

@@ -211,6 +211,51 @@ export async function executeClaimStage(
 }
 
 /**
+ * DRAWN|PAYING → PAYING: lote de claimwin sem boost/ combo.
+ * Tenta claimwinbatch; se action não existir on-chain, fallback 1-a-1.
+ * Chunk ~15 entries (Fase 2, #369).
+ * SEM boost_nft_ids — boost vai 1-a-1 via single_nft.
+ */
+export async function executeClaimWinBatch(
+    gameId: string,
+    entries: Array<{ ticket_id: string; ball_count: number; win_pattern_mask: string; golden_multiplier: number }>,
+): Promise<string | undefined> {
+    logger.info({ tag: 'Blockchain' }, `claimwinbatch → jogo ${gameId}, ${entries.length} entries`);
+    try {
+        const result = await microserviceSession.transact({
+            actions: [{
+                account:       contractAccount,
+                name:          'claimwinbatch',
+                authorization: [microserviceSession.permissionLevel],
+                data: { game_id: gameId, entries },
+            }],
+        }, { broadcast: true });
+        const txId = result.response?.transaction_id;
+        if (txId) logger.info(`claimwinbatch concluído (${entries.length} entries). TX: ${txId}`);
+        return txId;
+    } catch (err: any) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Fallback: action ausente on-chain → claimwin 1-a-1
+        if (/unknown action|not configured to have this abi|does not exist/i.test(msg)) {
+            logger.warn({ tag: 'Blockchain' }, `claimwinbatch não disponível. Fallback 1-a-1 (${entries.length} entries).`);
+            let lastTxId: string | undefined;
+            for (const e of entries) {
+                lastTxId = await transact('claimwin', {
+                    game_id:           gameId,
+                    ticket_id:         e.ticket_id,
+                    ball_count:        e.ball_count,
+                    win_pattern_mask:  e.win_pattern_mask,
+                    golden_multiplier: e.golden_multiplier,
+                    boost_nft_ids:     [],
+                });
+            }
+            return lastTxId;
+        }
+        throw err;
+    }
+}
+
+/**
  * PAYING|DRAWN → ARCHIVED: encerra o jogo após todos os claimwin do lote.
  * ADR-012: substitui a lógica anterior onde claimwin arquivava diretamente.
  */

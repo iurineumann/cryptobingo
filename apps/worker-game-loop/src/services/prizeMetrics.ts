@@ -37,6 +37,34 @@ export const buyinPersistedTotal = new Counter({
     registers: [registry],
 });
 
+export const prizePaymentsTxTotal = new Counter({
+    name: 'worker_prize_payments_tx_total',
+    help: 'Total de transações on-chain de pagamento (cai com batch)',
+    labelNames: ['currency'] as const,
+    registers: [registry],
+});
+
+export const payoutChunksTotal = new Counter({
+    name: 'worker_payout_chunks_total',
+    help: 'Total de chunks de payout publicados na fila',
+    labelNames: ['mode'] as const,
+    registers: [registry],
+});
+
+export const payoutRetriesTotal = new Counter({
+    name: 'worker_payout_retries_total',
+    help: 'Total de retentativas de payout',
+    labelNames: ['mode'] as const,
+    registers: [registry],
+});
+
+export const payoutRecoveredTotal = new Counter({
+    name: 'worker_payout_recovered_total',
+    help: 'Total de payouts recuperados por auto-advance',
+    labelNames: ['mode'] as const,
+    registers: [registry],
+});
+
 export const prizeRtpRatio = new Gauge({
     name: 'worker_prize_rtp_ratio',
     help: 'RTP da partida atual (prizes / buyins)',
