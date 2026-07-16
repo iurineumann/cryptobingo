@@ -196,7 +196,8 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
     });
 
     it('action=lockgame → executeLockGame chamado', async () => {
-        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_tickets: 3 }));
+        // Fonte da verdade do contrato é total_wagered (nao total_tickets inexistente).
+        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_wagered: { quantity: '3.0000 BINGO', contract: 'bingogametkn' } }));
         const msg = makeMsg({ action: 'lockgame', gameId: '1' });
         await processMsg(msg);
         expect(mockLockGame).toHaveBeenCalledWith('1');
