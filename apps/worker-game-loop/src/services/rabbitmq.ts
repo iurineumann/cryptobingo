@@ -45,6 +45,7 @@ import {
     autoAdvanceRunsTotal,
     autoAdvanceErrorsTotal,
     autoAdvanceGamesTotal,
+    setQueueDepth,
 }                          from './metrics';
 import dotenv from 'dotenv';
 
@@ -64,6 +65,7 @@ const PAYOUT_QUEUE       = 'game_loop_payouts';
 const PAYOUT_DLX         = 'game_loop_payouts_dlx';
 const PAYOUT_DLQ         = 'game_loop_payouts_dead';
 const PAYOUT_MAX_RETRIES = 3;
+const DLQ_MAX_RETRIES    = Number.parseInt(process.env.RABBITMQ_DLQ_MAX_RETRIES ?? '3', 10);
 const CHUNK_SIZE         = 15;
 
 // Polling do oráculo: 75 tentativas × 2s = 150s máximo
@@ -204,6 +206,10 @@ export async function connectRabbitMQ(): Promise<void> {
         logger.info({ tag: 'RabbitMQ' }, `Escutando "${QUEUE_NAME}" (max retries: ${MAX_RETRIES})`)
         consumeMessages();
         consumePayouts();
+        consumeDeadLetters();
+
+        const queueDepthInterval = setInterval(updateQueueDepthMetrics, 15_000);
+        queueDepthInterval.unref();
 
     } catch (error) {
         logger.error({ error, tag: 'RabbitMQ' }, `Falha ao conectar. Tentando em ${RETRY_DELAY_MS / 1000}s...`)
@@ -281,6 +287,9 @@ function consumeMessages(): void {
                         logger.error({ err, tag: 'RabbitMQ' }, `Erro ao conceder XP de compra para jogo ${gameId}:`)
                     );
                     sendGameLockedMessage(gameId).catch(() => {});
+                    // Encadeia startdraw via fila — consumer tem acquireOrchestrationLock
+                    // contra dupla-execução (auto-advance também publica como backup).
+                    await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
                     break;
                 }
 
@@ -350,6 +359,8 @@ function consumeMessages(): void {
                     onGameResolved(gameId).catch(err =>
                         logger.error({ err, tag: 'RabbitMQ' }, `onGameResolved error (abort, jogo ${gameId}):`)
                     );
+                    // Encadeia refundall via fila — estorno assíncrono dos tickets.
+                    await publishGameEvent(QUEUE_NAME, 'refundall', { gameId });
                     break;
                 }
 
@@ -358,6 +369,8 @@ function consumeMessages(): void {
                 // Ref: SPEC.md §5.2
                 case 'refundall': {
                     await processRefundAll(gameId);
+                    // Encadeia cleargame via fila — GC de RAM após estorno completo.
+                    await publishGameEvent(QUEUE_NAME, 'cleargame', { gameId });
                     break;
                 }
 
@@ -515,6 +528,83 @@ function consumePayouts(): void {
         }
 
     }, { noAck: false });
+}
+
+// ==========================================
+// CONSUMIDOR DE DLQ (Fase 5 #372)
+// Consome filas mortas e tenta re-publicação com backoff.
+// ==========================================
+
+function consumeDeadLetters(): void {
+    channel.consume(DLQ_NAME, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+        await handleDeadLetter(msg, DLQ_NAME, QUEUE_NAME);
+    }, { noAck: false });
+
+    channel.consume(PAYOUT_DLQ, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+        await handleDeadLetter(msg, PAYOUT_DLQ, PAYOUT_QUEUE);
+    }, { noAck: false });
+
+    logger.info({ tag: 'RabbitMQ' }, `Consumindo DLQs "${DLQ_NAME}" e "${PAYOUT_DLQ}" (max retries: ${DLQ_MAX_RETRIES})`)
+}
+
+/**
+ * Processa uma mensagem da DLQ: re-publica na fila original com backoff
+ * exponencial se x-death < DLQ_MAX_RETRIES; caso contrário, loga como
+ * permanente e mantém na DLQ para intervenção manual.
+ */
+async function handleDeadLetter(msg: ConsumeMessage, dlqName: string, originalQueue: string): Promise<void> {
+    const deliveryCount = getDeliveryCount(msg);
+    const payloadStr    = msg.content.toString();
+
+    let action: string;
+    try {
+        action = (JSON.parse(payloadStr)?.action as string) || 'unknown';
+    } catch {
+        action = 'unknown';
+    }
+
+    logger.info({ tag: 'RabbitMQ' }, `DLQ mensagem recebida em "${dlqName}" (action=${action}, x-death count=${deliveryCount})`);
+
+    if (deliveryCount < DLQ_MAX_RETRIES) {
+        const delayMs = 30_000 * Math.pow(2, deliveryCount);
+        logger.info({ tag: 'RabbitMQ' },
+            `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+
+        setTimeout(async () => {
+            try {
+                const parsed = JSON.parse(payloadStr) as Record<string, unknown>;
+                const { action: act, ...rest } = parsed;
+                await publishGameEvent(originalQueue, String(act ?? 'unknown'), rest);
+                eventsDeadLetteredTotal.inc({ action: String(act ?? 'unknown') });
+            } catch (err) {
+                logger.error({ err, tag: 'RabbitMQ' }, `DLQ erro ao re-publicar "${action}" em "${originalQueue}"`);
+            }
+        }, delayMs).unref();
+    } else {
+        logger.error({ tag: 'RabbitMQ' },
+            `DLQ msg permanente (action=${action}, x-death count=${deliveryCount}). Mantida na DLQ p/ intervenção manual.`);
+        eventsDeadLetteredTotal.inc({ action });
+    }
+
+    channel.ack(msg);
+}
+
+/**
+ * Atualiza a métrica worker_queue_depth para todas as filas gerenciadas.
+ * Chamado periodicamente pelo setInterval em connectRabbitMQ.
+ */
+export async function updateQueueDepthMetrics(): Promise<void> {
+    const queues = [QUEUE_NAME, PAYOUT_QUEUE, DLQ_NAME, PAYOUT_DLQ];
+    for (const q of queues) {
+        try {
+            const result = await channel.checkQueue(q);
+            setQueueDepth(q, result.messageCount);
+        } catch (err) {
+            logger.error({ err, tag: 'RabbitMQ' }, `Erro ao verificar profundidade da fila "${q}":`);
+        }
+    }
 }
 
 // ==========================================
