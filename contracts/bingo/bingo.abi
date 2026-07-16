@@ -226,6 +226,20 @@
       ]
     },
     {
+      "name": "claimwinbatch",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "entries",
+          "type": "win_entry[]"
+        }
+      ]
+    },
+    {
       "name": "cleargame",
       "base": "",
       "fields": [
@@ -778,6 +792,28 @@
         {
           "name": "nonce_data",
           "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "win_entry",
+      "base": "",
+      "fields": [
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ball_count",
+          "type": "uint8"
+        },
+        {
+          "name": "win_pattern_mask",
+          "type": "uint64"
+        },
+        {
+          "name": "golden_multiplier",
+          "type": "uint16"
         }
       ]
     },
@@ -1400,6 +1436,11 @@
     {
       "name": "claimwin",
       "type": "claimwin",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "claimwinbatch",
+      "type": "claimwinbatch",
       "ricardian_contract": ""
     },
     {

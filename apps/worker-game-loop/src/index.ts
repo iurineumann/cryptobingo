@@ -6,7 +6,7 @@ dotenv.config();
 require('./instrumentation');
 
 import mongoose from 'mongoose';
-import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames } from './services/rabbitmq';
+import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames, recoverPayoutGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
@@ -80,6 +80,16 @@ export async function bootstrap(): Promise<void> {
             logger.error({ err, tag: 'Recovery' }, 'Erro no recovery periódico:')
         );
     }, 60_000);
+
+    // ── 4c. Recovery de payout (Fase 2 #369) ───────────────────────────
+    recoverPayoutGames().catch(err =>
+        logger.error({ err, tag: 'Bootstrap' }, 'Erro no payout recovery scan:')
+    );
+    setInterval(() => {
+        recoverPayoutGames().catch(err =>
+            logger.error({ err, tag: 'Recovery' }, 'Erro no payout recovery periódico:')
+        );
+    }, 30_000);
 
     // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
     startBurnSyncCron();

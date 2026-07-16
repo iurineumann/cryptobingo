@@ -16,6 +16,7 @@ const mockAutoLockFundingGames = jest.fn();
 const mockAutoStartLockedGames = jest.fn();
 const mockAutoClaimDrawnGames  = jest.fn();
 const mockRecoverStuckGames    = jest.fn().mockResolvedValue(undefined);
+const mockRecoverPayoutGames   = jest.fn().mockResolvedValue(undefined);
 const mockEnsureFirstGame      = jest.fn();
 const mockStartBlockchainIndexer = jest.fn().mockResolvedValue(undefined);
 
@@ -33,6 +34,7 @@ jest.mock('./services/rabbitmq', () => ({
     autoStartLockedGames:  (...a: any[]) => mockAutoStartLockedGames(...a),
     autoClaimDrawnGames:   (...a: any[]) => mockAutoClaimDrawnGames(...a),
     recoverStuckGames:     (...a: any[]) => mockRecoverStuckGames(...a),
+    recoverPayoutGames:    (...a: any[]) => mockRecoverPayoutGames(...a),
 }));
 
 jest.mock('./services/broadcaster', () => ({

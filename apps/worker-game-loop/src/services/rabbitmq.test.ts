@@ -66,6 +66,18 @@ jest.mock('./metrics', () => ({
     oraclePollAttempts:       { observe: jest.fn() },
     workerQueuePublishedTotal:{ inc: jest.fn() },
 }));
+jest.mock('./prizeMetrics', () => ({
+    prizePaymentsTotal:      { inc: jest.fn() },
+    prizePaymentsAmountTotal:{ inc: jest.fn() },
+    prizePipelineDuration:   { startTimer: jest.fn().mockReturnValue(jest.fn()) },
+    prizePersistTotal:       { inc: jest.fn() },
+    buyinPersistedTotal:     { inc: jest.fn() },
+    prizeRtpRatio:           { set: jest.fn() },
+    prizePaymentsTxTotal:    { inc: jest.fn() },
+    payoutChunksTotal:       { inc: jest.fn() },
+    payoutRetriesTotal:      { inc: jest.fn() },
+    payoutRecoveredTotal:    { inc: jest.fn() },
+}));
 // Fase 1 (#368): lock Redis e publish na fila são novos. O teste original assumia
 // "executa sempre" — fingimos lock adquirido e publish no-op para isolar o handler.
 jest.mock('./gameLock', () => ({

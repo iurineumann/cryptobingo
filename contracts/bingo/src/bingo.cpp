@@ -19,6 +19,12 @@ namespace bingo {
         return ds;
     }
 
+    // Bit de idempotência: marca ticket já pago (claimwin/claimwinbatch).
+    // Reusa o campo state (uint32_t, já existente) — custo ZERO de RAM.
+    // Claims multi-estágio (claimstage/claimcombo, MULTI_MATCH) NÃO usam este bit
+    // (exigem paid_mask por stage — OPÇÃO B, fora do escopo da Fase 2).
+    static constexpr uint32_t TICKET_STATE_PAID = 0x80000000;
+
     void bingo_contract::_save_drop_state(drop_state& ds) {
         drop_state_singleton ds_table(get_self(), get_self().value);
         ds_table.set(ds, get_self());
@@ -1086,6 +1092,9 @@ namespace bingo {
         tickets_table tickets(get_self(), game_id);
         auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
 
+        // IDEMPOTÊNCIA (ADR-036): rejeita ticket já pago — evita double-pay on-chain.
+        check(!(ticket_itr->state & TICKET_STATE_PAID), "ticket ja pago (idempotencia).");
+
         name winner = ticket_itr->owner;
         balances_table balances(get_self(), winner.value);
         extended_asset payout;
@@ -1206,6 +1215,12 @@ namespace bingo {
             }
             // ADR-005: acumula payout do total_wagered para cálculo do GGR em closegame
             games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+            // IDEMPOTÊNCIA (ADR-036): marca ticket como pago p/ bloquear reenvios.
+            {
+                auto t_itr = tickets.find(ticket_id);
+                if (t_itr != tickets.end())
+                    tickets.modify(t_itr, same_payer, [&](auto& t) { t.state |= TICKET_STATE_PAID; });
+            }
             game_itr = games.find(game_id);
         }
 
@@ -1216,6 +1231,139 @@ namespace bingo {
                     balances.emplace(get_self(), [&](auto& b) { b.balance = sponsor_asset; });
                 } else {
                     balances.modify(sb_itr, same_payer, [&](auto& b) { b.balance += sponsor_asset; });
+                }
+            }
+        }
+        // Jogo permanece em "paying". Worker chama closegame() após o lote.
+    }
+
+    // ==========================================
+    // CLAIM WIN BATCH — Fase 2 Pagamento Batch (#369)
+    //
+    // Paga N vencedores limpos (sem boost NFT/grant) em uma única tx.
+    // Reusa a validação de claimwin por entry, SEM seção de boost.
+    // Fail-fast: qualquer erro invalida todo o lote.
+    // Fail-atomic: balances e total_paid acumulam iterativamente;
+    //   se um entry falhar AFTER creditação parcial, a tx reverte
+    //   inteiramente (behavior padrão do Antelope).
+    // ==========================================
+
+    void bingo_contract::claimwinbatch(uint64_t game_id, std::vector<win_entry> entries) {
+        require_auth("bingogamesvc"_n);
+        check(!entries.empty(), "claimwinbatch requer pelo menos 1 entry.");
+
+        games_table games(get_self(), get_self().value);
+        auto game_itr = games.require_find(game_id, "Game not found.");
+        check(
+            game_itr->status == "drawn"_n || game_itr->status == "paying"_n,
+            "Game deve estar em DRAWN ou PAYING para pagar vencedores."
+        );
+
+        // ADR-030: permite pagar jogo arquivado SEM pagamento (total_paid==0)
+        bool archived_unpaid = game_itr->status == "archived"_n && game_itr->total_paid == 0;
+        check(
+            game_itr->status == "drawn"_n
+         || game_itr->status == "paying"_n
+         || archived_unpaid,
+            "Game deve estar em DRAWN, PAYING ou ARCHIVED(não pago) para pagar vencedores."
+        );
+
+        if (archived_unpaid) {
+            games.modify(game_itr, same_payer, [&](auto& g) { g.status = "paying"_n; });
+            game_itr = games.find(game_id);
+        }
+
+        if (game_itr->status == "drawn"_n) {
+            games.modify(game_itr, same_payer, [&](auto& g) { g.status = "paying"_n; });
+            game_itr = games.find(game_id);
+        }
+
+        gametypes_table gametypes(get_self(), get_self().value);
+        auto gt_itr = gametypes.require_find(game_itr->gametype_id, "gametype_id invalido no jogo.");
+
+        tickets_table tickets(get_self(), game_id);
+
+        for (const auto& entry : entries) {
+            auto ticket_itr = tickets.require_find(entry.ticket_id, "Ticket not found.");
+
+            // IDEMPOTÊNCIA (ADR-036): rejeita ticket já pago — evita double-pay on-chain.
+            check(!(ticket_itr->state & TICKET_STATE_PAID), "ticket ja pago (idempotencia).");
+
+            name winner = ticket_itr->owner;
+            balances_table balances(get_self(), winner.value);
+
+            // Valida win_weight on-chain (anti-inflação — same as claimwin)
+            uint16_t win_weight = 0;
+            for (const auto& rule : gt_itr->rules) {
+                patterns_table patterns(get_self(), get_self().value);
+                auto pat_itr = patterns.find(rule.pattern_id);
+                if (pat_itr != patterns.end() && (uint64_t)pat_itr->mask == entry.win_pattern_mask) {
+                    win_weight = rule.weight;
+                    if (gt_itr->master_weight_ovrd > 0 && (uint64_t)pat_itr->mask == 0x1FFFFFF) {
+                        win_weight = gt_itr->master_weight_ovrd;
+                    }
+                    break;
+                }
+            }
+            check(win_weight > 0, "win_pattern_mask nao corresponde a nenhum padrao do gametype.");
+
+            // Calcula payout — SEM boost (batch é clean only)
+            extended_asset payout = ticket_itr->price.quantity.amount > 0
+                ? ticket_itr->price
+                : game_itr->ticket_price;
+            payout.quantity.amount =
+                payout.quantity.amount * (int64_t)gt_itr->base_multiplier * (int64_t)win_weight / 100;
+
+            if (entry.golden_multiplier > 1) {
+                payout.quantity.amount *= (int64_t)entry.golden_multiplier;
+            }
+
+            if (payout.quantity.amount > 0) {
+                // Sala patrocinada: debita do room_treasury
+                if (game_itr->room_id != 0) {
+                    rooms_table rooms(get_self(), get_self().value);
+                    auto room_itr = rooms.find(game_itr->room_id);
+                    if (room_itr != rooms.end() && room_itr->sponsor_room) {
+                        room_treasuries_table treasuries(get_self(), get_self().value);
+                        auto t_itr = treasuries.require_find(game_itr->room_id,
+                            "Treasury da sala patrocinada nao encontrado.");
+                        check(t_itr->balance.quantity.symbol == payout.quantity.symbol &&
+                              t_itr->balance.contract == payout.contract,
+                            "Token do payout difere do treasury da sala.");
+                        check(t_itr->balance >= payout,
+                            "Treasury da sala sem saldo para cobrir o payout.");
+                        treasuries.modify(t_itr, same_payer, [&](auto& t) { t.balance -= payout; });
+                    }
+                }
+
+                auto bal_itr = balances.find(payout.quantity.symbol.code().raw());
+                if (bal_itr == balances.end()) {
+                    balances.emplace(get_self(), [&](auto& b) { b.balance = payout; });
+                } else {
+                    balances.modify(bal_itr, same_payer, [&](auto& b) { b.balance += payout; });
+                }
+
+                // ADR-005: acumula payout para cálculo do GGR em closegame
+                game_itr = games.find(game_id);
+                games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+                // IDEMPOTÊNCIA (ADR-036): marca ticket como pago p/ bloquear reenvios.
+                {
+                    auto t_itr = tickets.find(entry.ticket_id);
+                    if (t_itr != tickets.end())
+                        tickets.modify(t_itr, same_payer, [&](auto& t) { t.state |= TICKET_STATE_PAID; });
+                }
+            }
+
+            // Sponsor pool credits — same per winner as claimwin
+            game_itr = games.find(game_id);
+            for (const auto& sponsor_asset : game_itr->sponsor_pool) {
+                if (sponsor_asset.quantity.amount > 0) {
+                    auto sb_itr = balances.find(sponsor_asset.quantity.symbol.code().raw());
+                    if (sb_itr == balances.end()) {
+                        balances.emplace(get_self(), [&](auto& b) { b.balance = sponsor_asset; });
+                    } else {
+                        balances.modify(sb_itr, same_payer, [&](auto& b) { b.balance += sponsor_asset; });
+                    }
                 }
             }
         }

@@ -38,7 +38,8 @@ import {
     io,
     type WinnerPayload,
 } from './broadcaster';
-import { executeCloseGame, executeAbortGame }                         from './blockchain';
+import { executeAbortGame }                         from './blockchain';
+import { setPayoutPlan, triggerCloseGame }          from './payoutSaga';
 import { deleteIndex }                                               from './invertedIndex';
 import { onGameResolved }                                            from './roomManager';
 import { sendGameSummaryMessage }                                    from './chatSystemHelper';
@@ -251,7 +252,8 @@ async function orchestrateMultiMatch(
     }
 
     endRevealSession(gameId);
-    await executeCloseGame(gameId);
+    await setPayoutPlan(gameId, 0);
+    await triggerCloseGame(gameId);
     return totalWinners;
 }
 
@@ -352,7 +354,8 @@ export async function orchestrateGame(gameId: string): Promise<void> {
         try {
             const g = await fetchGame(gameId).catch(() => null);
             if (g && (g.status === 'drawn' || g.status === 'paying')) {
-                await executeCloseGame(gameId);
+                await setPayoutPlan(gameId, 0);
+                await triggerCloseGame(gameId);
                 notifyGameEnded(gameId, drawMode, 0);
                 await onGameResolved(gameId).catch(() => {});
                 logger.warn({ tag: 'Orquestrador' }, `Jogo ${gameId} fechado via catch (zombie recovery).`);

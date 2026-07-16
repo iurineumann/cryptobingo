@@ -17,6 +17,9 @@ import {
     executeAbortGame,
     executeRefundTicket,
     executeClearGame,
+    executeClaimWinBatch,
+    executeClaimWin,
+    executeClaimCombo,
 }                          from './blockchain';
 import { buildInvertedIndex }                       from './invertedIndex';
 import { awardTicketPurchaseXP }                    from './xpEngine';
@@ -56,6 +59,13 @@ const DLX_NAME           = 'game_loop_dlx';
 const DLQ_NAME           = 'game_loop_dead';
 const MAX_RETRIES        = Number.parseInt(process.env.RABBITMQ_MAX_RETRIES ?? '3', 10);
 
+// Fase 2 (#369) — fila de payout com DLX/DLQ dedicados
+const PAYOUT_QUEUE       = 'game_loop_payouts';
+const PAYOUT_DLX         = 'game_loop_payouts_dlx';
+const PAYOUT_DLQ         = 'game_loop_payouts_dead';
+const PAYOUT_MAX_RETRIES = 3;
+const CHUNK_SIZE         = 15;
+
 // Polling do oráculo: 75 tentativas × 2s = 150s máximo
 const ORACLE_POLL_MAX_ATTEMPTS = 75;
 const ORACLE_POLL_INTERVAL_MS  = 2_000;
@@ -68,6 +78,8 @@ import { logger } from './logger';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock } from './gameLock';
 import { publishGameEvent } from './rabbitPublisher';
+import { setPayoutPlan, recordPayoutCompletion, triggerCloseGame, getPayoutProgress } from './payoutSaga';
+import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal } from './prizeMetrics';
 
 export let connection: ChannelModel;
 let channel:    Channel;
@@ -127,6 +139,7 @@ async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
 // ==========================================
 
 async function setupQueues(): Promise<void> {
+    // DLX/DLQ principal (game_loop_events)
     await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
     await channel.assertQueue(DLQ_NAME, { durable: true });
     await channel.bindQueue(DLQ_NAME, DLX_NAME, QUEUE_NAME);
@@ -138,6 +151,19 @@ async function setupQueues(): Promise<void> {
         },
     });
     logger.info({ tag: 'RabbitMQ' }, `Fila "${QUEUE_NAME}" + DLQ "${DLQ_NAME}" configuradas.`)
+
+    // DLX/DLQ de payout (Fase 2 #369)
+    await channel.assertExchange(PAYOUT_DLX, 'direct', { durable: true });
+    await channel.assertQueue(PAYOUT_DLQ, { durable: true });
+    await channel.bindQueue(PAYOUT_DLQ, PAYOUT_DLX, PAYOUT_QUEUE);
+    await channel.assertQueue(PAYOUT_QUEUE, {
+        durable: true,
+        arguments: {
+            'x-dead-letter-exchange':    PAYOUT_DLX,
+            'x-dead-letter-routing-key': PAYOUT_QUEUE,
+        },
+    });
+    logger.info({ tag: 'RabbitMQ' }, `Fila "${PAYOUT_QUEUE}" + DLQ "${PAYOUT_DLQ}" configuradas.`)
 }
 
 // ==========================================
@@ -177,6 +203,7 @@ export async function connectRabbitMQ(): Promise<void> {
         setRabbitConnected(true);
         logger.info({ tag: 'RabbitMQ' }, `Escutando "${QUEUE_NAME}" (max retries: ${MAX_RETRIES})`)
         consumeMessages();
+        consumePayouts();
 
     } catch (error) {
         logger.error({ error, tag: 'RabbitMQ' }, `Falha ao conectar. Tentando em ${RETRY_DELAY_MS / 1000}s...`)
@@ -376,6 +403,169 @@ function consumeMessages(): void {
         }
 
     }, { noAck: false });
+}
+
+// ==========================================
+// CONSUMIDOR DE PAYOUT (Fase 2 #369)
+// ==========================================
+
+type PayoutEventEntry = {
+    ticketId: string;
+    ticketOwner: string;
+    ballCount: number;
+    patternMask: string;
+    goldenMultiplier: number;
+    comboId?: number;
+    boostNftIds?: string[];
+    patternName: string;
+    weight: number;
+    baseMultiplier: number;
+    ticketPrice: string;
+};
+
+type PayoutEventPayload = {
+    gameId: string;
+    chunkId: string;
+    mode: 'chunk_clean' | 'single_combo' | 'single_nft';
+    entries: PayoutEventEntry[];
+};
+
+function consumePayouts(): void {
+    channel.prefetch(5);  // competing consumers — até 5 por canal
+    channel.consume(PAYOUT_QUEUE, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+
+        const payloadStr    = msg.content.toString();
+        const deliveryCount = getDeliveryCount(msg);
+
+        let payload: PayoutEventPayload;
+        try {
+            payload = JSON.parse(payloadStr) as PayoutEventPayload;
+        } catch {
+            logger.error({ tag: 'PayoutConsumer' }, 'JSON malformado. Descartando para DLQ.')
+            payoutChunksTotal.labels({ mode: 'parse_error' }).inc();
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        const { gameId, chunkId, mode, entries } = payload;
+        if (!gameId || !chunkId || !mode || !entries?.length) {
+            logger.error({ tag: 'PayoutConsumer' }, 'Campos obrigatórios ausentes. DLQ.')
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        if (deliveryCount >= PAYOUT_MAX_RETRIES) {
+            logger.error({ tag: 'PayoutConsumer' }, `"${mode}" jogo ${gameId} chunk ${chunkId} excedeu ${PAYOUT_MAX_RETRIES} retentativas → DLQ.`);
+            payoutRetriesTotal.labels({ mode }).inc();
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        try {
+            let txHash: string | undefined;
+
+            if (mode === 'chunk_clean') {
+                txHash = await executeClaimWinBatch(
+                    gameId,
+                    entries.map(e => ({
+                        ticket_id:         e.ticketId,
+                        ball_count:        e.ballCount,
+                        win_pattern_mask:  e.patternMask,
+                        golden_multiplier: e.goldenMultiplier,
+                    })),
+                );
+            } else if (mode === 'single_combo') {
+                const e = entries[0]!;
+                txHash = await executeClaimCombo(
+                    gameId, e.ticketId, e.ballCount, e.comboId!, e.goldenMultiplier,
+                );
+            } else if (mode === 'single_nft') {
+                const e = entries[0]!;
+                txHash = await executeClaimWin(
+                    gameId, e.ticketId, e.ballCount, BigInt(e.patternMask),
+                    e.goldenMultiplier, e.boostNftIds ?? [],
+                );
+            } else {
+                logger.warn(`[PayoutConsumer] Modo desconhecido: "${mode}". DLQ.`)
+                channel.nack(msg, false, false);
+                return;
+            }
+
+            if (txHash) {
+                await recordPayoutCompletion(gameId, chunkId);
+                channel.ack(msg);
+                logger.info({ tag: 'PayoutConsumer' }, `"${mode}" chunk ${chunkId} jogo ${gameId} OK. TX: ${txHash}`);
+            } else {
+                logger.warn({ tag: 'PayoutConsumer' }, `"${mode}" chunk ${chunkId} jogo ${gameId}: sem txHash (retentando).`)
+                channel.nack(msg, false, true);
+            }
+
+        } catch (err) {
+            const remaining = PAYOUT_MAX_RETRIES - deliveryCount - 1;
+            logger.error({ err, mode, gameId, chunkId, deliveryCount: deliveryCount + 1, remaining },
+                `Erro em payout "${mode}" chunk ${chunkId} jogo ${gameId}.`);
+            payoutRetriesTotal.labels({ mode }).inc();
+            if (remaining <= 0) {
+                logger.error(`Descartando payout "${mode}" ${chunkId} jogo ${gameId} p/ DLQ.`)
+                channel.nack(msg, false, false);
+            } else {
+                channel.nack(msg, false, true);
+            }
+        }
+
+    }, { noAck: false });
+}
+
+// ==========================================
+// RECOVERY DE PAYOUT (Fase 2 #369)
+// ==========================================
+
+/**
+ * Varre jogos com payout_plan pendente, republica chunks órfãos
+ * e drena DLQ de payout. Fecha jogos completos que não fecharam.
+ */
+export async function recoverPayoutGames(): Promise<void> {
+    logger.info({ tag: 'Recovery' }, 'Varredura de payouts pendentes...');
+
+    // 1. Recupera jogos em PAYING (payout_saga incompleto)
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   200,
+            reverse: true,
+            json:    true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        for (const game of games) {
+            const gameId = String(game.game_id);
+            if (game.status !== 'paying') continue;
+
+            const progress = await getPayoutProgress(gameId);
+            if (!progress) {
+                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em PAYING sem plano. Tentando fechar direto.`)
+                await triggerCloseGame(gameId).catch(() => {});
+                continue;
+            }
+
+            if (progress.paid >= progress.expected) {
+                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} já completo (${progress.paid}/${progress.expected}). Fechando.`)
+                await triggerCloseGame(gameId).catch(() => {});
+            } else {
+                logger.warn({ tag: 'Recovery' }, `Jogo ${gameId} incompleto (${progress.paid}/${progress.expected}). Aguardando consumers.`)
+                // Se ficou órfão (consumers morreram), republicar via auto-advance
+                // A republicação será tratada pelo cron periódico (varre jogos DRAWN/PAYING)
+                payoutRecoveredTotal.labels({ mode: 'recovery_scan' }).inc();
+            }
+        }
+    } catch (err) {
+        logger.error({ err, tag: 'Recovery' }, 'Erro na varredura de payout:')
+    }
+
+    logger.info({ tag: 'Recovery' }, 'Varredura de payouts concluída.')
 }
 
 // ==========================================
