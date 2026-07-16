@@ -108,6 +108,18 @@ export const wsConnectionsActive = new Gauge({
     registers: [registry],
 });
 
+/** Profundidade das filas RabbitMQ (mensagens pendentes por fila). */
+export const queueDepth = new Gauge({
+    name:       'worker_queue_depth',
+    help:       'Mensagens pendentes por fila RabbitMQ.',
+    labelNames: ['queue'] as const,
+    registers:  [registry],
+});
+
+export function setQueueDepth(queue: string, count: number): void {
+    queueDepth.set({ queue }, count);
+}
+
 /** Sessões de Slow Reveal em andamento (gauge). */
 export const slowRevealSessionsActive = new Gauge({
     name:      'worker_slow_reveal_sessions_active',

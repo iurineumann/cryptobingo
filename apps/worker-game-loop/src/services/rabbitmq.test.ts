@@ -16,6 +16,7 @@ const mockChannel = {
     ack:            jest.fn(),
     nack:           jest.fn(),
     prefetch:       jest.fn().mockResolvedValue({}),
+    checkQueue:     jest.fn().mockResolvedValue({ messageCount: 0, consumerCount: 0 }),
 };
 
 jest.mock('amqplib', () => ({
@@ -65,6 +66,7 @@ jest.mock('./metrics', () => ({
     autoAdvanceGamesTotal:    { inc: jest.fn() },
     oraclePollAttempts:       { observe: jest.fn() },
     workerQueuePublishedTotal:{ inc: jest.fn() },
+    setQueueDepth:            jest.fn(),
 }));
 jest.mock('./prizeMetrics', () => ({
     prizePaymentsTotal:      { inc: jest.fn() },
@@ -92,16 +94,19 @@ jest.mock('./rabbitPublisher', () => ({
 
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames } from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics } from './rabbitmq';
+import { publishGameEvent } from './rabbitPublisher';
+import { setQueueDepth } from './metrics';
 import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
-const mockOrchestrate    = orchestrateGame    as jest.Mock;
-const mockFundGame       = executeFundGame    as jest.Mock;
-const mockLockGame       = executeLockGame    as jest.Mock;
-const mockStartDraw      = executeStartDraw   as jest.Mock;
-const mockAbortGame      = executeAbortGame   as jest.Mock;
+const mockOrchestrate        = orchestrateGame    as jest.Mock;
+const mockFundGame           = executeFundGame    as jest.Mock;
+const mockLockGame           = executeLockGame    as jest.Mock;
+const mockStartDraw          = executeStartDraw   as jest.Mock;
+const mockAbortGame          = executeAbortGame   as jest.Mock;
+const mockPublishGameEvent   = publishGameEvent   as jest.Mock;
 
 const mockGetTableRows = rpcClient.v1.chain.get_table_rows as jest.Mock;
 const mockFetchGame    = fetchGame as jest.Mock;
@@ -138,9 +143,9 @@ function makeMsg(payload: object, xDeathCount = 0) {
     };
 }
 
-// Captura o handler registrado em channel.consume
-function captureHandler(): (msg: any) => Promise<void> {
-    const call = mockChannel.consume.mock.calls[0];
+// Captura o handler registrado em channel.consume pelo índice da chamada
+function captureHandler(index = 0): (msg: any) => Promise<void> {
+    const call = mockChannel.consume.mock.calls[index];
     return call?.[1];
 }
 
@@ -152,7 +157,7 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
     beforeAll(async () => {
         jest.clearAllMocks();
         await connectRabbitMQ();
-        processMsg = captureHandler();
+        processMsg = captureHandler(0);  // game_loop_events
     });
 
     beforeEach(() => jest.clearAllMocks());
@@ -217,6 +222,107 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
         // O ACK é chamado (claimwin usa fire-and-forget para o orchestrator)
         expect(mockChannel.ack).toHaveBeenCalledWith(msg);
         expect(mockChannel.nack).not.toHaveBeenCalled();
+    });
+});
+
+// ── consumeDeadLetters ─────────────────────────────────────────────────────
+
+describe('consumeDeadLetters (DLQ)', () => {
+    let processDlq: (msg: any) => Promise<void>;
+
+    beforeAll(async () => {
+        jest.clearAllMocks();
+        await connectRabbitMQ();
+        processDlq = captureHandler(2);  // game_loop_dead
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('DLQ msg com x-death < DLQ_MAX_RETRIES → ACK + setTimeout com backoff', async () => {
+        const msg = makeMsg({ action: 'fundgame', gameId: '1' }, 1); // x-death=1
+        await processDlq(msg);
+        expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        // 30s * 2^1 = 60000
+        jest.advanceTimersByTime(60000);
+        await Promise.resolve(); // flush microtasks (setTimeout callback)
+    });
+
+    it('DLQ msg com x-death >= DLQ_MAX_RETRIES → ACK, sem publish (permanente)', async () => {
+        const msg = makeMsg({ action: 'fundgame', gameId: '1' }, 5); // x-death=5 >= 3
+        await processDlq(msg);
+        expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        // Não deve ter publishado (permanente)
+        jest.advanceTimersByTime(120000);
+        await Promise.resolve();
+        expect(mockPublishGameEvent).not.toHaveBeenCalled();
+    });
+
+    it('DLQ msg com x-death=0 → ACK + publish após backoff base (30s)', async () => {
+        const msg = makeMsg({ action: 'lockgame', gameId: '2' }, 0);
+        await processDlq(msg);
+        expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        // Avança 30s para acionar o setTimeout
+        jest.advanceTimersByTime(30000);
+        await Promise.resolve();
+        expect(mockPublishGameEvent).toHaveBeenCalledWith(
+            'game_loop_events',
+            'lockgame',
+            expect.objectContaining({ gameId: '2' }),
+        );
+    });
+
+    it('DLQ com x-death=2 → backoff 120s + publishGameEvent', async () => {
+        const msg = makeMsg({ action: 'fundgame', gameId: '4' }, 2);
+        await processDlq(msg);
+        expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        // 30s * 2^2 = 120000
+        jest.advanceTimersByTime(120000);
+        await Promise.resolve();
+        expect(mockPublishGameEvent).toHaveBeenCalledWith(
+            'game_loop_events',
+            'fundgame',
+            expect.any(Object),
+        );
+    });
+});
+
+// ── updateQueueDepthMetrics ─────────────────────────────────────────────
+
+describe('updateQueueDepthMetrics', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockChannel.checkQueue = jest.fn().mockResolvedValue({ messageCount: 42, consumerCount: 1 });
+    });
+
+    it('chama checkQueue para cada fila gerenciada', async () => {
+        await updateQueueDepthMetrics();
+        expect(mockChannel.checkQueue).toHaveBeenCalledTimes(4);
+        expect(mockChannel.checkQueue).toHaveBeenCalledWith('game_loop_events');
+        expect(mockChannel.checkQueue).toHaveBeenCalledWith('game_loop_payouts');
+        expect(mockChannel.checkQueue).toHaveBeenCalledWith('game_loop_dead');
+        expect(mockChannel.checkQueue).toHaveBeenCalledWith('game_loop_payouts_dead');
+    });
+
+    it('setQueueDepth chamado com nome da fila e messageCount', async () => {
+        await updateQueueDepthMetrics();
+        expect(setQueueDepth).toHaveBeenCalledWith('game_loop_events', 42);
+        expect(setQueueDepth).toHaveBeenCalledWith('game_loop_payouts', 42);
+        expect(setQueueDepth).toHaveBeenCalledWith('game_loop_dead', 42);
+        expect(setQueueDepth).toHaveBeenCalledWith('game_loop_payouts_dead', 42);
+    });
+
+    it('checkQueue lança erro → apenas loga, não propaga', async () => {
+        mockChannel.checkQueue = jest.fn().mockRejectedValue(new Error('QUEUE_NOT_FOUND'));
+        await expect(updateQueueDepthMetrics()).resolves.toBeUndefined();
+        // Não deve ter chamado setQueueDepth
+        expect(setQueueDepth).not.toHaveBeenCalled();
     });
 });
 

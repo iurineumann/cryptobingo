@@ -1,0 +1,32 @@
+# apps/worker-game-loop/prometheus_rules.yml
+# Regras de alerta Prometheus para o worker-game-loop.
+#
+# Como aplicar:
+#   Prometheus local (dev): copiar para /etc/prometheus/rules/ e recarregar
+#     curl -X POST http://localhost:9090/-/reload
+#   VPS produção: copiar para o diretório de rules do Prometheus na VPS
+#     (ex: /opt/prometheus/rules/) e recarregar config.
+#   Kubernetes: montar como ConfigMap no volume rules.
+#
+# Ref: ADR-007 (observabilidade), ADR-043 (App Insights)
+
+groups:
+  - name: cryptobingo-worker
+    rules:
+
+      - alert: RabbitMQDeadLetteredMessages
+        expr: rate(worker_events_dead_lettered_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mensagens na DLQ do worker"
+          description: "Taxa de dead-letter > 0 por 2m (action={{ $labels.action }})."
+
+      - alert: RabbitMQQueueBacklogHigh
+        expr: worker_queue_depth{queue=~"game_loop.*"} > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backlog alto na fila {{ $labels.queue }}"
