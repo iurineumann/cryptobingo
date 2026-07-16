@@ -476,8 +476,12 @@ describe('Retry backoff helpers', () => {
             resRetryMap.clear();
         });
 
-        it('NÃO dispara startdraw em jogo LOCKED sem cartelas (aborta via NO_TICKETS_LOCKED)', async () => {
-            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '999', status: 'locked', total_tickets: 0 }));
+        it('NÃO dispara startdraw em jogo LOCKED sem apostas (total_wagered=0) — aborta NO_TICKETS_LOCKED', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id:  '999',
+                status:   'locked',
+                total_wagered: { quantity: '0.0000 BINGO', contract: 'bingogametkn' },
+            }));
 
             await processLockedGame('999');
 
@@ -485,8 +489,15 @@ describe('Retry backoff helpers', () => {
             expect(mockStartDraw).not.toHaveBeenCalled();
         });
 
-        it('DISPARA startdraw em jogo LOCKED COM cartelas', async () => {
-            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '888', status: 'locked', total_tickets: 5 }));
+        it('DISPARA startdraw em jogo LOCKED COM apostas (total_wagered>0) — NÃO aborta (BUG #382)', async () => {
+            // Caso real: usuário comprou 25 cartelas (1.0000 BINGO cada = 25 BINGO).
+            // A defesa #378 usava game?.total_tickets (inexistente no contrato) e
+            // abortava TODOS os jogos LOCKED. Fonte da verdade é total_wagered.
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id:  '888',
+                status:   'locked',
+                total_wagered: { quantity: '25.0000 BINGO', contract: 'bingogametkn' },
+            }));
 
             await processLockedGame('888');
 

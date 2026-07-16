@@ -276,9 +276,12 @@ function consumeMessages(): void {
                 // ── lockgame: FUNDING → LOCKED ───────────────────────────────
                 case 'lockgame': {
                     // Defesa anti-draw-sem-cartelas: não trava nem sorteia jogo sem tickets.
+                    // O contrato NÃO expõe total_tickets — fonte da verdade é total_wagered.
                     let game: any = null;
                     try { game = await fetchGame(gameId); } catch { /* ignore */ }
-                    if (Number(game?.total_tickets ?? 0) === 0) {
+                    const wagered = game?.total_wagered;
+                    const hasTickets = (Number.parseFloat(wagered?.quantity ?? '0') || 0) > 0;
+                    if (!hasTickets) {
                         logger.warn({ tag: 'RabbitMQ' }, `lockgame ${gameId} sem cartelas — abortando (NO_TICKETS).`);
                         await executeAbortGame(gameId, 'NO_TICKETS').catch(() => {});
                         break;
@@ -982,12 +985,14 @@ export async function processLockedGame(gameId: string): Promise<void> {
 
     // Defesa anti-draw-sem-cartelas: se o jogo chegou a LOCKED sem nenhum ticket,
     // aborta antes de disparar o sorteio (oráculo). O contrato também valida isso
-    // em startdraw (check total_tickets > 0), mas esta defesa off-chain evita o
-    // desperdício de oracle/CPU e jogos zombie em DRAWING.
+    // em startdraw (check total_wagered.quantity.amount > 0), mas esta defesa
+    // off-chain evita o desperdício de oracle/CPU e jogos zombie em DRAWING.
+    // O contrato NÃO expõe total_tickets — a fonte da verdade é total_wagered.
     let game: any = null;
     try { game = await fetchGame(gameId); } catch { /* jogo pode não existir */ }
-    const tickets = Number(game?.total_tickets ?? 0);
-    if (tickets === 0) {
+    const wagered = game?.total_wagered;
+    const hasTickets = (Number.parseFloat(wagered?.quantity ?? '0') || 0) > 0;
+    if (!hasTickets) {
         logger.warn({ tag: 'AutoAdvance' }, `Jogo ${gameId} LOCKED sem cartelas. Abortando (NO_TICKETS_LOCKED).`)
         try {
             await executeAbortGame(gameId, 'NO_TICKETS_LOCKED');
