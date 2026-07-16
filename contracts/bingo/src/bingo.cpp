@@ -1463,6 +1463,10 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(
+            game_itr->status == "created"_n ||
+            game_itr->status == "funding"_n ||
+            game_itr->status == "locked"_n  ||
+            game_itr->status == "drawing"_n ||
             game_itr->status == "paying"_n,
             "Game deve estar em CREATED, FUNDING, LOCKED, DRAWING ou PAYING para ser abortado."
         );
