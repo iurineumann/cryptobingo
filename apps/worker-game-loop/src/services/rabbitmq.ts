@@ -287,6 +287,9 @@ function consumeMessages(): void {
                         logger.error({ err, tag: 'RabbitMQ' }, `Erro ao conceder XP de compra para jogo ${gameId}:`)
                     );
                     sendGameLockedMessage(gameId).catch(() => {});
+                    // Encadeia startdraw via fila — consumer tem acquireOrchestrationLock
+                    // contra dupla-execução (auto-advance também publica como backup).
+                    await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
                     break;
                 }
 
@@ -356,6 +359,8 @@ function consumeMessages(): void {
                     onGameResolved(gameId).catch(err =>
                         logger.error({ err, tag: 'RabbitMQ' }, `onGameResolved error (abort, jogo ${gameId}):`)
                     );
+                    // Encadeia refundall via fila — estorno assíncrono dos tickets.
+                    await publishGameEvent(QUEUE_NAME, 'refundall', { gameId });
                     break;
                 }
 
@@ -364,6 +369,8 @@ function consumeMessages(): void {
                 // Ref: SPEC.md §5.2
                 case 'refundall': {
                     await processRefundAll(gameId);
+                    // Encadeia cleargame via fila — GC de RAM após estorno completo.
+                    await publishGameEvent(QUEUE_NAME, 'cleargame', { gameId });
                     break;
                 }
 

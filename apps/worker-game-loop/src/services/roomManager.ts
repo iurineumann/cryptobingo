@@ -4,6 +4,7 @@ import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { adminSession, microserviceSession } from './blockchain';
 import { processRoomDrops } from './dropWorker';
 import { logger } from './logger';
+import { publishGameEvent } from './rabbitPublisher';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
@@ -121,16 +122,11 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        // Funde o jogo (CREATED → FUNDING) — requer bingogamesvc@active
-        const fundResult = await microserviceSession.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'fundgame',
-                authorization: [microserviceSession.permissionLevel],
-                data:          { game_id: newGameId },
-            }],
-        }, { broadcast: true });
-        logger.info(`Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
+        // Funde o jogo (CREATED → FUNDING) via fila — publishGameEvent em vez de transact direto.
+        // O consumer `fundgame` na fila `game_loop_events` executa o fundgame async.
+        // Caller tolera CREATED→FUNDING assíncrono.
+        await publishGameEvent('game_loop_events', 'fundgame', { gameId: newGameId });
+        logger.info(`Game ${newGameId} aberto para vendas via fila.`);
 
         return newGameId;
     } catch (err: any) {
