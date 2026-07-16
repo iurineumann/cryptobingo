@@ -69,18 +69,23 @@ jest.mock('./metrics', () => ({
     workerQueuePublishedTotal:{ inc: jest.fn() },
     setQueueDepth:            jest.fn(),
 }));
-jest.mock('./prizeMetrics', () => ({
-    prizePaymentsTotal:      { inc: jest.fn() },
-    prizePaymentsAmountTotal:{ inc: jest.fn() },
-    prizePipelineDuration:   { startTimer: jest.fn().mockReturnValue(jest.fn()) },
-    prizePersistTotal:       { inc: jest.fn() },
-    buyinPersistedTotal:     { inc: jest.fn() },
-    prizeRtpRatio:           { set: jest.fn() },
-    prizePaymentsTxTotal:    { inc: jest.fn() },
-    payoutChunksTotal:       { inc: jest.fn() },
-    payoutRetriesTotal:      { inc: jest.fn() },
-    payoutRecoveredTotal:    { inc: jest.fn() },
-}));
+jest.mock('./prizeMetrics', () => {
+    const counter = () => ({ inc: jest.fn(), labels: jest.fn().mockReturnValue({ inc: jest.fn() }) });
+    const gauge = () => ({ set: jest.fn() });
+    const histogram = () => ({ startTimer: jest.fn().mockReturnValue(jest.fn()) });
+    return {
+        prizePaymentsTotal:      counter(),
+        prizePaymentsAmountTotal:counter(),
+        prizePipelineDuration:   histogram(),
+        prizePersistTotal:       counter(),
+        buyinPersistedTotal:     counter(),
+        prizeRtpRatio:           gauge(),
+        prizePaymentsTxTotal:    counter(),
+        payoutChunksTotal:       counter(),
+        payoutRetriesTotal:      counter(),
+        payoutRecoveredTotal:    counter(),
+    };
+});
 // Fase 1 (#368): lock Redis e publish na fila são novos. O teste original assumia
 // "executa sempre" — fingimos lock adquirido e publish no-op para isolar o handler.
 jest.mock('./gameLock', () => ({

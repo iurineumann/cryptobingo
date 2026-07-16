@@ -86,6 +86,7 @@ import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal,
 import { savePrizeTx } from './prizeTransactionsService';
 import { computePayoutAmount } from './evaluator';
 import { notifyPrizeConfirmed } from './broadcaster';
+import { publishGameEvent } from './rabbitPublisher';
 
 export let connection: ChannelModel;
 let channel:    Channel;
