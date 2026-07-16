@@ -269,6 +269,17 @@ function consumeMessages(): void {
 
                 // ── fundgame: CREATED → FUNDING ──────────────────────────────
                 case 'fundgame': {
+                    // FIX #384: idempotência — o jogo pode já ter saído de CREATED
+                    // via recoverCreatedGame (roomManager.ts) ou outra mensagem da
+                    // fila. Se não for CREATED, apenas ack (sem erro/retry) para
+                    // não gerar "Game is not in CREATED status" / "duplicate transaction".
+                    let game: any = null;
+                    try { game = await fetchGame(gameId); } catch { /* ignore */ }
+                    if (game?.status && game.status !== 'created') {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `fundgame ${gameId} ignorado — jogo em status "${game.status}" (já avançou).`);
+                        break;
+                    }
                     await executeFundGame(gameId);
                     break;
                 }
@@ -417,13 +428,14 @@ function consumeMessages(): void {
                 `❌ [RabbitMQ] Erro em "${action}" jogo ${gameId} (delivery #${deliveryCount + 1}, restam ${remaining} tentativas)`
             );
             eventsFailedTotal.inc({ action, reason: 'blockchain_error' });
-            if (remaining <= 0) {
-                logger.error(`[RabbitMQ] Descartando "${action}" jogo ${gameId} para DLQ.`)
-                eventsDeadLetteredTotal.inc({ action });
-                channel.nack(msg, false, false);
-            } else {
-                channel.nack(msg, false, true);
-            }
+            // FIX #384: requeue=false → mensagem vai para a DLQ, que possui
+            // retry com backoff exponencial (handleDeadLetter, rabbitmq.ts:568).
+            // O header x-death SÓ é populado em nack(requeue=false); com
+            // requeue=true o getDeliveryCount() sempre retornava 0 → loop
+            // infinito de retry que estagnava a fila (prefetch(1) + 1 consumer).
+            logger.error(`[RabbitMQ] Descartando "${action}" jogo ${gameId} para DLQ (retry via backoff).`)
+            eventsDeadLetteredTotal.inc({ action });
+            channel.nack(msg, false, false);
         }
 
     }, { noAck: false });
