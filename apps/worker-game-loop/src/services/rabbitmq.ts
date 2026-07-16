@@ -275,6 +275,14 @@ function consumeMessages(): void {
 
                 // ── lockgame: FUNDING → LOCKED ───────────────────────────────
                 case 'lockgame': {
+                    // Defesa anti-draw-sem-cartelas: não trava nem sorteia jogo sem tickets.
+                    let game: any = null;
+                    try { game = await fetchGame(gameId); } catch { /* ignore */ }
+                    if (Number(game?.total_tickets ?? 0) === 0) {
+                        logger.warn({ tag: 'RabbitMQ' }, `lockgame ${gameId} sem cartelas — abortando (NO_TICKETS).`);
+                        await executeAbortGame(gameId, 'NO_TICKETS').catch(() => {});
+                        break;
+                    }
                     await executeLockGame(gameId);
                     notifyGameLocked(gameId);
                     // Constrói o Índice Invertido Redis (SPEC.md §3.2)
@@ -969,8 +977,26 @@ export async function autoStartLockedGames(): Promise<void> {
     }
 }
 
-async function processLockedGame(gameId: string): Promise<void> {
+export async function processLockedGame(gameId: string): Promise<void> {
     autoAdvanceGamesTotal.inc({ action: 'start_locked' });
+
+    // Defesa anti-draw-sem-cartelas: se o jogo chegou a LOCKED sem nenhum ticket,
+    // aborta antes de disparar o sorteio (oráculo). O contrato também valida isso
+    // em startdraw (check total_tickets > 0), mas esta defesa off-chain evita o
+    // desperdício de oracle/CPU e jogos zombie em DRAWING.
+    let game: any = null;
+    try { game = await fetchGame(gameId); } catch { /* jogo pode não existir */ }
+    const tickets = Number(game?.total_tickets ?? 0);
+    if (tickets === 0) {
+        logger.warn({ tag: 'AutoAdvance' }, `Jogo ${gameId} LOCKED sem cartelas. Abortando (NO_TICKETS_LOCKED).`)
+        try {
+            await executeAbortGame(gameId, 'NO_TICKETS_LOCKED');
+            notifyGameAborted(gameId, 'NO_TICKETS_LOCKED');
+        } catch (abortErr) {
+            logger.error({ err: abortErr, tag: 'AutoAdvance' }, `Erro ao abortar jogo ${gameId} (sem cartelas):`)
+        }
+        return;
+    }
 
     const lockAcquired = await acquireOrchestrationLock(gameId);
     if (!lockAcquired) {
