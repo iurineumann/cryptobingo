@@ -542,7 +542,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
     const results: StageCutoffResult[] = [];
     let prevCutoff = 0;
 
-    for (const stageDef of stages.toSorted((a, b) => a.patterns_required - b.patterns_required)) {
+    for (const stageDef of [...stages].sort((a, b) => a.patterns_required - b.patterns_required)) {
         let cutoffBall = drawnBalls.length + 1; // sentinela: sem vencedor
 
         // Cada estágio começa do cutoff do anterior — não reinicia da bola 1
