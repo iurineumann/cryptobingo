@@ -338,12 +338,20 @@ async function expectReverseScanFindsRecent(
     const oldGames = Array.from({ length: 101 }, (_, i) =>
         makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
     );
-    const recent = makeBlockchainGame({ game_id: recentId, status, total_tickets: 5 });
+    // Fonte da verdade do contrato é total_wagered (nao total_tickets inexistente).
+    const recent = makeBlockchainGame({
+        game_id:       recentId,
+        status,
+        total_wagered: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+    });
     const allGames = [...oldGames, recent];
 
     mockGetTableRows
         .mockResolvedValueOnce({ rows: allGames })
         .mockResolvedValueOnce({ rows: [] });
+
+    // processLockedGame faz fetchGame(gameId) para decidir abortar ou sortear.
+    mockFetchGame.mockResolvedValue(recent);
 
     await target();
 
