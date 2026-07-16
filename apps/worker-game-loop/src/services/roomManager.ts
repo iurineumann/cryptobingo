@@ -270,22 +270,19 @@ async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise
     try {
         logger.info({ tag: 'RoomManager' },
             `Sala ${room.room_id}: tentando fundgame p/ game ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX})...`);
-        await microserviceSession.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'fundgame',
-                authorization: [microserviceSession.permissionLevel],
-                data:          { game_id: gameId },
-            }],
-        }, { broadcast: true });
-        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado com sucesso!`);
+        // FIX #384: publica na fila em vez de transactar direto. A fila é a ÚNICA
+        // via de execução de fundgame (createNextGameForRoom também publica lá),
+        // e o consumer é idempotente (rabbitmq.ts:271). Isso elimina a dupla fonte
+        // que gerava "Game is not in CREATED status" / "duplicate transaction".
+        await publishGameEvent('game_loop_events', 'fundgame', { gameId });
+        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado via fila (aguardando consumer).`);
         fundRetryMap.delete(gameId);
     } catch (fundErr: any) {
         retry.count++;
         retry.lastAttempt = Date.now();
         fundRetryMap.set(gameId, retry);
         logger.error({ err: fundErr, tag: 'RoomManager', retry: retry.count, maxRetries: FUND_RETRY_MAX },
-            `Sala ${room.room_id}: fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
+            `Sala ${room.room_id}: publish fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
     }
 }
 

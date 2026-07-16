@@ -195,6 +195,21 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
         expect(mockFundGame).toHaveBeenCalledWith('1');
     });
 
+    it('FIX #384: action=fundgame com jogo já fora de CREATED → executeFundGame NÃO chamado (idempotente)', async () => {
+        // Recuperação / outra mensagem da fila já avançou o jogo.
+        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding' }));
+        const msg = makeMsg({ action: 'fundgame', gameId: '1' });
+        await processMsg(msg);
+        expect(mockFundGame).not.toHaveBeenCalled();
+    });
+
+    it('FIX #384: action=fundgame com fetchGame falhando → executa mesmo assim (não deixa travado)', async () => {
+        mockFetchGame.mockRejectedValue(new Error('rpc down'));
+        const msg = makeMsg({ action: 'fundgame', gameId: '1' });
+        await processMsg(msg);
+        expect(mockFundGame).toHaveBeenCalledWith('1');
+    });
+
     it('action=lockgame → executeLockGame chamado', async () => {
         // Fonte da verdade do contrato é total_wagered (nao total_tickets inexistente).
         mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_wagered: { quantity: '3.0000 BINGO', contract: 'bingogametkn' } }));

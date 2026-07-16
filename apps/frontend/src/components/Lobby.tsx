@@ -30,7 +30,9 @@ const AUTO_LOCK_SEC        = 60;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS       = 4_000;   // salas idle
-const POLL_ACTIVE_MS       = 1_000;   // quando há funding ou drawing
+// FIX #384: 1000 -> 2000ms. Em sala ativa o lobby faz 2 req/ciclo
+// (lobby + lobby/me) = 60 req/min, abaixo do limite playerLimiter (200/min).
+const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
 
 const STATUS_DOT: Record<string, string> = {
     created: 'var(--cb-text-tertiary)',
