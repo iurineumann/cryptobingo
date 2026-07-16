@@ -40,6 +40,7 @@ jest.mock('./broadcaster', () => ({
     notifyGameLocked:  jest.fn(),
     notifyGameAborted: jest.fn(),
     startSlowReveal:   jest.fn().mockResolvedValue(undefined),
+    notifyPrizeConfirmed: jest.fn(),
 }));
 jest.mock('./invertedIndex', () => ({
     buildInvertedIndex: jest.fn().mockResolvedValue(undefined),
@@ -92,9 +93,21 @@ jest.mock('./rabbitPublisher', () => ({
     getPublishChannel: jest.fn(),
 }));
 
+jest.mock('./prizeTransactionsService', () => ({
+    savePrizeTx: jest.fn().mockResolvedValue(undefined),
+    saveBuyInTx: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('./evaluator', () => ({
+    computePayoutAmount: jest.fn().mockReturnValue({ amount: 1, currency: 'BINGO' }),
+}));
+
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics, processLockedGame } from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics, processLockedGame, persistPrizeTx } from './rabbitmq';
+import { savePrizeTx } from './prizeTransactionsService';
+import { computePayoutAmount } from './evaluator';
+import { notifyPrizeConfirmed } from './broadcaster';
+import { prizePersistTotal, prizePaymentsTotal, prizePaymentsAmountTotal } from './prizeMetrics';
 import { publishGameEvent } from './rabbitPublisher';
 import { setQueueDepth } from './metrics';
 import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
@@ -528,5 +541,62 @@ describe('Retry backoff helpers', () => {
             expect(mockStartDraw).toHaveBeenCalledWith('888');
             expect(mockAbortGame).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('persistPrizeTx — grava prizetxes p/ jogos non-multimatch (BUG #386)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('grava 1 PrizeTx por entry com winType pattern (chunk_clean)', async () => {
+        const entries = [{
+            ticketId: 't1', ticketOwner: 'player1', ballCount: 40, patternMask: '0x1FF',
+            goldenMultiplier: 0, patternName: 'ROW_1', weight: 100,
+            baseMultiplier: 1, ticketPrice: '1.0000 BINGO',
+        }] as any;
+
+        await persistPrizeTx('game1', 'chunk_clean', entries, 'txhash-abc');
+
+        expect(savePrizeTx).toHaveBeenCalledTimes(1);
+        const arg = (savePrizeTx as jest.Mock).mock.calls[0][0];
+        expect(arg.gameId).toBe('game1');
+        expect(arg.ticketId).toBe('t1');
+        expect(arg.account).toBe('player1');
+        expect(arg.winType).toBe('pattern');
+        expect(arg.winLabel).toBe('ROW_1');
+        expect(arg.transactionId).toBe('txhash-abc');
+        expect(arg.amount).toBe('1.0000');
+        expect(arg.currency).toBe('BINGO');
+        expect(notifyPrizeConfirmed).toHaveBeenCalledWith('game1', 't1', 'txhash-abc', '1.0000', 'BINGO', 'ROW_1');
+        expect(prizePersistTotal.labels({ result: 'success' }).inc).toHaveBeenCalled();
+    });
+
+    it('usa winType combo quando entry tem comboId (single_combo)', async () => {
+        const entries = [{
+            ticketId: 't2', ticketOwner: 'player2', ballCount: 40, patternMask: '0x2FF',
+            goldenMultiplier: 0, patternName: '2x Simples', weight: 300, comboId: 7,
+            baseMultiplier: 1, ticketPrice: '1.0000 BINGO',
+        }] as any;
+
+        await persistPrizeTx('game2', 'single_combo', entries, 'txhash-def');
+
+        const arg = (savePrizeTx as jest.Mock).mock.calls[0][0];
+        expect(arg.winType).toBe('combo');
+        expect(arg.comboId).toBe(7);
+        expect(arg.winLabel).toBe('2x Simples');
+    });
+
+    it('NÃO lança se savePrizeTx falhar (payout já ocorreu na chain)', async () => {
+        (savePrizeTx as jest.Mock).mockRejectedValueOnce(new Error('Mongo down'));
+
+        const entries = [{
+            ticketId: 't3', ticketOwner: 'player3', ballCount: 40, patternMask: '0x1FF',
+            goldenMultiplier: 0, patternName: 'ROW_1', weight: 100,
+            baseMultiplier: 1, ticketPrice: '1.0000 BINGO',
+        }] as any;
+
+        await expect(persistPrizeTx('game3', 'chunk_clean', entries, 'txhash-ghi')).resolves.toBeUndefined();
+        expect(prizePersistTotal.labels({ result: 'error' }).inc).toHaveBeenCalled();
     });
 });
