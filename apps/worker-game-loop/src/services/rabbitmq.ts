@@ -79,9 +79,14 @@ import { setRabbitConnected } from './connectionState';
 import { logger } from './logger';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
 import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock } from './gameLock';
+import {
+    setPayoutPlan, recordPayoutCompletion, triggerCloseGame, getPayoutProgress } from './payoutSaga';
+import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal,
+         prizePersistTotal, prizePaymentsTotal, prizePaymentsAmountTotal } from './prizeMetrics';
+import { savePrizeTx } from './prizeTransactionsService';
+import { computePayoutAmount } from './evaluator';
+import { notifyPrizeConfirmed } from './broadcaster';
 import { publishGameEvent } from './rabbitPublisher';
-import { setPayoutPlan, recordPayoutCompletion, triggerCloseGame, getPayoutProgress } from './payoutSaga';
-import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal } from './prizeMetrics';
 
 export let connection: ChannelModel;
 let channel:    Channel;
@@ -466,6 +471,53 @@ type PayoutEventPayload = {
     entries: PayoutEventEntry[];
 };
 
+/**
+ * Persiste os prêmios no MongoDB (coleção prizetxes) após o payout on-chain
+ * ser confirmado. Caminho padrão (standard/fixed/firstfull/goldenball) —
+ * diferente do multimatch, que persiste em payMultiMatchStage. Sem isto, a
+ * API GET /games/:id/prizes fica vazia e o frontend gira "aguardando transação".
+ * Falhas de persistência NÃO devem rejeitar o ack da fila (o pagamento já
+ * ocorreu na chain); apenas logamos + incrementamos métrica de erro.
+ */
+export async function persistPrizeTx(
+    gameId:  string,
+    mode:    'chunk_clean' | 'single_combo' | 'single_nft',
+    entries: PayoutEventEntry[],
+    txHash:  string,
+): Promise<void> {
+    for (const e of entries) {
+        const winType: 'pattern' | 'combo' = e.comboId !== undefined ? 'combo' : 'pattern';
+        const winLabel = e.patternName || (e.comboId !== undefined ? `combo_${e.comboId}` : 'pattern');
+        const payout = computePayoutAmount(e.ticketPrice || '0.0000 BINGO', e.baseMultiplier, e.weight, e.goldenMultiplier);
+        const ticketPrice = e.ticketPrice || '';
+
+        savePrizeTx({
+            gameId,
+            account: e.ticketOwner,
+            ticketId: e.ticketId,
+            winType,
+            winLabel,
+            patternMask: e.patternMask,
+            comboId: e.comboId,
+            weight: e.weight,
+            amount: payout.amount.toFixed(4),
+            currency: payout.currency,
+            transactionId: txHash,
+            goldenMultiplier: e.goldenMultiplier,
+            ticketPrice,
+            claimedAt: new Date().toISOString(),
+        }).then(() => {
+            prizePersistTotal.labels({ result: 'success' }).inc();
+            prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+            prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+            notifyPrizeConfirmed(gameId, e.ticketId, txHash, payout.amount.toFixed(4), payout.currency, winLabel);
+        }).catch(err => {
+            prizePersistTotal.labels({ result: 'error' }).inc();
+            logger.error({ err, tag: 'PrizePipeline' }, `Erro ao persistir PrizeTx (${mode}) jogo ${gameId}:`);
+        });
+    }
+}
+
 function consumePayouts(): void {
     channel.prefetch(5);  // competing consumers — até 5 por canal
     channel.consume(PAYOUT_QUEUE, async (msg: ConsumeMessage | null) => {
@@ -530,6 +582,7 @@ function consumePayouts(): void {
 
             if (txHash) {
                 await recordPayoutCompletion(gameId, chunkId);
+                await persistPrizeTx(gameId, mode, entries, txHash);
                 channel.ack(msg);
                 logger.info({ tag: 'PayoutConsumer' }, `"${mode}" chunk ${chunkId} jogo ${gameId} OK. TX: ${txHash}`);
             } else {
