@@ -196,7 +196,8 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
     });
 
     it('action=lockgame → executeLockGame chamado', async () => {
-        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_tickets: 3 }));
+        // Fonte da verdade do contrato é total_wagered (nao total_tickets inexistente).
+        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_wagered: { quantity: '3.0000 BINGO', contract: 'bingogametkn' } }));
         const msg = makeMsg({ action: 'lockgame', gameId: '1' });
         await processMsg(msg);
         expect(mockLockGame).toHaveBeenCalledWith('1');
@@ -338,12 +339,20 @@ async function expectReverseScanFindsRecent(
     const oldGames = Array.from({ length: 101 }, (_, i) =>
         makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
     );
-    const recent = makeBlockchainGame({ game_id: recentId, status, total_tickets: 5 });
+    // Fonte da verdade do contrato é total_wagered (nao total_tickets inexistente).
+    const recent = makeBlockchainGame({
+        game_id:       recentId,
+        status,
+        total_wagered: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+    });
     const allGames = [...oldGames, recent];
 
     mockGetTableRows
         .mockResolvedValueOnce({ rows: allGames })
         .mockResolvedValueOnce({ rows: [] });
+
+    // processLockedGame faz fetchGame(gameId) para decidir abortar ou sortear.
+    mockFetchGame.mockResolvedValue(recent);
 
     await target();
 
@@ -476,8 +485,12 @@ describe('Retry backoff helpers', () => {
             resRetryMap.clear();
         });
 
-        it('NÃO dispara startdraw em jogo LOCKED sem cartelas (aborta via NO_TICKETS_LOCKED)', async () => {
-            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '999', status: 'locked', total_tickets: 0 }));
+        it('NÃO dispara startdraw em jogo LOCKED sem apostas (total_wagered=0) — aborta NO_TICKETS_LOCKED', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id:  '999',
+                status:   'locked',
+                total_wagered: { quantity: '0.0000 BINGO', contract: 'bingogametkn' },
+            }));
 
             await processLockedGame('999');
 
@@ -485,8 +498,15 @@ describe('Retry backoff helpers', () => {
             expect(mockStartDraw).not.toHaveBeenCalled();
         });
 
-        it('DISPARA startdraw em jogo LOCKED COM cartelas', async () => {
-            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '888', status: 'locked', total_tickets: 5 }));
+        it('DISPARA startdraw em jogo LOCKED COM apostas (total_wagered>0) — NÃO aborta (BUG #382)', async () => {
+            // Caso real: usuário comprou 25 cartelas (1.0000 BINGO cada = 25 BINGO).
+            // A defesa #378 usava game?.total_tickets (inexistente no contrato) e
+            // abortava TODOS os jogos LOCKED. Fonte da verdade é total_wagered.
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id:  '888',
+                status:   'locked',
+                total_wagered: { quantity: '25.0000 BINGO', contract: 'bingogametkn' },
+            }));
 
             await processLockedGame('888');
 
