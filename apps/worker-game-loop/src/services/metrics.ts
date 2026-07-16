@@ -166,6 +166,14 @@ export const autoAdvanceErrorsTotal = new Counter({
     registers:  [registry],
 });
 
+/** Eventos publicados na fila RabbitMQ, por action. */
+export const workerQueuePublishedTotal = new Counter({
+    name:       'worker_queue_published_total',
+    help:       'Total de eventos publicados na fila do RabbitMQ.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
 /** Jogos processados por cada cron de AutoAdvance. */
 export const autoAdvanceGamesTotal = new Counter({
     name:       'worker_autoadvance_games_total',

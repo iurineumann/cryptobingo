@@ -64,6 +64,18 @@ jest.mock('./metrics', () => ({
     autoAdvanceErrorsTotal:   { inc: jest.fn() },
     autoAdvanceGamesTotal:    { inc: jest.fn() },
     oraclePollAttempts:       { observe: jest.fn() },
+    workerQueuePublishedTotal:{ inc: jest.fn() },
+}));
+// Fase 1 (#368): lock Redis e publish na fila são novos. O teste original assumia
+// "executa sempre" — fingimos lock adquirido e publish no-op para isolar o handler.
+jest.mock('./gameLock', () => ({
+    acquireOrchestrationLock: jest.fn().mockResolvedValue(true),
+    releaseOrchestrationLock: jest.fn().mockResolvedValue(undefined),
+    isLocked:                 jest.fn().mockResolvedValue(false),
+}));
+jest.mock('./rabbitPublisher', () => ({
+    publishGameEvent:  jest.fn().mockResolvedValue(undefined),
+    getPublishChannel: jest.fn(),
 }));
 
 import { orchestrateGame }  from './gameOrchestrator';
