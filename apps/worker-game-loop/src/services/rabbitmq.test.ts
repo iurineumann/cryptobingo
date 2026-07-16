@@ -94,7 +94,7 @@ jest.mock('./rabbitPublisher', () => ({
 
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics } from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics, processLockedGame } from './rabbitmq';
 import { publishGameEvent } from './rabbitPublisher';
 import { setQueueDepth } from './metrics';
 import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
@@ -196,6 +196,7 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
     });
 
     it('action=lockgame → executeLockGame chamado', async () => {
+        mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '1', status: 'funding', total_tickets: 3 }));
         const msg = makeMsg({ action: 'lockgame', gameId: '1' });
         await processMsg(msg);
         expect(mockLockGame).toHaveBeenCalledWith('1');
@@ -337,7 +338,7 @@ async function expectReverseScanFindsRecent(
     const oldGames = Array.from({ length: 101 }, (_, i) =>
         makeBlockchainGame({ game_id: String(i + 1), status: 'aborted' })
     );
-    const recent = makeBlockchainGame({ game_id: recentId, status });
+    const recent = makeBlockchainGame({ game_id: recentId, status, total_tickets: 5 });
     const allGames = [...oldGames, recent];
 
     mockGetTableRows
@@ -466,6 +467,31 @@ describe('Retry backoff helpers', () => {
             // Não deve ter chamado abort nem orchestrate
             expect(mockAbortGame).not.toHaveBeenCalled();
             expect(mockOrchestrate).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('processLockedGame — defesa anti-draw-sem-cartelas (BUG A)', () => {
+        beforeEach(() => {
+            jest.clearAllMocks();
+            resRetryMap.clear();
+        });
+
+        it('NÃO dispara startdraw em jogo LOCKED sem cartelas (aborta via NO_TICKETS_LOCKED)', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '999', status: 'locked', total_tickets: 0 }));
+
+            await processLockedGame('999');
+
+            expect(mockAbortGame).toHaveBeenCalledWith('999', 'NO_TICKETS_LOCKED');
+            expect(mockStartDraw).not.toHaveBeenCalled();
+        });
+
+        it('DISPARA startdraw em jogo LOCKED COM cartelas', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({ game_id: '888', status: 'locked', total_tickets: 5 }));
+
+            await processLockedGame('888');
+
+            expect(mockStartDraw).toHaveBeenCalledWith('888');
+            expect(mockAbortGame).not.toHaveBeenCalled();
         });
     });
 });
