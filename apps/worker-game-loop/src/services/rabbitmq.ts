@@ -36,7 +36,7 @@ import {
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
 import { redisClient } from './redis';
-import type { BlockchainGameState, BlockchainTicketRecord, BlockchainRoom } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainTicketRecord, type BlockchainRoom } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
     eventsFailedTotal,
@@ -842,7 +842,7 @@ async function processClearGame(gameId: string): Promise<void> {
  * (room_id=0). Com reverse:true e limit:20, os jogos de sala nunca aparecem no
  * topo. Corrigido com varredura adicional por sala ativa.
  */
-const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
+const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? String(FUNDING_WINDOW_SEC), 10);
 const processedGames = new Set<string>();
 
 async function isGamePastCutoff(gameId: string, cutoff: number): Promise<boolean> {

@@ -11,7 +11,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Session } from '@wharfkit/session';
 import { Name, UInt64 } from '@wharfkit/antelope';
-import type { BlockchainGameState, BlockchainBalance, ExtendedAsset } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainBalance, type ExtendedAsset } from '@cryptobingo/shared-types';
 import type { EnrichedRoom } from '../../services/api';
 import { useSlowReveal } from '../../hooks/useSlowReveal';
 import type { DrawnBall, GoldenBallInfo, GoldenMultiplierProgress, ClearedStage } from '../../hooks/useSlowReveal';
@@ -131,7 +131,7 @@ export function useGameRoomState(
   const [extendedRules,     setExtendedRules]     = useState<ExtendedRule[]>([]);
   const [ingameBalances,    setIngameBalances]    = useState<BlockchainBalance[]>([]);
 
-  const AUTO_LOCK_SEC = 60;
+  const AUTO_LOCK_SEC = FUNDING_WINDOW_SEC;
 
   // Limpa estado obsoleto imediatamente quando o gameId muda.
   // Defesa em profundidade: o `key={gameId}` no App.tsx já causa remount,

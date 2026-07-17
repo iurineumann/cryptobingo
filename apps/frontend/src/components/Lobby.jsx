@@ -16,7 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-const AUTO_LOCK_SEC = 60;
+import { FUNDING_WINDOW_SEC } from '@cryptobingo/shared-types';
+const AUTO_LOCK_SEC = FUNDING_WINDOW_SEC;
 const REVEAL_INTERVAL_MS = 3000;
 const SLOW_REVEAL_WINDOW = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS = 4_000; // salas idle
