@@ -35,6 +35,7 @@ import {
 }                          from './chatSystemHelper';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
+import { redisClient } from './redis';
 import type { BlockchainGameState, BlockchainTicketRecord, BlockchainRoom } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
@@ -54,6 +55,7 @@ dotenv.config();
 const RABBITMQ_URL         = process.env.RABBITMQ_URL         || 'amqp://localhost:5672';
 const CONTRACT_ACCOUNT     = process.env.CONTRACT_ACCOUNT     || 'bingogamectr';
 const RETRY_DELAY_MS       = 5_000;
+const FUNDGAME_DLQ_RETRY_MS = 3_000;
 const CONNECT_TIMEOUT_MS   = 10_000; // amqp.connect() não tem timeout nativo — forçamos 10s
 const QUEUE_NAME         = 'game_loop_events';
 const DLX_NAME           = 'game_loop_dlx';
@@ -286,6 +288,7 @@ function consumeMessages(): void {
                         break;
                     }
                     await executeFundGame(gameId);
+                    redisClient.set('funding:started:' + gameId, String(Date.now()), { EX: 600 }).catch(() => {});
                     break;
                 }
 
@@ -300,6 +303,11 @@ function consumeMessages(): void {
                     if (!hasTickets) {
                         logger.warn({ tag: 'RabbitMQ' }, `lockgame ${gameId} sem cartelas — abortando (NO_TICKETS).`);
                         await executeAbortGame(gameId, 'NO_TICKETS').catch(() => {});
+                        break;
+                    }
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeLockGame já realizado (lock existente).`);
                         break;
                     }
                     await executeLockGame(gameId);
@@ -644,9 +652,16 @@ async function handleDeadLetter(msg: ConsumeMessage, dlqName: string, originalQu
     logger.info({ tag: 'RabbitMQ' }, `DLQ mensagem recebida em "${dlqName}" (action=${action}, x-death count=${deliveryCount})`);
 
     if (deliveryCount < DLQ_MAX_RETRIES) {
-        const delayMs = 30_000 * Math.pow(2, deliveryCount);
-        logger.info({ tag: 'RabbitMQ' },
-            `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        const delayMs = action === 'fundgame'
+            ? FUNDGAME_DLQ_RETRY_MS
+            : 30_000 * Math.pow(2, deliveryCount);
+        if (action === 'fundgame') {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando fundgame com retry curto (${FUNDGAME_DLQ_RETRY_MS}ms, não corrói janela de funding) (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        } else {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        }
 
         setTimeout(async () => {
             try {
@@ -830,6 +845,16 @@ async function processClearGame(gameId: string): Promise<void> {
 const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
 const processedGames = new Set<string>();
 
+async function isGamePastCutoff(gameId: string, cutoff: number): Promise<boolean> {
+    try {
+        const fundedAt = await redisClient.get('funding:started:' + gameId);
+        if (fundedAt) {
+            return Number(fundedAt) <= cutoff;
+        }
+    } catch { /* fallback — Redis indisponível */ }
+    return Number(gameId) <= cutoff;
+}
+
 async function fetchActiveRoomGameIds(): Promise<string[]> {
     const roomsResponse = await rpcClient.v1.chain.get_table_rows({
         code:  CONTRACT_ACCOUNT,
@@ -858,7 +883,7 @@ async function pollDirectFundingGames(cutoff: number, seen: Set<string>): Promis
         if (game.status !== 'funding') continue;
         seen.add(gameId);
         if (processedGames.has(gameId)) continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(gameId, cutoff) || Number(gameId) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
@@ -872,7 +897,7 @@ async function pollRoomFundingGames(cutoff: number, seen: Set<string>): Promise<
             game = await fetchGame(gameId);
         } catch { continue; }
         if (game?.status !== 'funding') continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(gameId, cutoff) || Number(gameId) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
@@ -933,7 +958,6 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
     } catch (pubErr) {
         logger.error({ err: pubErr, tag: 'AutoAdvance' },
             `Falha ao publicar lockgame ${gameId}; fallback lock direto.`);
-
         try {
             await executeLockGame(gameId);
             notifyGameLocked(gameId);

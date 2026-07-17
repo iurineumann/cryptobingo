@@ -928,6 +928,10 @@
         {
           "name": "total_paid",
           "type": "int64"
+        },
+        {
+          "name": "funded_at",
+          "type": "uint32$"
         }
       ]
     },

@@ -55,6 +55,8 @@ namespace bingo {
         uint8_t                     golden_ball_num   = 0;  // ADR-012: número da bola dourada (1-75; 0=nenhuma)
         uint16_t                    golden_multiplier = 0;  // ADR-012: multiplicador derivado (0=nenhum)
         int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts (para cálculo do GGR)
+        // ADR-056: epoch sec do início do funding (fonte-de-verdade da janela de 60s).
+        eosio::binary_extension<uint32_t> funded_at;
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }
