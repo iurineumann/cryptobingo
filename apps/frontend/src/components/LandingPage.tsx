@@ -231,7 +231,8 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
   function getCountdown(roomId: string): string {
     const g = currentGames[String(roomId)];
     if (!g || g.status !== 'funding') return '';
-    const closeAt = Number(g.game_id) + AUTO_LOCK_SEC * 1000;
+    const t0      = g.funded_at ?? Number(g.game_id);
+    const closeAt = t0 + AUTO_LOCK_SEC * 1000;
     const diff    = closeAt - now;
     if (diff <= 0) return '';
     return fmtCountdown(diff);

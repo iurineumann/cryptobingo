@@ -199,7 +199,8 @@ function RoomCardStatus({
     readonly currentGame: BlockchainGameState | undefined;
     readonly t: (key: string, opts?: any) => string;
 }) {
-    const closeAt   = currentGame ? Number(currentGame.game_id) + AUTO_LOCK_SEC * 1000 : 0;
+    const t0        = currentGame?.funded_at ?? Number(currentGame?.game_id ?? 0);
+    const closeAt   = currentGame ? t0 + AUTO_LOCK_SEC * 1000 : 0;
     const remaining = closeAt - now;
     const isUrgent  = remaining > 0 && remaining < 15_000;
 
