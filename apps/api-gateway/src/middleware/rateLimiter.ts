@@ -88,10 +88,10 @@ function createLimiter(options: {
         legacyHeaders:   false,
         ...(store ? { store } : {}),
         keyGenerator: (req) => {
-            const forwarded = req.headers['x-forwarded-for'];
-            const ip = Array.isArray(forwarded)
-                ? forwarded[0]
-                : (forwarded?.split(',')[0]?.trim() ?? req.ip ?? 'unknown');
+            // Com `trust proxy` habilitado no app (index.ts), req.ip reflete o
+            // IP do cliente real (último IP não-confiável do XFF). XFF spoofado
+            // de fora dos proxies confiáveis é ignorado pelo Express.
+            const ip = req.ip ?? 'unknown';
             return `${keyPrefix}:${ip}`;
         },
         handler: (_req, res) => {
