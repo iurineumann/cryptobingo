@@ -35,6 +35,7 @@ import {
 }                          from './chatSystemHelper';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
+import { redisClient } from './redis';
 import type { BlockchainGameState, BlockchainTicketRecord, BlockchainRoom } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
@@ -286,6 +287,7 @@ function consumeMessages(): void {
                         break;
                     }
                     await executeFundGame(gameId);
+                    redisClient.set('funding:started:' + gameId, String(Date.now()), { EX: 600 }).catch(() => {});
                     break;
                 }
 
@@ -830,6 +832,16 @@ async function processClearGame(gameId: string): Promise<void> {
 const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
 const processedGames = new Set<string>();
 
+async function isGamePastCutoff(gameId: string, cutoff: number): Promise<boolean> {
+    try {
+        const fundedAt = await redisClient.get('funding:started:' + gameId);
+        if (fundedAt) {
+            return Number(fundedAt) <= cutoff;
+        }
+    } catch { /* fallback — Redis indisponível */ }
+    return Number(gameId) <= cutoff;
+}
+
 async function fetchActiveRoomGameIds(): Promise<string[]> {
     const roomsResponse = await rpcClient.v1.chain.get_table_rows({
         code:  CONTRACT_ACCOUNT,
@@ -858,7 +870,7 @@ async function pollDirectFundingGames(cutoff: number, seen: Set<string>): Promis
         if (game.status !== 'funding') continue;
         seen.add(gameId);
         if (processedGames.has(gameId)) continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(gameId, cutoff) || Number(gameId) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
@@ -872,7 +884,7 @@ async function pollRoomFundingGames(cutoff: number, seen: Set<string>): Promise<
             game = await fetchGame(gameId);
         } catch { continue; }
         if (game?.status !== 'funding') continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(gameId, cutoff) || Number(gameId) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
