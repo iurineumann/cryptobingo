@@ -170,6 +170,17 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // ==========================================
+// Trust proxy — valida X-Forwarded-For (anti-spoofing de IP no rate-limiter)
+// TRUSTED_PROXIES: CSV de IPs confiáveis (ingress/LB). Fallback 'loopback' (dev).
+// Sem isso, req.ip cai no socket.remoteAddress (IP do proxy).
+// ==========================================
+
+const trustedProxies = process.env.TRUSTED_PROXIES
+    ? process.env.TRUSTED_PROXIES.split(',').map((p) => p.trim()).filter(Boolean)
+    : 'loopback';
+app.set('trust proxy', trustedProxies);
+
+// ==========================================
 // CORS — Lista branca de origins
 // ==========================================
 
