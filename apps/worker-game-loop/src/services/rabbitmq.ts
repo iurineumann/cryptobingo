@@ -81,7 +81,7 @@ const GC_BATCH_SIZE = 50;
 import { setRabbitConnected } from './connectionState';
 import { logger } from './logger';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
-import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock } from './gameLock';
+import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock, startLockWatchdog } from './gameLock';
 import {
     setPayoutPlan, recordPayoutCompletion, triggerCloseGame, getPayoutProgress } from './payoutSaga';
 import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal,
@@ -338,15 +338,21 @@ function consumeMessages(): void {
                 // executeStartDraw em cenário multi-nó (auto-advance + consumer na fila).
                 case 'startdraw': {
                     const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
-                    if (lockAcquired) {
-                        await executeStartDraw(gameId);
-                    } else {
+                    if (!lockAcquired) {
                         logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente).`)
+                        return;
                     }
+
+                    // Watchdog: renova o lock durante orquestração longa (pode passar de 90s).
+                    // Se o worker morre, o timer para e o lock expira → outro nó assume.
+                    const watchdog = startLockWatchdog(gameId, 90_000);
+
+                    await executeStartDraw(gameId);
 
                     const drawnBalls = await waitForDrawnBalls(gameId);
 
                     if (!drawnBalls) {
+                        watchdog.stop();
                         logger.error({ tag: 'RabbitMQ' }, `Timeout do oráculo para jogo ${gameId}.`)
                         await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
                         notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
@@ -354,6 +360,7 @@ function consumeMessages(): void {
                         eventsDeadLetteredTotal.inc({ action });
                         timer();
                         channel.nack(msg, false, false);
+                        releaseOrchestrationLock(gameId).catch(() => {});
                         return;
                     }
 
@@ -369,9 +376,15 @@ function consumeMessages(): void {
                     }).catch(() => {});
 
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
-                    orchestrateGame(gameId).catch(err =>
-                        logger.error({ err, tag: 'RabbitMQ' }, `orchestrateGame error (jogo ${gameId}):`)
-                    );
+                    // Para o watchdog e libera o lock ao finalizar
+                    orchestrateGame(gameId)
+                        .catch(err =>
+                            logger.error({ err, tag: 'RabbitMQ' }, `orchestrateGame error (jogo ${gameId}):`)
+                        )
+                        .finally(() => {
+                            watchdog.stop();
+                            releaseOrchestrationLock(gameId).catch(() => {});
+                        });
                     return; // Retorno antecipado — ACK já foi enviado acima
                 }
 
