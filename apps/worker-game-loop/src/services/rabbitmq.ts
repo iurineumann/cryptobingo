@@ -305,6 +305,11 @@ function consumeMessages(): void {
                         await executeAbortGame(gameId, 'NO_TICKETS').catch(() => {});
                         break;
                     }
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeLockGame já realizado (lock existente).`);
+                        break;
+                    }
                     await executeLockGame(gameId);
                     notifyGameLocked(gameId);
                     // Constrói o Índice Invertido Redis (SPEC.md §3.2)
@@ -948,6 +953,11 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
     logger.info({ tag: 'AutoAdvance' }, `Travando jogo ${gameId} (funding >${AUTO_LOCK_DELAY_SEC}s)...`)
 
     try {
+        const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+        if (!lockAcquired) {
+            logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: executeLockGame já realizado (lock existente).`);
+            return;
+        }
         await executeLockGame(gameId);
         notifyGameLocked(gameId);
         sendGameLockedMessage(gameId).catch(() => {});
