@@ -950,44 +950,46 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
         return;
     }
 
-    logger.info({ tag: 'AutoAdvance' }, `Travando jogo ${gameId} (funding >${AUTO_LOCK_DELAY_SEC}s)...`)
+    logger.info({ tag: 'AutoAdvance' }, `Publicando lockgame ${gameId} na fila (funding >${AUTO_LOCK_DELAY_SEC}s)...`)
 
     try {
-        const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
-        if (!lockAcquired) {
-            logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: executeLockGame já realizado (lock existente).`);
-            return;
-        }
-        await executeLockGame(gameId);
-        notifyGameLocked(gameId);
-        sendGameLockedMessage(gameId).catch(() => {});
+        await publishGameEvent(QUEUE_NAME, 'lockgame', { gameId });
+        processedGames.add(gameId);
+    } catch (pubErr) {
+        logger.error({ err: pubErr, tag: 'AutoAdvance' },
+            `Falha ao publicar lockgame ${gameId}; fallback lock direto.`);
+        try {
+            await executeLockGame(gameId);
+            notifyGameLocked(gameId);
+            sendGameLockedMessage(gameId).catch(() => {});
 
-        buildInvertedIndex(gameId).catch(err =>
-            logger.error({ err, tag: 'AutoAdvance' }, `Erro índice invertido (jogo ${gameId}):`)
-        );
+            buildInvertedIndex(gameId).catch(err =>
+                logger.error({ err, tag: 'AutoAdvance' }, `Erro índice invertido (jogo ${gameId}):`)
+            );
 
-        acquireOrchestrationLock(gameId).then(lockAcquired => {
-            if (!lockAcquired) {
-                logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: lock já existe, pulando.`)
-                return;
-            }
-            autoStartDraw(gameId).catch(err => {
-                if (isResourceExhausted(err)) {
-                    handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+            acquireOrchestrationLock(gameId).then(lockAcquired => {
+                if (!lockAcquired) {
+                    logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: lock já existe, pulando.`)
                     return;
                 }
-                logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
-                processedGames.delete(gameId);
-                releaseOrchestrationLock(gameId).catch(() => {});
+                autoStartDraw(gameId).catch(err => {
+                    if (isResourceExhausted(err)) {
+                        handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                        return;
+                    }
+                    logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
+                    processedGames.delete(gameId);
+                    releaseOrchestrationLock(gameId).catch(() => {});
+                });
             });
-        });
-    } catch (err) {
-        if (isResourceExhausted(err)) {
-            handleResourceBackoff(gameId, 'AutoAdvance', `lock jogo ${gameId}`);
-            return;
+        } catch (err) {
+            if (isResourceExhausted(err)) {
+                handleResourceBackoff(gameId, 'AutoAdvance', `lock jogo ${gameId}`);
+                return;
+            }
+            logger.error({ err, tag: 'AutoAdvance' }, `Erro ao travar jogo ${gameId}:`)
+            processedGames.delete(gameId);
         }
-        logger.error({ err, tag: 'AutoAdvance' }, `Erro ao travar jogo ${gameId}:`)
-        processedGames.delete(gameId);
     }
 }
 
