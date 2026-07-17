@@ -6,7 +6,7 @@ module.exports = {
     moduleNameMapper: {
         '^\\./blockchain$': '<rootDir>/src/services/blockchain.stub.ts',
         '^@cryptobingo/blockchain-core$': '<rootDir>/../../packages/blockchain-core/src/index.ts',
-        '^@cryptobingo/shared-types$': '<rootDir>/../shared-types/src/index.ts',
+        '^@cryptobingo/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
     },
     collectCoverageFrom: [
         'src/services/**/*.ts',

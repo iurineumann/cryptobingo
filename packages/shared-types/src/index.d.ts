@@ -23,6 +23,7 @@ export interface BlockchainGameState {
     gametype_id: string;
     end_time: number;
     room_id: string;
+    funded_at?: number;
 }
 /**
  * extended_asset serializado pelo nó Antelope.
@@ -181,6 +182,7 @@ export interface MongoUserProfile {
         progress_pct?: number;
     };
     achievements?: AchievementEntry[];
+}
 export interface MongoChatMessage {
     lobby_id: string;
     wallet_address: string;
