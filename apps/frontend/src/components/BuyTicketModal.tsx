@@ -9,7 +9,7 @@ import { useTranslation }    from 'react-i18next';
 import { Session }           from '@wharfkit/session';
 import { useTicketPurchase, type PurchaseGroup, type SwapAction } from '../hooks/useTicketPurchase';
 import TicketGrid            from './TicketGrid';
-import type { ExtendedAsset } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type ExtendedAsset } from '@cryptobingo/shared-types';
 import type { SignedTicket } from '../services/api';
 import {
     fetchSwapPools,
@@ -59,7 +59,7 @@ interface TicketBatch {
 }
 
 const EXPLORER_BASE  = import.meta.env.VITE_EXPLORER_URL ?? 'https://wax.bloks.io';
-const AUTO_LOCK_SEC  = 60; // deve coincidir com AUTO_LOCK_DELAY_SEC do worker
+const AUTO_LOCK_SEC  = FUNDING_WINDOW_SEC; // deve coincidir com AUTO_LOCK_DELAY_SEC do worker
 
 function fmtCountdown(ms: number): string {
     if (ms <= 0) return '0s';

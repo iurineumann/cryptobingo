@@ -10,6 +10,9 @@ export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 
 export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
 export type PatternType = 'simple' | 'special' | 'master';
 
+/** Janela de funding (segundos) — tempo máximo de venda antes do lock. Compartilhado worker/frontend. */
+export const FUNDING_WINDOW_SEC = 60;
+
 // Permissões granulares (ADR-036)
 export type AdminPermission =
   | 'admin.dashboard.view'

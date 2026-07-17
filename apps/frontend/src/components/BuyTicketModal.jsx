@@ -12,8 +12,9 @@ import { fetchEligibleDiscountNfts } from '../services/api';
 import { X, PartyPopper, Check, Link2, Dices, TriangleAlert } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { FUNDING_WINDOW_SEC } from '@cryptobingo/shared-types';
 const EXPLORER_BASE = import.meta.env.VITE_EXPLORER_URL ?? 'https://wax.bloks.io';
-const AUTO_LOCK_SEC = 60; // deve coincidir com AUTO_LOCK_DELAY_SEC do worker
+const AUTO_LOCK_SEC = FUNDING_WINDOW_SEC; // deve coincidir com AUTO_LOCK_DELAY_SEC do worker
 function fmtCountdown(ms) {
     if (ms <= 0)
         return '0s';

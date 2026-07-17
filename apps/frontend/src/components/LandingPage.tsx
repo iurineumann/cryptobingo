@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchRooms, fetchRtpReport, fetchGamesHistory } from '../services/api';
 import { PaletteSelector } from './ui/PaletteSelector';
 import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api';
-import type { BlockchainGameState } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ interface LandingPageProps {
 }
 
 const CONTRACT       = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
-const AUTO_LOCK_SEC  = 60;
+const AUTO_LOCK_SEC  = FUNDING_WINDOW_SEC;
 const REVEAL_INTERVAL_MS = 3000;
 const SLOW_REVEAL_WINDOW = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 

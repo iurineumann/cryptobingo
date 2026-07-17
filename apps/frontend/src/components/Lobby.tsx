@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation }                from 'react-i18next';
 import { useNavigate }                   from 'react-router-dom';
 import { Session }                       from '@wharfkit/session';
-import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchLobby, fetchLobbyMe, type EnrichedRoom } from '../services/api';
 import Seo                               from './Seo';
 import { X } from 'lucide-react';
@@ -26,7 +26,7 @@ interface LobbyProps {
     readonly onReplayGame?: (gameId: string) => void;
 }
 
-const AUTO_LOCK_SEC        = 60;
+const AUTO_LOCK_SEC        = FUNDING_WINDOW_SEC;
 const REVEAL_INTERVAL_MS   = 3000;
 const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS       = 4_000;   // salas idle
