@@ -18,18 +18,6 @@ const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const LOBBY_CACHE_TTL   = 2;
 const LOBBY_ME_CACHE_TTL = 2;
 
-async function enrichGamesWithFundedAt(games: BlockchainGameState[]): Promise<BlockchainGameState[]> {
-    const results = await Promise.all(games.map(async (g) => {
-        try {
-            const fundedAtStr = await redisClient.get('funding:started:' + g.game_id);
-            return { ...g, funded_at: fundedAtStr ? Number(fundedAtStr) : undefined };
-        } catch {
-            return g;
-        }
-    }));
-    return results;
-}
-
 function makeLobbyCacheKey(): string {
     return 'lobby:shared';
 }
@@ -79,8 +67,7 @@ export async function getLobby(_req: Request, res: Response): Promise<void> {
             }),
         ]);
 
-        let games = gamesRes.rows as BlockchainGameState[];
-        games = await enrichGamesWithFundedAt(games);
+        const games = gamesRes.rows as BlockchainGameState[];
         const rooms = roomsRes.rows as BlockchainRoom[];
         const gametypes = gametypesRes.rows as BlockchainGametype[];
 
@@ -151,8 +138,7 @@ export async function getLobbyMe(req: Request, res: Response): Promise<void> {
             reverse: true,
             json: true,
         });
-        let games = gamesRes.rows as BlockchainGameState[];
-        games = await enrichGamesWithFundedAt(games);
+        const games = gamesRes.rows as BlockchainGameState[];
 
         // Tickets em jogos funding — agrupa por room_id
         const fundingGames = games.filter(g =>
