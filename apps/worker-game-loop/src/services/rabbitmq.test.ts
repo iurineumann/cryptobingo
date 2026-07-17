@@ -281,7 +281,7 @@ describe('consumeDeadLetters (DLQ)', () => {
     });
 
     it('DLQ msg com x-death < DLQ_MAX_RETRIES → ACK + setTimeout com backoff', async () => {
-        const msg = makeMsg({ action: 'fundgame', gameId: '1' }, 1); // x-death=1
+        const msg = makeMsg({ action: 'lockgame', gameId: '1' }, 1); // x-death=1
         await processDlq(msg);
         expect(mockChannel.ack).toHaveBeenCalledWith(msg);
         // 30s * 2^1 = 60000
@@ -313,12 +313,26 @@ describe('consumeDeadLetters (DLQ)', () => {
         );
     });
 
-    it('DLQ com x-death=2 → backoff 120s + publishGameEvent', async () => {
-        const msg = makeMsg({ action: 'fundgame', gameId: '4' }, 2);
+    it('DLQ com x-death=2 → backoff 120s + publishGameEvent (não fundgame)', async () => {
+        const msg = makeMsg({ action: 'startdraw', gameId: '4' }, 2);
         await processDlq(msg);
         expect(mockChannel.ack).toHaveBeenCalledWith(msg);
         // 30s * 2^2 = 120000
         jest.advanceTimersByTime(120000);
+        await Promise.resolve();
+        expect(mockPublishGameEvent).toHaveBeenCalledWith(
+            'game_loop_events',
+            'startdraw',
+            expect.any(Object),
+        );
+    });
+
+    it('DLQ fundgame com x-death=1 → ACK + setTimeout com retry curto (3s)', async () => {
+        const msg = makeMsg({ action: 'fundgame', gameId: '5' }, 1);
+        await processDlq(msg);
+        expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        // Fundgame usa FUNDGAME_DLQ_RETRY_MS=3000, não 30s*2^n
+        jest.advanceTimersByTime(3000);
         await Promise.resolve();
         expect(mockPublishGameEvent).toHaveBeenCalledWith(
             'game_loop_events',

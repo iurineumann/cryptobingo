@@ -230,7 +230,10 @@ namespace bingo {
         games_table games(get_self(), get_self().value);
         auto game_itr = games.require_find(game_id, "Game not found.");
         check(game_itr->status == "created"_n, "Game is not in CREATED status.");
-        games.modify(game_itr, same_payer, [&](auto& g) { g.status = "funding"_n; });
+        games.modify(game_itr, same_payer, [&](auto& g) {
+            g.status    = "funding"_n;
+            g.funded_at = current_time_point().sec_since_epoch();  // ADR-056
+        });
     }
 
     // ==========================================
