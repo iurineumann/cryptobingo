@@ -92,6 +92,7 @@ jest.mock('./gameLock', () => ({
     acquireOrchestrationLock: jest.fn().mockResolvedValue(true),
     releaseOrchestrationLock: jest.fn().mockResolvedValue(undefined),
     isLocked:                 jest.fn().mockResolvedValue(false),
+    startLockWatchdog:        jest.fn().mockReturnValue({ stop: jest.fn() }),
 }));
 jest.mock('./rabbitPublisher', () => ({
     publishGameEvent:  jest.fn().mockResolvedValue(undefined),
