@@ -55,6 +55,7 @@ dotenv.config();
 const RABBITMQ_URL         = process.env.RABBITMQ_URL         || 'amqp://localhost:5672';
 const CONTRACT_ACCOUNT     = process.env.CONTRACT_ACCOUNT     || 'bingogamectr';
 const RETRY_DELAY_MS       = 5_000;
+const FUNDGAME_DLQ_RETRY_MS = 3_000;
 const CONNECT_TIMEOUT_MS   = 10_000; // amqp.connect() não tem timeout nativo — forçamos 10s
 const QUEUE_NAME         = 'game_loop_events';
 const DLX_NAME           = 'game_loop_dlx';
@@ -646,9 +647,16 @@ async function handleDeadLetter(msg: ConsumeMessage, dlqName: string, originalQu
     logger.info({ tag: 'RabbitMQ' }, `DLQ mensagem recebida em "${dlqName}" (action=${action}, x-death count=${deliveryCount})`);
 
     if (deliveryCount < DLQ_MAX_RETRIES) {
-        const delayMs = 30_000 * Math.pow(2, deliveryCount);
-        logger.info({ tag: 'RabbitMQ' },
-            `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        const delayMs = action === 'fundgame'
+            ? FUNDGAME_DLQ_RETRY_MS
+            : 30_000 * Math.pow(2, deliveryCount);
+        if (action === 'fundgame') {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando fundgame com retry curto (${FUNDGAME_DLQ_RETRY_MS}ms, não corrói janela de funding) (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        } else {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        }
 
         setTimeout(async () => {
             try {
