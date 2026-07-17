@@ -26,6 +26,7 @@ import { awardTicketPurchaseXP }                    from './xpEngine';
 import { onGameResolved }                           from './roomManager';
 import { orchestrateGame }                          from './gameOrchestrator';
 import {
+    notifyGameFunded,
     notifyGameLocked,
     notifyGameAborted,
 }                          from './broadcaster';
@@ -286,6 +287,7 @@ function consumeMessages(): void {
                         break;
                     }
                     await executeFundGame(gameId);
+                    notifyGameFunded(gameId);   // ADR/issue #403: lobby em tempo real
                     break;
                 }
 

@@ -25,6 +25,8 @@ vi.mock('../services/api', () => ({
     fetchLobbyMe: vi.fn().mockImplementation(() => Promise.resolve(mockLobbyMeData)),
     fetchRooms:  vi.fn(),
     fetchPublicGametypeMetadata: vi.fn().mockResolvedValue({ combinations: [], rules: [], stages: [] }),
+    // useLobbySocket (issue #403) importa getAuthToken; sem token, o hook não abre socket.
+    getAuthToken: vi.fn().mockReturnValue(undefined),
 }));
 
 function buildSession(): Session {

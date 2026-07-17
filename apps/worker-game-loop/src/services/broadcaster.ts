@@ -280,6 +280,19 @@ export function notifyGameLocked(gameId: string): void {
 }
 
 /**
+ * Emite game_funded — jogo abriu para vendas (CREATED → FUNDING).
+ * Permite o lobby atualizar o status em tempo real (sem esperar polling).
+ */
+export function notifyGameFunded(gameId: string): void {
+    publishReveal('game_funded', gameId, {
+        event:   'game_funded',
+        game_id: parseInt(gameId, 10),
+        timestamp: new Date().toISOString(),
+    });
+    logger.info({ tag: 'WS' }, `game_funded publicado para jogo ${gameId}`);
+}
+
+/**
  * Emite game_aborted e encerra qualquer reveal ativo.
  */
 export function notifyGameAborted(

@@ -11,6 +11,7 @@ import { useNavigate }                   from 'react-router-dom';
 import { Session }                       from '@wharfkit/session';
 import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchLobby, fetchLobbyMe, type EnrichedRoom } from '../services/api';
+import { useLobbySocket }                from '../hooks/useLobbySocket';
 import Seo                               from './Seo';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
@@ -521,6 +522,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
         [games]
     );
 
+    // Game IDs ativos p/ subscription socket — push atualiza status entre polls
+    const gameIds = useMemo(() => games.map(g => g.game_id), [games]);
+    const { statuses } = useLobbySocket(gameIds);
+
     useEffect(() => {
         loadData();
     }, [loadData]);
@@ -633,7 +638,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                     {/* ── Cards de salas ativas ── */}
                     {activeRooms.map(room => {
                         const currentGame   = currentGameForRoom(room);
-                        const displayStatus = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
+                        const pollStatus    = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
+                        const displayStatus = currentGame
+                            ? (statuses[currentGame.game_id] ?? pollStatus)
+                            : 'idle';
                         return (
                             <RoomCard
                                 key={`r-${room.room_id}`}
@@ -653,7 +661,8 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                     {/* ── Jogos sem sala / legados (fallback) ── */}
                     {orphanGames.map(game => {
-                        const isFunding = game.status === 'funding';
+                        const effectiveStatus = statuses[game.game_id] ?? game.status;
+                        const isFunding = effectiveStatus === 'funding';
                         const tpSplit = splitAmount(game.ticket_price.quantity);
                         const orphanGt = gametypeMap.get(String(game.gametype_id));
                         const orphanMax = orphanGt && orphanGt.max_win_weight > 0
@@ -671,7 +680,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <p className="lobby-card-name">{t('lobby.room_label')}</p>
                                     </div>
                                     <Badge variant="secondary" className={isFunding ? 'text-success-400' : ''}>
-                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }} />{t(`lobby.${game.status}` as any, game.status)}
+                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveStatus] }} />{t(`lobby.${effectiveStatus}` as any, effectiveStatus)}
                                     </Badge>
                                 </div>
 
