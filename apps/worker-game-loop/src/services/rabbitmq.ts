@@ -26,6 +26,7 @@ import { awardTicketPurchaseXP }                    from './xpEngine';
 import { onGameResolved }                           from './roomManager';
 import { orchestrateGame }                          from './gameOrchestrator';
 import {
+    notifyGameFunded,
     notifyGameLocked,
     notifyGameAborted,
 }                          from './broadcaster';
@@ -288,6 +289,7 @@ function consumeMessages(): void {
                         break;
                     }
                     await executeFundGame(gameId);
+                    notifyGameFunded(gameId);   // ADR/issue #403: lobby em tempo real
                     redisClient.set('funding:started:' + gameId, String(Date.now()), { EX: 600 }).catch(() => {});
                     break;
                 }
