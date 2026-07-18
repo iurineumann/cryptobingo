@@ -58,16 +58,23 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
     rpcClient: { v1: { chain: { get_table_rows: jest.fn() } } },
 }));
 jest.mock('./metrics', () => ({
-    eventsProcessedTotal:     { inc: jest.fn() },
-    eventsFailedTotal:        { inc: jest.fn() },
-    eventsDeadLetteredTotal:  { inc: jest.fn() },
-    eventProcessingDuration:  { startTimer: jest.fn().mockReturnValue(jest.fn()) },
-    autoAdvanceRunsTotal:     { inc: jest.fn() },
-    autoAdvanceErrorsTotal:   { inc: jest.fn() },
-    autoAdvanceGamesTotal:    { inc: jest.fn() },
-    oraclePollAttempts:       { observe: jest.fn() },
-    workerQueuePublishedTotal:{ inc: jest.fn() },
-    setQueueDepth:            jest.fn(),
+    eventsProcessedTotal:       { inc: jest.fn() },
+    eventsFailedTotal:          { inc: jest.fn() },
+    eventsDeadLetteredTotal:    { inc: jest.fn() },
+    eventProcessingDuration:    { startTimer: jest.fn().mockReturnValue(jest.fn()) },
+    autoAdvanceRunsTotal:       { inc: jest.fn() },
+    autoAdvanceErrorsTotal:     { inc: jest.fn() },
+    autoAdvanceGamesTotal:      { inc: jest.fn() },
+    oraclePollAttempts:         { observe: jest.fn() },
+    workerQueuePublishedTotal:  { inc: jest.fn() },
+    setQueueDepth:              jest.fn(),
+    stateWatcherEventsReceived: { inc: jest.fn() },
+    stateWatcherPublished:      { inc: jest.fn() },
+    stateWatcherErrors:         { inc: jest.fn() },
+    stateWatcherReconnections:  { inc: jest.fn() },
+    stateWatcherSourceChanges:  { inc: jest.fn() },
+    stateWatcherCursorPosition: { set: jest.fn() },
+    stateWatcherPublishLatency: { startTimer: jest.fn().mockReturnValue(jest.fn()), observe: jest.fn() },
 }));
 jest.mock('./prizeMetrics', () => {
     const counter = () => ({ inc: jest.fn(), labels: jest.fn().mockReturnValue({ inc: jest.fn() }) });

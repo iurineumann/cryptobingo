@@ -9,10 +9,20 @@ import type { ContractEvent } from '@cryptobingo/blockchain-core';
 import { redisClient } from './redis';
 import { publishGameEvent } from './rabbitPublisher';
 import { logger } from './logger';
+import {
+    stateWatcherEventsReceived,
+    stateWatcherPublished,
+    stateWatcherErrors,
+    stateWatcherReconnections,
+    stateWatcherSourceChanges,
+    stateWatcherCursorPosition,
+    stateWatcherPublishLatency,
+} from './metrics';
 
 const REDIS_CURSOR_KEY = 'statewatcher:last_global_seq';
 
 let cursor: number = 0;
+let currentSource: 'firehose' | 'hyperion' = 'firehose';
 let unsubscribe: (() => void) | null = null;
 
 async function loadCursor(): Promise<void> {
@@ -53,6 +63,10 @@ export function startStateWatcher(): void {
           return;
         }
 
+        stateWatcherEventsReceived.inc({ source: currentSource });
+
+        const timer = stateWatcherPublishLatency.startTimer();
+
         try {
           await publishGameEvent('game_loop_events', evt.action, {
             gameId: evt.game_id,
@@ -62,6 +76,8 @@ export function startStateWatcher(): void {
             step: evt.step,
           });
         } catch (err) {
+          timer();
+          stateWatcherErrors.inc();
           logger.error(
             { err, action: evt.action, gameId: evt.game_id },
             'Erro ao publicar evento no RabbitMQ:',
@@ -69,14 +85,21 @@ export function startStateWatcher(): void {
           return; // nao salva cursor — tenta de novo na proxima execucao
         }
 
+        timer();
+        stateWatcherPublished.inc({ action: evt.action });
+        stateWatcherCursorPosition.set(evt.global_seq);
         await saveCursor(evt.global_seq);
       },
 
       onError: (err: Error) => {
+        stateWatcherErrors.inc();
+        stateWatcherReconnections.inc();
         logger.error({ err, tag: 'StateWatcher' }, 'Erro no stream de eventos:');
       },
 
       onSourceChange: (src: 'firehose' | 'hyperion') => {
+        currentSource = src;
+        stateWatcherSourceChanges.inc();
         logger.info({ tag: 'StateWatcher', source: src }, 'Fonte de eventos alterada');
       },
     });

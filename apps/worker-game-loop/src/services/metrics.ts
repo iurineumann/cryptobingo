@@ -247,6 +247,63 @@ export const achievementsUnlockedTotal = new Counter({
 });
 
 // ==========================================
+// MÉTRICAS DO STATE WATCHER (Fase B1/B5)
+// Acompanham o pipeline de eventos on-chain → RabbitMQ.
+// ==========================================
+
+/** Eventos on-chain recebidos do Firehose/Hyperion pelo State Watcher. */
+export const stateWatcherEventsReceived = new Counter({
+    name:       'worker_state_watcher_events_received_total',
+    help:       'Eventos on-chain recebidos do Firehose/Hyperion pelo State Watcher.',
+    labelNames: ['source'] as const,
+    registers:  [registry],
+});
+
+/** Eventos publicados na fila game_loop_events pelo State Watcher. */
+export const stateWatcherPublished = new Counter({
+    name:       'worker_state_watcher_published_total',
+    help:       'Eventos publicados na fila game_loop_events pelo State Watcher.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
+/** Erros no stream de eventos do State Watcher (parse/conexão). */
+export const stateWatcherErrors = new Counter({
+    name:       'worker_state_watcher_errors_total',
+    help:       'Erros no stream de eventos do State Watcher (parse/conexão).',
+    registers:  [registry],
+});
+
+/** Reconexões do stream Firehose/Hyperion do State Watcher. */
+export const stateWatcherReconnections = new Counter({
+    name:       'worker_state_watcher_reconnections_total',
+    help:       'Reconexões do stream Firehose/Hyperion do State Watcher.',
+    registers:  [registry],
+});
+
+/** Trocas de fonte Firehose<->Hyperion (fallback ativado). */
+export const stateWatcherSourceChanges = new Counter({
+    name:       'worker_state_watcher_source_changes_total',
+    help:       'Trocas de fonte Firehose<->Hyperion (fallback ativado).',
+    registers:  [registry],
+});
+
+/** Posição atual do cursor (last_global_seq) do State Watcher no Redis. */
+export const stateWatcherCursorPosition = new Gauge({
+    name:       'worker_state_watcher_cursor_position',
+    help:       'Posição atual do cursor (last_global_seq) do State Watcher no Redis.',
+    registers:  [registry],
+});
+
+/** Latência do onEvent até publishGameEvent OK (ms). */
+export const stateWatcherPublishLatency = new Histogram({
+    name:       'worker_state_watcher_publish_latency_ms',
+    help:       'Latência do onEvent até publishGameEvent OK (ms).',
+    buckets:    [1, 5, 10, 25, 50, 100, 250, 500],
+    registers:  [registry],
+});
+
+// ==========================================
 // SERVIDOR HTTP DE MÉTRICAS
 // ==========================================
 
