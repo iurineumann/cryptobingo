@@ -109,6 +109,16 @@ public:
     [[eosio::action]] void killjobs(const std::vector<uint64_t> &job_ids);
 
     /**
+     * Clears ALL pending requests from the `reqs` table.
+     *
+     * Erases rows by iterator without deserializing the full row object, so it
+     * also removes rows whose binary layout no longer matches the current ABI
+     * (e.g. stale rows left by an older contract version). Use with care: this
+     * drops every in-flight request.
+     */
+    [[eosio::action]] void clearreqs();
+
+    /**
      * bans dapp from requesting random values
      * @param dapp account name of dapp
      */
