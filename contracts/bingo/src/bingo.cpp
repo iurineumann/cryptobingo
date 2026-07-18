@@ -1003,17 +1003,11 @@ namespace bingo {
         ).send();
     }
 
-    // receiverand — compatível com o callback legacy do orng.wax de produção.
-    // O contrato orng.wax entrega: receiverand(assoc_id, checksum256 rnd)
-    // onde rnd = sha256(rsa_sig_hex_string).
-    // As 75 bolas são derivadas on-chain via Fisher-Yates seeded pelo checksum256.
-    void bingo_contract::receiverand(uint64_t assoc_id, eosio::checksum256 random_value) {
-        config_singleton config_table(get_self(), get_self().value);
-        check(config_table.exists(), "Contract configuration not initialized.");
-        require_auth(config_table.get().oracle_account.value_or("orng.wax"_n));
-
+    // C4: corpo compartilhado — Fisher-Yates + drawn + grava random_value (auditoria).
+    // Chamado por receiverand (legacy) e randnotify (ORNG v3.2). Auth fica no caller.
+    void bingo_contract::_apply_random(uint64_t game_id, const eosio::checksum256& random_value) {
         games_table games(get_self(), get_self().value);
-        auto game_itr = games.require_find(assoc_id, "Game not found for Oracle response.");
+        auto game_itr = games.require_find(game_id, "Game not found for Oracle response.");
         check(game_itr->status == "drawing"_n, "Game is not in DRAWING status.");
 
         // Deriva 75 bolas (1-75) via Fisher-Yates com seed do checksum256.
@@ -1041,9 +1035,31 @@ namespace bingo {
         }
 
         games.modify(game_itr, same_payer, [&](auto& g) {
-            g.drawn_balls = balls;
-            g.status      = "drawn"_n;
+            g.drawn_balls  = balls;
+            g.status       = "drawn"_n;
+            g.random_value = random_value;  // C4: auditoria on-chain do seed ORNG
         });
+    }
+
+    // receiverand — compatível com o callback legacy do orng.wax de produção.
+    // O contrato orng.wax entrega: receiverand(assoc_id, checksum256 rnd)
+    // onde rnd = sha256(rsa_sig_hex_string).
+    void bingo_contract::receiverand(uint64_t assoc_id, eosio::checksum256 random_value) {
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        require_auth(config_table.get().oracle_account.value_or("orng.wax"_n));
+        _apply_random(assoc_id, random_value);
+    }
+
+    // randnotify — ORNG v3.2 notify moderno.
+    // Assinatura oficial: randnotify(request_id, dapp, assoc_id, rnd).
+    void bingo_contract::randnotify(uint64_t /*request_id*/, eosio::name dapp, uint64_t assoc_id,
+                                    const eosio::checksum256& rnd) {
+        config_singleton config_table(get_self(), get_self().value);
+        check(config_table.exists(), "Contract configuration not initialized.");
+        require_auth(config_table.get().oracle_account.value_or("orng.wax"_n));
+        check(dapp == get_self(), "randnotify dapp mismatch");
+        _apply_random(assoc_id, rnd);
     }
 
     // ==========================================

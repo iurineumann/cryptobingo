@@ -57,6 +57,9 @@ namespace bingo {
         int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts (para cálculo do GGR)
         // ADR-056: epoch sec do início do funding (fonte-de-verdade da janela de 60s).
         eosio::binary_extension<uint32_t> funded_at;
+        // C4: seed ORNG (checksum256) p/ auditoria on-chain. binary_extension →
+        // linhas legadas (jogos archived sem o campo) continuam unpackáveis.
+        eosio::binary_extension<eosio::checksum256> random_value;
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }
@@ -489,6 +492,9 @@ namespace bingo {
         // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
         // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
+        // C4: notify moderno ORNG v3.2 — randnotify(request_id, dapp, assoc_id, rnd).
+        // Mesmo corpo de receiverand via _apply_random (Fisher-Yates + drawn + grava seed).
+        [[eosio::action]] void randnotify(uint64_t request_id, eosio::name dapp, uint64_t assoc_id, const eosio::checksum256& rnd);
         // ADR-028 §7 (Fase 2): boost_nft_ids — prize boost. Param trailing
         // binary_extension. Todos os callers (worker + harness) passam o campo
         // explicitamente (wharfkit não omite binary_extension de array). O contrato
@@ -571,6 +577,10 @@ namespace bingo {
     private:
         drop_state _get_drop_state();
         void       _save_drop_state(drop_state& ds);
+
+        // C4: corpo compartilhado de receiverand/randnotify — deriva 75 bolas,
+        // marca drawn e grava random_value (auditoria on-chain).
+        void _apply_random(uint64_t game_id, const eosio::checksum256& random_value);
 
         // ADR-028 §2: lê um schema field NUMÉRICO de um asset (deserialização ALPHA
         // AtomicAssets on-chain). Tenta o immutable do asset; se ausente, o do

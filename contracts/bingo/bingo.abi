@@ -556,6 +556,28 @@
       ]
     },
     {
+      "name": "randnotify",
+      "base": "",
+      "fields": [
+        {
+          "name": "request_id",
+          "type": "uint64"
+        },
+        {
+          "name": "dapp",
+          "type": "name"
+        },
+        {
+          "name": "assoc_id",
+          "type": "uint64"
+        },
+        {
+          "name": "rnd",
+          "type": "checksum256"
+        }
+      ]
+    },
+    {
       "name": "receiverand",
       "base": "",
       "fields": [
@@ -954,6 +976,10 @@
         {
           "name": "funded_at",
           "type": "uint32$"
+        },
+        {
+          "name": "random_value",
+          "type": "checksum256$"
         }
       ]
     },
@@ -1552,6 +1578,11 @@
     {
       "name": "pauseroom",
       "type": "pauseroom",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "randnotify",
+      "type": "randnotify",
       "ricardian_contract": ""
     },
     {
