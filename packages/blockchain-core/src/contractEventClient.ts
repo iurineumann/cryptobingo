@@ -82,6 +82,8 @@ export class ContractEventClient {
   private grpcModule: any = null;
   private protoLoaderModule: any = null;
   private firehoseClient: any = null;
+  /** Descriptor da message sf.antelope.type.v1.Block (para unpack do Any). */
+  private blockMessageType: any = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private firehoseErrorCount = 0;
@@ -307,7 +309,9 @@ export class ContractEventClient {
     const events: ContractEvent[] = [];
 
     const step = response?.step?.step ?? 0;
-    const block = response?.block;
+    // O servidor Pinax empacota o bloco em google.protobuf.Any (type_url +
+    // value bytes). Em testes/mocks o bloco pode vir direto (sem value).
+    const block = this.extractBlock(response?.block);
     if (!block) return events;
 
     const blockNum = typeof block.number === 'string' ? parseInt(block.number, 10) : block.number;
@@ -351,6 +355,40 @@ export class ContractEventClient {
     }
 
     return events;
+  }
+
+  /**
+   * Extrai o `sf.antelope.type.v1.Block` de um `response.block`.
+   *
+   * - Servidor real (Pinax): `block` é um `google.protobuf.Any`
+   *   (`{ type_url, value: Uint8Array }`). Fazemos unpack manual via o
+   *   descriptor do `Block` carregado em `getFirehoseClient`.
+   * - Testes/mocks: `block` é o objeto `Block` direto (sem `value`).
+   */
+  private extractBlock(rawBlock: any): any {
+    if (!rawBlock) return null;
+
+    // Formato Any (servidor real)
+    if (rawBlock.value && this.blockMessageType) {
+      // `loadPackageDefinition` (grpc-js) expõe `.deserialize`; protobufjs puro
+      // expõe `.decode`. Ambos fazem unpack dos bytes — usamos o que existir.
+      const decodeFn =
+        (this.blockMessageType as any).deserialize ??
+        (this.blockMessageType as any).decode;
+      if (typeof decodeFn === 'function') {
+        try {
+          return decodeFn.call(this.blockMessageType, rawBlock.value);
+        } catch (err) {
+          this.emitError(
+            err instanceof Error ? err : new Error(`Falha ao decodar bloco Any: ${String(err)}`)
+          );
+          return null;
+        }
+      }
+    }
+
+    // Formato direto (mock/teste) — usa o objeto como está
+    return rawBlock;
   }
 
   private isContractEvent(event: ContractEvent): boolean {
@@ -482,6 +520,11 @@ export class ContractEventClient {
       this.firehoseEndpoint,
       credentials.createSsl(),
     );
+
+    // Carrega o descriptor do Block (para unpack do google.protobuf.Any)
+    if (proto.sf?.antelope?.type?.v1?.Block) {
+      this.blockMessageType = proto.sf.antelope.type.v1.Block;
+    }
 
     return this.firehoseClient;
   }
