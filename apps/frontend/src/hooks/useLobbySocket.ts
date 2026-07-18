@@ -7,7 +7,7 @@ import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '../services/api';
 import { WS_BASE } from '@/config/env';
 
-type GameStatus = 'funding' | 'locked' | 'aborted';
+type GameStatus = 'funding' | 'locked' | 'aborted' | 'drawing' | 'drawn';
 
 interface PushEvent {
     event: string;
@@ -56,6 +56,7 @@ export function useLobbySocket(gameIds: string[]): { statuses: Record<string, st
         socket.on('game_funded', handleStatus('funding'));
         socket.on('game_locked', handleStatus('locked'));
         socket.on('game_aborted', handleStatus('aborted'));
+        socket.on('drawing_started', handleStatus('drawing'));
 
         return () => {
             socket.disconnect();

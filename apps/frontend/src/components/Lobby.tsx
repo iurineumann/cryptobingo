@@ -12,6 +12,7 @@ import { Session }                       from '@wharfkit/session';
 import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchLobby, fetchLobbyMe, type EnrichedRoom } from '../services/api';
 import { useLobbySocket }                from '../hooks/useLobbySocket';
+import { isWithinSlowReveal, resolveDisplayStatus } from '../utils/gameStatus';
 import Seo                               from './Seo';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
@@ -28,8 +29,6 @@ interface LobbyProps {
 }
 
 const AUTO_LOCK_SEC        = FUNDING_WINDOW_SEC;
-const REVEAL_INTERVAL_MS   = 3000;
-const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
 const POLL_NORMAL_MS       = 4_000;   // salas idle
 // FIX #384: 1000 -> 2000ms. Em sala ativa o lobby faz 2 req/ciclo
 // (lobby + lobby/me) = 60 req/min, abaixo do limite playerLimiter (200/min).
@@ -543,16 +542,6 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
     }, [loadData]);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    function isWithinSlowReveal(gameId: string): boolean {
-        return Date.now() - Number(gameId) < SLOW_REVEAL_WINDOW;
-    }
-
-    function resolveDisplayStatus(g: BlockchainGameState): string {
-        if (g.status === 'drawn') return 'drawing';
-        if (g.status === 'archived' && isWithinSlowReveal(g.game_id)) return 'drawing';
-        return g.status;
-    }
 
     // Jogo "relevante" para exibição de uma sala — exclui aborted e archived fora da janela
     function currentGameForRoom(room: EnrichedRoom): BlockchainGameState | undefined {

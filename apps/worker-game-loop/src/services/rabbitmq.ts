@@ -29,6 +29,7 @@ import {
     notifyGameFunded,
     notifyGameLocked,
     notifyGameAborted,
+    notifyDrawingStarted,
 }                          from './broadcaster';
 import {
     sendGameLockedMessage,
@@ -347,6 +348,7 @@ function consumeMessages(): void {
                     const watchdog = startLockWatchdog(gameId, 90_000);
 
                     await executeStartDraw(gameId);
+                    notifyDrawingStarted(gameId);  // C2: push drawing_started → lobby reage em tempo real
 
                     const drawnBalls = await waitForDrawnBalls(gameId);
 
