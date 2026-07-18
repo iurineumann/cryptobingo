@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package sf.firehose.v2;
 
-import "firehose.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "sf/antelope/type/v1/type.proto";
 
 service Stream {
   rpc Blocks(Request) returns (stream Response);
@@ -10,17 +12,34 @@ service Stream {
 
 message Request {
   int64 start_block_num = 1;
-  string start_cursor = 2;
+  string cursor = 2;
   uint64 stop_block_num = 3;
-  repeated ForkStep fork_steps = 4;
-  string irreversibility_condition = 5;
+  bool final_blocks_only = 4;
+  repeated google.protobuf.Any transforms = 10;
+  reserved 5;
 }
 
-message ForkStep {
-  uint32 step = 1;
+enum ForkStep {
+  STEP_UNSET = 0;
+  STEP_NEW = 1;
+  STEP_UNDO = 2;
+  STEP_FINAL = 3;
+  reserved 4;
 }
 
 message Response {
-  sf.antelope.type.v1.Block block = 1;
-  ForkStep step = 3;
+  // O bloco vem empacotado em google.protobuf.Any (type_url aponta p/ sf.antelope.type.v1.Block).
+  google.protobuf.Any block = 1;
+  ForkStep step = 6;
+  string cursor = 10;
+  BlockMetadata metadata = 12;
+}
+
+message BlockMetadata {
+  uint64 num = 1;
+  string id = 2;
+  uint64 parent_num = 3;
+  string parent_id = 4;
+  uint64 lib_num = 5;
+  google.protobuf.Timestamp time = 6;
 }

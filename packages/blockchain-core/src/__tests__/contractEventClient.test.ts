@@ -415,4 +415,79 @@ describe('ContractEventClient', () => {
     await new Promise(r => setTimeout(r, 50));
     expect(client.source).toBe('firehose');
   });
+
+  // ── Teste 13: unpack REAL de google.protobuf.Any -> Block ─
+  // Cobre o caminho de runtime do servidor Pinax: response.block é um Any
+  // empacotado, e extractBlock faz unpack via blockMessageType. Usa o proto
+  // REAL (loadPackageDefinition) para provar que .deserialize funciona.
+
+  test('unpack real do Any->Block via extractBlock (proto Pinax)', async () => {
+    // Carrega os protos reais como no runtime (getFirehoseClient).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const protoLoader = require('@grpc/proto-loader');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const grpc = require('@grpc/grpc-js');
+
+    const path = require('path');
+    const protoDir = path.resolve(__dirname, '..', 'proto');
+    const pd = protoLoader.loadSync(path.join(protoDir, 'firehose_v2.proto'), {
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+      oneofs: true,
+      includeDirs: [protoDir],
+    });
+    const proto = grpc.loadPackageDefinition(pd);
+    const Block = proto.sf.antelope.type.v1.Block;
+    const Any = proto.google.protobuf.Any;
+
+    const ms = createMockStream();
+    const { client, cb } = setupClientWithFactory(ms);
+
+    // Injeta o descriptor real do Block (o que getFirehoseClient carregaria).
+    (client as any).blockMessageType = Block;
+
+    await new Promise(r => setTimeout(r, 50));
+
+    // Monta um bloco real e empacota em Any (exatamente como o servidor manda).
+    const blockObj = {
+      id: '0'.repeat(64),
+      number: 4242,
+      filtered_transaction_traces: [
+        {
+          id: 'trace-1',
+          action_traces: [
+            {
+              receipt: { receiver: 'bingogamectr', global_sequence: 555 },
+              action: {
+                account: 'bingogamectr',
+                name: 'creategame',
+                json_data: JSON.stringify({ game_id: 'ZXC-99', amount: '5.0000 WAX' }),
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const anyWrapped = {
+      type_url: 'type.googleapis.com/sf.antelope.type.v1.Block',
+      value: Block.serialize(blockObj),
+    };
+
+    // Response no formato do servidor Pinax (block é Any, step=6).
+    ms.emitData({ block: anyWrapped, step: { step: 1 } });
+
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(cb.events.length).toBe(1);
+    expect(cb.events[0]).toMatchObject({
+      game_id: 'ZXC-99',
+      action: 'creategame',
+      block_num: 4242,
+      global_seq: 555,
+      step: 1,
+    });
+    expect(cb.events[0].data).toEqual({ game_id: 'ZXC-99', amount: '5.0000 WAX' });
+  });
 });
