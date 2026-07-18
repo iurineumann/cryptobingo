@@ -497,6 +497,9 @@ namespace bingo {
         // Fase 2 Pagamento Batch (#369): paga N vencedores limpos (sem boost) em 1 tx.
         // Reusa validação de claimwin. Fail-fast: qualquer erro invalida todo o lote.
         [[eosio::action]] void claimwinbatch(uint64_t game_id, std::vector<win_entry> entries);
+        // ADR-05x: evento de auditoria — valor pago por vencedor (visível no action log / waxblock entries).
+        // Emitido via SEND_INLINE_ACTION por claimwin/claimwinbatch APÓS creditar o saldo. require_auth(get_self()) garante que só o próprio contrato emite.
+        [[eosio::action]] void prizepaid(uint64_t game_id, uint64_t ticket_id, name winner, extended_asset payout);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived

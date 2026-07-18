@@ -1219,6 +1219,13 @@ namespace bingo {
             }
             // ADR-005: acumula payout do total_wagered para cálculo do GGR em closegame
             games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+            // ADR-05x: evento de auditoria — valor pago por vencedor (visível no waxblock entries).
+            action(
+                permission_level{get_self(), "active"_n},
+                get_self(),
+                "prizepaid"_n,
+                std::make_tuple(game_id, ticket_id, winner, payout)
+            ).send();
             // IDEMPOTÊNCIA (ADR-036): marca ticket como pago p/ bloquear reenvios.
             {
                 auto t_itr = tickets.find(ticket_id);
@@ -1350,6 +1357,13 @@ namespace bingo {
                 // ADR-005: acumula payout para cálculo do GGR em closegame
                 game_itr = games.find(game_id);
                 games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+                // ADR-05x: evento de auditoria — valor pago por vencedor (visível no waxblock entries).
+                action(
+                    permission_level{get_self(), "active"_n},
+                    get_self(),
+                    "prizepaid"_n,
+                    std::make_tuple(game_id, entry.ticket_id, winner, payout)
+                ).send();
                 // IDEMPOTÊNCIA (ADR-036): marca ticket como pago p/ bloquear reenvios.
                 {
                     auto t_itr = tickets.find(entry.ticket_id);
@@ -1372,6 +1386,16 @@ namespace bingo {
             }
         }
         // Jogo permanece em "paying". Worker chama closegame() após o lote.
+    }
+
+    // ==========================================
+    // PRIZEPAID EVENT (ADR-05x) — auditoria on-chain do valor pago
+    // Emitido via SEND_INLINE_ACTION por claimwin/claimwinbatch APÓS creditar o saldo.
+    // require_auth(get_self()) garante que SÓ o próprio contrato emite este evento
+    // (ninguém de fora pode poluir o action log com valores falsos).
+    // ==========================================
+    void bingo_contract::prizepaid(uint64_t game_id, uint64_t ticket_id, name winner, extended_asset payout) {
+        require_auth(get_self());
     }
 
     // ==========================================
