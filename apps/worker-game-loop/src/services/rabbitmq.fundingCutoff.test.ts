@@ -113,8 +113,12 @@ import { isGamePastCutoff } from './rabbitmq';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
 describe('isGamePastCutoff (ADR-056 consumo on-chain)', () => {
+    // cutoff em MILISEGUNDOS (Date.now()), espelhando autoLockFundingGames.
     const cutoff = Date.now() - 60_000;
     const OLD_EPOCH = '1';
+
+    // Contrato retorna funded_at em SEGUNDOS (sec_since_epoch). Helper converte.
+    const secAgo = (msAgo: number) => Math.floor((Date.now() - msAgo) / 1000);
 
     function makeGame(overrides: Partial<BlockchainGameState>): BlockchainGameState {
         return {
@@ -133,12 +137,12 @@ describe('isGamePastCutoff (ADR-056 consumo on-chain)', () => {
     }
 
     it('funded_at 65s atras (<= cutoff) retorna true', async () => {
-        const game = makeGame({ funded_at: cutoff - 5_000 });
+        const game = makeGame({ funded_at: secAgo(65_000) });
         await expect(isGamePastCutoff(game, cutoff)).resolves.toBe(true);
     });
 
     it('funded_at 30s atras (> cutoff) retorna false', async () => {
-        const game = makeGame({ funded_at: cutoff + 30_000 });
+        const game = makeGame({ funded_at: secAgo(30_000) });
         await expect(isGamePastCutoff(game, cutoff)).resolves.toBe(false);
     });
 
@@ -150,5 +154,11 @@ describe('isGamePastCutoff (ADR-056 consumo on-chain)', () => {
     it('funded_at 0 -> fallback game_id -> true', async () => {
         const game = makeGame({ game_id: OLD_EPOCH, funded_at: 0 });
         await expect(isGamePastCutoff(game, cutoff)).resolves.toBe(true);
+    });
+
+    it('funded_at em SEGUNDOS (contrato real) converte para ms corretamente', async () => {
+        // funded_at há 10s em segundos -> 10_000ms atrás -> ainda > cutoff (60s) -> false
+        const game = makeGame({ funded_at: secAgo(10_000) });
+        await expect(isGamePastCutoff(game, cutoff)).resolves.toBe(false);
     });
 });

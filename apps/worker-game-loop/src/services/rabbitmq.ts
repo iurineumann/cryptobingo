@@ -918,11 +918,13 @@ const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? S
 const processedGames = new Set<string>();
 
 export async function isGamePastCutoff(game: BlockchainGameState, cutoff: number): Promise<boolean> {
-    const fundedAt = (game.funded_at && game.funded_at > 0)
-        ? game.funded_at
-        : Number(game.game_id);
-    if (!Number.isFinite(fundedAt) || fundedAt <= 0) return false;
-    return fundedAt <= cutoff;
+    // ADR-056: funded_at vem do contrato em SEGUNDOS (sec_since_epoch).
+    // cutoff é em MILISEGUNDOS (Date.now()). Converter para ms antes de comparar.
+    // Fallback: game_id é Date.now() em ms (worker cria jogo com timestamp de criação).
+    const fundedAtSec = (game.funded_at && game.funded_at > 0) ? game.funded_at : 0;
+    const fundedAtMs  = fundedAtSec > 0 ? fundedAtSec * 1000 : Number(game.game_id);
+    if (!Number.isFinite(fundedAtMs) || fundedAtMs <= 0) return false;
+    return fundedAtMs <= cutoff;
 }
 
 async function fetchActiveRoomGameIds(): Promise<string[]> {

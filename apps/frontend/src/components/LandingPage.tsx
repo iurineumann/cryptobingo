@@ -221,7 +221,9 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
   function getCountdown(roomId: string): string {
     const g = currentGames[String(roomId)];
     if (!g || g.status !== 'funding') return '';
-    const t0      = g.funded_at ?? Number(g.game_id);
+    // ADR-056: funded_at do contrato é em SEGUNDOS; converter para ms.
+    // Fallback: game_id é Date.now() em ms (timestamp de criação).
+    const t0 = (g.funded_at && g.funded_at > 0 ? g.funded_at * 1000 : Number(g.game_id));
     const closeAt = t0 + AUTO_LOCK_SEC * 1000;
     const diff    = closeAt - now;
     if (diff <= 0) return '';

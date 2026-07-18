@@ -157,7 +157,10 @@ export function useGameRoomState(
 
   const nextGameTimer = useMemo(() => {
     if (!nextGame || nextGame.status !== 'funding') return '';
-    const closeAt = Number(nextGame.game_id) + AUTO_LOCK_SEC * 1000;
+    // ADR-056: funded_at do contrato é em SEGUNDOS; converter para ms.
+    // Fallback: game_id é Date.now() em ms (timestamp de criação).
+    const t0 = (nextGame.funded_at && nextGame.funded_at > 0 ? nextGame.funded_at * 1000 : Number(nextGame.game_id));
+    const closeAt = t0 + AUTO_LOCK_SEC * 1000;
     const diff = closeAt - now;
     if (diff <= 0) return '0s';
     const s = Math.ceil(diff / 1000);
@@ -176,7 +179,10 @@ export function useGameRoomState(
   const timeRemaining = useMemo(() => {
     if (!game) return '';
     if (game.status === 'funding' && drawnBalls.length === 0 && !isDrawing) {
-      const closeAt = Number(game.game_id) + AUTO_LOCK_SEC * 1000;
+      // ADR-056: funded_at do contrato é em SEGUNDOS; converter para ms.
+      // Fallback: game_id é Date.now() em ms (timestamp de criação).
+      const t0 = (game.funded_at && game.funded_at > 0 ? game.funded_at * 1000 : Number(game.game_id));
+      const closeAt = t0 + AUTO_LOCK_SEC * 1000;
       const diff = closeAt - now;
       if (diff <= 0) return `${t('game_room.closing')}...`;
       const s = Math.ceil(diff / 1000);
