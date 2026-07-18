@@ -178,6 +178,13 @@ export const autoAdvanceErrorsTotal = new Counter({
     registers:  [registry],
 });
 
+/** Falhas persistentes ao tentar closegame recovery de jogo archived. */
+export const recoverCloseFailTotal = new Counter({
+    name:       'worker_recover_close_fail_total',
+    help:       'Tentativas de closegame recovery (archived) que esgotaram o retry.',
+    labelNames: ['room_id'],
+});
+
 /** Eventos publicados na fila RabbitMQ, por action. */
 export const workerQueuePublishedTotal = new Counter({
     name:       'worker_queue_published_total',
