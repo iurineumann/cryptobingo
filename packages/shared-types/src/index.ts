@@ -110,6 +110,7 @@ export interface BlockchainGameState {
     golden_ball_num:  number;            // ADR-012: 1-75, 0=sem golden ball
     golden_multiplier: number;           // ADR-012: multiplicador (0=sem efeito)
     total_paid:       number;            // ADR-005: soma dos payouts executados (int64)
+    funded_at?:       number;            // ADR-056: epoch sec do início do funding (binary_extension no contrato; opcional p/ linhas legadas)
 }
 
 /**
