@@ -209,6 +209,23 @@ export async function connectRabbitMQ(): Promise<void> {
         });
 
         channel = await connection.createChannel();
+
+        // BUG FIX (2026-07-18): canal consumidor precisa de error/close handlers.
+        // Antes deste fix, apenas a connection tinha handlers. Se o canal morria
+        // (ex: fechado pelo broker por consumer timeout ou erro de protocolo), a
+        // connection continuava viva (confirm channel de publish seguia ok) mas o
+        // consumer morria silenciosamente — fila crescia sem nenhum log de erro.
+        channel.on('error', (err) => {
+            setRabbitConnected(false);
+            logger.error({ err, tag: 'RabbitMQ' }, 'Erro no canal consumidor. Reconectando...');
+            setTimeout(connectRabbitMQ, RETRY_DELAY_MS);
+        });
+        channel.on('close', () => {
+            setRabbitConnected(false);
+            logger.warn({ tag: 'RabbitMQ' }, `Canal consumidor fechado. Reconectando em ${RETRY_DELAY_MS / 1000}s...`);
+            setTimeout(connectRabbitMQ, RETRY_DELAY_MS);
+        });
+
         await setupQueues();
         await channel.prefetch(1);
 
@@ -346,7 +363,14 @@ function consumeMessages(): void {
                         // garantir que o "showing" (slow reveal) rode — senão o jogo trava em drawn
                         // sem revelar bolas (bug do jogo 1784390752148). Disparamos orchestrateGame,
                         // que valida status==='drawn' internamente e emite notifyRevealStarted.
+                        //
+                        // BUG FIX (2026-07-18): ack obrigatório ANTES de delegar ao orquestrador.
+                        // Sem ack, a mensagem permanece unacked e com prefetch(1) bloqueia TODAS as
+                        // mensagens subsequentes da fila — root cause dos 802 msgs acumuladas com
+                        // consumer parado e sem nenhum log de erro.
                         logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente). Garantindo orquestração do reveal...`)
+                        eventsProcessedTotal.inc({ action });
+                        channel.ack(msg);
                         orchestrateGame(gameId).catch(err =>
                             logger.error({ err, tag: 'RabbitMQ' }, `Erro ao orquestrar reveal (lock existente, jogo ${gameId}):`),
                         );

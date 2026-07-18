@@ -17,6 +17,7 @@ const mockChannel = {
     nack:           jest.fn(),
     prefetch:       jest.fn().mockResolvedValue({}),
     checkQueue:     jest.fn().mockResolvedValue({ messageCount: 0, consumerCount: 0 }),
+    on:             jest.fn(),
 };
 
 jest.mock('amqplib', () => ({
@@ -334,6 +335,26 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
             expect(mockStartDraw).toHaveBeenCalledWith('42');
             expect(mockOrchestrate).toHaveBeenCalledWith('42');
             expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('BUG FIX (2026-07-18): startdraw com lockAcquired=false → ack SIM, nack NAO (drena fila)', async () => {
+            // simula lock já existente (C7.2: executeStartDraw feito por outro caminho)
+            (acquireOrchestrationLock as jest.Mock).mockResolvedValueOnce(false);
+            const msg = makeMsg({ action: 'startdraw', gameId: '99' });
+            await processMsg(msg);
+            expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+            expect(mockChannel.nack).not.toHaveBeenCalled();
+            expect(mockStartDraw).not.toHaveBeenCalled();
+            // orchestrateGame deve ser chamado para garantir o reveal
+            expect(mockOrchestrate).toHaveBeenCalledWith('99');
+        });
+
+        it('BUG FIX (2026-07-18): startdraw lockAcquired=false 2x seguidas → ambas fazem ack', async () => {
+            (acquireOrchestrationLock as jest.Mock).mockResolvedValue(false);
+            await processMsg(makeMsg({ action: 'startdraw', gameId: '111' }));
+            await processMsg(makeMsg({ action: 'startdraw', gameId: '222' }));
+            expect(mockChannel.ack).toHaveBeenCalledTimes(2);
+            expect(mockChannel.nack).not.toHaveBeenCalled();
         });
     });
 
@@ -670,6 +691,9 @@ describe('Retry backoff helpers', () => {
         beforeEach(() => {
             jest.clearAllMocks();
             resRetryMap.clear();
+            // Garante lock livre para este describe (clearAllMocks não zera mockReturnValue;
+            // um mockResolvedValueOnce(false) vazado de outro describe não deve abortar o fallback)
+            acquireOrchestrationLock.mockResolvedValue(true);
         });
 
         it('B3: fallback direto — publishGameEvent THROW → executeStartDraw + acquireOrchestrationLock chamados', async () => {

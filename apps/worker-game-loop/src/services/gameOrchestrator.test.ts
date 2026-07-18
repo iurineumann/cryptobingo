@@ -587,3 +587,72 @@ describe('buildWinnerPayloads — preço variável e baseMultiplier (ADR-010 + A
         );
     });
 });
+
+// ── orchestratingGames guard (BUG FIX 2026-07-18) ─────────────────────────────
+
+describe('orchestratingGames — guard contra dupla-orquestração', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        jest.useFakeTimers();
+        mockFetchGame.mockResolvedValue(makeGame());
+        mockFindAllWinners.mockResolvedValue([makeWinResult()]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('segunda chamada com mesmo gameId é ignorada (retorna imediatamente)', async () => {
+        // Com mockResolvedValue, a primeira chamada executa a guard (add ao Set)
+        // e suspende no primeiro await. Segunda chamada vê o Set populado e retorna.
+        mockFetchGame.mockResolvedValue(makeGame({ game_id: '42' }));
+        mockFindAllWinners.mockResolvedValue([makeWinResult()]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        orchestrateGame('42'); // não await — executa até o primeiro await
+        // Microtask: guard check + Set.add('42') já executaram
+        await Promise.resolve(); // flush microtask para garantir que entrou no impl
+
+        // Segunda chamada: guard vê '42' no Set → retorna imediatamente
+        await orchestrateGame('42');
+
+        // fetchGame só foi chamado 1x (pela primeira chamada, via impl)
+        expect(mockFetchGame).toHaveBeenCalledTimes(1);
+    });
+
+    it('gameId diferente NÃO é bloqueado pelo guard', async () => {
+        mockFetchGame.mockResolvedValue(makeGame({ game_id: '111' }));
+        mockFindAllWinners.mockResolvedValue([makeWinResult()]);
+        mockProcessAllWinners.mockResolvedValue(undefined);
+
+        const call1 = orchestrateGame('111');
+        await Promise.resolve();
+
+        const call2 = orchestrateGame('222');
+        await Promise.resolve();
+
+        jest.runAllTimers();
+        await call1;
+        await call2;
+
+        // Dois gameIds diferentes → duas orquestrações
+        expect(mockStartReveal).toHaveBeenCalledTimes(2);
+    });
+
+    it('após primeira orquestração terminar, mesma gameId pode ser re-orquestrada', async () => {
+        // Orquestra normalmente
+        const promise = orchestrateGame('42');
+        jest.runAllTimers();
+        await promise;
+
+        const firstRevealCalls = mockStartReveal.mock.calls.length;
+        expect(firstRevealCalls).toBeGreaterThan(0);
+
+        // Após Set.delete no finally, nova chamada com mesmo gameId deve funcionar
+        // NÃO usar clearAllMocks — manter todos os mocks vivos para segunda chamada
+        const promise2 = orchestrateGame('42');
+        jest.runAllTimers();
+        await promise2;
+
+        // startSlowReveal foi chamado 2x (uma para cada orquestração)
+        expect(mockStartReveal.mock.calls.length).toBe(firstRevealCalls * 2);
+    });
+});

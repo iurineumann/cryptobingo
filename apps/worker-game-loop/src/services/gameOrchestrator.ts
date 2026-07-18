@@ -53,6 +53,11 @@ import {
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
+// Guard contra dupla-orquestração: C7.2 lock-reject chama orchestrateGame sem
+// guard, e o startdraw handler também. Se ambas as chamadas disparam para o mesmo
+// gameId, ocorre double slow-reveal (42 bolas no frontend) e double pagamento.
+const orchestratingGames = new Set<string>();
+
 // Pausa visual entre o reveal da golden ball e o anúncio de vencedores
 const GOLDEN_BALL_PAUSE_MS = Number.parseInt(process.env.GOLDEN_BALL_PAUSE_MS ?? '3000', 10);
 // Pausa entre estágios no MULTI_MATCH (jogador lê resultado antes de continuar)
@@ -268,6 +273,23 @@ async function orchestrateMultiMatch(
  * após o reveal completo e todos os pagamentos.
  */
 export async function orchestrateGame(gameId: string): Promise<void> {
+    // Guard contra dupla-orquestração: se este gameId já está sendo orquestrado
+    // (ex: startdraw handler delegou após lock reject + autoLockFundingGames
+    // publicou outra mensagem), retorna imediatamente sem duplicar reveal/pagamento.
+    if (orchestratingGames.has(gameId)) {
+        logger.info({ tag: 'Orquestrador' }, `Jogo ${gameId} já está sendo orquestrado. Ignorando chamada duplicada.`);
+        return;
+    }
+    orchestratingGames.add(gameId);
+
+    try {
+        return await orchestrateGameImpl(gameId);
+    } finally {
+        orchestratingGames.delete(gameId);
+    }
+}
+
+async function orchestrateGameImpl(gameId: string): Promise<void> {
     logger.info({ tag: 'Orquestrador' }, `Iniciando orquestração do jogo ${gameId}...`);
 
     const game = await fetchGame(gameId);
