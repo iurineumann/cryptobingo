@@ -280,6 +280,19 @@ export function notifyGameLocked(gameId: string): void {
 }
 
 /**
+ * Emite drawing_started — jogo entrou em DRAWING (startdraw executado).
+ * Permite o lobby transitar funding→drawing em tempo real.
+ */
+export function notifyDrawingStarted(gameId: string): void {
+    publishReveal('drawing_started', gameId, {
+        event:     'drawing_started',
+        game_id:   parseInt(gameId, 10),
+        timestamp: new Date().toISOString(),
+    });
+    logger.info({ tag: 'WS' }, `drawing_started publicado para jogo ${gameId}`);
+}
+
+/**
  * Emite game_funded — jogo abriu para vendas (CREATED → FUNDING).
  * Permite o lobby atualizar o status em tempo real (sem esperar polling).
  */

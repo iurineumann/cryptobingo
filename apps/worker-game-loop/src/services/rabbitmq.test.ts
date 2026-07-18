@@ -37,10 +37,12 @@ jest.mock('./blockchain', () => ({
     adminSession:        {},
 }));
 jest.mock('./broadcaster', () => ({
-    notifyGameLocked:  jest.fn(),
-    notifyGameAborted: jest.fn(),
-    startSlowReveal:   jest.fn().mockResolvedValue(undefined),
-    notifyPrizeConfirmed: jest.fn(),
+    notifyGameLocked:      jest.fn(),
+    notifyGameFunded:      jest.fn(),
+    notifyGameAborted:     jest.fn(),
+    notifyDrawingStarted:  jest.fn(),
+    startSlowReveal:       jest.fn().mockResolvedValue(undefined),
+    notifyPrizeConfirmed:  jest.fn(),
 }));
 jest.mock('./invertedIndex', () => ({
     buildInvertedIndex: jest.fn().mockResolvedValue(undefined),
