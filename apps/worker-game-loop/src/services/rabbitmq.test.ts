@@ -109,7 +109,7 @@ jest.mock('./evaluator', () => ({
 
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
-import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics, processLockedGame, persistPrizeTx } from './rabbitmq';
+import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, autoLockFundingGames, updateQueueDepthMetrics, processLockedGame, persistPrizeTx } from './rabbitmq';
 import { savePrizeTx } from './prizeTransactionsService';
 import { computePayoutAmount } from './evaluator';
 import { notifyPrizeConfirmed, notifyGameAborted } from './broadcaster';
@@ -514,15 +514,63 @@ describe('autoStartLockedGames', () => {
     beforeEach(() => jest.clearAllMocks());
     afterEach(() => jest.useRealTimers());
 
-    it('reverse:true + limit:200 encontra jogo locked recente entre >100 jogos antigos', async () => {
+    it('B3: republica startdraw na fila — publishGameEvent chamado, executeStartDraw NÃO chamado diretamente', async () => {
         jest.useFakeTimers();
         await expectReverseScanFindsRecent(
             autoStartLockedGames,
             'locked',
             '9999999998',
-            // processLockedGame chama autoStartDraw sem await, mas executeStartDraw
-            // é chamado síncrono na função — comprova que o jogo recente foi encontrado
-            () => expect(mockStartDraw).toHaveBeenCalledWith('9999999998'),
+            () => {
+                expect(mockPublishGameEvent).toHaveBeenCalledWith(
+                    'game_loop_events',
+                    'startdraw',
+                    expect.objectContaining({ gameId: '9999999998' }),
+                );
+                expect(mockStartDraw).not.toHaveBeenCalled();
+            },
+        );
+    });
+});
+
+// ── autoLockFundingGames regressão (B3: já é backup, só confirma) ──────────
+
+describe('autoLockFundingGames — regressão B3', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        jest.useFakeTimers();
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('B3: autoLockFundingGames continua publicando lockgame na fila', async () => {
+        const mockFetchGame = fetchGame as jest.Mock;
+
+        // Jogo funding com tickets — deve publicar lockgame
+        mockGetTableRows
+            .mockResolvedValueOnce({
+                rows: [makeBlockchainGame({
+                    game_id: '100',
+                    status: 'funding',
+                    total_wagered: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+                })],
+            })
+            .mockResolvedValueOnce({ rows: [] }); // active rooms vazio
+
+        mockFetchGame.mockResolvedValue(
+            makeBlockchainGame({
+                game_id: '100',
+                status: 'funding',
+                total_wagered: { quantity: '10.0000 BINGO', contract: 'bingogametkn' },
+            })
+        );
+
+        await autoLockFundingGames();
+        jest.advanceTimersByTime(0);
+        await Promise.resolve();
+
+        expect(mockPublishGameEvent).toHaveBeenCalledWith(
+            'game_loop_events',
+            'lockgame',
+            expect.objectContaining({ gameId: '100' }),
         );
     });
 });
@@ -615,7 +663,34 @@ describe('Retry backoff helpers', () => {
             resRetryMap.clear();
         });
 
-        it('NÃO dispara startdraw em jogo LOCKED sem apostas (total_wagered=0) — aborta NO_TICKETS_LOCKED', async () => {
+        it('B3: fallback direto — publishGameEvent THROW → executeStartDraw + acquireOrchestrationLock chamados', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id:  '777',
+                status:   'locked',
+                total_wagered: { quantity: '5.0000 BINGO', contract: 'bingogametkn' },
+            }));
+
+            // Simula RabbitMQ down — publishGameEvent lança
+            mockPublishGameEvent.mockRejectedValueOnce(new Error('RabbitMQ connection refused'));
+
+            await processLockedGame('777');
+
+            // publishGameEvent foi chamado (antes de falhar)
+            expect(mockPublishGameEvent).toHaveBeenCalledWith(
+                'game_loop_events',
+                'startdraw',
+                expect.objectContaining({ gameId: '777' }),
+            );
+            // Fallback direto: executeStartDraw chamado
+            expect(mockStartDraw).toHaveBeenCalledWith('777');
+            // Lock adquirido no fallback
+            const mockAcquireLock = acquireOrchestrationLock as jest.Mock;
+            expect(mockAcquireLock).toHaveBeenCalledWith('777');
+            // Abort NÃO chamado
+            expect(mockAbortGame).not.toHaveBeenCalled();
+        });
+
+        it('B3: NÃO dispara publishGameEvent se LOCKED sem tickets — aborta NO_TICKETS_LOCKED', async () => {
             mockFetchGame.mockResolvedValue(makeBlockchainGame({
                 game_id:  '999',
                 status:   'locked',
@@ -625,13 +700,13 @@ describe('Retry backoff helpers', () => {
             await processLockedGame('999');
 
             expect(mockAbortGame).toHaveBeenCalledWith('999', 'NO_TICKETS_LOCKED');
+            expect(mockPublishGameEvent).not.toHaveBeenCalled();
             expect(mockStartDraw).not.toHaveBeenCalled();
         });
 
-        it('DISPARA startdraw em jogo LOCKED COM apostas (total_wagered>0) — NÃO aborta (BUG #382)', async () => {
+        it('B3: DISPARA republish startdraw em jogo LOCKED COM apostas — publishGameEvent chamado, NÃO executeStartDraw', async () => {
             // Caso real: usuário comprou 25 cartelas (1.0000 BINGO cada = 25 BINGO).
-            // A defesa #378 usava game?.total_tickets (inexistente no contrato) e
-            // abortava TODOS os jogos LOCKED. Fonte da verdade é total_wagered.
+            // B3: processLockedGame agora republica startdraw na fila como backup.
             mockFetchGame.mockResolvedValue(makeBlockchainGame({
                 game_id:  '888',
                 status:   'locked',
@@ -640,8 +715,12 @@ describe('Retry backoff helpers', () => {
 
             await processLockedGame('888');
 
-            expect(mockStartDraw).toHaveBeenCalledWith('888');
-            expect(mockAbortGame).not.toHaveBeenCalled();
+            expect(mockPublishGameEvent).toHaveBeenCalledWith(
+                'game_loop_events',
+                'startdraw',
+                expect.objectContaining({ gameId: '888' }),
+            );
+            expect(mockStartDraw).not.toHaveBeenCalled();
         });
     });
 });
