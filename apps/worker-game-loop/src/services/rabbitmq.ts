@@ -98,13 +98,14 @@ let channel:    Channel;
 // ==========================================
 
 type GameEventPayload =
-    | { action: 'fundgame';   gameId: string }
-    | { action: 'lockgame';   gameId: string }
-    | { action: 'startdraw';  gameId: string }
-    | { action: 'claimwin';   gameId: string }
-    | { action: 'abortgame';  gameId: string; reason?: string }
-    | { action: 'refundall';  gameId: string }
-    | { action: 'cleargame';  gameId: string };
+    | { action: 'fundgame';    gameId: string }
+    | { action: 'lockgame';    gameId: string }
+    | { action: 'startdraw';   gameId: string }
+    | { action: 'receiverand'; gameId: string }
+    | { action: 'claimwin';    gameId: string }
+    | { action: 'abortgame';   gameId: string; reason?: string }
+    | { action: 'refundall';   gameId: string }
+    | { action: 'cleargame';   gameId: string };
 
 // ==========================================
 // HELPERS
@@ -118,7 +119,7 @@ function getDeliveryCount(msg: ConsumeMessage): number {
     return (xDeath[0].count as number) ?? 0;
 }
 
-async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
+export async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
     logger.info({ tag: 'RabbitMQ' }, `Aguardando oráculo — jogo ${gameId}...`)
 
     for (let attempt = 1; attempt <= ORACLE_POLL_MAX_ATTEMPTS; attempt++) {
@@ -427,6 +428,62 @@ function consumeMessages(): void {
                 case 'cleargame': {
                     await processClearGame(gameId);
                     break;
+                }
+
+                // ── receiverand: event-driven (State Watcher) — orquestra payout
+                //     assim que o oráculo entrega as bolas (sem esperar o polling
+                //     do startdraw). Idempotente: se o jogo já saiu de DRAWING
+                //     (startdraw polling já orquestrou), apenas ack e sai.
+                case 'receiverand': {
+                    const game = await fetchGame(gameId).catch(() => null);
+                    if (game?.status && game.status !== 'drawing') {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `receiverand ${gameId} ignorado — jogo em status "${game.status}" (já orquestrado).`);
+                        eventsProcessedTotal.inc({ action });
+                        channel.ack(msg);
+                        return;
+                    }
+
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `Jogo ${gameId}: orchestrateGame já realizado (lock existente).`);
+                        break;
+                    }
+
+                    const watchdog = startLockWatchdog(gameId, 90_000);
+                    try {
+                        const drawnBalls = await waitForDrawnBalls(gameId);
+                        if (!drawnBalls) {
+                            watchdog.stop();
+                            logger.error({ tag: 'RabbitMQ' },
+                                `receiverand sem bolas (timeout) jogo ${gameId}.`);
+                            await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
+                            notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
+                            eventsFailedTotal.inc({ action, reason: 'oracle_timeout' });
+                            eventsDeadLetteredTotal.inc({ action });
+                            channel.nack(msg, false, false);
+                            releaseOrchestrationLock(gameId).catch(() => {});
+                            return;
+                        }
+                        const durationMs = timer();
+                        eventsProcessedTotal.inc({ action });
+                        channel.ack(msg);
+                        orchestrateGame(gameId)
+                            .catch(err =>
+                                logger.error({ err, tag: 'RabbitMQ' },
+                                    `orchestrateGame error (jogo ${gameId}):`)
+                            )
+                            .finally(() => {
+                                watchdog.stop();
+                                releaseOrchestrationLock(gameId).catch(() => {});
+                            });
+                        return;
+                    } catch (err) {
+                        watchdog.stop();
+                        releaseOrchestrationLock(gameId).catch(() => {});
+                        throw err; // cai no catch externo → DLQ
+                    }
                 }
 
                 default: {

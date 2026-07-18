@@ -112,12 +112,13 @@ import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } 
 import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, updateQueueDepthMetrics, processLockedGame, persistPrizeTx } from './rabbitmq';
 import { savePrizeTx } from './prizeTransactionsService';
 import { computePayoutAmount } from './evaluator';
-import { notifyPrizeConfirmed } from './broadcaster';
+import { notifyPrizeConfirmed, notifyGameAborted } from './broadcaster';
 import { prizePersistTotal, prizePaymentsTotal, prizePaymentsAmountTotal } from './prizeMetrics';
 import { publishGameEvent } from './rabbitPublisher';
 import { setQueueDepth } from './metrics';
 import { isResourceExhausted, resBackoffMs, resRetryMap, RES_RETRY_MAX } from './retryBackoff';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
+import { acquireOrchestrationLock, releaseOrchestrationLock, startLockWatchdog } from './gameLock';
 import type { BlockchainGameState } from '@cryptobingo/shared-types';
 
 const mockOrchestrate        = orchestrateGame    as jest.Mock;
@@ -243,8 +244,89 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
         expect(mockAbortGame).toHaveBeenCalledWith('1', expect.any(String));
     });
 
-    // startdraw usa waitForDrawnBalls que faz polling por até 150s — testado em harness E2E
-    it.todo('action=startdraw → executeStartDraw + waitForDrawnBalls + orchestrateGame (ver fsm.test.ts E2E)');
+    // receiverand + startdraw testados com fake timers abaixo
+    describe('action=receiverand (B2: event-driven oracle)', () => {
+        // Mocks tipados das dependências usadas pelos testes de receiverand
+        const mockAcquireLock    = acquireOrchestrationLock as jest.Mock;
+        const mockReleaseLock    = releaseOrchestrationLock as jest.Mock;
+        const mockStartWatchdog  = startLockWatchdog  as jest.Mock;
+        const mockNotifyAborted  = notifyGameAborted  as jest.Mock;
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            jest.useFakeTimers({ legacyFakeTimers: false });
+            mockAcquireLock.mockResolvedValue(true);
+            mockStartWatchdog.mockReturnValue({ stop: jest.fn() });
+        });
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it('receiverand → orchestrateGame chamado (jogo em drawing, lock ok, bolas prontas)', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '42', status: 'drawing', drawn_balls: new Array(75).fill(1),
+            }));
+            const msg = makeMsg({ action: 'receiverand', gameId: '42' });
+            const promise = processMsg(msg);
+            await jest.advanceTimersToNextTimerAsync();
+            await promise;
+            expect(mockOrchestrate).toHaveBeenCalledWith('42');
+            expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('receiverand com jogo já em DRAWN → orchestrateGame NÃO chamado (idempotência por status)', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '42', status: 'drawn', drawn_balls: new Array(75).fill(1),
+            }));
+            const msg = makeMsg({ action: 'receiverand', gameId: '42' });
+            await processMsg(msg);
+            expect(mockOrchestrate).not.toHaveBeenCalled();
+            expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('receiverand sem lock → orchestrateGame NÃO chamado (idempotência por lock)', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '42', status: 'drawing',
+            }));
+            mockAcquireLock.mockResolvedValueOnce(false);
+            const msg = makeMsg({ action: 'receiverand', gameId: '42' });
+            await processMsg(msg);
+            expect(mockOrchestrate).not.toHaveBeenCalled();
+            // lock não adquirido → break → outer success path acks
+            expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('receiverand com waitForDrawnBalls retornando null → executeAbortGame + nack', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '42', status: 'drawing', drawn_balls: [],
+            }));
+            const msg = makeMsg({ action: 'receiverand', gameId: '42' });
+            const promise = processMsg(msg);
+            // waitForDrawnBalls: 75 iterações × 2000ms poll = 150s simulado
+            // advanceTimersToNextTimerAsync avança 2s por vez + microtasks
+            for (let i = 0; i < 75; i++) {
+                await jest.advanceTimersToNextTimerAsync();
+            }
+            await promise;
+            expect(mockAbortGame).toHaveBeenCalledWith('42', 'ORACLE_TIMEOUT');
+            expect(mockNotifyAborted).toHaveBeenCalledWith('42', 'ORACLE_TIMEOUT');
+            expect(mockChannel.nack).toHaveBeenCalledWith(msg, false, false);
+            expect(mockOrchestrate).not.toHaveBeenCalled();
+        });
+
+        it('startdraw CONTINUA orquestrando (regressão: polling + executeStartDraw + orchestrateGame)', async () => {
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '42', status: 'drawing', drawn_balls: new Array(75).fill(1),
+            }));
+            const msg = makeMsg({ action: 'startdraw', gameId: '42' });
+            const promise = processMsg(msg);
+            await jest.advanceTimersToNextTimerAsync();
+            await promise;
+            expect(mockStartDraw).toHaveBeenCalledWith('42');
+            expect(mockOrchestrate).toHaveBeenCalledWith('42');
+            expect(mockChannel.ack).toHaveBeenCalledWith(msg);
+        });
+    });
 
     it('action=claimwin: orchestrateGame lança → erro swallowed via .catch(), ack chamado', async () => {
         // claimwin usa orchestrateGame(gameId).catch(...) — não propaga para o try/catch externo.
