@@ -1168,20 +1168,39 @@ export async function processLockedGame(gameId: string): Promise<void> {
         return;
     }
 
-    const lockAcquired = await acquireOrchestrationLock(gameId);
-    if (!lockAcquired) {
-        logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId} já está sendo processado pela fila.`)
-        return;
-    }
+    logger.info({ tag: 'AutoAdvance' }, `Publicando startdraw ${gameId} na fila (locked)...`)
 
-    autoStartDraw(gameId).catch(async (err) => {
-        if (isResourceExhausted(err)) {
-            handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
-            return;
+    try {
+        await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
+        processedGames.add(gameId);
+    } catch (pubErr) {
+        logger.error({ err: pubErr, tag: 'AutoAdvance' },
+            `Falha ao publicar startdraw ${gameId}; fallback startdraw direto.`);
+        try {
+            const lockAcquired = await acquireOrchestrationLock(gameId);
+            if (!lockAcquired) {
+                logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId} já está sendo processado pela fila.`)
+                return;
+            }
+
+            autoStartDraw(gameId).catch(async (err) => {
+                if (isResourceExhausted(err)) {
+                    handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                    return;
+                }
+                logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
+                processedGames.delete(gameId);
+                await releaseOrchestrationLock(gameId).catch(() => {});
+            });
+        } catch (err) {
+            if (isResourceExhausted(err)) {
+                handleResourceBackoff(gameId, 'AutoAdvance', `startdraw jogo ${gameId}`);
+                return;
+            }
+            logger.error({ err, tag: 'AutoAdvance' }, `Erro ao iniciar sorteio ${gameId}:`)
+            processedGames.delete(gameId);
         }
-        logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
-        await releaseOrchestrationLock(gameId).catch(() => {});
-    });
+    }
 }
 
 /**
