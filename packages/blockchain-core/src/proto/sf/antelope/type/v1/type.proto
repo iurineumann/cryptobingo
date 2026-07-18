@@ -2,86 +2,61 @@ syntax = "proto3";
 
 package sf.antelope.type.v1;
 
-// Subconjunto mínimo do sf.antelope.type.v1 necessário para extrair
-// action_traces de um bloco Firehose. O servidor envia o bloco completo
-// empacotado em google.protobuf.Any; aqui definimos só o que lemos.
+// Subconjunto do sf.antelope.type.v1 necessário para extrair action_traces de
+// um bloco Firehose Pinax WAX testnet.
+//
+// NÚMEROS DE CAMPO validados contra:
+//  - streamingfast/firehose-antelope @ buf.build (fonte original firehose.proto)
+//  - grpcurl reflection no waxtest.firehose.pinax.network:443 (2026-07-18)
+// O servidor empacota o Block em google.protobuf.Any (ver firehose_v2.proto);
+// aqui definimos APENAS os campos que o client navega (e os pais imediatos).
+// Campos não listados são ignorados no decode (proto3 tolera campos ausentes).
 
 message Block {
   string id = 1;
-  uint32 number = 2;
-  uint32 version = 3;
-  BlockHeader header = 4;
-  string producer_signature = 5;
-  repeated TransactionReceipt unfiltered_transactions = 6;
-  repeated Extension block_extensions = 7;
-  uint32 dpos_proposed_irreversible_blocknum = 8;
-  uint32 dpos_irreversible_blocknum = 9;
-  ProducerSchedule active_schedule_v1 = 10;
-  BlockRootMerkle blockroot_merkle = 11;
-  repeated ProducerToLastProduced producer_to_last_produced = 12;
-  repeated ProducerToLastImpliedIRB producer_to_last_implied_irb = 13;
-  string block_signing_key = 14;
-  repeated uint32 confirm_count = 15;
-  PendingProducerSchedule pending_schedule = 16;
-  ActivatedProtocolFeatures activated_protocol_features = 17;
-  bool validated = 18;
-  repeated RlimitOp rlimit_ops = 19;
-  repeated TrxOp unfiltered_implicit_transaction_ops = 20;
-  repeated TransactionTrace unfiltered_transaction_traces = 21;
-  uint32 unfiltered_transaction_count = 22;
-  uint32 unfiltered_transaction_trace_count = 23;
-  uint32 unfiltered_executed_input_action_count = 24;
-  uint32 unfiltered_executed_total_action_count = 25;
-  ProducerAuthoritySchedule active_schedule_v2 = 30;
-  bool filtering_applied = 40;
-  string filtering_include_filter_expr = 41;
-  string filtering_exclude_filter_expr = 42;
-  uint32 filtered_transaction_trace_count = 43;
-  uint32 filtered_executed_input_action_count = 44;
-  uint32 filtered_executed_total_action_count = 45;
-  repeated TransactionTrace filtered_transaction_traces = 46;
-  repeated TransactionReceipt filtered_transactions = 47;
-  uint32 filtered_transaction_count = 48;
-  repeated TrxOp filtered_implicit_transaction_ops = 49;
+  uint64 number = 2;
+  // Preenchido pelo transform de filtro do Pinax (filtered_transaction_traces).
+  repeated TransactionTrace filtered_transaction_traces = 20;
 }
-
-message BlockHeader {}
-message TransactionReceipt {}
-message Extension {}
-message ProducerSchedule {}
-message BlockRootMerkle {}
-message ProducerToLastProduced {}
-message ProducerToLastImpliedIRB {}
-message PendingProducerSchedule {}
-message ActivatedProtocolFeatures {}
-message RlimitOp {}
-message TrxOp {}
-message ProducerAuthoritySchedule {}
 
 message TransactionTrace {
   string id = 1;
-  string producer_block_id = 4;
-  TransactionReceiptHeader receipt = 5;
+  uint64 block_num = 2;
   repeated ActionTrace action_traces = 9;
 }
-
-message TransactionReceiptHeader {}
 
 message ActionTrace {
   ActionReceipt receipt = 1;
   Action action = 2;
-  uint32 closest_unnotified_ancestor_action_ordinal = 18;
-}
-
-message ActionReceipt {
-  string receiver = 1;
-  uint64 global_sequence = 2;
+  bool context_free = 3;
+  int64 elapsed = 4;
+  string console = 5;
+  string transaction_id = 6;
+  uint64 block_num = 7;
+  string producer_block_id = 8;
+  string receiver = 11;
+  uint32 action_ordinal = 16;
+  uint32 creator_action_ordinal = 17;
 }
 
 message Action {
   string account = 1;
   string name = 2;
-  string authorization = 3;
+  repeated PermissionLevel authorization = 3;
   string json_data = 4;
   bytes raw_data = 5;
+}
+
+message ActionReceipt {
+  string receiver = 1;
+  string digest = 2;
+  uint64 global_sequence = 3;
+  uint64 recv_sequence = 5;
+  uint64 code_sequence = 6;
+  uint64 abi_sequence = 7;
+}
+
+message PermissionLevel {
+  string actor = 1;
+  string permission = 2;
 }

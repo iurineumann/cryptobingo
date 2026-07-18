@@ -15,24 +15,16 @@ message Request {
   string cursor = 2;
   uint64 stop_block_num = 3;
   bool final_blocks_only = 4;
-  repeated google.protobuf.Any transforms = 10;
   reserved 5;
+  repeated google.protobuf.Any transforms = 10;
 }
 
 enum ForkStep {
-  STEP_UNSET = 0;
+  STEP_UNKNOWN = 0;
   STEP_NEW = 1;
   STEP_UNDO = 2;
-  STEP_FINAL = 3;
+  STEP_IRREVERSIBLE = 3;
   reserved 4;
-}
-
-message Response {
-  // O bloco vem empacotado em google.protobuf.Any (type_url aponta p/ sf.antelope.type.v1.Block).
-  google.protobuf.Any block = 1;
-  ForkStep step = 6;
-  string cursor = 10;
-  BlockMetadata metadata = 12;
 }
 
 message BlockMetadata {
@@ -41,5 +33,13 @@ message BlockMetadata {
   uint64 parent_num = 3;
   string parent_id = 4;
   uint64 lib_num = 5;
-  google.protobuf.Timestamp time = 6;
+  string lib_id = 6;
+  google.protobuf.Timestamp time = 7;
+}
+
+message Response {
+  google.protobuf.Any block = 1;
+  ForkStep step = 6;
+  string cursor = 10;
+  BlockMetadata metadata = 12;
 }
