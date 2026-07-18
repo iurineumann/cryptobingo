@@ -240,6 +240,28 @@
       ]
     },
     {
+      "name": "prizepaid",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_id",
+          "type": "uint64"
+        },
+        {
+          "name": "ticket_id",
+          "type": "uint64"
+        },
+        {
+          "name": "winner",
+          "type": "name"
+        },
+        {
+          "name": "payout",
+          "type": "extended_asset"
+        }
+      ]
+    },
+    {
       "name": "cleargame",
       "base": "",
       "fields": [
@@ -1445,6 +1467,11 @@
     {
       "name": "claimwinbatch",
       "type": "claimwinbatch",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "prizepaid",
+      "type": "prizepaid",
       "ricardian_contract": ""
     },
     {
