@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package sf.firehose.v2;
+
+import "firehose.proto";
+
+service Stream {
+  rpc Blocks(Request) returns (stream Response);
+}
+
+message Request {
+  int64 start_block_num = 1;
+  string start_cursor = 2;
+  uint64 stop_block_num = 3;
+  repeated ForkStep fork_steps = 4;
+  string irreversibility_condition = 5;
+}
+
+message ForkStep {
+  uint32 step = 1;
+}
+
+message Response {
+  sf.antelope.type.v1.Block block = 1;
+  ForkStep step = 3;
+}

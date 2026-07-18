@@ -9,6 +9,18 @@ export {
     parseHexBytes,
 } from './client';
 
+// Exporta o cliente de eventos on-chain (Firehose gRPC + Hyperion fallback)
+export {
+    ContractEventClient,
+    contractEventClient,
+} from './contractEventClient';
+
+export type {
+    ContractEvent,
+    ContractEventHandlers,
+    ContractEventClientOptions,
+} from './contractEventClient';
+
 // Re-exporta os tipos on-chain para conveniência dos consumers
 export type {
     BlockchainGameState,
