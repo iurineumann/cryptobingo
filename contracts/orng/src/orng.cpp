@@ -851,6 +851,27 @@ ACTION orng::killjobs(const std::vector<uint64_t>& job_ids) {
     }
 }
 
+ACTION orng::clearreqs() {
+    require_auth(get_self());
+
+    // Struct fantasma: só o campo `id` (primeiro campo de `request`). Ao
+    // desserializar, o CDT lê apenas os 8 bytes da chave primária e para antes
+    // dos campos que mudaram de layout (ex.: free_call). Assim o erase por
+    // iterador apaga linhas corrompidas sem precisar desserializá-las por
+    // inteiro — o que abortaria com "datastream attempted to read past the end".
+    struct req_key_only {
+        uint64_t id;
+        uint64_t primary_key() const { return id; }
+    };
+    using req_key_only_table = eosio::multi_index<"reqs"_n, req_key_only>;
+
+    req_key_only_table t(get_self(), get_self().value);
+    auto it = t.begin();
+    while (it != t.end()) {
+        it = t.erase(it);
+    }
+}
+
 
 ACTION orng::ban(const eosio::name& dapp) {
     require_auth(get_self());
