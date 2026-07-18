@@ -120,6 +120,7 @@ jest.mock('./evaluator', () => ({
 import { orchestrateGame }  from './gameOrchestrator';
 import { executeFundGame, executeLockGame, executeStartDraw, executeAbortGame } from './blockchain';
 import { connectRabbitMQ, autoStartDraw, autoClaimDrawnGames, autoStartLockedGames, autoLockFundingGames, updateQueueDepthMetrics, processLockedGame, persistPrizeTx } from './rabbitmq';
+import * as RM from './rabbitmq';
 import { savePrizeTx } from './prizeTransactionsService';
 import { computePayoutAmount } from './evaluator';
 import { notifyPrizeConfirmed, notifyGameAborted } from './broadcaster';
@@ -340,8 +341,15 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
         it('BUG FIX (2026-07-18): startdraw com lockAcquired=false → ack SIM, nack NAO (drena fila)', async () => {
             // simula lock já existente (C7.2: executeStartDraw feito por outro caminho)
             (acquireOrchestrationLock as jest.Mock).mockResolvedValueOnce(false);
+            // CORREÇÃO RACE: aguarda oráculo confirmar drawn antes de orquestrar.
+            // waitForDrawnBalls real roda com fake timers; fetchGame retorna drawn.
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '99', status: 'drawn', drawn_balls: new Array(75).fill(1),
+            }));
             const msg = makeMsg({ action: 'startdraw', gameId: '99' });
-            await processMsg(msg);
+            const promise = processMsg(msg);
+            await jest.advanceTimersToNextTimerAsync();
+            await promise;
             expect(mockChannel.ack).toHaveBeenCalledWith(msg);
             expect(mockChannel.nack).not.toHaveBeenCalled();
             expect(mockStartDraw).not.toHaveBeenCalled();
@@ -351,8 +359,13 @@ describe('connectRabbitMQ + consumeMessages handlers', () => {
 
         it('BUG FIX (2026-07-18): startdraw lockAcquired=false 2x seguidas → ambas fazem ack', async () => {
             (acquireOrchestrationLock as jest.Mock).mockResolvedValue(false);
-            await processMsg(makeMsg({ action: 'startdraw', gameId: '111' }));
-            await processMsg(makeMsg({ action: 'startdraw', gameId: '222' }));
+            mockFetchGame.mockResolvedValue(makeBlockchainGame({
+                game_id: '111', status: 'drawn', drawn_balls: new Array(75).fill(1),
+            }));
+            const p1 = processMsg(makeMsg({ action: 'startdraw', gameId: '111' }));
+            const p2 = processMsg(makeMsg({ action: 'startdraw', gameId: '222' }));
+            await jest.advanceTimersToNextTimerAsync();
+            await Promise.all([p1, p2]);
             expect(mockChannel.ack).toHaveBeenCalledTimes(2);
             expect(mockChannel.nack).not.toHaveBeenCalled();
         });

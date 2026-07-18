@@ -371,6 +371,16 @@ function consumeMessages(): void {
                         logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente). Garantindo orquestração do reveal...`)
                         eventsProcessedTotal.inc({ action });
                         channel.ack(msg);
+                        // CORREÇÃO RACE (2026-07-18): o executeStartDraw pode estar em voo
+                        // (contrato ainda em `locked`/`drawing`). Espera o oráculo confirmar
+                        // `drawn` ANTES de orquestrar — senão o orchestrateGame falha com
+                        // "não está em DRAWN" e o jogo fica órfão (bug 1784407129970).
+                        const drawnBalls = await waitForDrawnBalls(gameId);
+                        if (!drawnBalls) {
+                            logger.error({ tag: 'RabbitMQ' }, `Timeout do oráculo (lock existente) para jogo ${gameId}. Reveal será retomado pelo recovery.`);
+                            eventsFailedTotal.inc({ action, reason: 'oracle_timeout_locked' });
+                            return;
+                        }
                         orchestrateGame(gameId).catch(err =>
                             logger.error({ err, tag: 'RabbitMQ' }, `Erro ao orquestrar reveal (lock existente, jogo ${gameId}):`),
                         );
