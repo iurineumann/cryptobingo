@@ -6,6 +6,7 @@ import { processRoomDrops } from './dropWorker';
 import { logger } from './logger';
 import { publishGameEvent } from './rabbitPublisher';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
+import { recoverCloseFailTotal } from './metrics';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const REDIS_ROOM_PREFIX = 'room:';
@@ -204,18 +205,29 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
             const existingGame = await fetchGame(gameId).catch(() => null);
             if (existingGame?.status === 'archived') {
                 logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: recovery — jogo ${gameId} é archived mas current_game_id não foi zerado. Liberando slot via closegame...`)
-                try {
-                    await microserviceSession.transact({
-                        actions: [{
-                            account:       CONTRACT_ACCOUNT,
-                            name:          'closegame',
-                            authorization: [microserviceSession.permissionLevel],
-                            data:          { game_id: gameId },
-                        }],
-                    }, { broadcast: true });
-                    logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id zerado via closegame.`)
-                } catch (err) {
-                    logger.warn({ tag: 'RoomManager' }, `Sala ${room.room_id}: closegame recovery falhou:`)
+                let closed = false;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        await microserviceSession.transact({
+                            actions: [{
+                                account:       CONTRACT_ACCOUNT,
+                                name:          'closegame',
+                                authorization: [microserviceSession.permissionLevel],
+                                data:          { game_id: gameId },
+                            }],
+                        }, { broadcast: true });
+                        logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id zerado via closegame (tentativa ${attempt}).`);
+                        closed = true;
+                        break;
+                    } catch (err) {
+                        logger.error({ err, tag: 'RoomManager', attempt },
+                            `Sala ${room.room_id}: closegame recovery falhou (tentativa ${attempt}/3) p/ game ${gameId}.`);
+                        if (attempt < 3) await new Promise(r => setTimeout(r, 2000));
+                    }
+                }
+                if (!closed) {
+                    recoverCloseFailTotal.inc({ room_id: String(room.room_id) });
+                    logger.error({ tag: 'RoomManager' }, `Sala ${room.room_id}: closegame recovery ESGOtou 3 tentativas p/ game ${gameId}. Ação manual necessária.`);
                     return; // sem closegame bem-sucedido não criamos novo jogo
                 }
                 await createNextGameForRoom(room);
