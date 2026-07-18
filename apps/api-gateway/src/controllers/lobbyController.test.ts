@@ -166,6 +166,25 @@ describe('getLobby', () => {
 
         expect(res.status).toHaveBeenCalledWith(503);
     });
+
+    it('[ADR-056] funded_at vem do row on-chain, sem enrich Redis', async () => {
+        const ONCHAIN_FUNDED_AT = 1700000000;
+        mockGetTableRows
+            .mockImplementationOnce(async () => ({ rows: [
+                { ...mockGame('200', '2', 'funding'), funded_at: ONCHAIN_FUNDED_AT },
+            ], more: false }))
+            .mockImplementationOnce(async () => ({ rows: [mockRoom('2')], more: false }))
+            .mockImplementationOnce(async () => ({ rows: [mockGametype('2', 100, [])], more: false }));
+
+        mockRoomFind.mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
+
+        const res = makeRes();
+        await getLobby(makeReq(), res);
+
+        expect(mockRedisGet).not.toHaveBeenCalledWith(expect.stringContaining('funding:started:'));
+        const body = (res.json as jest.Mock).mock.calls[0][0];
+        expect(body.games[0].funded_at).toBe(ONCHAIN_FUNDED_AT);
+    });
 });
 
 // ── GET /api/v1/lobby/me ─────────────────────────────────────────────────

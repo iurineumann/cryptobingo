@@ -55,6 +55,8 @@ namespace bingo {
         uint8_t                     golden_ball_num   = 0;  // ADR-012: número da bola dourada (1-75; 0=nenhuma)
         uint16_t                    golden_multiplier = 0;  // ADR-012: multiplicador derivado (0=nenhum)
         int64_t                     total_paid        = 0;  // ADR-005: soma dos payouts (para cálculo do GGR)
+        // ADR-056: epoch sec do início do funding (fonte-de-verdade da janela de 60s).
+        eosio::binary_extension<uint32_t> funded_at;
 
         uint64_t primary_key() const { return game_id; }
         uint64_t by_room()     const { return room_id; }
@@ -234,6 +236,15 @@ namespace bingo {
     struct combo_rule {
         uint64_t combo_id;           // índice estável (0..n-1), espelha o off-chain
         uint16_t weight;             // peso do prêmio em hundredths (100 = 1×)
+    };
+
+    // Fase 2 Pagamento Batch (#369): entrada individual para claimwinbatch.
+    // SEM boost_nft_ids — NFT/grant boost continua 1-a-1 via claimwin.
+    struct win_entry {
+        uint64_t ticket_id;
+        uint8_t  ball_count;
+        uint64_t win_pattern_mask;
+        uint16_t golden_multiplier;
     };
 
     // ==========================================
@@ -483,6 +494,9 @@ namespace bingo {
         // explicitamente (wharfkit não omite binary_extension de array). O contrato
         // valida ownership + regra PRIZE_BOOST (FIXED) e aplica o maior boost.
         [[eosio::action]] void claimwin(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t win_pattern_mask, uint16_t golden_multiplier, eosio::binary_extension<std::vector<uint64_t>> boost_nft_ids);
+        // Fase 2 Pagamento Batch (#369): paga N vencedores limpos (sem boost) em 1 tx.
+        // Reusa validação de claimwin. Fail-fast: qualquer erro invalida todo o lote.
+        [[eosio::action]] void claimwinbatch(uint64_t game_id, std::vector<win_entry> entries);
         [[eosio::action]] void claimstage(uint64_t game_id, uint64_t ticket_id, uint8_t stage, uint8_t ball_count, uint64_t win_pattern_mask); // ADR-013
         [[eosio::action]] void claimcombo(uint64_t game_id, uint64_t ticket_id, uint8_t ball_count, uint64_t combo_id, uint16_t golden_multiplier); // ADR-016
         [[eosio::action]] void closegame(uint64_t game_id);  // ADR-012: paying|drawn → archived

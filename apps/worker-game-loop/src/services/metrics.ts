@@ -108,6 +108,18 @@ export const wsConnectionsActive = new Gauge({
     registers: [registry],
 });
 
+/** Profundidade das filas RabbitMQ (mensagens pendentes por fila). */
+export const queueDepth = new Gauge({
+    name:       'worker_queue_depth',
+    help:       'Mensagens pendentes por fila RabbitMQ.',
+    labelNames: ['queue'] as const,
+    registers:  [registry],
+});
+
+export function setQueueDepth(queue: string, count: number): void {
+    queueDepth.set({ queue }, count);
+}
+
 /** Sessões de Slow Reveal em andamento (gauge). */
 export const slowRevealSessionsActive = new Gauge({
     name:      'worker_slow_reveal_sessions_active',
@@ -166,6 +178,21 @@ export const autoAdvanceErrorsTotal = new Counter({
     registers:  [registry],
 });
 
+/** Falhas persistentes ao tentar closegame recovery de jogo archived. */
+export const recoverCloseFailTotal = new Counter({
+    name:       'worker_recover_close_fail_total',
+    help:       'Tentativas de closegame recovery (archived) que esgotaram o retry.',
+    labelNames: ['room_id'],
+});
+
+/** Eventos publicados na fila RabbitMQ, por action. */
+export const workerQueuePublishedTotal = new Counter({
+    name:       'worker_queue_published_total',
+    help:       'Total de eventos publicados na fila do RabbitMQ.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
 /** Jogos processados por cada cron de AutoAdvance. */
 export const autoAdvanceGamesTotal = new Counter({
     name:       'worker_autoadvance_games_total',
@@ -216,6 +243,63 @@ export const achievementsUnlockedTotal = new Counter({
     name:       'worker_achievements_unlocked_total',
     help:       'Total de achievements desbloqueados, por ID.',
     labelNames: ['achievement_id'] as const,
+    registers:  [registry],
+});
+
+// ==========================================
+// MÉTRICAS DO STATE WATCHER (Fase B1/B5)
+// Acompanham o pipeline de eventos on-chain → RabbitMQ.
+// ==========================================
+
+/** Eventos on-chain recebidos do Firehose/Hyperion pelo State Watcher. */
+export const stateWatcherEventsReceived = new Counter({
+    name:       'worker_state_watcher_events_received_total',
+    help:       'Eventos on-chain recebidos do Firehose/Hyperion pelo State Watcher.',
+    labelNames: ['source'] as const,
+    registers:  [registry],
+});
+
+/** Eventos publicados na fila game_loop_events pelo State Watcher. */
+export const stateWatcherPublished = new Counter({
+    name:       'worker_state_watcher_published_total',
+    help:       'Eventos publicados na fila game_loop_events pelo State Watcher.',
+    labelNames: ['action'] as const,
+    registers:  [registry],
+});
+
+/** Erros no stream de eventos do State Watcher (parse/conexão). */
+export const stateWatcherErrors = new Counter({
+    name:       'worker_state_watcher_errors_total',
+    help:       'Erros no stream de eventos do State Watcher (parse/conexão).',
+    registers:  [registry],
+});
+
+/** Reconexões do stream Firehose/Hyperion do State Watcher. */
+export const stateWatcherReconnections = new Counter({
+    name:       'worker_state_watcher_reconnections_total',
+    help:       'Reconexões do stream Firehose/Hyperion do State Watcher.',
+    registers:  [registry],
+});
+
+/** Trocas de fonte Firehose<->Hyperion (fallback ativado). */
+export const stateWatcherSourceChanges = new Counter({
+    name:       'worker_state_watcher_source_changes_total',
+    help:       'Trocas de fonte Firehose<->Hyperion (fallback ativado).',
+    registers:  [registry],
+});
+
+/** Posição atual do cursor (last_global_seq) do State Watcher no Redis. */
+export const stateWatcherCursorPosition = new Gauge({
+    name:       'worker_state_watcher_cursor_position',
+    help:       'Posição atual do cursor (last_global_seq) do State Watcher no Redis.',
+    registers:  [registry],
+});
+
+/** Latência do onEvent até publishGameEvent OK (ms). */
+export const stateWatcherPublishLatency = new Histogram({
+    name:       'worker_state_watcher_publish_latency_ms',
+    help:       'Latência do onEvent até publishGameEvent OK (ms).',
+    buckets:    [1, 5, 10, 25, 50, 100, 250, 500],
     registers:  [registry],
 });
 

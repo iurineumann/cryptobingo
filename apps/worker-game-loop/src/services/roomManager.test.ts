@@ -27,9 +27,13 @@ jest.mock('./redis', () => ({
 jest.mock('./dropWorker', () => ({
     processRoomDrops: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('./rabbitPublisher', () => ({
+    publishGameEvent: jest.fn().mockResolvedValue(undefined),
+}));
 
 import { fetchGame, rpcClient }  from '@cryptobingo/blockchain-core';
 import { processRoomDrops }       from './dropWorker';
+import { publishGameEvent }      from './rabbitPublisher';
 import {
     findRoomByGameId,
     onGameResolved,

@@ -11,7 +11,7 @@
 import { fetchGame, fetchPlayerTickets, parseHexBytes, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 } from '@wharfkit/antelope';
 import type { BlockchainTicketRecord, DrawMode } from '@cryptobingo/shared-types';
-import { executeClaimWin, executeClaimCombo, executeClaimStage, executeCloseGame } from './blockchain';
+import { executeClaimWin, executeClaimStage } from './blockchain';
 import { savePrizeTx, saveBuyInTx } from './prizeTransactionsService';
 import { notifyPrizeTxSent, notifyPrizeConfirmed } from './broadcaster';
 import {
@@ -19,13 +19,14 @@ import {
     prizePaymentsAmountTotal,
     prizePersistTotal,
     buyinPersistedTotal,
+    payoutChunksTotal,
 } from './prizeMetrics';
 import { getTicketsForBall, indexExists, deleteIndex }    from './invertedIndex';
 import { fetchPatternsWithCache } from './patternCache';
 import { fetchComboContext, bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import { getBoostNftIds } from './nftMechanics';
-import { decrementUsedNfts } from './consumableService';
-import { awardWinXP, awardComboXP } from './xpEngine';
+import { setPayoutPlan, triggerCloseGame } from './payoutSaga';
+import { publishGameEvent } from './rabbitPublisher';
 import { checkStageWinAchievement } from './achievementEngine';
 import { Pool } from 'pg';
 import { logger } from './logger';
@@ -98,6 +99,84 @@ export interface WinResult {
     patternMask: bigint;  // mask do melhor padrão (golden ball check); combo herda a do melhor padrão
     weight:      number;  // weight do padrão OU da combinação vencedora (maior peso)
     comboId?:    number;  // ADR-016: se definido, paga via claimcombo (tier combinação)
+}
+
+// Fase 2 — entrada de payout p/ publish no RabbitMQ
+export interface PayoutEntry {
+    ticketId: string;
+    ticketOwner: string;
+    ballCount: number;
+    patternMask: bigint;
+    goldenMultiplier: number;
+    comboId?: number;
+    patternName: string;
+    weight: number;
+    isNft: boolean;
+    boostNftIds: string[];
+}
+
+export interface ClassifiedPayouts {
+    chunks: PayoutEntry[][];
+    comboSingles: PayoutEntry[];
+    nftSingles: PayoutEntry[];
+}
+
+/**
+ * Separa vencedores em clean (chunk ~15 p/ claimwinbatch), combo (1-a-1 claimcombo)
+ * e NFT (1-a-1 claimwin c/ boost). Busca boost NFTs p/ classificação.
+ * Fase 2 (#369).
+ */
+export async function classifyWinnersForBatch(
+    winners: WinResult[],
+    drawnBalls: number[],
+    drawMode: string,
+    goldenBallNum: number,
+    goldenMultiplierGlobal: number,
+    CHUNK_SIZE = 15,
+): Promise<ClassifiedPayouts> {
+    const clean: PayoutEntry[] = [];
+    const comboSingles: PayoutEntry[] = [];
+    const nftSingles: PayoutEntry[] = [];
+
+    for (const { ticket, patternName, patternMask, weight, comboId } of winners) {
+        let appliedMultiplier = 0;
+        if (drawMode === 'goldenball' && goldenBallNum > 0) {
+            const inPattern = isBallInPattern(ticket, goldenBallNum, patternMask);
+            if (inPattern) appliedMultiplier = goldenMultiplierGlobal;
+        }
+
+        const entry: PayoutEntry = {
+            ticketId: ticket.ticket_id,
+            ticketOwner: ticket.owner,
+            ballCount: drawnBalls.length,
+            patternMask,
+            goldenMultiplier: appliedMultiplier,
+            comboId,
+            patternName,
+            weight,
+            isNft: false,
+            boostNftIds: [],
+        };
+
+        if (comboId !== undefined) {
+            comboSingles.push(entry);
+        } else {
+            entry.boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
+            entry.isNft = entry.boostNftIds.length > 0;
+            if (entry.isNft) {
+                nftSingles.push(entry);
+            } else {
+                clean.push(entry);
+            }
+        }
+    }
+
+    const chunks: PayoutEntry[][] = [];
+    for (let i = 0; i < clean.length; i += CHUNK_SIZE) {
+        chunks.push(clean.slice(i, i + CHUNK_SIZE));
+    }
+
+    return { chunks, comboSingles, nftSingles };
 }
 
 /**
@@ -463,7 +542,7 @@ export async function preComputeMultiMatchCutoffs( // NOSONAR — pré-cômputo 
     const results: StageCutoffResult[] = [];
     let prevCutoff = 0;
 
-    for (const stageDef of stages.toSorted((a, b) => a.patterns_required - b.patterns_required)) {
+    for (const stageDef of [...stages].sort((a, b) => a.patterns_required - b.patterns_required)) {
         let cutoffBall = drawnBalls.length + 1; // sentinela: sem vencedor
 
         // Cada estágio começa do cutoff do anterior — não reinicia da bola 1
@@ -574,7 +653,8 @@ async function processMultiMatchWinners(
             logger.info({ tag: 'MULTI_MATCH' }, `Estágio ${result.stage}: sem vencedores.`)
         }
     }
-    await executeCloseGame(gameId);
+    await setPayoutPlan(gameId, 0);
+    await triggerCloseGame(gameId);
     logger.info({ tag: 'MULTI_MATCH' }, `Jogo ${gameId} resolvido.`)
 }
 
@@ -681,157 +761,97 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
         winners = winners.filter(w => (BigInt(w.patternMask) & MASTER_MASK) === MASTER_MASK);
     }
 
-    // ── Submete pagamentos ───────────────────────────────────────────────────
+    // ── Publica payouts (publish-only — Fase 2 #369) ──────────────────────
     if (winners.length === 0) {
-        logger.info({ tag: 'Avaliador' }, `Nenhum vencedor no jogo ${gameId}.`)
-    } else {
-        logger.info({ tag: 'Avaliador' }, `${winners.length} vencedor(es) no jogo ${gameId}!`)
-
-        for (const { ticket, patternName, patternMask, weight, comboId } of winners) {
-            // GOLDEN_BALL: verifica se a bola dourada está coberta pelo padrão vencedor
-            let appliedMultiplier = 0;
-            if (drawMode === 'goldenball' && goldenBallNum > 0) {
-                const inPattern = isBallInPattern(ticket, goldenBallNum, patternMask);
-                if (inPattern) appliedMultiplier = goldenMultiplierGlobal;
-            }
-
-            const isCombo = comboId !== undefined;
-            const patternDesc = isCombo ? `combinação: ${patternName} (#${comboId})` : `padrão: ${patternName}`;
-            logger.info(
-                `${isCombo ? '🔗' : '🏆'} [Avaliador] Liquidando #${ticket.ticket_id} ` +
-                `(${ticket.owner}, ${patternDesc}, weight: ${weight}` +
-                (appliedMultiplier > 1 ? `, 🌟×${appliedMultiplier}` : '') + ')...'
-            );
-            // ADR-016: combinação (tier superior) → claimcombo; senão claimwin (max_weight)
-            // ADR-028 §7: para claimwin, pré-computa NFTs de PRIZE_BOOST do vencedor.
-            let boostNftIds: string[] = [];
-            let txHash: string | undefined;
-            if (isCombo) {
-                try {
-                    txHash = await executeClaimCombo(
-                        gameId,
-                        ticket.ticket_id,
-                        effectiveBalls.length,
-                        comboId as number,
-                        appliedMultiplier,
-                    );
-                }
-                catch (comboErr) {
-                    // BUG B (resiliência) + DRIFT GUARD: claimcombo falha (ex: gametype
-                    // sem combos on-chain, dessincronizado do api-gateway) → tenta pagar
-                    // por padrão (fallback claimwin) em vez de abortar o jogo inteiro.
-                    // Se a causa for DRIFT (combo existe off-chain mas não on-chain), isso
-                    // SUBPAGA o vencedor — emite alerta CRÍTICO p/ reconciliação (setcombos).
-                    const msg = comboErr instanceof Error ? comboErr.message : String(comboErr);
-                    const isDrift = /combinacoes definidas|combo_id nao encontrado/i.test(msg);
-                    if (isDrift) {
-                        logger.error(
-                            { err: comboErr, tag: 'Avaliador', gameId, gametypeId, comboId, ticketId: ticket.ticket_id, alert: 'COMBO_DRIFT' },
-                            `⚠️ DRIFT on-chain: combo #${comboId} do gametype ${gametypeId} NÃO existe no contrato — vencedor #${ticket.ticket_id} será SUBPAGO como padrão. Rode setcombos p/ sincronizar.`,
-                        );
-                    } else {
-                        logger.error({ err: comboErr, tag: 'Avaliador' }, `claimcombo falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}); tentando claimwin por padrão:`);
-                    }
-                    try {
-                        boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
-                        txHash = await executeClaimWin(
-                            gameId,
-                            ticket.ticket_id,
-                            effectiveBalls.length,
-                            patternMask,
-                            appliedMultiplier,
-                            boostNftIds,
-                        );
-                    }
-                    catch (winErr) {
-                        logger.error({ err: winErr, tag: 'Avaliador' }, `claimwin fallback falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
-                        continue;
-                    }
-                }
-            } else {
-                boostNftIds = await getBoostNftIds(ticket.owner).catch(() => []);
-                try {
-                    txHash = await executeClaimWin(
-                        gameId,
-                        ticket.ticket_id,
-                        effectiveBalls.length,
-                        patternMask,
-                        appliedMultiplier,
-                        boostNftIds,
-                    );
-                }
-                catch (claimErr) {
-                    // BUG B (resiliência): um claimwin individual falha → logar e
-                    // CONTINUAR com os demais vencedores, em vez de abortar o jogo.
-                    logger.error({ err: claimErr, tag: 'Avaliador' }, `claimwin falhou p/ cartela #${ticket.ticket_id} (jogo ${gameId}):`);
-                    continue;
-                }
-            }
-
-            if (txHash) {
-                const actualPrice = ticket.price?.quantity ?? game.ticket_price.quantity;
-                const payout = computePayoutAmount(
-                    actualPrice,
-                    baseMultiplier,
-                    weight,
-                    appliedMultiplier,
-                );
-                recordClaimWin(
-                    txHash,
-                    ticket.owner,
-                    gameId,
-                    ticket.ticket_id,
-                    payout.amount,
-                    payout.currency,
-                ).catch(() => {});
-                awardWinXP(ticket.owner, gameId, false, appliedMultiplier > 0).catch(() => {});
-                if (isCombo) awardComboXP(ticket.owner).catch(() => {});
-                // ADR-028 §3: decrementa usos de NFTs consumíveis usadas no boost
-                if (boostNftIds.length) decrementUsedNfts(ticket.owner, boostNftIds).catch(() => {});
-
-                // — Prize Pipeline: persistir + notificar + métricas ──────────
-                notifyPrizeTxSent(gameId, ticket.ticket_id, patternName);
-
-                const winType    = isCombo ? 'combo' as const : 'pattern' as const;
-                const priceParts = actualPrice.split(' ');
-                const buyInAmount = priceParts[0];
-                const buyInCurr   = priceParts.slice(1).join(' ') || 'WAX';
-
-                savePrizeTx({
-                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
-                    winType, winLabel: patternName, weight,
-                    amount: payout.amount.toFixed(4), currency: payout.currency,
-                    transactionId: txHash,
-                    goldenMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
-                    ticketPrice: actualPrice,
-                    claimedAt: new Date().toISOString(),
-                }).then(() => {
-                    prizePersistTotal.labels({ result: 'success' }).inc();
-                    prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
-                    prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
-                    notifyPrizeConfirmed(gameId, ticket.ticket_id, txHash, payout.amount.toFixed(4), payout.currency, patternName);
-                }).catch(err => {
-                    prizePersistTotal.labels({ result: 'error' }).inc();
-                    logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir PrizeTx:')
-                });
-
-                saveBuyInTx({
-                    gameId, account: ticket.owner, ticketId: ticket.ticket_id,
-                    amount: buyInAmount, currency: buyInCurr,
-                    purchasedAt: new Date().toISOString(),
-                }).then(() => {
-                    buyinPersistedTotal.labels({ currency: buyInCurr }).inc();
-                }).catch(err => {
-                    logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir BuyInTx:')
-                });
-            }
-        }
+        logger.info({ tag: 'Avaliador' }, `Nenhum vencedor no jogo ${gameId}.`);
+        await setPayoutPlan(gameId, 0);
+        await triggerCloseGame(gameId);
+        logger.info({ tag: 'Avaliador' }, `Jogo ${gameId} sem vencedores, fechado via saga.`);
+        return;
     }
 
-    // ── Limpa índice e fecha jogo ────────────────────────────────────────────
-    if (hasIndex) await deleteIndex(gameId);
+    logger.info({ tag: 'Avaliador' }, `${winners.length} vencedor(es) no jogo ${gameId}!`)
 
-    await executeCloseGame(gameId);
+    const classified = await classifyWinnersForBatch(
+        winners, effectiveBalls, drawMode, goldenBallNum, goldenMultiplierGlobal,
+    );
+
+    const { chunks, comboSingles, nftSingles } = classified;
+    const totalEvents = chunks.length + comboSingles.length + nftSingles.length;
+
+    await setPayoutPlan(gameId, totalEvents);
+
+    // Chunks clean → claimwinbatch
+    for (let i = 0; i < chunks.length; i++) {
+        await publishGameEvent('game_loop_payouts', 'payout', {
+            gameId,
+            chunkId: `clean_${i}`,
+            mode: 'chunk_clean',
+            entries: chunks[i].map(e => ({
+                ticketId: e.ticketId,
+                ticketOwner: e.ticketOwner,
+                ballCount: e.ballCount,
+                patternMask: e.patternMask.toString(),
+                goldenMultiplier: e.goldenMultiplier,
+                patternName: e.patternName,
+                weight: e.weight,
+                baseMultiplier,
+                ticketPrice: e.ticketId, // filled at publish time below
+            })),
+        });
+        payoutChunksTotal.labels({ mode: 'chunk_clean' }).inc();
+        logger.info({ tag: 'Avaliador' }, `Chunk clean_${i} publicado (${chunks[i].length} entries).`);
+    }
+
+    // Singles combo → claimcombo 1-a-1
+    for (const e of comboSingles) {
+        await publishGameEvent('game_loop_payouts', 'payout', {
+            gameId,
+            chunkId: `combo_${e.ticketId}`,
+            mode: 'single_combo',
+            entries: [e].map(ee => ({
+                ticketId: ee.ticketId,
+                ticketOwner: ee.ticketOwner,
+                ballCount: ee.ballCount,
+                patternMask: ee.patternMask.toString(),
+                goldenMultiplier: ee.goldenMultiplier,
+                comboId: ee.comboId,
+                patternName: ee.patternName,
+                weight: ee.weight,
+                baseMultiplier,
+                ticketPrice: ee.ticketId,
+            })),
+        });
+        payoutChunksTotal.labels({ mode: 'single_combo' }).inc();
+    }
+
+    // Singles NFT → claimwin c/ boost 1-a-1
+    for (const e of nftSingles) {
+        await publishGameEvent('game_loop_payouts', 'payout', {
+            gameId,
+            chunkId: `nft_${e.ticketId}`,
+            mode: 'single_nft',
+            entries: [e].map(ee => ({
+                ticketId: ee.ticketId,
+                ticketOwner: ee.ticketOwner,
+                ballCount: ee.ballCount,
+                patternMask: ee.patternMask.toString(),
+                goldenMultiplier: ee.goldenMultiplier,
+                boostNftIds: ee.boostNftIds,
+                patternName: ee.patternName,
+                weight: ee.weight,
+                baseMultiplier,
+                ticketPrice: ee.ticketId,
+            })),
+        });
+        payoutChunksTotal.labels({ mode: 'single_nft' }).inc();
+    }
+
+    logger.info({ tag: 'Avaliador' },
+        `${totalEvents} payout(s) publicados p/ jogo ${gameId}: ${chunks.length} chunks, ${comboSingles.length} combos, ${nftSingles.length} NFT.`)
+
+    // ── Limpa índice ──────────────────────────────────────────────────────
+    if (hasIndex) await deleteIndex(gameId);
     logger.info({ tag: 'Avaliador' }, `Resolução do jogo ${gameId} concluída (modo: ${drawMode}).`)
 }
 

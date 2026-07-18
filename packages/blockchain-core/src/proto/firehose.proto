@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package sf.antelope.type.v1;
+
+// Tipos base do bloco Antelope (EOSIO/WAX) via Firehose.
+// Campo NUMBERS validados contra streamingfast/firehose-antelope @ buf.build.
+// Ajustar se o servidor Pinax divergir.
+
+message Block {
+  uint64 number = 2;
+  string id = 1;
+  repeated TransactionTrace filtered_transaction_traces = 20;
+}
+
+message TransactionTrace {
+  bytes id = 1;
+  uint32 index = 5;
+  string status = 7;
+  repeated ActionTrace action_traces = 9;
+}
+
+message ActionTrace {
+  ActionReceipt receipt = 1;
+  Action action = 2;
+  string creator_action_ordinal = 5;
+  string closest_unnotified_ancestor_action_ordinal = 7;
+  bool context_free = 13;
+}
+
+message Action {
+  string account = 2;
+  string name = 3;
+  string json_data = 4;
+  bytes raw_data = 5;
+}
+
+message ActionReceipt {
+  uint64 global_sequence = 1;
+  string receiver = 2;
+  bytes digest = 5;
+  string act_digest = 7;
+}
+
+message PermissionLevel {
+  string actor = 1;
+  string permission = 2;
+}

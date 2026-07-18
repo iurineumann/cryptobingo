@@ -6,6 +6,7 @@ Expõe as séries esperadas pelo dashboard infra-email-app:
   pg_cryptobingo_email_log_total
   pg_cryptobingo_email_log_by_status{status=...}
   pg_cryptobingo_email_log_by_purpose{purpose=...}
+  pg_cryptobingo_email_log_by_status_purpose{status=..., purpose=...}
   pg_cryptobingo_email_log_failed_recent
   pg_cryptobingo_email_log_sent_today
 
@@ -38,6 +39,11 @@ M_BY_PURPOSE = Gauge(
     "pg_cryptobingo_email_log_by_purpose",
     "Contagem de e-mails por propósito",
     ["purpose"],
+)
+M_BY_STATUS_PURPOSE = Gauge(
+    "pg_cryptobingo_email_log_by_status_purpose",
+    "Contagem de e-mails por status e propósito",
+    ["status", "purpose"],
 )
 M_FAILED_RECENT = Gauge(
     "pg_cryptobingo_email_log_failed_recent",
@@ -79,6 +85,15 @@ def collect():
             M_BY_PURPOSE.labels(purpose or "unknown").set(cnt)
     except Exception as exc:  # noqa: BLE001
         print(f"[warn] by_purpose: {exc}", flush=True)
+
+    try:
+        for status, purpose, cnt in _query(
+            "SELECT status, purpose, COALESCE(count(*), 0) FROM email_log "
+            "GROUP BY status, purpose"
+        ):
+            M_BY_STATUS_PURPOSE.labels(status or "unknown", purpose or "unknown").set(cnt)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[warn] by_status_purpose: {exc}", flush=True)
 
     try:
         failed = _query(

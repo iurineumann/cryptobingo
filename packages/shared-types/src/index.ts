@@ -10,6 +10,9 @@ export type SupportedLocale = 'en-US' | 'pt-BR' | 'es-ES' | 'fr-FR' | 'ru-RU' | 
 export type UserRole = 'player' | 'moderator' | 'sponsor' | 'admin' | 'contract_admin';
 export type PatternType = 'simple' | 'special' | 'master';
 
+/** Janela de funding (segundos) — tempo máximo de venda antes do lock. Compartilhado worker/frontend. */
+export const FUNDING_WINDOW_SEC = 60;
+
 // Permissões granulares (ADR-036)
 export type AdminPermission =
   | 'admin.dashboard.view'
@@ -107,6 +110,7 @@ export interface BlockchainGameState {
     golden_ball_num:  number;            // ADR-012: 1-75, 0=sem golden ball
     golden_multiplier: number;           // ADR-012: multiplicador (0=sem efeito)
     total_paid:       number;            // ADR-005: soma dos payouts executados (int64)
+    funded_at?:       number;            // ADR-056: epoch sec do início do funding (binary_extension no contrato; opcional p/ linhas legadas)
 }
 
 /**

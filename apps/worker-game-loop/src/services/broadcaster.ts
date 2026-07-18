@@ -280,11 +280,37 @@ export function notifyGameLocked(gameId: string): void {
 }
 
 /**
+ * Emite drawing_started — jogo entrou em DRAWING (startdraw executado).
+ * Permite o lobby transitar funding→drawing em tempo real.
+ */
+export function notifyDrawingStarted(gameId: string): void {
+    publishReveal('drawing_started', gameId, {
+        event:     'drawing_started',
+        game_id:   parseInt(gameId, 10),
+        timestamp: new Date().toISOString(),
+    });
+    logger.info({ tag: 'WS' }, `drawing_started publicado para jogo ${gameId}`);
+}
+
+/**
+ * Emite game_funded — jogo abriu para vendas (CREATED → FUNDING).
+ * Permite o lobby atualizar o status em tempo real (sem esperar polling).
+ */
+export function notifyGameFunded(gameId: string): void {
+    publishReveal('game_funded', gameId, {
+        event:   'game_funded',
+        game_id: parseInt(gameId, 10),
+        timestamp: new Date().toISOString(),
+    });
+    logger.info({ tag: 'WS' }, `game_funded publicado para jogo ${gameId}`);
+}
+
+/**
  * Emite game_aborted e encerra qualquer reveal ativo.
  */
 export function notifyGameAborted(
     gameId: string,
-    reason: 'ORACLE_TIMEOUT' | 'ORACLE_TIMEOUT_RECOVERY' | 'LOW_QUORUM' | 'ADMIN_HALT' | 'NO_TICKETS' | 'NO_TICKETS_DRAWING',
+    reason: 'ORACLE_TIMEOUT' | 'ORACLE_TIMEOUT_RECOVERY' | 'LOW_QUORUM' | 'ADMIN_HALT' | 'NO_TICKETS' | 'NO_TICKETS_DRAWING' | 'NO_TICKETS_LOCKED',
 ): void {
     const session = activeSessions.get(gameId);
     if (session?.timer) {

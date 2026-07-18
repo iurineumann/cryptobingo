@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { fetchRooms, fetchRtpReport, fetchGamesHistory } from '../services/api';
 import { PaletteSelector } from './ui/PaletteSelector';
 import type { EnrichedRoom, RtpReport, GameHistoryEntry } from '../services/api';
-import type { BlockchainGameState } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState } from '@cryptobingo/shared-types';
 import { fetchTableRows } from '../utils/rpc';
+import { isWithinSlowReveal, resolveDisplayStatus } from '../utils/gameStatus';
 import Logo from './Logo';
 import { Button } from '@/components/ui/button';
 import Seo from './Seo';
@@ -29,9 +30,7 @@ interface LandingPageProps {
 }
 
 const CONTRACT       = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
-const AUTO_LOCK_SEC  = 60;
-const REVEAL_INTERVAL_MS = 3000;
-const SLOW_REVEAL_WINDOW = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
+const AUTO_LOCK_SEC  = FUNDING_WINDOW_SEC;
 
 const DEMO_SEQ = [42, 17, 64, 8, 33, 71, 51, 22];
 
@@ -56,15 +55,6 @@ function devRoleFromLabel(label: string): string {
     case 'Sponsor':         return 'sponsor';
     default:                return label.toLowerCase().replace(/\s+/g, '-');
   }
-}
-
-function isWithinSlowReveal(gameId: string): boolean {
-  return Date.now() - Number(gameId) < SLOW_REVEAL_WINDOW;
-}
-
-function resolveDisplayStatus(g: BlockchainGameState): string {
-  if (g.status === 'drawn' || (g.status === 'archived' && isWithinSlowReveal(g.game_id))) return 'drawing';
-  return g.status;
 }
 
 function fmtCountdown(ms: number): string {
@@ -231,7 +221,8 @@ export default function LandingPage({ onConnect, devAccounts, onDevLogin, theme,
   function getCountdown(roomId: string): string {
     const g = currentGames[String(roomId)];
     if (!g || g.status !== 'funding') return '';
-    const closeAt = Number(g.game_id) + AUTO_LOCK_SEC * 1000;
+    const t0      = g.funded_at ?? Number(g.game_id);
+    const closeAt = t0 + AUTO_LOCK_SEC * 1000;
     const diff    = closeAt - now;
     if (diff <= 0) return '';
     return fmtCountdown(diff);

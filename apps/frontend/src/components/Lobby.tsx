@@ -9,8 +9,10 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation }                from 'react-i18next';
 import { useNavigate }                   from 'react-router-dom';
 import { Session }                       from '@wharfkit/session';
-import type { BlockchainGameState, BlockchainBalance } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainBalance } from '@cryptobingo/shared-types';
 import { fetchLobby, fetchLobbyMe, type EnrichedRoom } from '../services/api';
+import { useLobbySocket }                from '../hooks/useLobbySocket';
+import { isWithinSlowReveal, resolveDisplayStatus } from '../utils/gameStatus';
 import Seo                               from './Seo';
 import { X } from 'lucide-react';
 import BuyTicketModal                    from './BuyTicketModal';
@@ -26,11 +28,11 @@ interface LobbyProps {
     readonly onReplayGame?: (gameId: string) => void;
 }
 
-const AUTO_LOCK_SEC        = 60;
-const REVEAL_INTERVAL_MS   = 3000;
-const SLOW_REVEAL_WINDOW   = AUTO_LOCK_SEC * 1000 + 75 * REVEAL_INTERVAL_MS;
+const AUTO_LOCK_SEC        = FUNDING_WINDOW_SEC;
 const POLL_NORMAL_MS       = 4_000;   // salas idle
-const POLL_ACTIVE_MS       = 1_000;   // quando há funding ou drawing
+// FIX #384: 1000 -> 2000ms. Em sala ativa o lobby faz 2 req/ciclo
+// (lobby + lobby/me) = 60 req/min, abaixo do limite playerLimiter (200/min).
+const POLL_ACTIVE_MS       = 2_000;   // quando há funding ou drawing
 
 const STATUS_DOT: Record<string, string> = {
     created: 'var(--cb-text-tertiary)',
@@ -197,7 +199,8 @@ function RoomCardStatus({
     readonly currentGame: BlockchainGameState | undefined;
     readonly t: (key: string, opts?: any) => string;
 }) {
-    const closeAt   = currentGame ? Number(currentGame.game_id) + AUTO_LOCK_SEC * 1000 : 0;
+    const t0        = currentGame?.funded_at ?? Number(currentGame?.game_id ?? 0);
+    const closeAt   = currentGame ? t0 + AUTO_LOCK_SEC * 1000 : 0;
     const remaining = closeAt - now;
     const isUrgent  = remaining > 0 && remaining < 15_000;
 
@@ -519,6 +522,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
         [games]
     );
 
+    // Game IDs ativos p/ subscription socket — push atualiza status entre polls
+    const gameIds = useMemo(() => games.map(g => g.game_id), [games]);
+    const { statuses } = useLobbySocket(gameIds);
+
     useEffect(() => {
         loadData();
     }, [loadData]);
@@ -535,16 +542,6 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
     }, [loadData]);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    function isWithinSlowReveal(gameId: string): boolean {
-        return Date.now() - Number(gameId) < SLOW_REVEAL_WINDOW;
-    }
-
-    function resolveDisplayStatus(g: BlockchainGameState): string {
-        if (g.status === 'drawn') return 'drawing';
-        if (g.status === 'archived' && isWithinSlowReveal(g.game_id)) return 'drawing';
-        return g.status;
-    }
 
     // Jogo "relevante" para exibição de uma sala — exclui aborted e archived fora da janela
     function currentGameForRoom(room: EnrichedRoom): BlockchainGameState | undefined {
@@ -631,7 +628,10 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                     {/* ── Cards de salas ativas ── */}
                     {activeRooms.map(room => {
                         const currentGame   = currentGameForRoom(room);
-                        const displayStatus = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
+                        const pollStatus    = currentGame ? resolveDisplayStatus(currentGame) : 'idle';
+                        const displayStatus = currentGame
+                            ? (statuses[currentGame.game_id] ?? pollStatus)
+                            : 'idle';
                         return (
                             <RoomCard
                                 key={`r-${room.room_id}`}
@@ -651,7 +651,8 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
 
                     {/* ── Jogos sem sala / legados (fallback) ── */}
                     {orphanGames.map(game => {
-                        const isFunding = game.status === 'funding';
+                        const effectiveStatus = statuses[game.game_id] ?? game.status;
+                        const isFunding = effectiveStatus === 'funding';
                         const tpSplit = splitAmount(game.ticket_price.quantity);
                         const orphanGt = gametypeMap.get(String(game.gametype_id));
                         const orphanMax = orphanGt && orphanGt.max_win_weight > 0
@@ -669,7 +670,7 @@ export default function Lobby({ session, onEnterRoom, onReplayGame }: LobbyProps
                                         <p className="lobby-card-name">{t('lobby.room_label')}</p>
                                     </div>
                                     <Badge variant="secondary" className={isFunding ? 'text-success-400' : ''}>
-                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[game.status] }} />{t(`lobby.${game.status}` as any, game.status)}
+                                        <span className="lobby-status-dot" style={{ background: STATUS_DOT[effectiveStatus] }} />{t(`lobby.${effectiveStatus}` as any, effectiveStatus)}
                                     </Badge>
                                 </div>
 

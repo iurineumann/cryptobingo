@@ -12,6 +12,7 @@ logs
 # Environment
 .env
 .env.*
+!.env.example
 
 # AI
 .cline/sessions
@@ -35,6 +36,7 @@ local.db
 
 .env
 .env.*
+!.env.example
 
 .cline/sessions
 .cline/cache

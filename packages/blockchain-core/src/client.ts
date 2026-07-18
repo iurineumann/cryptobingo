@@ -8,7 +8,39 @@ import type {
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8888';
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 
-export const rpcClient = new APIClient({ url: RPC_URL });
+// ── Multi-RPC fallback ────────────────────────────────────
+
+const RPC_URLS_RAW = process.env.RPC_URLS || '';
+const EXTRA_URLS = RPC_URLS_RAW
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 0 && s !== RPC_URL);
+
+export const RPC_ENDPOINTS = [RPC_URL, ...EXTRA_URLS].map(url => new APIClient({ url }));
+
+// rpcClient mantido como alias do primeiro endpoint (compatibilidade retroativa)
+export const rpcClient = RPC_ENDPOINTS[0];
+
+// ── Cache para fetchGame ──────────────────────────────────
+
+interface CacheEntry {
+    state: BlockchainGameState;
+    ts: number;
+}
+
+const gameCache = new Map<string, CacheEntry>();
+
+const FETCH_GAME_CACHE_TTL_MS = Number.parseInt(
+    process.env.FETCH_GAME_CACHE_TTL_MS ?? '2000', 10
+);
+
+export function invalidateGameCache(gameId: string): void {
+    gameCache.delete(gameId);
+}
+
+export function clearGameCache(): void {
+    gameCache.clear();
+}
 
 /**
  * Converte uma hex string da ABI (tipo `bytes`) para um array de números.
@@ -26,27 +58,48 @@ export function parseHexBytes(hex: string): number[] {
  * Busca o estado de um jogo na tabela `games` (scope: bingogamectr).
  * Retorna null se o jogo não existir.
  *
+ * Usa múltiplos endpoints RPC com fallback automático.
+ * Cache com TTL configurável (default 2s) evita martelar o RPC.
+ *
  * IMPORTANTE: `drawn_balls` vem como hex string (`bytes` na ABI) e é convertida
  * automaticamente para `number[]`.
  */
 export async function fetchGame(gameId: string): Promise<BlockchainGameState | null> {
-    const gameIdU64 = UInt64.from(gameId);
-    const response = await rpcClient.v1.chain.get_table_rows({
-        code: CONTRACT_ACCOUNT,
-        scope: CONTRACT_ACCOUNT,
-        table: 'games',
-        lower_bound: gameIdU64,
-        upper_bound: gameIdU64,
-        limit: 1,
-        json: true,
-    });
-
-    if (response.rows.length === 0) return null;
-    const row = response.rows[0] as Record<string, any>;
-    if (typeof row.drawn_balls === 'string') {
-        row.drawn_balls = parseHexBytes(row.drawn_balls);
+    const cached = gameCache.get(gameId);
+    if (cached && Date.now() - cached.ts < FETCH_GAME_CACHE_TTL_MS) {
+        return { ...cached.state };
     }
-    return row as unknown as BlockchainGameState;
+
+    const gameIdU64 = UInt64.from(gameId);
+    let lastError: Error | null = null;
+
+    for (const endpoint of RPC_ENDPOINTS) {
+        try {
+            const response = await endpoint.v1.chain.get_table_rows({
+                code: CONTRACT_ACCOUNT,
+                scope: CONTRACT_ACCOUNT,
+                table: 'games',
+                lower_bound: gameIdU64,
+                upper_bound: gameIdU64,
+                limit: 1,
+                json: true,
+            });
+
+            if (response.rows.length === 0) return null;
+            const row = response.rows[0] as Record<string, any>;
+            if (typeof row.drawn_balls === 'string') {
+                row.drawn_balls = parseHexBytes(row.drawn_balls);
+            }
+            const state = row as unknown as BlockchainGameState;
+
+            gameCache.set(gameId, { state, ts: Date.now() });
+            return state;
+        } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+        }
+    }
+
+    throw lastError || new Error(`fetchGame(${gameId}): todos os endpoints falharam`);
 }
 
 /**

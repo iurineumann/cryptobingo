@@ -36,6 +36,10 @@ jest.mock('./broadcaster', () => ({
     notifyGameAborted:  jest.fn(),
     io: { to: jest.fn().mockReturnValue({ emit: jest.fn() }) },
 }));
+jest.mock('./payoutSaga', () => ({
+    setPayoutPlan:    jest.fn().mockResolvedValue(undefined),
+    triggerCloseGame: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('./blockchain', () => ({
     executeCloseGame: jest.fn().mockResolvedValue('tx-close'),
     executeClaimWin:  jest.fn().mockResolvedValue('tx-claim'),
@@ -178,6 +182,14 @@ describe('orchestrateGame — standard (gametype_id=0)', () => {
     it('Game status !== drawn → lança Error', async () => {
         mockFetchGame.mockResolvedValue(makeGame({ status: 'funding' }));
         await expect(orchestrateGame('1')).rejects.toThrow(/DRAWN/i);
+    });
+
+    it('não chama onGameResolved quando status é drawing (jogo em andamento)', async () => {
+        mockFetchGame.mockResolvedValue(makeGame({ status: 'drawing' }));
+
+        await expect(orchestrateGame('1')).rejects.toThrow(/DRAWN/i);
+
+        expect(mockOnResolved).not.toHaveBeenCalled();
     });
 
     it('onGameResolved lança → erro é swallowed', async () => {

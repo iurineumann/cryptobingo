@@ -88,10 +88,10 @@ function createLimiter(options: {
         legacyHeaders:   false,
         ...(store ? { store } : {}),
         keyGenerator: (req) => {
-            const forwarded = req.headers['x-forwarded-for'];
-            const ip = Array.isArray(forwarded)
-                ? forwarded[0]
-                : (forwarded?.split(',')[0]?.trim() ?? req.ip ?? 'unknown');
+            // Com `trust proxy` habilitado no app (index.ts), req.ip reflete o
+            // IP do cliente real (último IP não-confiável do XFF). XFF spoofado
+            // de fora dos proxies confiáveis é ignorado pelo Express.
+            const ip = req.ip ?? 'unknown';
             return `${keyPrefix}:${ip}`;
         },
         handler: (_req, res) => {
@@ -116,7 +116,10 @@ function createLimiter(options: {
 export function initRateLimiters(): void {
     try {
         _authLimiter       = createLimiter({ windowMs: 60_000, limit: 20,  keyPrefix: 'auth',       message: 'Muitas tentativas de autenticação. Aguarde 1 minuto.'          });
-        _playerLimiter     = createLimiter({ windowMs: 60_000, limit: 100, keyPrefix: 'player',     message: 'Muitas requisições. Aguarde alguns segundos.'                   });
+        // FIX #384: 100 -> 200 req/min. O lobby em sala ativa faz 2 req/s
+        // (lobby + lobby/me) = 120 req/min; com margem p/ outros endpoints do
+        // usuário (rooms, profile, balances) evitamos 429 falsos.
+        _playerLimiter     = createLimiter({ windowMs: 60_000, limit: 200, keyPrefix: 'player',     message: 'Muitas requisições. Aguarde alguns segundos.'                   });
         _ticketLimiter     = createLimiter({ windowMs: 60_000, limit: 30,  keyPrefix: 'tickets',    message: 'Limite de geração de cartelas atingido. Aguarde 1 minuto.'      });
         _adminLimiter      = createLimiter({ windowMs: 60_000, limit: 100,  keyPrefix: 'admin',      message: 'Limite de operações administrativas atingido. Aguarde 1 minuto.' });
         _monteCarloLimiter = createLimiter({ windowMs: 60_000, limit: 100,   keyPrefix: 'montecarlo', message: 'Limite de simulações atingido. Aguarde 1 minuto.'               });

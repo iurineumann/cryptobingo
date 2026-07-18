@@ -1,0 +1,383 @@
+{
+  "id": null,
+  "uid": "cryptobingo-engine-event-driven",
+  "title": "CryptoBingo — Engine Event-Driven",
+  "tags": [
+    "cryptobingo",
+    "worker",
+    "event-driven",
+    "state-watcher"
+  ],
+  "timezone": "browser",
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Eventos Publicados/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_queue_published_total[1m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "description": "Eventos que o State Watcher publica na fila game_loop_events, por ação."
+    },
+    {
+      "id": 2,
+      "title": "Eventos Consumidos/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_events_processed_total[1m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "description": "Eventos consumidos e processados com sucesso pelo worker, por ação (fundgame, lockgame, startdraw, claimwin, abortgame)."
+    },
+    {
+      "id": 3,
+      "title": "Profundidade da Fila",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "worker_queue_depth",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          }
+        }
+      },
+      "description": "Mensagens pendentes por fila RabbitMQ. Acima de 200 indica backlog crítico."
+    },
+    {
+      "id": 4,
+      "title": "Dead Letters (DLQ) — Total",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(worker_events_dead_lettered_total)",
+          "legendFormat": "DLQ Total",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      },
+      "description": "Total acumulado de eventos que excederam o limite de retentativas e foram para a Dead Letter Queue."
+    },
+    {
+      "id": 5,
+      "title": "Dead Letters/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_events_dead_lettered_total[5m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "description": "Taxa de eventos descartados para a DLQ, por ação. Qualquer taxa > 0 por período prolongado requer intervenção."
+    },
+    {
+      "id": 6,
+      "title": "Falhas/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_events_failed_total[5m])",
+          "legendFormat": "{{action}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "description": "Eventos que falharam durante processamento, por ação e razão."
+    },
+    {
+      "id": 7,
+      "title": "Latência de Processamento (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(worker_event_processing_duration_ms_bucket[5m]))",
+          "legendFormat": "p50 — {{action}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(worker_event_processing_duration_ms_bucket[5m]))",
+          "legendFormat": "p95 — {{action}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(worker_event_processing_duration_ms_bucket[5m]))",
+          "legendFormat": "p99 — {{action}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "description": "Latência de processamento de eventos por ação (p50, p95, p99). Acompanhe para detectar gargalos."
+    },
+    {
+      "id": 8,
+      "title": "AutoAdvance — Execuções/min",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_autoadvance_runs_total[1m]) * 60",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      },
+      "description": "Execuções dos crons de AutoAdvance do State Watcher por minuto."
+    },
+    {
+      "id": 9,
+      "title": "AutoAdvance — Erros",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum by (action) (worker_autoadvance_errors_total)",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      },
+      "description": "Total de erros nos crons de AutoAdvance do State Watcher."
+    },
+    {
+      "id": 10,
+      "title": "AutoAdvance — Jogos Processados/min",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 24,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_autoadvance_games_total[1m]) * 60",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      },
+      "description": "Jogos processados pelos crons de AutoAdvance do State Watcher por minuto."
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  }
+}

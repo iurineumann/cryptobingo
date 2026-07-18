@@ -17,14 +17,19 @@ import {
     executeAbortGame,
     executeRefundTicket,
     executeClearGame,
+    executeClaimWinBatch,
+    executeClaimWin,
+    executeClaimCombo,
 }                          from './blockchain';
 import { buildInvertedIndex }                       from './invertedIndex';
 import { awardTicketPurchaseXP }                    from './xpEngine';
 import { onGameResolved }                           from './roomManager';
 import { orchestrateGame }                          from './gameOrchestrator';
 import {
+    notifyGameFunded,
     notifyGameLocked,
     notifyGameAborted,
+    notifyDrawingStarted,
 }                          from './broadcaster';
 import {
     sendGameLockedMessage,
@@ -32,7 +37,7 @@ import {
 }                          from './chatSystemHelper';
 import { fetchGame, rpcClient } from '@cryptobingo/blockchain-core';
 import { Name, UInt64 }    from '@wharfkit/antelope';
-import type { BlockchainGameState, BlockchainTicketRecord, BlockchainRoom } from '@cryptobingo/shared-types';
+import { FUNDING_WINDOW_SEC, type BlockchainGameState, type BlockchainTicketRecord, type BlockchainRoom } from '@cryptobingo/shared-types';
 import {
     eventsProcessedTotal,
     eventsFailedTotal,
@@ -42,6 +47,7 @@ import {
     autoAdvanceRunsTotal,
     autoAdvanceErrorsTotal,
     autoAdvanceGamesTotal,
+    setQueueDepth,
 }                          from './metrics';
 import dotenv from 'dotenv';
 
@@ -50,11 +56,20 @@ dotenv.config();
 const RABBITMQ_URL         = process.env.RABBITMQ_URL         || 'amqp://localhost:5672';
 const CONTRACT_ACCOUNT     = process.env.CONTRACT_ACCOUNT     || 'bingogamectr';
 const RETRY_DELAY_MS       = 5_000;
+const FUNDGAME_DLQ_RETRY_MS = 3_000;
 const CONNECT_TIMEOUT_MS   = 10_000; // amqp.connect() não tem timeout nativo — forçamos 10s
 const QUEUE_NAME         = 'game_loop_events';
 const DLX_NAME           = 'game_loop_dlx';
 const DLQ_NAME           = 'game_loop_dead';
 const MAX_RETRIES        = Number.parseInt(process.env.RABBITMQ_MAX_RETRIES ?? '3', 10);
+
+// Fase 2 (#369) — fila de payout com DLX/DLQ dedicados
+const PAYOUT_QUEUE       = 'game_loop_payouts';
+const PAYOUT_DLX         = 'game_loop_payouts_dlx';
+const PAYOUT_DLQ         = 'game_loop_payouts_dead';
+const PAYOUT_MAX_RETRIES = 3;
+const DLQ_MAX_RETRIES    = Number.parseInt(process.env.RABBITMQ_DLQ_MAX_RETRIES ?? '3', 10);
+const CHUNK_SIZE         = 15;
 
 // Polling do oráculo: 75 tentativas × 2s = 150s máximo
 const ORACLE_POLL_MAX_ATTEMPTS = 75;
@@ -66,8 +81,17 @@ const GC_BATCH_SIZE = 50;
 import { setRabbitConnected } from './connectionState';
 import { logger } from './logger';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
+import { acquireOrchestrationLock, isLocked, releaseOrchestrationLock, startLockWatchdog } from './gameLock';
+import {
+    setPayoutPlan, recordPayoutCompletion, triggerCloseGame, getPayoutProgress } from './payoutSaga';
+import { payoutChunksTotal, payoutRetriesTotal, payoutRecoveredTotal,
+         prizePersistTotal, prizePaymentsTotal, prizePaymentsAmountTotal } from './prizeMetrics';
+import { savePrizeTx } from './prizeTransactionsService';
+import { computePayoutAmount } from './evaluator';
+import { notifyPrizeConfirmed } from './broadcaster';
+import { publishGameEvent } from './rabbitPublisher';
 
-let connection: ChannelModel;
+export let connection: ChannelModel;
 let channel:    Channel;
 
 // ==========================================
@@ -75,13 +99,14 @@ let channel:    Channel;
 // ==========================================
 
 type GameEventPayload =
-    | { action: 'fundgame';   gameId: string }
-    | { action: 'lockgame';   gameId: string }
-    | { action: 'startdraw';  gameId: string }
-    | { action: 'claimwin';   gameId: string }
-    | { action: 'abortgame';  gameId: string; reason?: string }
-    | { action: 'refundall';  gameId: string }
-    | { action: 'cleargame';  gameId: string };
+    | { action: 'fundgame';    gameId: string }
+    | { action: 'lockgame';    gameId: string }
+    | { action: 'startdraw';   gameId: string }
+    | { action: 'receiverand'; gameId: string }
+    | { action: 'claimwin';    gameId: string }
+    | { action: 'abortgame';   gameId: string; reason?: string }
+    | { action: 'refundall';   gameId: string }
+    | { action: 'cleargame';   gameId: string };
 
 // ==========================================
 // HELPERS
@@ -95,7 +120,7 @@ function getDeliveryCount(msg: ConsumeMessage): number {
     return (xDeath[0].count as number) ?? 0;
 }
 
-async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
+export async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
     logger.info({ tag: 'RabbitMQ' }, `Aguardando oráculo — jogo ${gameId}...`)
 
     for (let attempt = 1; attempt <= ORACLE_POLL_MAX_ATTEMPTS; attempt++) {
@@ -125,6 +150,7 @@ async function waitForDrawnBalls(gameId: string): Promise<number[] | null> {
 // ==========================================
 
 async function setupQueues(): Promise<void> {
+    // DLX/DLQ principal (game_loop_events)
     await channel.assertExchange(DLX_NAME, 'direct', { durable: true });
     await channel.assertQueue(DLQ_NAME, { durable: true });
     await channel.bindQueue(DLQ_NAME, DLX_NAME, QUEUE_NAME);
@@ -136,6 +162,19 @@ async function setupQueues(): Promise<void> {
         },
     });
     logger.info({ tag: 'RabbitMQ' }, `Fila "${QUEUE_NAME}" + DLQ "${DLQ_NAME}" configuradas.`)
+
+    // DLX/DLQ de payout (Fase 2 #369)
+    await channel.assertExchange(PAYOUT_DLX, 'direct', { durable: true });
+    await channel.assertQueue(PAYOUT_DLQ, { durable: true });
+    await channel.bindQueue(PAYOUT_DLQ, PAYOUT_DLX, PAYOUT_QUEUE);
+    await channel.assertQueue(PAYOUT_QUEUE, {
+        durable: true,
+        arguments: {
+            'x-dead-letter-exchange':    PAYOUT_DLX,
+            'x-dead-letter-routing-key': PAYOUT_QUEUE,
+        },
+    });
+    logger.info({ tag: 'RabbitMQ' }, `Fila "${PAYOUT_QUEUE}" + DLQ "${PAYOUT_DLQ}" configuradas.`)
 }
 
 // ==========================================
@@ -175,6 +214,11 @@ export async function connectRabbitMQ(): Promise<void> {
         setRabbitConnected(true);
         logger.info({ tag: 'RabbitMQ' }, `Escutando "${QUEUE_NAME}" (max retries: ${MAX_RETRIES})`)
         consumeMessages();
+        consumePayouts();
+        consumeDeadLetters();
+
+        const queueDepthInterval = setInterval(updateQueueDepthMetrics, 15_000);
+        queueDepthInterval.unref();
 
     } catch (error) {
         logger.error({ error, tag: 'RabbitMQ' }, `Falha ao conectar. Tentando em ${RETRY_DELAY_MS / 1000}s...`)
@@ -234,12 +278,40 @@ function consumeMessages(): void {
 
                 // ── fundgame: CREATED → FUNDING ──────────────────────────────
                 case 'fundgame': {
+                    // FIX #384: idempotência — o jogo pode já ter saído de CREATED
+                    // via recoverCreatedGame (roomManager.ts) ou outra mensagem da
+                    // fila. Se não for CREATED, apenas ack (sem erro/retry) para
+                    // não gerar "Game is not in CREATED status" / "duplicate transaction".
+                    let game: any = null;
+                    try { game = await fetchGame(gameId); } catch { /* ignore */ }
+                    if (game?.status && game.status !== 'created') {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `fundgame ${gameId} ignorado — jogo em status "${game.status}" (já avançou).`);
+                        break;
+                    }
                     await executeFundGame(gameId);
+                    notifyGameFunded(gameId);   // ADR/issue #403: lobby em tempo real
                     break;
                 }
 
                 // ── lockgame: FUNDING → LOCKED ───────────────────────────────
                 case 'lockgame': {
+                    // Defesa anti-draw-sem-cartelas: não trava nem sorteia jogo sem tickets.
+                    // O contrato NÃO expõe total_tickets — fonte da verdade é total_wagered.
+                    let game: any = null;
+                    try { game = await fetchGame(gameId); } catch { /* ignore */ }
+                    const wagered = game?.total_wagered;
+                    const hasTickets = (Number.parseFloat(wagered?.quantity ?? '0') || 0) > 0;
+                    if (!hasTickets) {
+                        logger.warn({ tag: 'RabbitMQ' }, `lockgame ${gameId} sem cartelas — abortando (NO_TICKETS).`);
+                        await executeAbortGame(gameId, 'NO_TICKETS').catch(() => {});
+                        break;
+                    }
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeLockGame já realizado (lock existente).`);
+                        break;
+                    }
                     await executeLockGame(gameId);
                     notifyGameLocked(gameId);
                     // Constrói o Índice Invertido Redis (SPEC.md §3.2)
@@ -252,18 +324,36 @@ function consumeMessages(): void {
                         logger.error({ err, tag: 'RabbitMQ' }, `Erro ao conceder XP de compra para jogo ${gameId}:`)
                     );
                     sendGameLockedMessage(gameId).catch(() => {});
+                    // Encadeia startdraw via fila — consumer tem acquireOrchestrationLock
+                    // contra dupla-execução (auto-advance também publica como backup).
+                    await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
                     break;
                 }
 
                 // ── startdraw: LOCKED → DRAWING → aguarda oráculo → orquestra reveal + pagamento ──
                 // ADR-014: ACK imediato antes do reveal (o reveal pode durar ~120s para 35 bolas).
                 // O orquestrador assume o controle: reveal → avalia → paga → próxima partida.
+                //
+                // Idempotência: usa acquireOrchestrationLock para evitar dupla execução de
+                // executeStartDraw em cenário multi-nó (auto-advance + consumer na fila).
                 case 'startdraw': {
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente).`)
+                        return;
+                    }
+
+                    // Watchdog: renova o lock durante orquestração longa (pode passar de 90s).
+                    // Se o worker morre, o timer para e o lock expira → outro nó assume.
+                    const watchdog = startLockWatchdog(gameId, 90_000);
+
                     await executeStartDraw(gameId);
+                    notifyDrawingStarted(gameId);  // C2: push drawing_started → lobby reage em tempo real
 
                     const drawnBalls = await waitForDrawnBalls(gameId);
 
                     if (!drawnBalls) {
+                        watchdog.stop();
                         logger.error({ tag: 'RabbitMQ' }, `Timeout do oráculo para jogo ${gameId}.`)
                         await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
                         notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
@@ -271,6 +361,7 @@ function consumeMessages(): void {
                         eventsDeadLetteredTotal.inc({ action });
                         timer();
                         channel.nack(msg, false, false);
+                        releaseOrchestrationLock(gameId).catch(() => {});
                         return;
                     }
 
@@ -285,13 +376,16 @@ function consumeMessages(): void {
                         }
                     }).catch(() => {});
 
-                    // Marca como processado antes — impede dupla execução via autoClaimDrawnGames (race)
-                    processedGames.add(gameId);
-
                     // Orquestra reveal + avaliação + pagamentos (pode demorar vários minutos)
-                    orchestrateGame(gameId).catch(err =>
-                        logger.error({ err, tag: 'RabbitMQ' }, `orchestrateGame error (jogo ${gameId}):`)
-                    );
+                    // Para o watchdog e libera o lock ao finalizar
+                    orchestrateGame(gameId)
+                        .catch(err =>
+                            logger.error({ err, tag: 'RabbitMQ' }, `orchestrateGame error (jogo ${gameId}):`)
+                        )
+                        .finally(() => {
+                            watchdog.stop();
+                            releaseOrchestrationLock(gameId).catch(() => {});
+                        });
                     return; // Retorno antecipado — ACK já foi enviado acima
                 }
 
@@ -316,6 +410,8 @@ function consumeMessages(): void {
                     onGameResolved(gameId).catch(err =>
                         logger.error({ err, tag: 'RabbitMQ' }, `onGameResolved error (abort, jogo ${gameId}):`)
                     );
+                    // Encadeia refundall via fila — estorno assíncrono dos tickets.
+                    await publishGameEvent(QUEUE_NAME, 'refundall', { gameId });
                     break;
                 }
 
@@ -324,6 +420,8 @@ function consumeMessages(): void {
                 // Ref: SPEC.md §5.2
                 case 'refundall': {
                     await processRefundAll(gameId);
+                    // Encadeia cleargame via fila — GC de RAM após estorno completo.
+                    await publishGameEvent(QUEUE_NAME, 'cleargame', { gameId });
                     break;
                 }
 
@@ -332,6 +430,62 @@ function consumeMessages(): void {
                 case 'cleargame': {
                     await processClearGame(gameId);
                     break;
+                }
+
+                // ── receiverand: event-driven (State Watcher) — orquestra payout
+                //     assim que o oráculo entrega as bolas (sem esperar o polling
+                //     do startdraw). Idempotente: se o jogo já saiu de DRAWING
+                //     (startdraw polling já orquestrou), apenas ack e sai.
+                case 'receiverand': {
+                    const game = await fetchGame(gameId).catch(() => null);
+                    if (game?.status && game.status !== 'drawing') {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `receiverand ${gameId} ignorado — jogo em status "${game.status}" (já orquestrado).`);
+                        eventsProcessedTotal.inc({ action });
+                        channel.ack(msg);
+                        return;
+                    }
+
+                    const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
+                    if (!lockAcquired) {
+                        logger.info({ tag: 'RabbitMQ' },
+                            `Jogo ${gameId}: orchestrateGame já realizado (lock existente).`);
+                        break;
+                    }
+
+                    const watchdog = startLockWatchdog(gameId, 90_000);
+                    try {
+                        const drawnBalls = await waitForDrawnBalls(gameId);
+                        if (!drawnBalls) {
+                            watchdog.stop();
+                            logger.error({ tag: 'RabbitMQ' },
+                                `receiverand sem bolas (timeout) jogo ${gameId}.`);
+                            await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
+                            notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
+                            eventsFailedTotal.inc({ action, reason: 'oracle_timeout' });
+                            eventsDeadLetteredTotal.inc({ action });
+                            channel.nack(msg, false, false);
+                            releaseOrchestrationLock(gameId).catch(() => {});
+                            return;
+                        }
+                        const durationMs = timer();
+                        eventsProcessedTotal.inc({ action });
+                        channel.ack(msg);
+                        orchestrateGame(gameId)
+                            .catch(err =>
+                                logger.error({ err, tag: 'RabbitMQ' },
+                                    `orchestrateGame error (jogo ${gameId}):`)
+                            )
+                            .finally(() => {
+                                watchdog.stop();
+                                releaseOrchestrationLock(gameId).catch(() => {});
+                            });
+                        return;
+                    } catch (err) {
+                        watchdog.stop();
+                        releaseOrchestrationLock(gameId).catch(() => {});
+                        throw err; // cai no catch externo → DLQ
+                    }
                 }
 
                 default: {
@@ -359,9 +513,170 @@ function consumeMessages(): void {
                 `❌ [RabbitMQ] Erro em "${action}" jogo ${gameId} (delivery #${deliveryCount + 1}, restam ${remaining} tentativas)`
             );
             eventsFailedTotal.inc({ action, reason: 'blockchain_error' });
+            // FIX #384: requeue=false → mensagem vai para a DLQ, que possui
+            // retry com backoff exponencial (handleDeadLetter, rabbitmq.ts:568).
+            // O header x-death SÓ é populado em nack(requeue=false); com
+            // requeue=true o getDeliveryCount() sempre retornava 0 → loop
+            // infinito de retry que estagnava a fila (prefetch(1) + 1 consumer).
+            logger.error(`[RabbitMQ] Descartando "${action}" jogo ${gameId} para DLQ (retry via backoff).`)
+            eventsDeadLetteredTotal.inc({ action });
+            channel.nack(msg, false, false);
+        }
+
+    }, { noAck: false });
+}
+
+// ==========================================
+// CONSUMIDOR DE PAYOUT (Fase 2 #369)
+// ==========================================
+
+type PayoutEventEntry = {
+    ticketId: string;
+    ticketOwner: string;
+    ballCount: number;
+    patternMask: string;
+    goldenMultiplier: number;
+    comboId?: number;
+    boostNftIds?: string[];
+    patternName: string;
+    weight: number;
+    baseMultiplier: number;
+    ticketPrice: string;
+};
+
+type PayoutEventPayload = {
+    gameId: string;
+    chunkId: string;
+    mode: 'chunk_clean' | 'single_combo' | 'single_nft';
+    entries: PayoutEventEntry[];
+};
+
+/**
+ * Persiste os prêmios no MongoDB (coleção prizetxes) após o payout on-chain
+ * ser confirmado. Caminho padrão (standard/fixed/firstfull/goldenball) —
+ * diferente do multimatch, que persiste em payMultiMatchStage. Sem isto, a
+ * API GET /games/:id/prizes fica vazia e o frontend gira "aguardando transação".
+ * Falhas de persistência NÃO devem rejeitar o ack da fila (o pagamento já
+ * ocorreu na chain); apenas logamos + incrementamos métrica de erro.
+ */
+export async function persistPrizeTx(
+    gameId:  string,
+    mode:    'chunk_clean' | 'single_combo' | 'single_nft',
+    entries: PayoutEventEntry[],
+    txHash:  string,
+): Promise<void> {
+    for (const e of entries) {
+        const winType: 'pattern' | 'combo' = e.comboId !== undefined ? 'combo' : 'pattern';
+        const winLabel = e.patternName || (e.comboId !== undefined ? `combo_${e.comboId}` : 'pattern');
+        const payout = computePayoutAmount(e.ticketPrice || '0.0000 BINGO', e.baseMultiplier, e.weight, e.goldenMultiplier);
+        const ticketPrice = e.ticketPrice || '';
+
+        savePrizeTx({
+            gameId,
+            account: e.ticketOwner,
+            ticketId: e.ticketId,
+            winType,
+            winLabel,
+            patternMask: e.patternMask,
+            comboId: e.comboId,
+            weight: e.weight,
+            amount: payout.amount.toFixed(4),
+            currency: payout.currency,
+            transactionId: txHash,
+            goldenMultiplier: e.goldenMultiplier,
+            ticketPrice,
+            claimedAt: new Date().toISOString(),
+        }).then(() => {
+            prizePersistTotal.labels({ result: 'success' }).inc();
+            prizePaymentsTotal.labels({ winType, currency: payout.currency }).inc();
+            prizePaymentsAmountTotal.labels({ currency: payout.currency }).inc(payout.amount);
+            notifyPrizeConfirmed(gameId, e.ticketId, txHash, payout.amount.toFixed(4), payout.currency, winLabel);
+        }).catch(err => {
+            prizePersistTotal.labels({ result: 'error' }).inc();
+            logger.error({ err, tag: 'PrizePipeline' }, `Erro ao persistir PrizeTx (${mode}) jogo ${gameId}:`);
+        });
+    }
+}
+
+function consumePayouts(): void {
+    channel.prefetch(5);  // competing consumers — até 5 por canal
+    channel.consume(PAYOUT_QUEUE, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+
+        const payloadStr    = msg.content.toString();
+        const deliveryCount = getDeliveryCount(msg);
+
+        let payload: PayoutEventPayload;
+        try {
+            payload = JSON.parse(payloadStr) as PayoutEventPayload;
+        } catch {
+            logger.error({ tag: 'PayoutConsumer' }, 'JSON malformado. Descartando para DLQ.')
+            payoutChunksTotal.labels({ mode: 'parse_error' }).inc();
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        const { gameId, chunkId, mode, entries } = payload;
+        if (!gameId || !chunkId || !mode || !entries?.length) {
+            logger.error({ tag: 'PayoutConsumer' }, 'Campos obrigatórios ausentes. DLQ.')
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        if (deliveryCount >= PAYOUT_MAX_RETRIES) {
+            logger.error({ tag: 'PayoutConsumer' }, `"${mode}" jogo ${gameId} chunk ${chunkId} excedeu ${PAYOUT_MAX_RETRIES} retentativas → DLQ.`);
+            payoutRetriesTotal.labels({ mode }).inc();
+            channel.nack(msg, false, false);
+            return;
+        }
+
+        try {
+            let txHash: string | undefined;
+
+            if (mode === 'chunk_clean') {
+                txHash = await executeClaimWinBatch(
+                    gameId,
+                    entries.map(e => ({
+                        ticket_id:         e.ticketId,
+                        ball_count:        e.ballCount,
+                        win_pattern_mask:  e.patternMask,
+                        golden_multiplier: e.goldenMultiplier,
+                    })),
+                );
+            } else if (mode === 'single_combo') {
+                const e = entries[0]!;
+                txHash = await executeClaimCombo(
+                    gameId, e.ticketId, e.ballCount, e.comboId!, e.goldenMultiplier,
+                );
+            } else if (mode === 'single_nft') {
+                const e = entries[0]!;
+                txHash = await executeClaimWin(
+                    gameId, e.ticketId, e.ballCount, BigInt(e.patternMask),
+                    e.goldenMultiplier, e.boostNftIds ?? [],
+                );
+            } else {
+                logger.warn(`[PayoutConsumer] Modo desconhecido: "${mode}". DLQ.`)
+                channel.nack(msg, false, false);
+                return;
+            }
+
+            if (txHash) {
+                await recordPayoutCompletion(gameId, chunkId);
+                await persistPrizeTx(gameId, mode, entries, txHash);
+                channel.ack(msg);
+                logger.info({ tag: 'PayoutConsumer' }, `"${mode}" chunk ${chunkId} jogo ${gameId} OK. TX: ${txHash}`);
+            } else {
+                logger.warn({ tag: 'PayoutConsumer' }, `"${mode}" chunk ${chunkId} jogo ${gameId}: sem txHash (retentando).`)
+                channel.nack(msg, false, true);
+            }
+
+        } catch (err) {
+            const remaining = PAYOUT_MAX_RETRIES - deliveryCount - 1;
+            logger.error({ err, mode, gameId, chunkId, deliveryCount: deliveryCount + 1, remaining },
+                `Erro em payout "${mode}" chunk ${chunkId} jogo ${gameId}.`);
+            payoutRetriesTotal.labels({ mode }).inc();
             if (remaining <= 0) {
-                logger.error(`[RabbitMQ] Descartando "${action}" jogo ${gameId} para DLQ.`)
-                eventsDeadLetteredTotal.inc({ action });
+                logger.error(`Descartando payout "${mode}" ${chunkId} jogo ${gameId} p/ DLQ.`)
                 channel.nack(msg, false, false);
             } else {
                 channel.nack(msg, false, true);
@@ -369,6 +684,141 @@ function consumeMessages(): void {
         }
 
     }, { noAck: false });
+}
+
+// ==========================================
+// CONSUMIDOR DE DLQ (Fase 5 #372)
+// Consome filas mortas e tenta re-publicação com backoff.
+// ==========================================
+
+function consumeDeadLetters(): void {
+    channel.consume(DLQ_NAME, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+        await handleDeadLetter(msg, DLQ_NAME, QUEUE_NAME);
+    }, { noAck: false });
+
+    channel.consume(PAYOUT_DLQ, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+        await handleDeadLetter(msg, PAYOUT_DLQ, PAYOUT_QUEUE);
+    }, { noAck: false });
+
+    logger.info({ tag: 'RabbitMQ' }, `Consumindo DLQs "${DLQ_NAME}" e "${PAYOUT_DLQ}" (max retries: ${DLQ_MAX_RETRIES})`)
+}
+
+/**
+ * Processa uma mensagem da DLQ: re-publica na fila original com backoff
+ * exponencial se x-death < DLQ_MAX_RETRIES; caso contrário, loga como
+ * permanente e mantém na DLQ para intervenção manual.
+ */
+async function handleDeadLetter(msg: ConsumeMessage, dlqName: string, originalQueue: string): Promise<void> {
+    const deliveryCount = getDeliveryCount(msg);
+    const payloadStr    = msg.content.toString();
+
+    let action: string;
+    try {
+        action = (JSON.parse(payloadStr)?.action as string) || 'unknown';
+    } catch {
+        action = 'unknown';
+    }
+
+    logger.info({ tag: 'RabbitMQ' }, `DLQ mensagem recebida em "${dlqName}" (action=${action}, x-death count=${deliveryCount})`);
+
+    if (deliveryCount < DLQ_MAX_RETRIES) {
+        const delayMs = action === 'fundgame'
+            ? FUNDGAME_DLQ_RETRY_MS
+            : 30_000 * Math.pow(2, deliveryCount);
+        if (action === 'fundgame') {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando fundgame com retry curto (${FUNDGAME_DLQ_RETRY_MS}ms, não corrói janela de funding) (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        } else {
+            logger.info({ tag: 'RabbitMQ' },
+                `DLQ re-publicando "${action}" em "${originalQueue}" após ${delayMs}ms (retry ${deliveryCount + 1}/${DLQ_MAX_RETRIES})`);
+        }
+
+        setTimeout(async () => {
+            try {
+                const parsed = JSON.parse(payloadStr) as Record<string, unknown>;
+                const { action: act, ...rest } = parsed;
+                await publishGameEvent(originalQueue, String(act ?? 'unknown'), rest);
+                eventsDeadLetteredTotal.inc({ action: String(act ?? 'unknown') });
+            } catch (err) {
+                logger.error({ err, tag: 'RabbitMQ' }, `DLQ erro ao re-publicar "${action}" em "${originalQueue}"`);
+            }
+        }, delayMs).unref();
+    } else {
+        logger.error({ tag: 'RabbitMQ' },
+            `DLQ msg permanente (action=${action}, x-death count=${deliveryCount}). Mantida na DLQ p/ intervenção manual.`);
+        eventsDeadLetteredTotal.inc({ action });
+    }
+
+    channel.ack(msg);
+}
+
+/**
+ * Atualiza a métrica worker_queue_depth para todas as filas gerenciadas.
+ * Chamado periodicamente pelo setInterval em connectRabbitMQ.
+ */
+export async function updateQueueDepthMetrics(): Promise<void> {
+    const queues = [QUEUE_NAME, PAYOUT_QUEUE, DLQ_NAME, PAYOUT_DLQ];
+    for (const q of queues) {
+        try {
+            const result = await channel.checkQueue(q);
+            setQueueDepth(q, result.messageCount);
+        } catch (err) {
+            logger.error({ err, tag: 'RabbitMQ' }, `Erro ao verificar profundidade da fila "${q}":`);
+        }
+    }
+}
+
+// ==========================================
+// RECOVERY DE PAYOUT (Fase 2 #369)
+// ==========================================
+
+/**
+ * Varre jogos com payout_plan pendente, republica chunks órfãos
+ * e drena DLQ de payout. Fecha jogos completos que não fecharam.
+ */
+export async function recoverPayoutGames(): Promise<void> {
+    logger.info({ tag: 'Recovery' }, 'Varredura de payouts pendentes...');
+
+    // 1. Recupera jogos em PAYING (payout_saga incompleto)
+    try {
+        const response = await rpcClient.v1.chain.get_table_rows({
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   200,
+            reverse: true,
+            json:    true,
+        });
+
+        const games = response.rows as BlockchainGameState[];
+        for (const game of games) {
+            const gameId = String(game.game_id);
+            if (game.status !== 'paying') continue;
+
+            const progress = await getPayoutProgress(gameId);
+            if (!progress) {
+                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em PAYING sem plano. Tentando fechar direto.`)
+                await triggerCloseGame(gameId).catch(() => {});
+                continue;
+            }
+
+            if (progress.paid >= progress.expected) {
+                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} já completo (${progress.paid}/${progress.expected}). Fechando.`)
+                await triggerCloseGame(gameId).catch(() => {});
+            } else {
+                logger.warn({ tag: 'Recovery' }, `Jogo ${gameId} incompleto (${progress.paid}/${progress.expected}). Aguardando consumers.`)
+                // Se ficou órfão (consumers morreram), republicar via auto-advance
+                // A republicação será tratada pelo cron periódico (varre jogos DRAWN/PAYING)
+                payoutRecoveredTotal.labels({ mode: 'recovery_scan' }).inc();
+            }
+        }
+    } catch (err) {
+        logger.error({ err, tag: 'Recovery' }, 'Erro na varredura de payout:')
+    }
+
+    logger.info({ tag: 'Recovery' }, 'Varredura de payouts concluída.')
 }
 
 // ==========================================
@@ -464,8 +914,16 @@ async function processClearGame(gameId: string): Promise<void> {
  * (room_id=0). Com reverse:true e limit:20, os jogos de sala nunca aparecem no
  * topo. Corrigido com varredura adicional por sala ativa.
  */
-const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? '60', 10);
+const AUTO_LOCK_DELAY_SEC = Number.parseInt(process.env.AUTO_LOCK_DELAY_SEC ?? String(FUNDING_WINDOW_SEC), 10);
 const processedGames = new Set<string>();
+
+export async function isGamePastCutoff(game: BlockchainGameState, cutoff: number): Promise<boolean> {
+    const fundedAt = (game.funded_at && game.funded_at > 0)
+        ? game.funded_at
+        : Number(game.game_id);
+    if (!Number.isFinite(fundedAt) || fundedAt <= 0) return false;
+    return fundedAt <= cutoff;
+}
 
 async function fetchActiveRoomGameIds(): Promise<string[]> {
     const roomsResponse = await rpcClient.v1.chain.get_table_rows({
@@ -495,7 +953,7 @@ async function pollDirectFundingGames(cutoff: number, seen: Set<string>): Promis
         if (game.status !== 'funding') continue;
         seen.add(gameId);
         if (processedGames.has(gameId)) continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(game, cutoff) || Number(game.game_id) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
@@ -509,7 +967,7 @@ async function pollRoomFundingGames(cutoff: number, seen: Set<string>): Promise<
             game = await fetchGame(gameId);
         } catch { continue; }
         if (game?.status !== 'funding') continue;
-        if (Number(gameId) > cutoff || Number(gameId) <= 0) continue;
+        if (!await isGamePastCutoff(game, cutoff) || Number(game.game_id) <= 0) continue;
         await processFundingGame(game, gameId);
     }
 }
@@ -562,32 +1020,46 @@ async function processFundingGame(game: BlockchainGameState, gameId: string): Pr
         return;
     }
 
-    logger.info({ tag: 'AutoAdvance' }, `Travando jogo ${gameId} (funding >${AUTO_LOCK_DELAY_SEC}s)...`)
+    logger.info({ tag: 'AutoAdvance' }, `Publicando lockgame ${gameId} na fila (funding >${AUTO_LOCK_DELAY_SEC}s)...`)
 
     try {
-        await executeLockGame(gameId);
-        notifyGameLocked(gameId);
-        sendGameLockedMessage(gameId).catch(() => {});
+        await publishGameEvent(QUEUE_NAME, 'lockgame', { gameId });
+        processedGames.add(gameId);
+    } catch (pubErr) {
+        logger.error({ err: pubErr, tag: 'AutoAdvance' },
+            `Falha ao publicar lockgame ${gameId}; fallback lock direto.`);
+        try {
+            await executeLockGame(gameId);
+            notifyGameLocked(gameId);
+            sendGameLockedMessage(gameId).catch(() => {});
 
-        buildInvertedIndex(gameId).catch(err =>
-            logger.error({ err, tag: 'AutoAdvance' }, `Erro índice invertido (jogo ${gameId}):`)
-        );
+            buildInvertedIndex(gameId).catch(err =>
+                logger.error({ err, tag: 'AutoAdvance' }, `Erro índice invertido (jogo ${gameId}):`)
+            );
 
-        autoStartDraw(gameId).catch(err => {
+            acquireOrchestrationLock(gameId).then(lockAcquired => {
+                if (!lockAcquired) {
+                    logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId}: lock já existe, pulando.`)
+                    return;
+                }
+                autoStartDraw(gameId).catch(err => {
+                    if (isResourceExhausted(err)) {
+                        handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                        return;
+                    }
+                    logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
+                    processedGames.delete(gameId);
+                    releaseOrchestrationLock(gameId).catch(() => {});
+                });
+            });
+        } catch (err) {
             if (isResourceExhausted(err)) {
-                handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                handleResourceBackoff(gameId, 'AutoAdvance', `lock jogo ${gameId}`);
                 return;
             }
-            logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw (jogo ${gameId}):`)
+            logger.error({ err, tag: 'AutoAdvance' }, `Erro ao travar jogo ${gameId}:`)
             processedGames.delete(gameId);
-        });
-    } catch (err) {
-        if (isResourceExhausted(err)) {
-            handleResourceBackoff(gameId, 'AutoAdvance', `lock jogo ${gameId}`);
-            return;
         }
-        logger.error({ err, tag: 'AutoAdvance' }, `Erro ao travar jogo ${gameId}:`)
-        processedGames.delete(gameId);
     }
 }
 
@@ -675,17 +1147,62 @@ export async function autoStartLockedGames(): Promise<void> {
     }
 }
 
-async function processLockedGame(gameId: string): Promise<void> {
+export async function processLockedGame(gameId: string): Promise<void> {
     autoAdvanceGamesTotal.inc({ action: 'start_locked' });
-    processedGames.add(gameId);
-    autoStartDraw(gameId).catch(err => {
-        if (isResourceExhausted(err)) {
-            handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
-            return;
+
+    // Defesa anti-draw-sem-cartelas: se o jogo chegou a LOCKED sem nenhum ticket,
+    // aborta antes de disparar o sorteio (oráculo). O contrato também valida isso
+    // em startdraw (check total_wagered.quantity.amount > 0), mas esta defesa
+    // off-chain evita o desperdício de oracle/CPU e jogos zombie em DRAWING.
+    // O contrato NÃO expõe total_tickets — a fonte da verdade é total_wagered.
+    let game: any = null;
+    try { game = await fetchGame(gameId); } catch { /* jogo pode não existir */ }
+    const wagered = game?.total_wagered;
+    const hasTickets = (Number.parseFloat(wagered?.quantity ?? '0') || 0) > 0;
+    if (!hasTickets) {
+        logger.warn({ tag: 'AutoAdvance' }, `Jogo ${gameId} LOCKED sem cartelas. Abortando (NO_TICKETS_LOCKED).`)
+        try {
+            await executeAbortGame(gameId, 'NO_TICKETS_LOCKED');
+            notifyGameAborted(gameId, 'NO_TICKETS_LOCKED');
+        } catch (abortErr) {
+            logger.error({ err: abortErr, tag: 'AutoAdvance' }, `Erro ao abortar jogo ${gameId} (sem cartelas):`)
         }
-        logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
-        processedGames.delete(gameId);
-    });
+        return;
+    }
+
+    logger.info({ tag: 'AutoAdvance' }, `Publicando startdraw ${gameId} na fila (locked)...`)
+
+    try {
+        await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
+        processedGames.add(gameId);
+    } catch (pubErr) {
+        logger.error({ err: pubErr, tag: 'AutoAdvance' },
+            `Falha ao publicar startdraw ${gameId}; fallback startdraw direto.`);
+        try {
+            const lockAcquired = await acquireOrchestrationLock(gameId);
+            if (!lockAcquired) {
+                logger.info({ tag: 'AutoAdvance' }, `Jogo ${gameId} já está sendo processado pela fila.`)
+                return;
+            }
+
+            autoStartDraw(gameId).catch(async (err) => {
+                if (isResourceExhausted(err)) {
+                    handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);
+                    return;
+                }
+                logger.error({ err, tag: 'AutoAdvance' }, `Erro startdraw locked (jogo ${gameId}):`)
+                processedGames.delete(gameId);
+                await releaseOrchestrationLock(gameId).catch(() => {});
+            });
+        } catch (err) {
+            if (isResourceExhausted(err)) {
+                handleResourceBackoff(gameId, 'AutoAdvance', `startdraw jogo ${gameId}`);
+                return;
+            }
+            logger.error({ err, tag: 'AutoAdvance' }, `Erro ao iniciar sorteio ${gameId}:`)
+            processedGames.delete(gameId);
+        }
+    }
 }
 
 /**
@@ -785,9 +1302,14 @@ export async function recoverStuckGames(): Promise<void> {
 
         for (const game of lockedResult.rows as BlockchainGameState[]) {
             const gameId = String(game.game_id);
-            if (game.status === 'locked' && !processedGames.has(gameId)) {
-                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em LOCKED. Iniciando sorteio...`)
-                await autoStartDraw(gameId);
+            if (game.status === 'locked') {
+                const lockAcquired = await acquireOrchestrationLock(gameId);
+                if (lockAcquired) {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} em LOCKED. Iniciando sorteio...`)
+                    await autoStartDraw(gameId);
+                } else {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} já sendo processado.`)
+                }
             }
         }
     } catch (err) {
@@ -804,24 +1326,7 @@ export async function autoStartDraw(gameId: string): Promise<void> {
 
     try {
         await executeStartDraw(gameId);
-
-        const drawnBalls = await waitForDrawnBalls(gameId);
-
-        if (!drawnBalls) {
-            logger.error({ tag: 'AutoAdvance' }, `Timeout do oráculo para jogo ${gameId}. Abortando.`)
-            await executeAbortGame(gameId, 'ORACLE_TIMEOUT');
-            notifyGameAborted(gameId, 'ORACLE_TIMEOUT');
-            return;
-        }
-
-        logger.info({ tag: 'AutoAdvance' }, `Oráculo respondeu (jogo ${gameId}). Orquestrando...`)
-        fetchGame(gameId).then(game => {
-            if (game?.room_id && game.room_id !== '0') {
-                sendDrawStartedMessage(game.room_id).catch(() => {});
-            }
-        }).catch(() => {});
-
-        await orchestrateGame(gameId);
+        await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
     } catch (err) {
         if (isResourceExhausted(err)) {
             handleResourceBackoff(gameId, 'AutoAdvance', `jogo ${gameId}`);

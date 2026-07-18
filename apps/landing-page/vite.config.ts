@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { configDefaults }        from 'vitest/config';
 import { reactRouter }          from '@react-router/dev/vite';
 import tailwindcss              from '@tailwindcss/vite';
 import react                    from '@vitejs/plugin-react';
@@ -39,6 +40,11 @@ export default defineConfig(({ mode }) => {
             environment: 'jsdom',
             globals: true,
             setupFiles: ['./src/test-setup.ts'],
+            // `api/` é sub-pacote deploy SEPARADO (Azure Functions shim, jest próprio,
+            // NÃO listado no pnpm-workspace). Excluído da varredura do vitest da raiz
+            // para evitar falsos failures (resolve 'nodemailer' que só existe em api/node_modules).
+            // Mantém os defaults (node_modules/dist) via configDefaults.
+            exclude: [...configDefaults.exclude, 'api/**'],
         },
         build: {
             target: 'es2022',

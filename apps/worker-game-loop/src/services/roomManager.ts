@@ -4,7 +4,9 @@ import type { BlockchainRoom } from '@cryptobingo/shared-types';
 import { adminSession, microserviceSession } from './blockchain';
 import { processRoomDrops } from './dropWorker';
 import { logger } from './logger';
+import { publishGameEvent } from './rabbitPublisher';
 import { isResourceExhausted, resRetryMap, handleResourceBackoff } from './retryBackoff';
+import { recoverCloseFailTotal } from './metrics';
 
 const CONTRACT_ACCOUNT = process.env.CONTRACT_ACCOUNT || 'bingogamectr';
 const REDIS_ROOM_PREFIX = 'room:';
@@ -121,16 +123,11 @@ export async function createNextGameForRoom(room: BlockchainRoom): Promise<strin
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        // Funde o jogo (CREATED → FUNDING) — requer bingogamesvc@active
-        const fundResult = await microserviceSession.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'fundgame',
-                authorization: [microserviceSession.permissionLevel],
-                data:          { game_id: newGameId },
-            }],
-        }, { broadcast: true });
-        logger.info(`Game ${newGameId} aberto para vendas. TX: ${fundResult.response?.transaction_id}`);
+        // Funde o jogo (CREATED → FUNDING) via fila — publishGameEvent em vez de transact direto.
+        // O consumer `fundgame` na fila `game_loop_events` executa o fundgame async.
+        // Caller tolera CREATED→FUNDING assíncrono.
+        await publishGameEvent('game_loop_events', 'fundgame', { gameId: newGameId });
+        logger.info(`Game ${newGameId} aberto para vendas via fila.`);
 
         return newGameId;
     } catch (err: any) {
@@ -208,18 +205,29 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
             const existingGame = await fetchGame(gameId).catch(() => null);
             if (existingGame?.status === 'archived') {
                 logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: recovery — jogo ${gameId} é archived mas current_game_id não foi zerado. Liberando slot via closegame...`)
-                try {
-                    await microserviceSession.transact({
-                        actions: [{
-                            account:       CONTRACT_ACCOUNT,
-                            name:          'closegame',
-                            authorization: [microserviceSession.permissionLevel],
-                            data:          { game_id: gameId },
-                        }],
-                    }, { broadcast: true });
-                    logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id zerado via closegame.`)
-                } catch (err) {
-                    logger.warn({ tag: 'RoomManager' }, `Sala ${room.room_id}: closegame recovery falhou:`)
+                let closed = false;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        await microserviceSession.transact({
+                            actions: [{
+                                account:       CONTRACT_ACCOUNT,
+                                name:          'closegame',
+                                authorization: [microserviceSession.permissionLevel],
+                                data:          { game_id: gameId },
+                            }],
+                        }, { broadcast: true });
+                        logger.info({ tag: 'RoomManager' }, `Sala ${room.room_id}: current_game_id zerado via closegame (tentativa ${attempt}).`);
+                        closed = true;
+                        break;
+                    } catch (err) {
+                        logger.error({ err, tag: 'RoomManager', attempt },
+                            `Sala ${room.room_id}: closegame recovery falhou (tentativa ${attempt}/3) p/ game ${gameId}.`);
+                        if (attempt < 3) await new Promise(r => setTimeout(r, 2000));
+                    }
+                }
+                if (!closed) {
+                    recoverCloseFailTotal.inc({ room_id: String(room.room_id) });
+                    logger.error({ tag: 'RoomManager' }, `Sala ${room.room_id}: closegame recovery ESGOtou 3 tentativas p/ game ${gameId}. Ação manual necessária.`);
                     return; // sem closegame bem-sucedido não criamos novo jogo
                 }
                 await createNextGameForRoom(room);
@@ -237,6 +245,13 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
 }
 
 async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise<void> {
+    const current = await fetchGame(gameId).catch(() => null);
+    if (current?.status && current.status !== 'created') {
+        logger.info({ tag: 'RoomManager' },
+            `recoverCreatedGame ${gameId}: jogo em "${current.status}", nao republica fundgame.`);
+        fundRetryMap.delete(gameId);
+        return;
+    }
     const retry = fundRetryMap.get(gameId) || { count: 0, lastAttempt: 0 };
 
     if (retry.count >= FUND_RETRY_MAX) {
@@ -274,22 +289,19 @@ async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise
     try {
         logger.info({ tag: 'RoomManager' },
             `Sala ${room.room_id}: tentando fundgame p/ game ${gameId} (tentativa ${retry.count + 1}/${FUND_RETRY_MAX})...`);
-        await microserviceSession.transact({
-            actions: [{
-                account:       CONTRACT_ACCOUNT,
-                name:          'fundgame',
-                authorization: [microserviceSession.permissionLevel],
-                data:          { game_id: gameId },
-            }],
-        }, { broadcast: true });
-        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado com sucesso!`);
+        // FIX #384: publica na fila em vez de transactar direto. A fila é a ÚNICA
+        // via de execução de fundgame (createNextGameForRoom também publica lá),
+        // e o consumer é idempotente (rabbitmq.ts:271). Isso elimina a dupla fonte
+        // que gerava "Game is not in CREATED status" / "duplicate transaction".
+        await publishGameEvent('game_loop_events', 'fundgame', { gameId });
+        logger.info({ tag: 'RoomManager' }, `Game ${gameId} fundado via fila (aguardando consumer).`);
         fundRetryMap.delete(gameId);
     } catch (fundErr: any) {
         retry.count++;
         retry.lastAttempt = Date.now();
         fundRetryMap.set(gameId, retry);
         logger.error({ err: fundErr, tag: 'RoomManager', retry: retry.count, maxRetries: FUND_RETRY_MAX },
-            `Sala ${room.room_id}: fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
+            `Sala ${room.room_id}: publish fundgame falhou (${retry.count}/${FUND_RETRY_MAX}) p/ game ${gameId}. ${fundErr?.message || ''}`);
     }
 }
 

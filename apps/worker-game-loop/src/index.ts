@@ -6,13 +6,14 @@ dotenv.config();
 require('./instrumentation');
 
 import mongoose from 'mongoose';
-import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames } from './services/rabbitmq';
+import { connectRabbitMQ, autoLockFundingGames, autoStartLockedGames, autoClaimDrawnGames, recoverStuckGames, recoverPayoutGames } from './services/rabbitmq';
 import { startBroadcaster }   from './services/broadcaster';
 import { startMetricsServer } from './services/metrics';
 import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
 import { startBurnSyncCron }   from './services/burnCron';
 import { startBlockchainIndexer } from './services/blockchainIndexer';
+import { startStateWatcher }   from './services/stateWatcher';
 import { logger } from './services/logger';
 
 logger.info('=============================================');
@@ -81,12 +82,25 @@ export async function bootstrap(): Promise<void> {
         );
     }, 60_000);
 
+    // ── 4c. Recovery de payout (Fase 2 #369) ───────────────────────────
+    recoverPayoutGames().catch(err =>
+        logger.error({ err, tag: 'Bootstrap' }, 'Erro no payout recovery scan:')
+    );
+    setInterval(() => {
+        recoverPayoutGames().catch(err =>
+            logger.error({ err, tag: 'Recovery' }, 'Erro no payout recovery periódico:')
+        );
+    }, 30_000);
+
     // ── 5. Burn sync cron (ADR-028 §8) ────────────────────────────────────────
     startBurnSyncCron();
 
     // ── 6. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
     // Não await: a conexão pode demorar ou precisar de retry sem bloquear o worker.
     connectRabbitMQ();
+
+    // ── 7. State Watcher (Firehose/Hyperion) — publica eventos em tempo real ──
+    startStateWatcher();
 }
 
 // NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro

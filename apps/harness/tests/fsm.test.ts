@@ -1662,3 +1662,165 @@ describe('ORACLE_CONFIG — setoracle (ADR-XXX)', () => {
         console.log('   ✅ startdraw → drawing → drawn com oracle parametrizado');
     }, 90_000);
 });
+
+// ==========================================
+// CLAIMWINBATCH — pagamento em lote (#369 / ADR-036)
+// Valida a nova action on-chain: N vencedores "clean" (sem boost) em 1 tx.
+// Cobre: happy path, fail-fast, entries vazio, mixed batch+claimwin,
+// e double-pay (contrato NÃO é idempotente → mitigação é a saga Redis do worker).
+// ==========================================
+describe('CLAIMWINBATCH — pagamento em lote (#369)', () => {
+    // Helper: cria jogo dedicado, deposita em 2 jogadores, compra 2 cartelas
+    // vencedoras (ROW_0), trava e sorteia → status 'drawn'.
+    async function setupBatchGame(depositQty = '200.0000 WAX'): Promise<{ g: UInt64; gStr: string; ticketIds: UInt64[] }> {
+        // Seed idempotente de patterns + gametype (o Passo 0 global não roda com -t)
+        const row0Mask = Number(MASK_ROW0);
+        const row1Mask = Number(MASK_ROW1);
+        try { await transact(bingoSession, 'bingogamectr', 'addpattern', { pattern_id: PATTERN_ID_ROW0, name: 'ROW_0', mask: row0Mask }); } catch { /* já existe */ }
+        try { await transact(bingoSession, 'bingogamectr', 'addpattern', { pattern_id: PATTERN_ID_ROW1, name: 'ROW_1', mask: row1Mask }); } catch { /* já existe */ }
+        try {
+            await transact(bingoSession, 'bingogamectr', 'addgametype', {
+                gametype_id: GAMETYPE_ID_STD, name: 'Standard', base_multiplier: 1,
+                rules: [{ pattern_id: PATTERN_ID_ROW0, weight: GAMETYPE_WEIGHT }],
+                draw_mode: 'standard', max_balls: 35, golden_ball_after: 0, master_weight_ovrd: 0,
+            });
+        } catch { /* já existe */ }
+
+        // Configs globais (singleton config) — necessárias p/ startdraw(busca oracle)
+        // e buytickets(valida signer_key). O nodeos local sobe com oracle_account="" e
+        // signer_key=bingoKey (bug de bootstrap), então corrigimos aqui (idempotente).
+        try { await transact(bingoSession, 'bingogamectr', 'setoracle', { oracle: 'orng.wax' }); } catch { /* já config */ }
+        try { await transact(bingoActiveSession, 'bingogamectr', 'setconfig', { signer_key: microserviceKey.toPublic().toString() }); } catch { /* já config */ }
+
+        const name  = Name.from(randomGameName());
+        const g     = name.value;
+        const gStr  = name.toString();
+        await transact(bingoSession, 'bingogamectr', 'creategame', {
+            game_id:      g,
+            ticket_price: ExtendedAsset.from({ quantity: '10.0000 WAX', contract: 'eosio.token' }),
+            gametype_id:  GAMETYPE_ID_STD,
+            room_id:      UInt64.from(0),
+        });
+        await transact(microSession, 'bingogamectr', 'fundgame', { game_id: g });
+        await transact(playerSession,  'eosio.token', 'transfer', { from: 'jogador1', to: 'bingogamectr', quantity: depositQty, memo: 'deposit batch j1' });
+        await transact(player2Session, 'eosio.token', 'transfer', { from: 'jogador2', to: 'bingogamectr', quantity: depositQty, memo: 'deposit batch j2' });
+
+        const ticketIds: UInt64[] = [];
+        for (const ownerName of ['jogador1', 'jogador2'] as const) {
+            const owner       = Name.from(ownerName);
+            const matrixBytes = Bytes.from(new Uint8Array(TEST_MATRIX));
+            const matBuf  = Serializer.encode({ type: 'bytes',  object: matrixBytes }).array;
+            const gameBuf = Serializer.encode({ type: 'uint64', object: g           }).array;
+            const ownBuf  = Serializer.encode({ type: 'name',   object: owner       }).array;
+            const sig     = microserviceKey.signDigest(Checksum256.hash(new Uint8Array([...matBuf, ...gameBuf, ...ownBuf, ...nft0Buf])));
+            const sess    = ownerName === 'jogador1' ? playerSession : player2Session;
+            await transact(sess, 'bingogamectr', 'buytickets', {
+                buyer: owner, game_id: g, matrices: [matrixBytes], signatures: [sig],
+                nft_id: 0, requested_price: ExtendedAsset.from({ quantity: '0.0000 WAX', contract: 'eosio.token' }),
+            });
+        }
+        const tRes = await rpcClient.v1.chain.get_table_rows({ code: 'bingogamectr', scope: gStr, table: 'tickets', limit: 10, json: true });
+        const ticketByOwner: Record<string, UInt64> = {};
+        for (const r of tRes.rows as any[]) {
+            const tid = UInt64.from(r.ticket_id);
+            ticketIds.push(tid);
+            ticketByOwner[r.owner] = tid;
+        }
+
+        await transact(microSession, 'bingogamectr', 'lockgame',  { game_id: g });
+        await transact(microSession, 'bingogamectr', 'startdraw', { game_id: g });
+        await waitForDrawn(gStr);
+        return { g, gStr, ticketIds, ticketByOwner };
+    }
+
+    const makeEntry = (ticketId: UInt64) => ({
+        ticket_id:         ticketId,
+        ball_count:        35,
+        win_pattern_mask:  UInt64.from(MASK_ROW0.toString()),
+        golden_multiplier: 0,
+    });
+
+    // Saldo interno (WAX, unidades de 4 casas) do owner na tabela balances.
+    async function getInternalWax(owner: string): Promise<number> {
+        const res = await rpcClient.v1.chain.get_table_rows({
+            code: 'bingogamectr', scope: owner, table: 'balances', limit: 10, json: true,
+        });
+        for (const row of res.rows as any[]) {
+            const q: string = row.balance?.quantity ?? '';
+            if (q.endsWith('WAX')) return Math.round(parseFloat(q) * 10000);
+        }
+        return 0;
+    }
+
+    let main: { g: UInt64; gStr: string; ticketIds: UInt64[] };
+
+    test('CB-1: claimwinbatch (2 vencedores clean) → paying + total_paid + balances', async () => {
+        main = await setupBatchGame();
+        const before1 = await getInternalWax('jogador1');
+        const before2 = await getInternalWax('jogador2');
+
+        const r = await transact(microSession, 'bingogamectr', 'claimwinbatch', {
+            game_id: main.g, entries: main.ticketIds.map(makeEntry),
+        } as any);
+        expect(r.response).toBeDefined();
+        expect(await getGameStatus(main.gStr)).toBe('paying');
+
+        // payout = ticket_price(10) * base_mult(1) * weight(10) / 100 = 1.0000 WAX
+        const after1 = await getInternalWax('jogador1');
+        const after2 = await getInternalWax('jogador2');
+        expect(after1 - before1).toBe(10000);
+        expect(after2 - before2).toBe(10000);
+
+        const row = await getGameRow(main.g);
+        expect(Number(row.total_paid)).toBe(20000);
+        console.log('   ✅ batch de 2 → +1 WAX cada, total_paid=2 WAX');
+    }, 90_000);
+
+    test('CB-2: fail-fast — entry com mask sem peso reverte o chunk inteiro (jogo continua drawn)', async () => {
+        const { g, gStr, ticketIds } = await setupBatchGame();
+        const badEntries = [{ ticket_id: ticketIds[0], ball_count: 35, win_pattern_mask: UInt64.from(0), golden_multiplier: 0 }];
+        await expect(transact(microSession, 'bingogamectr', 'claimwinbatch', { game_id: g, entries: badEntries } as any)).rejects.toThrow();
+        expect(await getGameStatus(gStr)).toBe('drawn'); // nenhum pago
+        console.log('   ✅ fail-fast: chunk inteiro reverteu, jogo permanece drawn');
+    }, 90_000);
+
+    test('CB-3: entries vazio → rejeitado', async () => {
+        const { g } = await setupBatchGame();
+        await expect(transact(microSession, 'bingogamectr', 'claimwinbatch', { game_id: g, entries: [] } as any)).rejects.toThrow();
+        console.log('   ✅ entries vazio rejeitado');
+    }, 90_000);
+
+    test('CB-4: mixed — claimwinbatch (1) + claimwin individual (1) coexistem', async () => {
+        const { g, gStr, ticketIds } = await setupBatchGame();
+        const before2 = await getInternalWax('jogador2');
+
+        await transact(microSession, 'bingogamectr', 'claimwinbatch', { game_id: g, entries: [makeEntry(ticketIds[0])] } as any);
+        await transact(microSession, 'bingogamectr', 'claimwin', {
+            game_id: g, ticket_id: ticketIds[1], ball_count: 35,
+            win_pattern_mask: UInt64.from(MASK_ROW0.toString()), golden_multiplier: 0, boost_nft_ids: [],
+        });
+        const after2 = await getInternalWax('jogador2');
+        expect(after2 - before2).toBe(10000);
+        expect(await getGameStatus(gStr)).toBe('paying');
+        console.log('   ✅ batch + claimwin individual coexistem (mesmo jogo, paying)');
+    }, 90_000);
+
+    test('CB-5: idempotência — 2º batch c/ ticket já pago é REJEITADO (CONTRATO idempotente via bit em state)', async () => {
+        const { g, ticketByOwner } = await setupBatchGame();
+        const t1 = ticketByOwner['jogador1'];
+        const t2 = ticketByOwner['jogador2'];
+        const before = await getInternalWax('jogador1');
+        // Batch 1: só jogador1 → pago (+10000), bit PAID setado.
+        await transact(microSession, 'bingogamectr', 'claimwinbatch', { game_id: g, entries: [makeEntry(t1)] } as any);
+        // Batch 2: jogador1 + jogador2 (jogador1 reaparece). Contrato REJEITA o entry do
+        // jogador1 (bit PAID) → tx falha com "ticket ja pago". Prova idempotência on-chain.
+        await expect(transact(microSession, 'bingogamectr', 'claimwinbatch', { game_id: g, entries: [makeEntry(t1), makeEntry(t2)] } as any)).rejects.toThrow(/ticket ja pago/);
+        const after = await getInternalWax('jogador1');
+        expect(after - before).toBe(10000); // jogador1 pago APENAS 1x → sem double-pay
+        console.log('   ✅ idempotência on-chain: 2º batch com ticket já pago rejeitado (sem double-pay)');
+    }, 90_000);
+
+    afterAll(async () => {
+        if (main) { try { await transact(microSession, 'bingogamectr', 'closegame', { game_id: main.g }); } catch { /* best-effort */ } }
+    });
+});

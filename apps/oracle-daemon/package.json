@@ -6,7 +6,7 @@
   "main": "orng-oracle.ts",
   "scripts": {
     "start": "ts-node orng-oracle.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start:js": "node dist/orng-oracle.js"
   },
   "dependencies": {
