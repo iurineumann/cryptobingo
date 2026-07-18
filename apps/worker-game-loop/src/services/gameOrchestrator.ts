@@ -30,6 +30,7 @@ import {
 import {
     startSlowReveal,
     endRevealSession,
+    notifyRevealStarted,
     notifyWinners,
     notifyGoldenBall,
     notifyGoldenMultiplierProgress,
@@ -274,6 +275,12 @@ export async function orchestrateGame(gameId: string): Promise<void> {
     if (game.status !== 'drawn') {
         throw new Error(`[Orquestrador] Jogo ${gameId} não está em DRAWN. Status: ${game.status}`);
     }
+
+    // C7.1: marca o início do "showing" (nosso slow reveal). Emitido APÓS o contrato
+    // confirmar `drawn` e ANTES do startSlowReveal. Garante que o frontend transita
+    // locked→drawing (showing) assim que o reveal começa — independente de COMO o
+    // jogo chegou a `drawn` (executeStartDraw no lockgame, recovery, etc).
+    notifyRevealStarted(gameId);
 
     const gametypeId = (game as any).gametype_id?.toString() ?? '0';
     let drawMode: DrawMode = 'standard';

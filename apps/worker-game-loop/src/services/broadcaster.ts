@@ -280,8 +280,26 @@ export function notifyGameLocked(gameId: string): void {
 }
 
 /**
- * Emite drawing_started — jogo entrou em DRAWING (startdraw executado).
- * Permite o lobby transitar funding→drawing em tempo real.
+ * Emite reveal_started — início do SLOW REVEAL (nosso lado, "showing").
+ * Chamado pelo gameOrchestrator APÓS o contrato confirmar `drawn` e ANTES do
+ * startSlowReveal. Substitui semanticamente o antigo notifyDrawingStarted (que
+ * era emitido junto com executeStartDraw, confundindo sorteio on-chain com reveal).
+ * Permite o lobby/frontend transitar locked→drawing (showing) em tempo real.
+ */
+export function notifyRevealStarted(gameId: string): void {
+    publishReveal('reveal_started', gameId, {
+        event:     'reveal_started',
+        game_id:   parseInt(gameId, 10),
+        timestamp: new Date().toISOString(),
+    });
+    logger.info({ tag: 'WS' }, `reveal_started publicado para jogo ${gameId}`);
+}
+
+/**
+ * @deprecated Mantido APENAS para compatibilidade de clientes antigos que ainda
+ * escutam 'drawing_started'. O semântico correto é notifyRevealStarted (showing).
+ * NÃO deve ser chamado em novos fluxos. O frontend mantém 'drawing_started' como
+ * alias de 'reveal_started' por 1 release.
  */
 export function notifyDrawingStarted(gameId: string): void {
     publishReveal('drawing_started', gameId, {
@@ -289,7 +307,7 @@ export function notifyDrawingStarted(gameId: string): void {
         game_id:   parseInt(gameId, 10),
         timestamp: new Date().toISOString(),
     });
-    logger.info({ tag: 'WS' }, `drawing_started publicado para jogo ${gameId}`);
+    logger.info({ tag: 'WS' }, `drawing_started (DEPRECATED) publicado para jogo ${gameId}`);
 }
 
 /**
