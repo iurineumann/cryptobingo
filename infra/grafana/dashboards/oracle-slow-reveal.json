@@ -1,0 +1,366 @@
+{
+  "id": null,
+  "uid": "cryptobingo-oracle-slow-reveal",
+  "title": "CryptoBingo — Oráculo & Slow Reveal",
+  "tags": [
+    "cryptobingo",
+    "worker",
+    "oracle",
+    "slow-reveal"
+  ],
+  "timezone": "browser",
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Bolas Emitidas/s (Slow Reveal)",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_slow_reveal_balls_emitted_total[1m])",
+          "legendFormat": "bolas/s",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
+        }
+      },
+      "description": "Taxa de emissão de bolas via WebSocket Slow Reveal. Abaixo de 0.1 bolas/s indica reveis lentos ou parados."
+    },
+    {
+      "id": 2,
+      "title": "Sessões Slow Reveal Ativas",
+      "type": "stat",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "worker_slow_reveal_sessions_active",
+          "legendFormat": "reveals",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      },
+      "description": "Sessões de Slow Reveal ativas simultaneamente. Muitas indica alta demanda ou sessões não finalizadas."
+    },
+    {
+      "id": 3,
+      "title": "Bolas Emitidas — Acumulado",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "worker_slow_reveal_balls_emitted_total",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "Total acumulado de bolas emitidas desde o último restart do worker."
+    },
+    {
+      "id": 4,
+      "title": "Latência de Polling do Oráculo",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(worker_oracle_poll_attempts_bucket[5m]))",
+          "legendFormat": "p99 tentativas",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(worker_oracle_poll_attempts_bucket[5m]))",
+          "legendFormat": "p50 tentativas",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        }
+      },
+      "description": "Número de tentativas de polling até o oráculo responder. Acima de 30 (p50) indica lentidão do oráculo. Acima de 60 (p99) é alarmante."
+    },
+    {
+      "id": 5,
+      "title": "Jogos Resolvidos/s",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(worker_game_resolution_total[5m])",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "description": "Jogos resolvidos pelo orquestrador, particionados por resultado (success/failure)."
+    },
+    {
+      "id": 6,
+      "title": "Pagamentos/min — Prize Pipeline",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (winType) (rate(worker_prize_payments_total[5m]))",
+          "legendFormat": "{{winType}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cpm",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "description": "Pagamentos de prêmio processados pelo pipeline, por tipo de vitória (winType)."
+    },
+    {
+      "id": 7,
+      "title": "Duração da Resolução (p50 / p95 por Draw Mode)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))",
+          "legendFormat": "p50 — {{draw_mode}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, draw_mode) (rate(worker_game_resolution_duration_ms_bucket[5m])))",
+          "legendFormat": "p95 — {{draw_mode}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "description": "Duração da resolução de jogo (reveal + avaliação + payouts) por draw mode. Acompanhe para detectar modos lentos."
+    },
+    {
+      "id": 8,
+      "title": "RTP Acumulado",
+      "type": "gauge",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "worker_prize_rtp_ratio",
+          "legendFormat": "RTP",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 85
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "description": "RTP acumulado (Return To Player). Alvo: 85%. Entre 70-84% = atenção. Abaixo de 70% = crítico."
+    },
+    {
+      "id": 9,
+      "title": "Latência Pipeline de Prêmios (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(worker_prize_pipeline_duration_ms_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(worker_prize_pipeline_duration_ms_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "description": "Latência do pipeline de prêmios (do winner_found ao prize_confirmed)."
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  }
+}
