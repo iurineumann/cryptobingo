@@ -30,6 +30,7 @@ import {
     notifyGameLocked,
     notifyGameAborted,
     notifyDrawingStarted,
+    notifyRevealStarted,
 }                          from './broadcaster';
 import {
     sendGameLockedMessage,
@@ -339,7 +340,16 @@ function consumeMessages(): void {
                 case 'startdraw': {
                     const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
                     if (!lockAcquired) {
-                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente).`)
+                        // C7.2: lock existente = executeStartDraw já realizado em outro lugar
+                        // (ex: processLockedGame chamou executeStartDraw direto, ou auto-advance).
+                        // O contrato JÁ está `drawn` (ou `drawing` aguardando oráculo). Precisamos
+                        // garantir que o "showing" (slow reveal) rode — senão o jogo trava em drawn
+                        // sem revelar bolas (bug do jogo 1784390752148). Disparamos orchestrateGame,
+                        // que valida status==='drawn' internamente e emite notifyRevealStarted.
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente). Garantindo orquestração do reveal...`)
+                        orchestrateGame(gameId).catch(err =>
+                            logger.error({ err, tag: 'RabbitMQ' }, `Erro ao orquestrar reveal (lock existente, jogo ${gameId}):`),
+                        );
                         return;
                     }
 
@@ -348,7 +358,10 @@ function consumeMessages(): void {
                     const watchdog = startLockWatchdog(gameId, 90_000);
 
                     await executeStartDraw(gameId);
-                    notifyDrawingStarted(gameId);  // C2: push drawing_started → lobby reage em tempo real
+                    // NOTA C7.1: não emitimos mais notifyDrawingStarted aqui. O "showing"
+                    // (slow reveal) é iniciado pelo gameOrchestrator (notifyRevealStarted),
+                    // que roda quando o jogo está `drawn` — independente de COMO chegou lá.
+                    // Isso evita o bug de pular o reveal quando executeStartDraw já foi feito.
 
                     const drawnBalls = await waitForDrawnBalls(gameId);
 

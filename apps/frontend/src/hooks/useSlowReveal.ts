@@ -329,6 +329,21 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
         // ── winner_found: vencedores detectados pelo evaluator ────────────────
         socket.on('winner_found', (msg) => handleWinnerFound(msg, gameId, setWinners, setIsDrawing, setPrizeStatuses));
 
+        // ── reveal_started: início do "showing" (nosso slow reveal) ────────────
+        // C7.3: garante que a UI mostre "live" assim que o reveal começa, mesmo
+        // antes da primeira bola (ball_drawn) chegar. Mantém drawing_started como alias.
+        socket.on('reveal_started', (msg: { event: string; game_id: number }) => {
+            if (String(msg.game_id) !== gameId) return;
+            console.log(`🎬 [WS] reveal_started recebido para jogo ${gameId}`);
+            setIsDrawing(true);
+        });
+
+        socket.on('drawing_started', (msg: { event: string; game_id: number }) => {
+            if (String(msg.game_id) !== gameId) return;
+            console.log(`🎬 [WS] drawing_started (alias) recebido para jogo ${gameId}`);
+            setIsDrawing(true);
+        });
+
         // ── game_locked: vendas encerradas ────────────────────────────────────
         socket.on('game_locked', (msg: { event: string; game_id: number }) => {
             if (String(msg.game_id) !== gameId) return;

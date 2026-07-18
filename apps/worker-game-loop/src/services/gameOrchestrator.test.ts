@@ -27,6 +27,7 @@ jest.mock('./evaluator', () => ({
 jest.mock('./broadcaster', () => ({
     startSlowReveal:    jest.fn().mockResolvedValue(undefined),
     endRevealSession:   jest.fn(),
+    notifyRevealStarted: jest.fn(),
     notifyWinners:      jest.fn(),
     notifyGoldenBall:   jest.fn(),
     notifyGoldenMultiplierProgress: jest.fn(),
@@ -65,7 +66,7 @@ import {
     computePayoutAmount, isBallInPattern,
 } from './evaluator';
 import {
-    startSlowReveal, endRevealSession, notifyWinners,
+    startSlowReveal, endRevealSession, notifyRevealStarted, notifyWinners,
     notifyGoldenBall, notifyGoldenMultiplierProgress, notifyStageCleared, notifyGameEnded,
 } from './broadcaster';
 import { deleteIndex }    from './invertedIndex';
@@ -81,6 +82,7 @@ const mockPreCompute        = preComputeMultiMatchCutoffs                  as je
 const mockPayStage          = payMultiMatchStage                           as jest.Mock;
 const mockDeriveGolden      = deriveGoldenMultiplierExported               as jest.Mock;
 const mockStartReveal       = startSlowReveal                              as jest.Mock;
+const mockRevealStarted      = notifyRevealStarted                         as jest.Mock;
 const mockEndReveal         = endRevealSession                             as jest.Mock;
 const mockNotifyWinners     = notifyWinners                                as jest.Mock;
 const mockNotifyGoldenBall  = notifyGoldenBall                             as jest.Mock;
@@ -150,6 +152,19 @@ describe('orchestrateGame — standard (gametype_id=0)', () => {
         expect(mockNotifyWinners).toHaveBeenCalled();
         expect(mockNotifyEnded).toHaveBeenCalledWith('1', 'standard', 1);
         expect(mockOnResolved).toHaveBeenCalledWith('1');
+    });
+
+    it('C7.1: notifyRevealStarted é chamado ANTES de startSlowReveal (showing inicia antes do reveal)', async () => {
+        const promise = orchestrateGame('1');
+        jest.runAllTimers();
+        await promise;
+
+        expect(mockRevealStarted).toHaveBeenCalledWith('1');
+        expect(mockStartReveal).toHaveBeenCalled();
+        // Ordem: reveal_started deve vir antes do primeiro startSlowReveal
+        const revealStartedIdx = mockRevealStarted.mock.invocationCallOrder[0];
+        const startRevealIdx   = mockStartReveal.mock.invocationCallOrder[0];
+        expect(revealStartedIdx).toBeLessThan(startRevealIdx);
     });
 
     it('Sem vencedores → notifyWinners não chamado', async () => {

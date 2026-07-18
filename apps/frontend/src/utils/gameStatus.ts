@@ -18,8 +18,10 @@ export function isWithinSlowReveal(gameId: string): boolean {
 
 /**
  * Resolve o status de exibição de um jogo.
- * Jogos em 'drawn' ou 'archived' dentro da janela de slow reveal
- * são exibidos como 'drawing' (bolas ainda sendo reveladas).
+ * Jogos em 'drawn' são exibidos como 'drawing' = "showing" em andamento
+ * (nosso slow reveal, que acontece após o contrato sortear as bolas de uma vez).
+ * 'archived' dentro da janela de slow reveal também exibido como 'drawing'.
+ * Ref: Fase C7 — locked → drawn → showing → shown.
  */
 export function resolveDisplayStatus(g: BlockchainGameState): string {
     if (g.status === 'drawn') return 'drawing';
