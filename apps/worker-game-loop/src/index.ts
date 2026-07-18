@@ -13,6 +13,7 @@ import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
 import { startBurnSyncCron }   from './services/burnCron';
 import { startBlockchainIndexer } from './services/blockchainIndexer';
+import { startStateWatcher }   from './services/stateWatcher';
 import { logger } from './services/logger';
 
 logger.info('=============================================');
@@ -97,6 +98,9 @@ export async function bootstrap(): Promise<void> {
     // ── 6. Consumidor RabbitMQ (fire-and-forget — reconecta internamente) ─────
     // Não await: a conexão pode demorar ou precisar de retry sem bloquear o worker.
     connectRabbitMQ();
+
+    // ── 7. State Watcher (Firehose/Hyperion) — publica eventos em tempo real ──
+    startStateWatcher();
 }
 
 // NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro
