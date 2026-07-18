@@ -184,6 +184,14 @@ describe('orchestrateGame — standard (gametype_id=0)', () => {
         await expect(orchestrateGame('1')).rejects.toThrow(/DRAWN/i);
     });
 
+    it('não chama onGameResolved quando status é drawing (jogo em andamento)', async () => {
+        mockFetchGame.mockResolvedValue(makeGame({ status: 'drawing' }));
+
+        await expect(orchestrateGame('1')).rejects.toThrow(/DRAWN/i);
+
+        expect(mockOnResolved).not.toHaveBeenCalled();
+    });
+
     it('onGameResolved lança → erro é swallowed', async () => {
         mockOnResolved.mockRejectedValue(new Error('Room error'));
 
