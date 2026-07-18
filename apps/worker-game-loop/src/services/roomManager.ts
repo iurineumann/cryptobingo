@@ -233,6 +233,13 @@ export async function ensureFirstGameForActiveRooms(): Promise<void> {
 }
 
 async function recoverCreatedGame(room: BlockchainRoom, gameId: string): Promise<void> {
+    const current = await fetchGame(gameId).catch(() => null);
+    if (current?.status && current.status !== 'created') {
+        logger.info({ tag: 'RoomManager' },
+            `recoverCreatedGame ${gameId}: jogo em "${current.status}", nao republica fundgame.`);
+        fundRetryMap.delete(gameId);
+        return;
+    }
     const retry = fundRetryMap.get(gameId) || { count: 0, lastAttempt: 0 };
 
     if (retry.count >= FUND_RETRY_MAX) {
