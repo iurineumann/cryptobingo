@@ -56,11 +56,8 @@ export function useLobbySocket(gameIds: string[]): { statuses: Record<string, st
         socket.on('game_funded', handleStatus('funding'));
         socket.on('game_locked', handleStatus('locked'));
         socket.on('game_aborted', handleStatus('aborted'));
-        // C7.3: reveal_started = início do "showing" (nosso slow reveal). Substitui
-        // semanticamente drawing_started. Mantemos drawing_started como alias de
-        // compatibilidade (1 release) para não quebrar clientes antigos.
+        // C7.3: reveal_started = início do "showing" (nosso slow reveal).
         socket.on('reveal_started', handleStatus('drawing'));
-        socket.on('drawing_started', handleStatus('drawing'));
 
         return () => {
             socket.disconnect();

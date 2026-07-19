@@ -29,7 +29,6 @@ import {
     notifyGameFunded,
     notifyGameLocked,
     notifyGameAborted,
-    notifyDrawingStarted,
     notifyRevealStarted,
 }                          from './broadcaster';
 import {

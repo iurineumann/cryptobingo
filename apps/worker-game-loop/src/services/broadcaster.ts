@@ -296,21 +296,6 @@ export function notifyRevealStarted(gameId: string): void {
 }
 
 /**
- * @deprecated Mantido APENAS para compatibilidade de clientes antigos que ainda
- * escutam 'drawing_started'. O semântico correto é notifyRevealStarted (showing).
- * NÃO deve ser chamado em novos fluxos. O frontend mantém 'drawing_started' como
- * alias de 'reveal_started' por 1 release.
- */
-export function notifyDrawingStarted(gameId: string): void {
-    publishReveal('drawing_started', gameId, {
-        event:     'drawing_started',
-        game_id:   parseInt(gameId, 10),
-        timestamp: new Date().toISOString(),
-    });
-    logger.info({ tag: 'WS' }, `drawing_started (DEPRECATED) publicado para jogo ${gameId}`);
-}
-
-/**
  * Emite game_funded — jogo abriu para vendas (CREATED → FUNDING).
  * Permite o lobby atualizar o status em tempo real (sem esperar polling).
  */

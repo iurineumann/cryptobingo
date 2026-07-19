@@ -41,7 +41,6 @@ jest.mock('./broadcaster', () => ({
     notifyGameLocked:      jest.fn(),
     notifyGameFunded:      jest.fn(),
     notifyGameAborted:     jest.fn(),
-    notifyDrawingStarted:  jest.fn(),
     startSlowReveal:       jest.fn().mockResolvedValue(undefined),
     notifyPrizeConfirmed:  jest.fn(),
 }));

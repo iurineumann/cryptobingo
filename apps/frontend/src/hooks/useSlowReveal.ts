@@ -338,12 +338,6 @@ export function useSlowReveal(gameId: string | null): SlowRevealState {
             setIsDrawing(true);
         });
 
-        socket.on('drawing_started', (msg: { event: string; game_id: number }) => {
-            if (String(msg.game_id) !== gameId) return;
-            console.log(`🎬 [WS] drawing_started (alias) recebido para jogo ${gameId}`);
-            setIsDrawing(true);
-        });
-
         // ── game_locked: vendas encerradas ────────────────────────────────────
         socket.on('game_locked', (msg: { event: string; game_id: number }) => {
             if (String(msg.game_id) !== gameId) return;
