@@ -302,7 +302,16 @@ function consumeMessages(): void {
                     // não gerar "Game is not in CREATED status" / "duplicate transaction".
                     let game: any = null;
                     try { game = await fetchGame(gameId); } catch { /* ignore */ }
-                    if (game?.status && game.status !== 'created') {
+                    if (!game) {
+                        // Jogo NÃO EXISTE on-chain. Causa típica: evento replayado
+                        // pelo StateWatcher (cursor perdido) de partida já abortada/
+                        // arquivada, ou game_id fantasma. Não retryar — ack e descarta
+                        // para evitar loop infinito (nack→DLQ→replay) de "Game not found".
+                        logger.warn({ tag: 'RabbitMQ' },
+                            `fundgame ${gameId} ignorado — jogo NÃO EXISTE on-chain (evento stale/phantom).`);
+                        break;
+                    }
+                    if (game.status !== 'created') {
                         logger.info({ tag: 'RabbitMQ' },
                             `fundgame ${gameId} ignorado — jogo em status "${game.status}" (já avançou).`);
                         break;
