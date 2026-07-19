@@ -8,9 +8,11 @@ const mockSubscribe = jest.fn();
 const mockRedisGet = jest.fn();
 const mockRedisSet = jest.fn();
 const mockPublish = jest.fn();
+const mockFetchGame = jest.fn();
 
 jest.mock('@cryptobingo/blockchain-core', () => ({
     contractEventClient: { subscribe: mockSubscribe },
+    fetchGame: mockFetchGame,
 }));
 
 jest.mock('../redis', () => ({
@@ -88,7 +90,8 @@ describe('stateWatcher — instrumentação de métricas (B5)', () => {
         mockPublish.mockResolvedValue(undefined);
     });
 
-    it('Evento recebido + publicado → metrics inc/set chamados', async () => {
+    it('fundgame (partida CREATED) → evento publicado + metrics inc/set', async () => {
+        mockFetchGame.mockResolvedValue({ status: 'created' });
         await handlers.onEvent({
             action: 'fundgame',
             game_id: '1',
@@ -102,6 +105,38 @@ describe('stateWatcher — instrumentação de métricas (B5)', () => {
         expect(stateWatcherPublished.inc).toHaveBeenCalledWith({ action: 'fundgame' });
         expect(stateWatcherCursorPosition.set).toHaveBeenCalledWith(50);
         expect(mockRedisSet).toHaveBeenCalledWith('statewatcher:last_global_seq', '50');
+        expect(mockPublish).toHaveBeenCalled();
+    });
+
+    it('fundgame (partida inexistente/phantom) → NÃO publicado (anti-replay)', async () => {
+        mockFetchGame.mockResolvedValue(null);
+        await handlers.onEvent({
+            action: 'fundgame',
+            game_id: '999',
+            global_seq: 51,
+            block_num: 100,
+            step: 0,
+            data: {},
+        });
+
+        expect(mockPublish).not.toHaveBeenCalled();
+        expect(stateWatcherPublished.inc).not.toHaveBeenCalledWith({ action: 'fundgame' });
+        expect(stateWatcherErrors.inc).not.toHaveBeenCalled();
+    });
+
+    it('fundgame (partida ja avancou, status!=created) → NÃO publicado (anti-replay)', async () => {
+        mockFetchGame.mockResolvedValue({ status: 'archived' });
+        await handlers.onEvent({
+            action: 'fundgame',
+            game_id: '2',
+            global_seq: 52,
+            block_num: 100,
+            step: 0,
+            data: {},
+        });
+
+        expect(mockPublish).not.toHaveBeenCalled();
+        expect(stateWatcherPublished.inc).not.toHaveBeenCalledWith({ action: 'fundgame' });
     });
 
     it('Evento sem game_id → stateWatcherEventsReceived NÃO incrementa', async () => {

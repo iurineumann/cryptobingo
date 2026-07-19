@@ -193,15 +193,14 @@ describe('fundgame idempotency (FIX #384)', () => {
     expect(channel.nack).not.toHaveBeenCalled();
   });
 
-  it('bonus: fetchGame retorna null -> executeFundGame chamado (fallback)', async () => {
+  it('bonus: fetchGame retorna null (partida inexistente/phantom) -> executeFundGame NAO chamado, ack sim', async () => {
     mockFetchGame.mockResolvedValue(null);
     await connectRabbitMQ();
     const { cb, channel } = getRabbitFixtures();
     await cb(makeMsg('fundgame', '123'));
 
-    expect(executeFundGame).toHaveBeenCalledTimes(1);
-    expect(executeFundGame).toHaveBeenCalledWith('123');
-    expect(notifyGameFunded).toHaveBeenCalledTimes(1);
+    expect(executeFundGame).not.toHaveBeenCalled();
+    expect(notifyGameFunded).not.toHaveBeenCalled();
     expect(channel.ack).toHaveBeenCalled();
     expect(channel.nack).not.toHaveBeenCalled();
   });
