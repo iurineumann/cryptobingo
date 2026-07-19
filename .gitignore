@@ -89,3 +89,6 @@ apps/landing-page/coverage/
 *.testx
 .hermes/
 
+
+# Build artifacts vazados (ex: .ef306fa0-*-app.zip do frontend)
+apps/frontend/.*.zip
