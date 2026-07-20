@@ -113,6 +113,7 @@ export interface PayoutEntry {
     weight: number;
     isNft: boolean;
     boostNftIds: string[];
+    ticketPrice: string;
 }
 
 export interface ClassifiedPayouts {
@@ -156,6 +157,7 @@ export async function classifyWinnersForBatch(
             weight,
             isNft: false,
             boostNftIds: [],
+            ticketPrice: ticket.price?.quantity ?? '',
         };
 
         if (comboId !== undefined) {
@@ -796,7 +798,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 patternName: e.patternName,
                 weight: e.weight,
                 baseMultiplier,
-                ticketPrice: e.ticketId, // filled at publish time below
+                ticketPrice: e.ticketPrice,
             })),
         });
         payoutChunksTotal.labels({ mode: 'chunk_clean' }).inc();
@@ -819,7 +821,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 patternName: ee.patternName,
                 weight: ee.weight,
                 baseMultiplier,
-                ticketPrice: ee.ticketId,
+                ticketPrice: ee.ticketPrice,
             })),
         });
         payoutChunksTotal.labels({ mode: 'single_combo' }).inc();
@@ -841,7 +843,7 @@ export async function processAllGameWinners(gameId: string): Promise<void> { // 
                 patternName: ee.patternName,
                 weight: ee.weight,
                 baseMultiplier,
-                ticketPrice: ee.ticketId,
+                ticketPrice: ee.ticketPrice,
             })),
         });
         payoutChunksTotal.labels({ mode: 'single_nft' }).inc();
