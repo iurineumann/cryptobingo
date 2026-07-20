@@ -155,4 +155,21 @@ describe('useGameRoomState — MULTI_MATCH vencedores de estágios', () => {
     await waitFor(() => expect(result.current.localWinners.length).toBe(0), { timeout: 5000 });
     await waitFor(() => expect(result.current.apiPrizes.length).toBe(0), { timeout: 5000 });
   });
+
+  // 5. Bug 2: jogo archived + drawnBalls do WS + isGameEnded=false →
+  //    effectiveDisplayStatus NÃO deve ser 'drawing' (archived match).
+  //    Regressão: se effectiveDisplayStatus fica 'drawing', o frontend trava
+  //    nesse estado mesmo com o jogo já arquivado (game_ended perdido).
+  it('archived + WS balls + !isGameEnded → effectiveDisplayStatus = archived (não drawing)', async () => {
+    mockSlowReveal.mockReturnValue(createSlowReveal({
+      drawnBalls: [{ order: 1, number: 1, timestamp: '' }],
+      isGameEnded: false,
+    }));
+    mockFetchGamePrizeTransactions.mockResolvedValue({ items: PRIZES, total: 4, gameId: '1783976459268' });
+    const { result } = renderHook(() => useGameRoomState({ gameId: '1783976459268', roomId: '14', session }));
+    await waitFor(() => {
+      expect(result.current.effectiveDisplayStatus).not.toBe('drawing');
+      expect(result.current.effectiveDisplayStatus).toBe('archived');
+    }, { timeout: 5000 });
+  });
 });

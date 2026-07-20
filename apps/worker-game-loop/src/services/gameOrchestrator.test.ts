@@ -32,6 +32,7 @@ jest.mock('./broadcaster', () => ({
     notifyGoldenBall:   jest.fn(),
     notifyGoldenMultiplierProgress: jest.fn(),
     notifyStageCleared: jest.fn(),
+    notifyStageFailed:  jest.fn(),
     notifyGameEnded:    jest.fn(),
     notifyGameLocked:   jest.fn(),
     notifyGameAborted:  jest.fn(),
@@ -67,7 +68,7 @@ import {
 } from './evaluator';
 import {
     startSlowReveal, endRevealSession, notifyRevealStarted, notifyWinners,
-    notifyGoldenBall, notifyGoldenMultiplierProgress, notifyStageCleared, notifyGameEnded,
+    notifyGoldenBall, notifyGoldenMultiplierProgress,     notifyStageCleared, notifyStageFailed, notifyGameEnded,
 } from './broadcaster';
 import { deleteIndex }    from './invertedIndex';
 import { onGameResolved } from './roomManager';
@@ -88,6 +89,7 @@ const mockNotifyWinners     = notifyWinners                                as je
 const mockNotifyGoldenBall  = notifyGoldenBall                             as jest.Mock;
 const mockNotifyMultiProgress = notifyGoldenMultiplierProgress                as jest.Mock;
 const mockNotifyStaged      = notifyStageCleared                           as jest.Mock;
+const mockNotifyStageFailed = notifyStageFailed                            as jest.Mock;
 const mockNotifyEnded       = notifyGameEnded                              as jest.Mock;
 const mockDeleteIndex       = deleteIndex                                  as jest.Mock;
 const mockOnResolved        = onGameResolved                               as jest.Mock;
@@ -449,6 +451,29 @@ describe('orchestrateGame — multimatch', () => {
         await orchestrateGame('1');
         // preComputeMultiMatchCutoffs deve receber todos os 75 balls do oracle
         expect(mockPreCompute).toHaveBeenCalledWith('1', DRAWN_BALLS, '4');
+    });
+
+    it('payMultiMatchStage falha no stage 2 → stages 1 e 3 pagam, jogo fecha com falha parcial', async () => {
+        mockPreCompute.mockResolvedValue([
+            { stage: 1, cutoffBall: 5,  cutoffIndex: 4,  winners: [makeWinResult('1')] },
+            { stage: 2, cutoffBall: 10, cutoffIndex: 9,  winners: [makeWinResult('2')] },
+            { stage: 3, cutoffBall: 15, cutoffIndex: 14, winners: [makeWinResult('3')] },
+        ]);
+        mockPayStage
+            .mockResolvedValueOnce(undefined)
+            .mockRejectedValueOnce(new Error('RPC timeout'))
+            .mockResolvedValueOnce(undefined);
+
+        await orchestrateGame('1');
+
+        expect(mockPayStage).toHaveBeenCalledTimes(3);
+        expect(mockNotifyStageFailed).toHaveBeenCalledTimes(1);
+        expect(mockNotifyStageFailed).toHaveBeenCalledWith('1', 2, 'Error: RPC timeout');
+        expect(mockNotifyStaged).toHaveBeenCalledTimes(2);  // stages 1 and 3 only
+        expect(mockNotifyEnded).toHaveBeenCalledWith('1', 'multimatch', expect.any(Number));
+        // triggerCloseGame deve ser chamado (jogo fecha mesmo com falha parcial)
+        const { triggerCloseGame } = require('./payoutSaga');
+        expect(triggerCloseGame).toHaveBeenCalledWith('1');
     });
 
     it('startSlowReveal cobre TODAS as bolas quando nenhum stage tem vencedores (zero fallback bug)', async () => {

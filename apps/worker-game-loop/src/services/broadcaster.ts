@@ -207,6 +207,19 @@ export function notifyStageCleared(
 }
 
 /**
+ * ADR-052: notifica que um stage individual falhou no pagamento on-chain.
+ * O frontend pode exibir erro parcial sem travar o reveal dos stages seguintes.
+ */
+export function notifyStageFailed(gameId: string, stage: number, reason: string): void {
+    publishReveal('stage_failed', gameId, {
+        event:   'stage_failed',
+        game_id: parseInt(gameId, 10),
+        payload: { stage, reason },
+    });
+    logger.warn({ tag: 'WS' }, `stage_failed estágio ${stage} (${reason}) — jogo ${gameId}`);
+}
+
+/**
  * ADR-014: sinaliza o fim completo do reveal (após último lote).
  */
 export function notifyGameEnded(gameId: string, drawMode: string, totalWinners: number): void {
