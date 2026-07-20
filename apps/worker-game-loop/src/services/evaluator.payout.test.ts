@@ -82,4 +82,9 @@ describe('computePayoutAmount', () => {
     const result = computePayoutAmount('10.0000', 1, 500, 0);
     expect(result.currency).toBe('WAX');
   });
+
+  it('BINGO regression: 1.0000 BINGO × 1 × 100 / 100 = 1.0000 BINGO', () => {
+    const result = computePayoutAmount('1.0000 BINGO', 1, 100, 0);
+    expect(result).toEqual({ amount: 1, currency: 'BINGO' });
+  });
 });

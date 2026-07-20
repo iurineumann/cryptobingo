@@ -825,4 +825,20 @@ describe('persistPrizeTx — grava prizetxes p/ jogos non-multimatch (BUG #386)'
         await expect(persistPrizeTx('game3', 'chunk_clean', entries, 'txhash-ghi')).resolves.toBeUndefined();
         expect(prizePersistTotal.labels({ result: 'error' }).inc).toHaveBeenCalled();
     });
+
+    it('BINGO regression: computePayoutAmount chamado com ticketPrice correto (não ticketId)', async () => {
+        const entries = [{
+            ticketId: 't4', ticketOwner: 'player4', ballCount: 40, patternMask: '0x1FF',
+            goldenMultiplier: 0, patternName: 'ROW_1', weight: 100,
+            baseMultiplier: 1, ticketPrice: '1.0000 BINGO',
+        }] as any;
+
+        await persistPrizeTx('game4', 'chunk_clean', entries, 'txhash-jkl');
+
+        expect(computePayoutAmount).toHaveBeenCalledWith('1.0000 BINGO', 1, 100, 0);
+
+        const arg = (savePrizeTx as jest.Mock).mock.calls[0][0];
+        expect(arg.amount).toBe('1.0000');
+        expect(arg.currency).toBe('BINGO');
+    });
 });

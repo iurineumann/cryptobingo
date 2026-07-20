@@ -5,9 +5,14 @@ import {
     applyDrawnBalls,
     checkWinPatterns,
     selectBestPayout,
+    classifyWinnersForBatch,
 } from './evaluator';
 import { bestSatisfiedCombo, type ComboContext } from './combinationEvaluator';
 import type { BlockchainTicketRecord } from '@cryptobingo/shared-types';
+
+jest.mock('./nftMechanics', () => ({
+    getBoostNftIds: jest.fn().mockResolvedValue([]),
+}));
 
 function makeTicket(matrix: number[], state = 0x00001000): BlockchainTicketRecord {
     return {
@@ -15,6 +20,16 @@ function makeTicket(matrix: number[], state = 0x00001000): BlockchainTicketRecor
         owner: 'jogador1',
         matrix,
         state,
+    } as BlockchainTicketRecord;
+}
+
+function makeTicketWithPrice(matrix: number[], priceQuantity: string, state = 0x00001000): BlockchainTicketRecord {
+    return {
+        ticket_id: '2',
+        owner: 'jogador1',
+        matrix,
+        state,
+        price: { quantity: priceQuantity, contract: 'bingogametkn' },
     } as BlockchainTicketRecord;
 }
 
@@ -328,6 +343,37 @@ describe('GOLDEN BALL — ga fallback calculation (T3)', () => {
 
         expect(ga).toBe(4);
         expect(effectiveBalls.length).toBe(5);
+    });
+});
+
+// ==========================================
+// classifyWinnersForBatch — ticketPrice
+// ==========================================
+// Regression: PayoutEntry.ticketPrice deve conter o asset de preço, não ticketId.
+// Evita que computePayoutAmount no consumer interprete uint64 como float → WAX gigante.
+describe('classifyWinnersForBatch — ticketPrice', () => {
+    const matrix = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+    const drawnBalls = [1, 5, 10, 15, 20];
+
+    it('preenche ticketPrice com price.quantity do ticket', async () => {
+        const ticket = makeTicketWithPrice(matrix, '1.0000 BINGO');
+        const winners = [{
+            ticket, patternName: 'ROW_0', patternMask: 33n, weight: 100,
+        }];
+        const result = await classifyWinnersForBatch(winners, drawnBalls, 'standard', 0, 0);
+        const all = [...result.chunks.flat(), ...result.comboSingles, ...result.nftSingles];
+        expect(all[0].ticketPrice).toBe('1.0000 BINGO');
+        expect(all[0].ticketPrice).not.toBe(ticket.ticket_id);
+    });
+
+    it('usa string vazia quando ticket.price é undefined', async () => {
+        const ticket = makeTicket(matrix);
+        const winners = [{
+            ticket, patternName: 'ROW_0', patternMask: 33n, weight: 100,
+        }];
+        const result = await classifyWinnersForBatch(winners, drawnBalls, 'standard', 0, 0);
+        const all = [...result.chunks.flat(), ...result.comboSingles, ...result.nftSingles];
+        expect(all[0].ticketPrice).toBe('');
     });
 });
 
