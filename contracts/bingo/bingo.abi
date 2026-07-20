@@ -1010,6 +1010,10 @@
         {
           "name": "price",
           "type": "extended_asset"
+        },
+        {
+          "name": "paid_stages",
+          "type": "uint64"
         }
       ]
     },

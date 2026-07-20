@@ -622,6 +622,10 @@ namespace bingo {
         auto ticket_itr = tickets.require_find(ticket_id, "Ticket not found.");
         name winner = ticket_itr->owner;
 
+        // ADR-052: idempotência por (ticket, stage) — evita double-pay em retry
+        uint64_t stage_bit = 1ULL << stage_num;
+        check(!(ticket_itr->paid_stages & stage_bit), "stage ja pago (idempotencia)");
+
         extended_asset payout = ticket_itr->price.quantity.amount > 0
             ? ticket_itr->price
             : game_itr->ticket_price;  // fallback para tickets legados sem price
@@ -639,6 +643,13 @@ namespace bingo {
             }
             // ADR-005: acumula payout para cálculo do GGR em closegame
             games.modify(game_itr, same_payer, [&](auto& g) { g.total_paid += payout.quantity.amount; });
+        }
+
+        // ADR-052: marca bit de stage pago (idempotência)
+        {
+            auto t_itr = tickets.find(ticket_id);
+            if (t_itr != tickets.end())
+                tickets.modify(t_itr, same_payer, [&](auto& t) { t.paid_stages |= stage_bit; });
         }
         // Jogo permanece em "paying". Worker chama closegame() após todos os stages.
     }

@@ -81,6 +81,7 @@ namespace bingo {
         uint32_t           state;
         uint64_t           game_id;
         extended_asset     price;   // preço efetivo pago por este ticket (ADR-010 variable pricing)
+        uint64_t           paid_stages = 0;   // bitmask de stages já pagos (ADR-052 idempotência claimstage)
 
         uint64_t primary_key()  const { return ticket_id; }
         uint64_t by_owner()     const { return owner.value; }

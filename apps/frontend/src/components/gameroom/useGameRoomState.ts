@@ -263,7 +263,7 @@ export function useGameRoomState(
   // ativo, mesmo que o blockchain já marque o jogo como "drawn".
   const effectiveDisplayStatus = useMemo(() => {
     if (!game) return '';
-    if (drawnBalls.length > 0 && !isGameEnded) return 'drawing';
+    if (drawnBalls.length > 0 && !isGameEnded && game?.status !== 'archived') return 'drawing';
     return game.status;
   }, [game, drawnBalls.length, isGameEnded]);
 

@@ -35,6 +35,7 @@ import {
     notifyGoldenBall,
     notifyGoldenMultiplierProgress,
     notifyStageCleared,
+    notifyStageFailed,
     notifyGameEnded,
     io,
     type WinnerPayload,
@@ -239,7 +240,13 @@ async function orchestrateMultiMatch(
             });
 
             // Paga on-chain (prize_tx_sent emitido internamente)
-            await payMultiMatchStage(gameId, result, baseMultiplier);
+            try {
+                await payMultiMatchStage(gameId, result, baseMultiplier);
+            } catch (err) {
+                logger.error({ err, gameId, stage: result.stage }, 'Falha ao pagar stage — continuando');
+                notifyStageFailed(gameId, result.stage, String(err));
+                continue;
+            }
 
             // Anuncia estágio limpo (PatternsPanel progresso)
             notifyStageCleared(gameId, stage, payloads, cutoffBall, drawnBalls);
