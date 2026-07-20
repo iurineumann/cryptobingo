@@ -208,6 +208,8 @@ async function orchestrateMultiMatch(
 
     let prevCutoff    = 0;
     let totalWinners  = 0;
+    const failedStages: number[] = [];   // stages com vencedores que falharam após retry
+    let stagesWithWinners    = 0;   // total de stages que TINHAM vencedores
 
     for (const result of cutoffs) {
         const { stage, cutoffBall, winners } = result;
@@ -218,6 +220,7 @@ async function orchestrateMultiMatch(
         }
 
         if (winners.length > 0) {
+            stagesWithWinners++;
             // Computa payouts dos vencedores do estágio
             const payloads: WinnerPayload[] = winners.map(w => {
                 const actualPrice = w.ticket.price?.quantity ?? '';
@@ -239,12 +242,17 @@ async function orchestrateMultiMatch(
                 payload: { winning_ball: null, winners: payloads },
             });
 
-            // Paga on-chain (prize_tx_sent emitido internamente)
-            try {
-                await payMultiMatchStage(gameId, result, baseMultiplier);
-            } catch (err) {
-                logger.error({ err, gameId, stage: result.stage }, 'Falha ao pagar stage — continuando');
-                notifyStageFailed(gameId, result.stage, String(err));
+            // Paga on-chain (prize_tx_sent emitido internamente).
+            // payMultiMatchStage faz retry idempotente (max 3, ADR-052 paid_stages)
+            // e retorna false se algum ticket esgotou o retry.
+            const ok = await payMultiMatchStage(gameId, result, baseMultiplier);
+            if (!ok) {
+                logger.error(
+                    { gameId, stage: result.stage },
+                    `Estágio ${result.stage} falhou após retry — jogo será ABORTADO (evita underpayment).`,
+                );
+                notifyStageFailed(gameId, result.stage, 'retry esgotado');
+                failedStages.push(result.stage);
                 continue;
             }
 
@@ -265,7 +273,21 @@ async function orchestrateMultiMatch(
     }
 
     endRevealSession(gameId);
-    await setPayoutPlan(gameId, 0);
+
+    // FRENTE D (2026-07-20): só arquiva se TODOS os stages com vencedores
+    // foram pagos. Se algum falhou após retry, ABORTA (não archived com underpayment).
+    if (failedStages.length > 0) {
+        logger.error(
+            { gameId, failedStages, stagesWithWinners },
+            `Multimatch com ${failedStages.length}/${stagesWithWinners} stages falhos — abortando para evitar underpayment.`,
+        );
+        await executeAbortGame(gameId, `MULTIMATCH stages não pagos após retry: ${failedStages.join(',')}`);
+        notifyGameEnded(gameId, 'multimatch', 0);
+        await onGameResolved(gameId).catch(() => {});
+        return totalWinners;
+    }
+
+    await setPayoutPlan(gameId, stagesWithWinners);
     await triggerCloseGame(gameId);
     return totalWinners;
 }

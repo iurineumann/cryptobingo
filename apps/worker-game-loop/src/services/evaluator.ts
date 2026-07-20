@@ -588,18 +588,41 @@ export async function payMultiMatchStage(
     gameId:        string,
     result:        StageCutoffResult,
     baseMultiplier = 1,
-): Promise<void> {
-        const winLabel = `stage_${result.stage}`;
-        for (const { ticket, patternMask, ballCount } of result.winners) {
-            const txHash = await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
-            checkStageWinAchievement(ticket.owner).catch(() => {});
+): Promise<boolean> {
+    const winLabel = `stage_${result.stage}`;
+    const MAX_RETRY = 3;
 
-            if (!txHash) continue;
+    for (const { ticket, patternMask, ballCount } of result.winners) {
+        let txHash: string | undefined;
+        let attempt = 0;
+        while (attempt < MAX_RETRY) {
+            attempt++;
+            try {
+                txHash = await executeClaimStage(gameId, ticket.ticket_id, result.stage, ballCount, patternMask);
+                break;
+            } catch (err) {
+                // ADR-052: claimstage é idempotente por (ticket,stage) no contrato
+                // (paid_stages). Se falhou por erro transitório (rede/RPC), retry.
+                logger.warn(
+                    { err, tag: 'MULTI_MATCH', gameId, stage: result.stage, ticket: ticket.ticket_id, attempt },
+                    `claimstage falhou (tentativa ${attempt}/${MAX_RETRY}) — retry...`,
+                );
+                if (attempt >= MAX_RETRY) {
+                    logger.error(
+                        { err, tag: 'MULTI_MATCH', gameId, stage: result.stage, ticket: ticket.ticket_id },
+                        `claimstage esgotou retry (${MAX_RETRY}) para estágio ${result.stage}.`,
+                    );
+                    return false; // sinaliza falha ao orquestrador (ele aborta o jogo)
+                }
+                await new Promise(r => setTimeout(r, 800 * attempt));
+            }
+        }
+        if (!txHash) continue;
 
-            // — Prize Pipeline: persistir + notificar + métricas ──────────
-            notifyPrizeTxSent(gameId, ticket.ticket_id, winLabel);
+        // — Prize Pipeline: persistir + notificar + métricas ──────────
+        notifyPrizeTxSent(gameId, ticket.ticket_id, winLabel);
 
-            const winType  = 'stage' as const;
+        const winType  = 'stage' as const;
 
         const actualPrice   = ticket.price?.quantity ?? '';
         const priceParts    = actualPrice.split(' ');
@@ -634,7 +657,10 @@ export async function payMultiMatchStage(
         }).catch(err => {
             logger.error({ err, tag: 'PrizePipeline' }, 'Erro ao persistir BuyInTx stage:')
         });
+
+        checkStageWinAchievement(ticket.owner).catch(() => {});
     }
+    return true; // todos os tickets do estágio liquidados (ou não havia vencedores)
 }
 
 /**

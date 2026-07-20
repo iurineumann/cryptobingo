@@ -19,7 +19,7 @@ jest.mock('./evaluator', () => ({
     processAllGameWinners:           jest.fn(),
     findFirstFullCutoff:             jest.fn(),
     preComputeMultiMatchCutoffs:     jest.fn(),
-    payMultiMatchStage:              jest.fn(),
+    payMultiMatchStage:              jest.fn().mockResolvedValue(true),
     deriveGoldenMultiplierExported:  jest.fn(),
     computePayoutAmount:             jest.fn().mockReturnValue({ amount: 0, currency: 'BINGO' }),
     isBallInPattern:                 jest.fn().mockReturnValue(false),
@@ -45,6 +45,7 @@ jest.mock('./payoutSaga', () => ({
 jest.mock('./blockchain', () => ({
     executeCloseGame: jest.fn().mockResolvedValue('tx-close'),
     executeClaimWin:  jest.fn().mockResolvedValue('tx-claim'),
+    executeAbortGame: jest.fn().mockResolvedValue('tx-abort'),
     microserviceSession: {},
     adminSession:        {},
 }));
@@ -400,7 +401,7 @@ describe('orchestrateGame — multimatch', () => {
             more: false,
         });
         mockPreCompute.mockResolvedValue(stageResults);
-        mockPayStage.mockResolvedValue(undefined);
+        mockPayStage.mockResolvedValue(true);   // sucesso padrão (Frente D: payMultiMatchStage retorna boolean)
         mockProcessAllWinners.mockResolvedValue(undefined);
     });
 
@@ -453,27 +454,31 @@ describe('orchestrateGame — multimatch', () => {
         expect(mockPreCompute).toHaveBeenCalledWith('1', DRAWN_BALLS, '4');
     });
 
-    it('payMultiMatchStage falha no stage 2 → stages 1 e 3 pagam, jogo fecha com falha parcial', async () => {
+    it('payMultiMatchStage falha no stage 2 → jogo ABORTA (evita underpayment)', async () => {
         mockPreCompute.mockResolvedValue([
             { stage: 1, cutoffBall: 5,  cutoffIndex: 4,  winners: [makeWinResult('1')] },
             { stage: 2, cutoffBall: 10, cutoffIndex: 9,  winners: [makeWinResult('2')] },
             { stage: 3, cutoffBall: 15, cutoffIndex: 14, winners: [makeWinResult('3')] },
         ]);
+        // stage 1 ok, stage 2 falha (retry esgotado → retorna false), stage 3 ok
         mockPayStage
-            .mockResolvedValueOnce(undefined)
-            .mockRejectedValueOnce(new Error('RPC timeout'))
-            .mockResolvedValueOnce(undefined);
+            .mockResolvedValueOnce(true)
+            .mockResolvedValueOnce(false)
+            .mockResolvedValueOnce(true);
 
         await orchestrateGame('1');
 
         expect(mockPayStage).toHaveBeenCalledTimes(3);
         expect(mockNotifyStageFailed).toHaveBeenCalledTimes(1);
-        expect(mockNotifyStageFailed).toHaveBeenCalledWith('1', 2, 'Error: RPC timeout');
+        expect(mockNotifyStageFailed).toHaveBeenCalledWith('1', 2, 'retry esgotado');
         expect(mockNotifyStaged).toHaveBeenCalledTimes(2);  // stages 1 and 3 only
         expect(mockNotifyEnded).toHaveBeenCalledWith('1', 'multimatch', expect.any(Number));
-        // triggerCloseGame deve ser chamado (jogo fecha mesmo com falha parcial)
+        // executeAbortGame deve ser chamado (jogo abortado, não archived com underpayment)
+        const { executeAbortGame } = require('./blockchain');
+        expect(executeAbortGame).toHaveBeenCalledWith('1', expect.stringContaining('MULTIMATCH'));
+        // triggerCloseGame NÃO deve ser chamado (arquiva só se TODOS os stages pagos)
         const { triggerCloseGame } = require('./payoutSaga');
-        expect(triggerCloseGame).toHaveBeenCalledWith('1');
+        expect(triggerCloseGame).not.toHaveBeenCalled();
     });
 
     it('startSlowReveal cobre TODAS as bolas quando nenhum stage tem vencedores (zero fallback bug)', async () => {
