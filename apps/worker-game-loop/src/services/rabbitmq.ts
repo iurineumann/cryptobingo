@@ -1297,9 +1297,14 @@ export async function recoverStuckGames(): Promise<void> {
 
             if (game.status === 'drawing') {
                 const drawnCount = (game as any).drawn_balls?.length ?? 0;
+                // BUG-FIX (2026-07-20): quando updated_at é null (jogos em DRAWING que
+                // nunca saíram de 0 bolas), o fallback `: now` fazia o recovery achar
+                // "recente" e NUNCA abortar → travamento perpétuo em drawing.
+                // O game_id é um timestamp em ms (epoch) da criação do jogo, então
+                // usá-lo como fallback reflete o tempo real decorrido.
                 const lastUpdated = (game as any).updated_at
                     ? new Date((game as any).updated_at + 'Z').getTime()
-                    : now;
+                    : Number(game.game_id);
 
                 const wagered = (game as any).total_wagered;
                 const wageredAmount = Number.parseFloat(wagered?.quantity ?? '0') || 0;
