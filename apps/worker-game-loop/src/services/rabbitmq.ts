@@ -388,6 +388,15 @@ function consumeMessages(): void {
                                         `Jogo ${gameId}: executeStartDraw direto falhou (já drawing?). Seguindo para aguardar oráculo.`);
                                 }
                                 // ACK e segue para waitForDrawnBalls + orquestração (código comum abaixo)
+                            } else if (game.status === 'funding' || game.status === 'created') {
+                                // Jogo ainda não travou — mensagem startdraw chegou cedo.
+                                // ACK e retorna. O fluxo normal (funding→locked via AutoAdvance)
+                                // vai republicar startdraw quando o jogo estiver locked.
+                                logger.warn({ tag: 'RabbitMQ' },
+                                    `Jogo ${gameId}: on-chain ${game.status}, ainda não travado. Ignorando startdraw.`);
+                                eventsProcessedTotal.inc({ action });
+                                channel.ack(msg);
+                                return;
                             } else {
                                 // Jogo já está drawing/drawn → só ACK + legado abaixo
                                 logger.info({ tag: 'RabbitMQ' },
