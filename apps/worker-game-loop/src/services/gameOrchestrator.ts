@@ -126,14 +126,14 @@ async function orchestrateStandard(gameId: string, drawnBalls: number[], maxBall
     return winResults.length;
 }
 
-async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gametypeId: string, baseMultiplier = 1): Promise<number> {
+async function orchestrateFirstFull(gameId: string, drawnBalls: number[], gametypeId: string, baseMultiplier = 1, masterWeightOvrd = 0): Promise<number> {
     const cutoff = await findFirstFullCutoff(gameId, drawnBalls);
     const balls  = drawnBalls.slice(0, cutoff);
 
     await startSlowReveal(gameId, balls, balls.length);
     endRevealSession(gameId);
 
-    const winResults = await findAllWinners(gameId, balls, gametypeId);
+    const winResults = await findAllWinners(gameId, balls, gametypeId, masterWeightOvrd);
 
     if (winResults.length > 0) {
         const payloads = await buildWinnerPayloads(gameId, winResults, baseMultiplier);
@@ -344,6 +344,7 @@ async function orchestrateGameImpl(gameId: string): Promise<void> {
     let maxBalls        = DEFAULT_DRAW_BALLS;
     let goldenBallAfter = 0;
     let baseMultiplier  = 1;
+    let masterWeightOvrd = 0;
 
     if (gametypeId !== '0') {
         const gtRes = await rpcClient.v1.chain.get_table_rows({
@@ -357,6 +358,7 @@ async function orchestrateGameImpl(gameId: string): Promise<void> {
             maxBalls        = gt.max_balls > 0 ? gt.max_balls : DEFAULT_DRAW_BALLS;
             goldenBallAfter = gt.golden_ball_after ?? 0;
             baseMultiplier  = gt.base_multiplier ?? 1;
+            masterWeightOvrd = gt.master_weight_ovrd ?? 0;
 
             // ADR-051 / L4.2: MULTI_MATCH exige stages não-vazios. Sem defesa, o
             // orquestrador revelaria todas as 75 bolas e deixaria o jogo travado em drawn.
@@ -386,7 +388,7 @@ async function orchestrateGameImpl(gameId: string): Promise<void> {
                 break;
 
             case 'firstfull':
-                totalWinners = await orchestrateFirstFull(gameId, drawnBalls, gametypeId, baseMultiplier);
+                totalWinners = await orchestrateFirstFull(gameId, drawnBalls, gametypeId, baseMultiplier, masterWeightOvrd);
                 break;
 
             case 'goldenball':
