@@ -1524,13 +1524,20 @@ namespace bingo {
             game_itr->status == "paying"_n,
             "Game deve estar em CREATED, FUNDING, LOCKED, DRAWING ou PAYING para ser abortado."
         );
-        // Libera o slot da sala para que uma nova partida possa ser criada
+        // Libera o slot da sala
         if (game_itr->room_id != 0) {
             rooms_table rooms(get_self(), get_self().value);
             auto room_itr = rooms.find(game_itr->room_id);
             if (room_itr != rooms.end() && room_itr->current_game_id == game_id) {
                 rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
             }
+        }
+
+        // ADR-XXX: Se ninguém comprou cartela, deleta a row em vez de marcar aborted
+        // — libera RAM do contrato sem necessidade de cleargame posterior.
+        if (game_itr->total_wagered.quantity.amount == 0) {
+            games.erase(game_itr);
+            return;
         }
 
         games.modify(game_itr, same_payer, [&](auto& g) {
@@ -1606,6 +1613,33 @@ namespace bingo {
                 }
             }
             games.erase(game_itr);
+        }
+    }
+
+    // ==========================================
+    // CLEAR BATCH — limpa jogos ABORTED sem cartelas em lote
+    // ==========================================
+
+    void bingo_contract::clearbatch(const std::vector<uint64_t>& game_ids) {
+        require_auth(permission_level{get_self(), "admin"_n});
+        games_table games(get_self(), get_self().value);
+        rooms_table rooms(get_self(), get_self().value);
+
+        for (auto g : game_ids) {
+            auto itr = games.find(g);
+            check(itr != games.end(), ("clearbatch: game " + std::to_string(g) + " not found").c_str());
+            check(itr->status == "aborted"_n,
+                ("clearbatch: game " + std::to_string(g) + " not in ABORTED status").c_str());
+            check(itr->total_wagered.quantity.amount == 0,
+                ("clearbatch: game " + std::to_string(g) + " has tickets sold — use cleargame").c_str());
+            // Libera o slot da sala
+            if (itr->room_id != 0) {
+                auto room_itr = rooms.find(itr->room_id);
+                if (room_itr != rooms.end() && room_itr->current_game_id == g) {
+                    rooms.modify(room_itr, same_payer, [&](auto& r) { r.current_game_id = 0; });
+                }
+            }
+            games.erase(itr);
         }
     }
 

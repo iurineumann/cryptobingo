@@ -513,6 +513,7 @@ namespace bingo {
         [[eosio::action]] void abortgame(uint64_t game_id, std::string reason);
         [[eosio::action]] void refundticket(uint64_t game_id, uint64_t ticket_id);
         [[eosio::action]] void cleargame(uint64_t game_id, uint32_t max_rows);
+        [[eosio::action]] void clearbatch(const std::vector<uint64_t>& game_ids);
 
         // ── NFT Config (ADR-028) ──────────────────────────────────────────────
         [[eosio::action]] void confignft(uint64_t template_id, name collection_name, std::vector<nft_rule> rules);
