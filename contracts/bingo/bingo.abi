@@ -276,6 +276,16 @@
       ]
     },
     {
+      "name": "clearbatch",
+      "base": "",
+      "fields": [
+        {
+          "name": "game_ids",
+          "type": "uint64[]"
+        }
+      ]
+    },
+    {
       "name": "closecmpgn",
       "base": "",
       "fields": [
@@ -1507,6 +1517,11 @@
     {
       "name": "cleargame",
       "type": "cleargame",
+      "ricardian_contract": ""
+    },
+    {
+      "name": "clearbatch",
+      "type": "clearbatch",
       "ricardian_contract": ""
     },
     {
