@@ -211,6 +211,12 @@ async function orchestrateMultiMatch(
     const failedStages: number[] = [];   // stages com vencedores que falharam após retry
     let stagesWithWinners    = 0;   // total de stages que TINHAM vencedores
 
+    // FRENTE E (2026-07-21): setPayoutPlan ANTES do loop para evitar race com
+    // recoverPayoutGames (polling 15s). Recovery arquiva jogos em PAYING sem plano
+    // no Redis. Com expected=cutoffs.length, recovery vê que paid < expected e
+    // não archiva prematuramente. Valor real é atualizado no final do loop (linha 290).
+    await setPayoutPlan(gameId, cutoffs.length);
+
     for (const result of cutoffs) {
         const { stage, cutoffBall, winners } = result;
 
