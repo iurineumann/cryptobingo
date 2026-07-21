@@ -372,18 +372,24 @@ function consumeMessages(): void {
                         logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: startdraw lock já adquirido. Verificando status on-chain...`)
                         try {
                             const game = await fetchGame(gameId);
-                            if (game && game.status === 'locked') {
-                                // Lock existe mas startdraw NÃO foi chamado no contrato.
-                                // ACK imediato e retorna — Recovery (polling 15s) detecta
-                                // LOCKED e chama o verdadeiro executeStartDraw.
+                            if (!game || game.status === 'locked') {
+                                // Lock existe mas startdraw NÃO foi executado (ou RPC não
+                                // propagou ainda). ACK imediato e retorna — Recovery (polling
+                                // 15s) detecta LOCKED e chama o verdadeiro executeStartDraw.
+                                // Evita cair no legado waitForDrawnBalls (75 tentativas, ~2min).
                                 logger.warn({ tag: 'RabbitMQ' },
-                                    `Jogo ${gameId}: status=locked com lock, startdraw ainda não executado. Recovery fará o startdraw.`);
+                                    !game
+                                        ? `Jogo ${gameId}: fetchGame retornou null (RPC propagation delay). Recovery fará o startdraw.`
+                                        : `Jogo ${gameId}: status=locked com lock, startdraw ainda não executado. Recovery fará o startdraw.`);
                                 eventsProcessedTotal.inc({ action });
                                 channel.ack(msg);
                                 return;
                             }
                         } catch (err) {
-                            logger.warn({ err, tag: 'RabbitMQ' }, `Jogo ${gameId}: falha ao verificar status on-chain, usando comportamento legado.`);
+                            logger.warn({ err, tag: 'RabbitMQ' }, `Jogo ${gameId}: falha ao verificar status on-chain. Recovery fará o startdraw.`);
+                            eventsProcessedTotal.inc({ action });
+                            channel.ack(msg);
+                            return;
                         }
 
                         // Jogo já está drawing (oráculo a caminho) ou drawn → comportamento legado
