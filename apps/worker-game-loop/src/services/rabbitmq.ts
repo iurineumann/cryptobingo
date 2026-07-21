@@ -365,51 +365,48 @@ function consumeMessages(): void {
                 case 'startdraw': {
                     const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
                     if (!lockAcquired) {
-                        // FRENTE F (2026-07-21): lock ocupado. Verifica se startdraw já
-                        // foi executado no contrato. Se não, chama executeStartDraw direto
-                        // em vez de delegar para o Recovery (que levaria ~15s).
+                        // FRENTE F (2026-07-21): lock ocupado. Verifica status on-chain.
+                        // Se jogo não está drawing/drawn, tenta executeStartDraw direto
+                        // (contrato é idempotente). Se rejeitar, Recovery resolve.
                         logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: startdraw lock já adquirido. Verificando status on-chain...`)
+                        let sdDone = true;
                         try {
                             const game = await fetchGame(gameId);
-                            if (!game || game.status === 'locked') {
-                                // Lock existe mas startdraw NÃO foi chamado (ou RPC não
-                                // propagou ainda). Chama executeStartDraw direto — contrato
-                                // é idempotente: se outro já executou, rejeita (OK).
+                            if (!game || (game.status !== 'drawing' && game.status !== 'drawn')) {
+                                // Jogo não está drawing/drawn — pode estar locked, funding,
+                                // created, ou RPC não propagou ainda. Tenta startdraw direto.
+                                // Se o lockgame TX estava em voo, o contrato já pode estar
+                                // locked e aceita. Se rejeitar, Recovery fará em ~15s.
                                 logger.warn({ tag: 'RabbitMQ' },
                                     !game
-                                        ? `Jogo ${gameId}: fetchGame retornou null. Tentando executeStartDraw direto.`
-                                        : `Jogo ${gameId}: status=locked com lock. Tentando executeStartDraw direto.`);
+                                        ? `Jogo ${gameId}: fetchGame retornou null. Tentando executeStartDraw...`
+                                        : `Jogo ${gameId}: status=${game.status}. Tentando executeStartDraw...`);
                                 try {
                                     await executeStartDraw(gameId);
+                                    logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw direto OK.`);
                                 } catch (sdErr) {
-                                    // startdraw rejeitado (jogo já drawing/drawn) — ok,
-                                    // o oráculo está a caminho. Segue para waitForDrawnBalls.
+                                    sdDone = false;
                                     logger.warn({ err: sdErr, tag: 'RabbitMQ' },
-                                        `Jogo ${gameId}: executeStartDraw direto falhou (já drawing?). Seguindo para aguardar oráculo.`);
+                                        `Jogo ${gameId}: executeStartDraw rejeitado (status não locked). Recovery fará.`);
                                 }
-                                // ACK e segue para waitForDrawnBalls + orquestração (código comum abaixo)
-                            } else if (game.status === 'funding' || game.status === 'created') {
-                                // Jogo ainda não travou — mensagem startdraw chegou cedo.
-                                // ACK e retorna. O fluxo normal (funding→locked via AutoAdvance)
-                                // vai republicar startdraw quando o jogo estiver locked.
-                                logger.warn({ tag: 'RabbitMQ' },
-                                    `Jogo ${gameId}: on-chain ${game.status}, ainda não travado. Ignorando startdraw.`);
-                                eventsProcessedTotal.inc({ action });
-                                channel.ack(msg);
-                                return;
                             } else {
-                                // Jogo já está drawing/drawn → só ACK + legado abaixo
                                 logger.info({ tag: 'RabbitMQ' },
-                                    `Jogo ${gameId}: on-chain ${game.status}, oráculo já a caminho ou concluído.`);
+                                    `Jogo ${gameId}: on-chain ${game.status}, oráculo já a caminho.`);
                             }
                         } catch (err) {
-                            logger.warn({ err, tag: 'RabbitMQ' }, `Jogo ${gameId}: falha ao verificar status on-chain. Recovery fará o startdraw.`);
+                            logger.warn({ err, tag: 'RabbitMQ' }, `Jogo ${gameId}: falha ao verificar status on-chain. Recovery fará.`);
+                            eventsProcessedTotal.inc({ action });
+                            channel.ack(msg);
+                            return;
+                        }
+                        if (!sdDone) {
+                            // executeStartDraw rejeitado — ACK e retorna (Recovery faz)
                             eventsProcessedTotal.inc({ action });
                             channel.ack(msg);
                             return;
                         }
 
-                        // Comportamento comum: aguarda oráculo + orquestra
+                        // executeStartDraw OK (ou jogo já drawing/drawn) → aguarda oráculo
                         channel.ack(msg);
                         const drawnBalls = await waitForDrawnBalls(gameId);
                         if (!drawnBalls) {
