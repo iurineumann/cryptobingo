@@ -365,19 +365,28 @@ function consumeMessages(): void {
                 case 'startdraw': {
                     const lockAcquired = await acquireOrchestrationLock(gameId, 90_000);
                     if (!lockAcquired) {
-                        // C7.2: lock existente = executeStartDraw já realizado em outro lugar
-                        // (ex: processLockedGame chamou executeStartDraw direto, ou auto-advance).
-                        // O contrato JÁ está `drawn` (ou `drawing` aguardando oráculo). Precisamos
-                        // garantir que o "showing" (slow reveal) rode — senão o jogo trava em drawn
-                        // sem revelar bolas (bug do jogo 1784390752148). Disparamos orchestrateGame,
-                        // que valida status==='drawn' internamente e emite notifyRevealStarted.
-                        //
-                        // BUG FIX (2026-07-18): ack obrigatório ANTES de delegar ao orquestrador.
-                        // Sem ack, a mensagem permanece unacked e com prefetch(1) bloqueia TODAS as
-                        // mensagens subsequentes da fila — root cause dos 802 msgs acumuladas com
-                        // consumer parado e sem nenhum log de erro.
-                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: executeStartDraw já realizado (lock existente). Garantindo orquestração do reveal...`)
-                        eventsProcessedTotal.inc({ action });
+                        // FRENTE F (2026-07-21): verifica status on-chain antes de assumir
+                        // que "executeStartDraw já foi realizado". O lock pode ser de outra
+                        // instância do handler (race) sem que startdraw tenha sido executado
+                        // no contrato — evitando polling desnecessário de ~2 min.
+                        logger.info({ tag: 'RabbitMQ' }, `Jogo ${gameId}: startdraw lock já adquirido. Verificando status on-chain...`)
+                        try {
+                            const game = await fetchGame(gameId);
+                            if (game && game.status === 'locked') {
+                                // Lock existe mas startdraw NÃO foi chamado no contrato.
+                                // ACK imediato e retorna — Recovery (polling 15s) detecta
+                                // LOCKED e chama o verdadeiro executeStartDraw.
+                                logger.warn({ tag: 'RabbitMQ' },
+                                    `Jogo ${gameId}: status=locked com lock, startdraw ainda não executado. Recovery fará o startdraw.`);
+                                eventsProcessedTotal.inc({ action });
+                                channel.ack(msg);
+                                return;
+                            }
+                        } catch (err) {
+                            logger.warn({ err, tag: 'RabbitMQ' }, `Jogo ${gameId}: falha ao verificar status on-chain, usando comportamento legado.`);
+                        }
+
+                        // Jogo já está drawing (oráculo a caminho) ou drawn → comportamento legado
                         channel.ack(msg);
                         // CORREÇÃO RACE (2026-07-18): o executeStartDraw pode estar em voo
                         // (contrato ainda em `locked`/`drawing`). Espera o oráculo confirmar
