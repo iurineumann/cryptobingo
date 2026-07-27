@@ -303,6 +303,13 @@ export const stateWatcherPublishLatency = new Histogram({
     registers:  [registry],
 });
 
+/** Lag entre block_time do último evento processado e now(). */
+export const stateWatcherCursorLag = new Gauge({
+    name:       'worker_state_watcher_cursor_lag_seconds',
+    help:       'Lag entre block_time do último evento processado e now()',
+    registers:  [registry],
+});
+
 // ==========================================
 // SERVIDOR HTTP DE MÉTRICAS
 // ==========================================
