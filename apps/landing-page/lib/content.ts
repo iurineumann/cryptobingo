@@ -225,19 +225,27 @@ export function loadTutorials(locale: string = 'en'): TutorialItem[] {
 
 export function loadTutorialPost(slug: string, locale: string = 'en'): TutorialItem | null {
   const canonicalId = getCanonicalId('tutorial', slug, locale);
-  if (!canonicalId) return null;
-  const filePath = path.join(contentDir, 'tutorial', locale, `${canonicalId}.mdx`);
-  if (!fs.existsSync(filePath)) return null;
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const { data, content } = matter(raw);
-  return {
-    slug,
-    title: data.title || '',
-    description: data.description || '',
-    body: marked.parse(content.trim()) as string,
-    order: data.order || 99,
-    faq: data.faq as FAQEntry[] | undefined,
-  };
+  // O slugs.json 'tutorial' usa canonicalId em PT, mas os arquivos .mdx usam o slug
+  // (filename) como nome. Se o arquivo do canonicalId não existir, tenta o slug direto
+  // como filename — espelha o que loadTutorials (listagem) já faz. Sem isso, o post
+  // individual cai no fallback 'Tutorials coming soon!'.
+  const candidates = [canonicalId, slug].filter(Boolean) as string[];
+  for (const id of candidates) {
+    const filePath = path.join(contentDir, 'tutorial', locale, `${id}.mdx`);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const { data, content } = matter(raw);
+      return {
+        slug,
+        title: data.title || '',
+        description: data.description || '',
+        body: marked.parse(content.trim()) as string,
+        order: data.order || 99,
+        faq: data.faq as FAQEntry[] | undefined,
+      };
+    }
+  }
+  return null;
 }
 
 interface PageHeading {
