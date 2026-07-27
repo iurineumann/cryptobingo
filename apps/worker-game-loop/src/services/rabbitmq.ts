@@ -353,6 +353,11 @@ function consumeMessages(): void {
                     // Encadeia startdraw via fila — consumer tem acquireOrchestrationLock
                     // contra dupla-execução (auto-advance também publica como backup).
                     await publishGameEvent(QUEUE_NAME, 'startdraw', { gameId });
+                    // Libera o orchestrationLock — o consumidor do startdraw (linha 366)
+                    // adquire o próprio lock. O Frente F (if !lockAcquired) trata race
+                    // com backup do auto-advance. Manter o lock aqui por 90s TTL trava
+                    // jogos em LOCKED até o TTL expirar (~90s de delay no startdraw).
+                    releaseOrchestrationLock(gameId).catch(() => {});
                     break;
                 }
 
