@@ -424,7 +424,13 @@ function consumeMessages(): void {
                     // Se o worker morre, o timer para e o lock expira → outro nó assume.
                     const watchdog = startLockWatchdog(gameId, 90_000);
 
-                    await executeStartDraw(gameId);
+                    try {
+                        await executeStartDraw(gameId);
+                    } catch (err) {
+                        watchdog.stop();
+                        await releaseOrchestrationLock(gameId).catch(() => {});
+                        throw err;
+                    }
                     // NOTA C7.1: não emitimos mais notifyDrawingStarted aqui. O "showing"
                     // (slow reveal) é iniciado pelo gameOrchestrator (notifyRevealStarted),
                     // que roda quando o jogo está `drawn` — independente de COMO chegou lá.
@@ -1158,6 +1164,11 @@ export async function autoClaimDrawnGames(): Promise<void> {
         });
 
         const games = response.rows as BlockchainGameState[];
+        const drawnCount = games.filter(g => g.status === 'drawn').length;
+        if (drawnCount > 0) {
+            logger.info({ tag: 'AutoAdvance' },
+                `autoClaimDrawnGames: ${games.length} games, ${drawnCount} drawn, ${processedGames.size} cached`);
+        }
         for (const game of games) {
             const gameId = String(game.game_id);
             if (game.status !== 'drawn') continue;
@@ -1403,7 +1414,53 @@ export async function recoverStuckGames(): Promise<void> {
         logger.error({ err, tag: 'Recovery' }, 'Erro na varredura LOCKED:')
     }
 
-    // 3. Recovery de FUNDING (coberto pelo auto-advance, mas fazemos passada extra)
+    // 3. Recovery de DRAWN sem pagamento — jogo saiu de drawing pra drawn mas
+    //    ninguém chamou orchestrateGame (ex: Recovery fez startdraw, RabbitMQ
+    //    handler ACKed sem esperar oracle, oráculo respondeu, stuck em drawn).
+    try {
+        const drawnResult = await rpcClient.v1.chain.get_table_rows({
+            code:    CONTRACT_ACCOUNT,
+            scope:   CONTRACT_ACCOUNT,
+            table:   'games',
+            limit:   200,
+            reverse: true,
+            json:    true,
+        });
+
+        const drawnRows = drawnResult.rows as BlockchainGameState[];
+        const totalGames = drawnRows.length;
+        const drawnGames = drawnRows.filter(g => g.status === 'drawn');
+        const unpaidDrawn = drawnGames.filter(g => {
+            const paid = (g as any).total_paid ?? 0;
+            const wagered = Number.parseFloat((g as any).total_wagered?.quantity ?? '0') || 0;
+            return wagered > 0 && paid === 0;
+        });
+        logger.info({ tag: 'Recovery' },
+            `Recovery DRAWN scan: ${totalGames} games, ${drawnGames.length} drawn, ${unpaidDrawn.length} unpaid (wagered>0, total_paid=0)`);
+
+        for (const game of drawnRows) {
+            const gameId = String(game.game_id);
+            if (game.status !== 'drawn') continue;
+            const wagered = (game as any).total_wagered;
+            const totalPaid = (game as any).total_paid ?? 0;
+            const wageredAmount = Number.parseFloat(wagered?.quantity ?? '0') || 0;
+            if (wageredAmount > 0 && totalPaid === 0) {
+                logger.info({ tag: 'Recovery' }, `Jogo ${gameId} DRAWN sem pagamentos (total_paid=0). Orquestrando payout...`);
+                const lockAcquired = await acquireOrchestrationLock(gameId, 0);
+                if (lockAcquired) {
+                    orchestrateGame(gameId).catch(err =>
+                        logger.error({ err, tag: 'Recovery' }, `Erro orchestrateGame (${gameId}):`)
+                    );
+                } else {
+                    logger.info({ tag: 'Recovery' }, `Jogo ${gameId} já sendo processado.`);
+                }
+            }
+        }
+    } catch (err) {
+        logger.error({ err, tag: 'Recovery' }, 'Erro na varredura DRAWN:')
+    }
+
+    // 4. Recovery de FUNDING (coberto pelo auto-advance, mas fazemos passada extra)
     //    autoLockFundingGames já é chamado no bootstrap antes do RabbitMQ
     logger.info({ tag: 'Recovery' }, 'Varredura concluída.')
 }
