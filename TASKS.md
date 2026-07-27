@@ -131,3 +131,13 @@
 - [x] **CSP do lobby**: `staticwebapp.config.json` `connect-src` libera os 4 presets de RPC do dropdown (`waxtestnet.greymass.com`, `wax-testnet.eosphere.io`, `testnet.waxsweden.org`, `testnet.wax.eosusa.io`). Deployado em `test.cryptobingo.bet`.
 - [x] **ADR-045** criado; **ADR-026** com errata; **CLAUDE.md** (seção auth), **SPEC.md** §2.4, **openapi.yaml** `/rooms/{id}/settings` atualizados.
 - [x] **RAG**: reindexados `docs/adr/**` (ADR-045 + ADR-026) e ingerido session-summary com tags `['cryptobingo','session-summary','adr']`.
+
+## Épico 8: Migrar 3 Static Web Apps (Azure) → static nginx VPS — Sessão 2026-07-27
+- [x] **ADR-060** criada (errata ADR-054): trazer cryptobingo-frontend / cryptobingo-landing / cryptobingo-swap-ui de Azure SWA para static no cryptobingo-nginx VPS.
+- [x] **infra/nginx/apps.conf**: +3 server blocks (landing SSG 301→/en/, frontend/swap-ui SPA try_files) servindo `/usr/share/nginx/static/<app>`; CSP transposta de `staticwebapp.config.json`.
+- [x] **scripts/deploy-static-vps.sh**: substitui `deploy-frontend.sh` + `deploy-landing.sh` (Azure SWA). Build + gate CSP + rsync + `nginx -s reload`.
+- [x] **docs/processes/deploy-vps.md** §7/§9: deleção SWA + deploy static VPS.
+- [x] **VPS**: volume `/opt/cryptobingo/static:/usr/share/nginx/static:ro` no cryptobingo-nginx; build em worktree /tmp (pnpm install + shared-types/blockchain-core antes do frontend); rsync + reload por app.
+- [x] **Validação origem pública**: cryptobingo.bet 308 (/→/en/, SSG 200, blog 200); test.cryptobingo.bet 200 + CSP DENY; test-swap.cryptobingo.bet 200.
+- [x] **PR #465** merge develop; **Issue #464** fechada.
+- [ ] **Pendente**: deletar 3 SWA no Azure (`az staticwebapp delete`) → Azure ZERADO.
