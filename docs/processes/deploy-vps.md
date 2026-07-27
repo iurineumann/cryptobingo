@@ -70,46 +70,59 @@ e senhas dos datastores via env (nunca hardcoded no repo).
 - [ ] Firewall: portas 5432/27017/6379/5672 NÃO expostas à internet (só rede interna).
 
 ## 7. Deleção de recursos Azure (após validação total no VPS)
-- `az containerapp delete -n api-gateway -g cryptobingo-testnet`
-- `az containerapp delete -n worker-game-loop -g cryptobingo-testnet`
-- `az containerapp delete -n oracle-daemon -g cryptobingo-testnet`
-- `az containerapp env delete -n cryptobingo-env -g cryptobingo-testnet` (se não usado por SWA)
-- Manter Static Web Apps (frontend, swap-ui) e o Resource Group se necessário.
+- `az containerapp delete -n api-gateway -g cryptobingo-testnet` (já migrado p/ VPS)
+- `az containerapp delete -n worker-game-loop -g cryptobingo-testnet` (já migrado p/ VPS)
+- `az containerapp delete -n oracle-daemon -g cryptobingo-testnet` (já migrado p/ VPS)
+- `az containerapp env delete -n cryptobingo-env -g cryptobingo-testnet`
+- **Frontend/landing/swap-ui migrados de SWA → static no nginx VPS (ADR-060).** Após validar
+  origem VPS (§9.6), deletar as 3 Static Web Apps:
+  - `az staticwebapp delete -n cryptobingo-frontend -g cryptobingo-testnet`
+  - `az staticwebapp delete -n cryptobingo-landing -g cryptobingo-testnet`
+  - `az staticwebapp delete -n cryptobingo-swap-ui -g cryptobingo-testnet`
+- Azure ZERADO para o projeto cryptobingo após isso.
 
 ## 8. RAG (registrar sempre)
 - Token GHCR, senhas de datastore, IPs, DNS, decisões de arquitetura → RAG local.
 - Todo ajuste de senha/token atualiza o RAG (regra do dono: "não ter mais problemas de interpretação").
 
-## 9. Deploy do Landing-Page (Static Web App — blog, separado dos containers)
-O landing-page (blog) é Azure Static Web Apps, NÃO container Docker. Build é SSG
-(`ssr:false` + prerender) e depende do **submodule `content/`** (cryptobingo-tina.git),
-que tem o `content/slugs.json` (slugs dinâmicos ADR-040).
+## 9. Deploy dos 3 Frontends (Static no nginx VPS — ADR-060)
+landing-page (SSG), frontend (SPA) e swap-ui (SPA) são servidos como **arquivos estáticos**
+pelo `cryptobingo-nginx` (rede `cb-front`), montando o volume
+`/opt/cryptobingo/static:/usr/share/nginx/static:ro`. CSP transposta de
+`staticwebapp.config.json` para `add_header` em `infra/nginx/apps.conf`.
 
 ### 9.1 Pré-requisitos
-- GitHub Actions BLOQUEADAS em free tier → deploy é **MANUAL** (o `.github/workflows/deploy-landing.yml`
-  NÃO roda; serve só de configuração para quando habilitarem Actions).
-- `swa` CLI instalado; Azure CLI logado; token em `SWA_DEPLOY_TOKEN_LANDING`.
+- GitHub Actions BLOQUEADAS → build é **MANUAL** em worktree `/tmp` limpo (skill build-test).
+- `ssh vps` configurado; nginx com volume static montado (apps-compose.yml VPS).
+- landing-page SSG depende do **submodule `content/`** (cryptobingo-tina.git, `slugs.json`).
 
-### 9.2 Passo obrigatório: submodule
-Sem o submodule, o build FALHA (RRv7.18.1): `content/slugs.json` ausente →
-`loadSlugsIndex()` lança erro claro (`[react-router.config] content/slugs.json AUSENTE …
-git submodule update --init --recursive`). O `react-router.config.ts` tem esse guard
-desde fix/300 (PR #307).
-
-### 9.3 Comando (script manual)
+### 9.2 Comando (script manual unificado)
 ```bash
-bash scripts/deploy-landing.sh
+bash scripts/deploy-static-vps.sh <landing|frontend|swap-ui> [--no-build]
 ```
-O script faz: `git submodule update --init` (obrigatório) → `pnpm build` (gera HTML
-estático + `build/client/sitemap.xml` com slugs traduzidos do slugs.json) → `swa deploy`.
+O script faz: `git submodule update --init` (landing) → `pnpm build` → gate CSP
+(`validate-csp.sh`, frontend/swap-ui/landing) → rsync build → `/opt/cryptobingo/static/<app>`
+→ `docker exec cryptobingo-nginx nginx -s reload`.
 
-### 9.4 Validação pós-deploy
-- [ ] `/blog` e uma postagem individual (`/en/blog/<slug-traduzido>`) retornam HTML pré-renderizado.
-- [ ] `sitemap.xml` lista slugs traduzidos (ex: `/en/blog/crypto-wallets`), não canônicos.
-- [ ] `scripts/validate-vps-health.sh` sem erro (rotas da landing-api no VPS).
+### 9.3 Build dir por app
+- landing → `apps/landing-page/build/client`
+- frontend → `apps/frontend/dist`
+- swap-ui → `apps/swap-ui/dist`
 
-### 9.5 Notas de arquitetura (ADR-040 / A1-ssg-routing)
-- Slugs de blog/tutorial/page vêm do `content/slugs.json` (`{type:{canonicalId:{locale:slug}}}`),
-  NÃO dos nomes dos arquivos `.md`. O sitemap (`generate-sitemap.mjs`, fix/304 PR #305)
-  e o prerender (`react-router.config.ts`) leem a MESMA fonte → URLs alinhadas.
-- `zh` mantém slug canônico (URL zh usa slug pt); `en` traduzido.
+### 9.4 Validação pós-deploy (por app)
+- [ ] `curl -sI https://<domain> | grep -i content-security-policy` → header presente.
+- [ ] `curl -s https://<domain>/ | grep -i "localhost"` → vazio (sem VITE_* dev).
+- [ ] landing: `curl -sI https://cryptobingo.bet/ | grep -i location` → `301 → /en/`.
+- [ ] frontend: WebSocket `wss://test.cryptobingo.bet` conecta; 4 presets RPC no `connect-src`.
+- [ ] swap-ui: swap funciona no browser.
+
+### 9.5 Notas de arquitetura (ADR-040 / ADR-060)
+- Slugs de blog/tutorial vêm do `content/slugs.json` (submodule). Sitemap + prerender leem a mesma fonte.
+- `zh` mantém slug canônico; `en` traduzido.
+- CSP do swap-ui herda baseline do frontend (swap-ui não tem `staticwebapp.config.json` próprio).
+
+### 9.6 Cutover DNS (Cloudflare)
+Origem SWA → origem VPS: o domínio já aponta `*.cryptobingo.bet` (Cloudflare proxy ON).
+Como o nginx VPS já responde pelos 3 domínios (cert wildcard), o cutover é transparente —
+basta confirmar a origem servindo (curl com Host header) antes de confiar. SWA mantido como
+fallback até validar; depois deletar (§7).
