@@ -117,14 +117,17 @@ export function startStateWatcher(): void {
         await saveCursor(evt.global_seq);
 
         // Lag entre block_time do evento e now()
-        const blockTimeMs = new Date(evt.block_time).getTime();
-        const lagSec = (Date.now() - blockTimeMs) / 1000;
-        stateWatcherCursorLag.set(lagSec);
-        if (lagSec > 60) {
-          logger.warn(
-            { lagSec: Math.round(lagSec), global_seq: evt.global_seq, block_time: evt.block_time },
-            'StateWatcher: lag elevado (>60s) — verificar Firehose/Hyperion',
-          );
+        const evtAny = evt as any;
+        const blockTimeMs = evtAny.block_time ? new Date(evtAny.block_time).getTime() : 0;
+        if (blockTimeMs > 0) {
+          const lagSec = (Date.now() - blockTimeMs) / 1000;
+          stateWatcherCursorLag.set(lagSec);
+          if (lagSec > 60) {
+            logger.warn(
+              { lagSec: Math.round(lagSec), global_seq: evt.global_seq, block_time: evtAny.block_time },
+              'StateWatcher: lag elevado (>60s) — verificar Firehose/Hyperion',
+            );
+          }
         }
       },
 
