@@ -79,7 +79,7 @@ describe('bug #457 — DRAWN sem payout', () => {
         await recoverStuckGames();
         expect(mockLoggerInfo).toHaveBeenCalledWith({ tag: 'Recovery' }, expect.stringContaining('Recovery DRAWN scan:'));
         expect(mockLoggerInfo).toHaveBeenCalledWith({ tag: 'Recovery' }, expect.stringContaining('1785109670427'));
-        expect(mockAcquireLock).toHaveBeenCalledWith('1785109670427', 0);
+        expect(mockAcquireLock).toHaveBeenCalledWith('1785109670427');
         expect(mockOrchestrate).toHaveBeenCalledWith('1785109670427');
     });
 
@@ -101,7 +101,7 @@ describe('bug #457 — DRAWN sem payout', () => {
         mockGetTableRows.mockResolvedValue({ rows: [makeDrawnGame('1785109670427', 0, '25.0000 BINGO')] });
         mockAcquireLock.mockResolvedValue(false);
         await recoverStuckGames();
-        expect(mockAcquireLock).toHaveBeenCalledWith('1785109670427', 0);
+        expect(mockAcquireLock).toHaveBeenCalledWith('1785109670427');
         expect(mockOrchestrate).not.toHaveBeenCalled();
     });
 
