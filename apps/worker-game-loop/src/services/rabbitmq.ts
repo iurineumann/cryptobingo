@@ -1446,7 +1446,7 @@ export async function recoverStuckGames(): Promise<void> {
             const wageredAmount = Number.parseFloat(wagered?.quantity ?? '0') || 0;
             if (wageredAmount > 0 && totalPaid === 0) {
                 logger.info({ tag: 'Recovery' }, `Jogo ${gameId} DRAWN sem pagamentos (total_paid=0). Orquestrando payout...`);
-                const lockAcquired = await acquireOrchestrationLock(gameId, 0);
+                const lockAcquired = await acquireOrchestrationLock(gameId);
                 if (lockAcquired) {
                     orchestrateGame(gameId).catch(err =>
                         logger.error({ err, tag: 'Recovery' }, `Erro orchestrateGame (${gameId}):`)
