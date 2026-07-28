@@ -116,6 +116,7 @@ CookieConsent.run({
     marketing:{cookies:[{name:/^_gcl_/},{name:/^_fbp/}]}
   },
   language:{
+    default:'en',
     current:(function(){try{return localStorage.getItem('cb_lang')||'pt';}catch(e){return 'pt';}})()
   ,
     translations:{
