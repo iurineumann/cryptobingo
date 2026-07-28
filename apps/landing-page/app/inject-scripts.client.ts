@@ -161,8 +161,8 @@ export function injectCookieConsent(): void {
     var target = e.target;
     while (target && target !== document) {
       if (target.classList && target.classList.contains('cc-change-settings')) {
-        if (typeof CookieConsent !== 'undefined' && CookieConsent.show) {
-          CookieConsent.show();
+        if (typeof CookieConsent !== 'undefined' && CookieConsent.showPreferences) {
+          CookieConsent.showPreferences();
         }
         e.preventDefault();
         return;
