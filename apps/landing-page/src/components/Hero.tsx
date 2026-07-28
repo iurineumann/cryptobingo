@@ -1,8 +1,46 @@
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import NextDrawTimer from '@/components/NextDrawTimer';
+
+const DEMO_SEQ = [42, 17, 64, 8, 33, 71, 51, 22];
+
+const BINGO_COLORS: Record<string, string> = {
+  B: 'var(--color-bingo-b)', I: 'var(--color-bingo-i)', N: 'var(--color-bingo-n)',
+  G: 'var(--color-bingo-g)', O: 'var(--color-bingo-o)',
+};
+
+function getCol(n: number) {
+  if (n <= 15) return 'B'; if (n <= 30) return 'I'; if (n <= 45) return 'N';
+  if (n <= 60) return 'G'; return 'O';
+}
+
+function HeroBall() {
+  const [idx, setIdx] = useState(0);
+  const ballRef       = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const id = setInterval(() => setIdx(x => (x + 1) % DEMO_SEQ.length), 2200);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (!ballRef.current) return;
+    const el = ballRef.current;
+    el.classList.remove('gr-drop'); void el.offsetWidth; el.classList.add('gr-drop');
+  }, [idx]);
+  const n = DEMO_SEQ[idx], col = getCol(n), color = BINGO_COLORS[col];
+  return (
+    <div className="landing-hero-ball-wrap" style={{ '--ball-color': color } as React.CSSProperties}>
+      <div className="gr-ball-halo" />
+      <div ref={ballRef} className="gr-ball-hero gr-drop">
+        <div className="ball-surface" />
+        <span className="ball-letter">{col}</span>
+        <span className="ball-number">{n}</span>
+      </div>
+    </div>
+  );
+}
 
 interface HeroProps {
   hero?: {
@@ -17,12 +55,21 @@ export default function Hero({ hero }: HeroProps) {
   const { t } = useTranslation();
   const { locale } = useParams();
   const { trackEvent } = useAnalytics(locale);
+  const [showHeroBall, setShowHeroBall] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+
   const h = hero || {
     title: t('hero.title'),
     subtitle: t('hero.subtitle'),
     cta_text: t('hero.cta_text'),
     cta_link: 'https://test.cryptobingo.bet',
   };
+
+  // Mostra HeroBall apos 3s (video pode nunca carregar em conexoes lentas)
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHeroBall(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <section className="relative min-h-[calc(100vh-4rem)] flex items-center overflow-hidden">
@@ -71,34 +118,31 @@ export default function Hero({ hero }: HeroProps) {
           </div>
           <div className="hidden md:block flex-1 max-w-md" data-testid="hero-image">
             <div className="relative group">
-              <img
-                src="/images/game-screenshot.png"
-                alt="CryptoBingo game screenshot"
-                className="w-full rounded-2xl border border-surface-700/50 shadow-2xl shadow-brand-500/10"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling;
-                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                }}
-              />
-              <div className="hidden absolute inset-0 items-center justify-center bg-surface-950/60 rounded-2xl border border-surface-700/50" data-testid="hero-image-fallback">
-                <div className="text-center">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-500/20 to-accent-500/20 flex items-center justify-center mx-auto mb-3 border border-brand-500/20">
-                    <Play size={32} className="text-accent-400 ml-1" />
+              {!videoError && (
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full rounded-2xl border border-surface-700/50 shadow-2xl shadow-brand-500/10"
+                  onError={() => setVideoError(true)}
+                  onCanPlay={() => setShowHeroBall(false)}
+                >
+                  <source src="/images/hero-loop.webm" type="video/webm" />
+                  <source src="/images/hero-loop.mp4" type="video/mp4" />
+                </video>
+              )}
+              {(videoError || showHeroBall) && <HeroBall />}
+              {!showHeroBall && !videoError && (
+                <div className="hidden absolute inset-0 items-center justify-center bg-surface-950/60 rounded-2xl border border-surface-700/50" data-testid="hero-image-fallback">
+                  <div className="text-center">
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-500/20 to-accent-500/20 flex items-center justify-center mx-auto mb-3 border border-brand-500/20">
+                      <Play size={32} className="text-accent-400 ml-1" />
+                    </div>
+                    <p className="text-sm text-slate-500">Game Preview</p>
                   </div>
-                  <p className="text-sm text-slate-500">Game Preview</p>
                 </div>
-              </div>
-              <button
-                data-testid="hero-play-overlay"
-                className="absolute inset-0 flex items-center justify-center bg-surface-950/0 hover:bg-surface-950/40 rounded-2xl transition-all duration-300 group"
-                onClick={() => trackEvent('cta_click', { cta_location: 'hero_video' })}
-              >
-                <div className="w-16 h-16 rounded-full bg-accent-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-lg shadow-accent-500/30">
-                  <Play size={28} className="text-surface-900 ml-1" />
-                </div>
-              </button>
+              )}
             </div>
           </div>
         </div>
