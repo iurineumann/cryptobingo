@@ -44,7 +44,8 @@
     "error_generic": "Erro ao executar swap: {{msg}}",
     "connect_to_swap": "Conecte sua carteira para fazer swap",
     "wallet_balance": "Saldo: {{amount}}",
-    "reverse": "Inverter"
+    "reverse": "Inverter",
+    "error_slippage": "Slippage excedido — tente novamente."
   },
   "pool": {
     "title": "Pools de Liquidez",
