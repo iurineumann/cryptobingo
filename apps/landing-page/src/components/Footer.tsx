@@ -28,7 +28,7 @@ export default function Footer({ social }: FooterProps) {
   const productLinks = [
     { label: t('nav.testnet'), href: 'https://test.cryptobingo.bet' },
     { label: t('nav.faq'), href: `/${lang}/faq` },
-    { label: t('nav.ideas'), href: '/ideas' },
+    { label: t('nav.ideas'), href: `/${lang}/ideas` },
     { label: t('nav.blog'), href: `/${lang}/blog` },
     { label: t('nav.tutorials'), href: `/${lang}/tutorials` },
   ] as const;

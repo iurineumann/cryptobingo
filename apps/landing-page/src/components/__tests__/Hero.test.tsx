@@ -44,13 +44,14 @@ describe('Hero', () => {
     expect(screen.getByText('Play')).toBeInTheDocument();
   });
 
-  it('should show fallback on image error', () => {
+  it('should show HeroBall fallback on video error', () => {
     render(<Hero />);
-    const img = screen.getByAltText('CryptoBingo game screenshot');
-    fireEvent.error(img);
-    expect(img.style.display).toBe('none');
-    const fallback = screen.getByTestId('hero-image-fallback');
-    expect(fallback.style.display).toBe('flex');
+    const video = document.querySelector('video');
+    expect(video).toBeInTheDocument();
+    expect(video?.querySelector('source[src="/images/hero-loop.webm"]')).toBeTruthy();
+    expect(video?.querySelector('source[src="/images/hero-loop.mp4"]')).toBeTruthy();
+    fireEvent.error(video!);
+    expect(screen.getByTestId('hero-image')).toBeInTheDocument();
   });
 
   it('should handle missing locale', () => {

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Session } from '@wharfkit/session';
-import { UInt64 } from '@wharfkit/antelope';
+import { UInt64, Name } from '@wharfkit/antelope';
 import type { BlockchainGameState, BlockchainTicketRecord } from '@cryptobingo/shared-types';
-import { Pattern, fetchGamePatterns, isCombinationSatisfied, type CombinationRuleInput, type ExtendedRule } from '../components/ticketUtils';
+import { Pattern, fetchGamePatterns, fetchGamePatternsPublic, isCombinationSatisfied, type CombinationRuleInput, type ExtendedRule } from '../components/ticketUtils';
 import { fetchPublicGametypeMetadata } from '../services/api';
+import { fetchTableRows } from '../utils/rpc';
 
 const CONTRACT = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
 
@@ -85,7 +86,7 @@ function parseTicket(r: BlockchainTicketRecord & { matrix: number[] | string }):
   };
 }
 
-export function useReplay(gameId: string, session: Session): ReplayState {
+export function useReplay(gameId: string, session?: Session | null, playerAccount?: string): ReplayState {
   const [game, setGame] = useState<BlockchainGameState | null>(null);
   const [tickets, setTickets] = useState<Array<{ id: string; matrix: number[]; pricePaid?: string }>>([]);
   const [allTicketRecords, setAllTicketRecords] = useState<TicketData[]>([]);
@@ -103,21 +104,28 @@ export function useReplay(gameId: string, session: Session): ReplayState {
     async function load() {
       setIsLoading(true);
       try {
-        const [gameRes, ticketsRes, allTicketsRes] = await Promise.all([
-          session.client.v1.chain.get_table_rows({
-            code: CONTRACT, scope: CONTRACT, table: 'games',
-            lower_bound: UInt64.from(gameId), upper_bound: UInt64.from(gameId), limit: 1, json: true,
-          }),
-          session.client.v1.chain.get_table_rows({
-            code: CONTRACT, scope: UInt64.from(gameId), table: 'tickets',
-            lower_bound: session.actor.value, upper_bound: session.actor.value,
-            index_position: 'secondary', key_type: 'i64', limit: 50, json: true,
-          }),
-          session.client.v1.chain.get_table_rows({
-            code: CONTRACT, scope: UInt64.from(gameId), table: 'tickets',
-            limit: 500, json: true,
-          }),
-        ]);
+        const effectivePlayer = playerAccount || session?.actor.toString();
+
+        const gameResP = fetchTableRows({
+          code: CONTRACT, scope: CONTRACT, table: 'games',
+          lower_bound: UInt64.from(gameId).toString(), upper_bound: UInt64.from(gameId).toString(), limit: 1,
+        }, session);
+
+        const ticketsResP = effectivePlayer
+          ? fetchTableRows({
+              code: CONTRACT, scope: UInt64.from(gameId).toString(), table: 'tickets',
+              lower_bound: Name.from(effectivePlayer).value.toString(),
+              upper_bound: Name.from(effectivePlayer).value.toString(),
+              index_position: 'secondary', key_type: 'i64', limit: 50,
+            }, session)
+          : Promise.resolve({ rows: [], more: false });
+
+        const allTicketsResP = fetchTableRows({
+          code: CONTRACT, scope: UInt64.from(gameId).toString(), table: 'tickets',
+          limit: 500,
+        }, session);
+
+        const [gameRes, ticketsRes, allTicketsRes] = await Promise.all([gameResP, ticketsResP, allTicketsResP]);
         if (cancelled) return;
 
         const g = gameRes.rows[0] as BlockchainGameState | undefined;
@@ -128,11 +136,12 @@ export function useReplay(gameId: string, session: Session): ReplayState {
         let maxBalls = 75;
         if (gametypeId !== '0') {
           try {
-            const gtRes = await session.client.v1.chain.get_table_rows({
+            const gtRes = await fetchTableRows({
               code: CONTRACT, scope: CONTRACT, table: 'gametypes',
-              lower_bound: UInt64.from(gametypeId), upper_bound: UInt64.from(gametypeId),
-              limit: 1, json: true,
-            });
+              lower_bound: UInt64.from(gametypeId).toString(),
+              upper_bound: UInt64.from(gametypeId).toString(),
+              limit: 1,
+            }, session);
             if (gtRes.rows.length) {
               const gt = gtRes.rows[0] as any;
               maxBalls = gt.max_balls > 0 ? gt.max_balls : 75;
@@ -141,7 +150,7 @@ export function useReplay(gameId: string, session: Session): ReplayState {
           // Busca patterns e combinações deste gametype
           try {
             const [pats, meta] = await Promise.all([
-              fetchGamePatterns(session, gametypeId),
+              session ? fetchGamePatterns(session, gametypeId) : fetchGamePatternsPublic(gametypeId),
               fetchPublicGametypeMetadata(gametypeId),
             ]);
             if (!cancelled) {

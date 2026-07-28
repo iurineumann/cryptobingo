@@ -17,7 +17,8 @@ import ReplaySummary from './replayroom/ReplaySummary';
 
 interface ReplayRoomProps {
   gameId: string;
-  session: Session;
+  session?: Session | null;
+  playerAccount?: string;
   onLeave: () => void;
 }
 
@@ -29,14 +30,14 @@ function formatDateShort(endTime: number): string {
   });
 }
 
-export default function ReplayRoom({ gameId, session, onLeave }: ReplayRoomProps) {
+export default function ReplayRoom({ gameId, session, playerAccount, onLeave }: ReplayRoomProps) {
   const { t } = useTranslation();
   const {
     game, tickets, aggregate, revealedBalls, totalBalls,
     isPlaying, isComplete, isLoading, speed, patterns, combinations,
     patternWinCount, combinationWinCount, winners, goldenBall, gameEnded,
     setSpeed, togglePlay, skipToEnd, restart,
-  } = useReplay(gameId, session);
+  } = useReplay(gameId, session, playerAccount);
 
   const stageRef    = useRef<HTMLElement>(null);
   const patternsRef = useRef<HTMLElement>(null);
