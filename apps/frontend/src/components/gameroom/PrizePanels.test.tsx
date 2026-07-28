@@ -13,7 +13,7 @@ afterEach(() => cleanup());
 const baseProps = {
   hasBanners: true, goldenBall: null, clearedStages: [],
   isEffectiveGameEnded: true, isStaticFinalState: false,
-  playerWinEntries: [{ name: 'Linha', total: 1.5, currency: 'WAX', isCombination: false }],
+  playerWinEntries: [{ name: 'Linha', total: 1.5, currency: 'WAX', isCombination: false, precision: 4 }],
   localWinners: [
     { ticket_id: '1', win_pattern: 'Linha', payouts: ['1.5000 WAX'] },
     { ticket_id: '2', win_pattern: 'Linha', payouts: ['2.0000 WAX'] },
@@ -35,5 +35,16 @@ describe('PrizePanels — prêmios jogador vs sala', () => {
   it('não mostra premiações da sala quando não há vencedores', () => {
     render(<PrizePanels {...baseProps} playerWinEntries={[]} localWinners={[]} />);
     expect(screen.queryByTestId('gr-room-prizes')).toBeNull();
+  });
+
+  it('formata premios multi-currency corretamente no share text', () => {
+    render(<PrizePanels {...baseProps} playerWinEntries={[
+      { name: 'ROW_0', total: 10.0, currency: 'WAX', isCombination: false, precision: 4 },
+      { name: 'Combo 3x', total: 5.0, currency: 'BINGO', isCombination: true, precision: 4 },
+    ]} />);
+    // O breakdown total deve mostrar "10.0000 WAX + 5.0000 BINGO"
+    const total = screen.getByTestId('gr-prize-breakdown');
+    expect(total.textContent).toContain('10.0000 WAX');
+    expect(total.textContent).toContain('5.0000 BINGO');
   });
 });

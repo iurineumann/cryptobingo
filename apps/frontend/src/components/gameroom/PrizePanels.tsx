@@ -54,7 +54,7 @@ export interface PrizePanelsProps {
   readonly clearedStages: ClearedStage[];
   readonly isEffectiveGameEnded: boolean;
   readonly isStaticFinalState: boolean;
-  readonly playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean; goldenMultiplier?: number }>;
+  readonly playerWinEntries: Array<{ name: string; total: number; currency: string; precision: number; isCombination: boolean; goldenMultiplier?: number }>;
   readonly localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
   readonly playerTickets: Array<{ id: string; matrix: number[] }>;
   readonly nextGame: BlockchainGameState | null;
