@@ -44,7 +44,8 @@
     "error_generic": "Swap failed: {{msg}}",
     "connect_to_swap": "Connect your wallet to swap",
     "wallet_balance": "Balance: {{amount}}",
-    "reverse": "Reverse"
+    "reverse": "Reverse",
+    "error_slippage": "Slippage exceeded — please try again."
   },
   "pool": {
     "title": "Liquidity Pools",
