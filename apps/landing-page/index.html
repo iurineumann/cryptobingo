@@ -51,14 +51,14 @@
         <script>
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            j.async=true;j.src=
+            '/tg/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
             })(window,document,'script','dataLayer','GTM-N88CZVJF');
         </script>
         <!-- End Google Tag Manager -->
 
-        <!-- CookieConsent CSS -->
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.css" crossorigin="anonymous" />
+        <!-- CookieConsent CSS (self-host 1ª parte) -->
+        <link rel="stylesheet" href="/static/vendor/cookieconsent.css" />
         <!-- CookieConsent theme → CryptoBingo design system -->
         <style>
         :root {
@@ -170,8 +170,8 @@
         }
         </style>
 
-        <!-- CookieConsent JS + init LGPD-compliant -->
-        <script defer src="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.umd.js" crossorigin="anonymous"></script>
+        <!-- CookieConsent JS + init LGPD-compliant (self-host 1ª parte) -->
+        <script defer src="/static/vendor/cookieconsent.umd.js"></script>
         <script>
         document.addEventListener('DOMContentLoaded',function(){
 
@@ -208,7 +208,7 @@
                 if(window.clarity) return;
                 (function(c,l,a,r,i,t,y){
                     c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                    t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;
+                    t=l.createElement(r);t.async=1;t.src='/cl/tag/'+i;
                     y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
                 })(window,document,'clarity','script','xge781i2so');
             }
@@ -257,9 +257,9 @@
                 },
 
                 language: {
-                    default: 'pt',
-                    autoDetect: 'browser',
-                    translations: {
+                    current: (function(){try{return localStorage.getItem('cb_lang')||null;}catch(e){return null;}})()
+                        ,
+                        translations: {
                         pt: {
                             consentModal: {
                                 title: '🍪 Usamos cookies',
@@ -377,7 +377,7 @@
         <!-- End CookieConsent -->
     </head>
     <body>
-        <!-- Google Tag Manager (noscript) -->
+        <!-- Google Tag Manager (noscript) — gtm.js é 1ª parte (/tg); ns.html mantém origem Google (fallback no-JS) -->
         <noscript>
             <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
                 height="0" width="0" style="display:none;visibility:hidden">
