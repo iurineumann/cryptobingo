@@ -50,15 +50,44 @@ echo "=== Deploy static: $APP (VPS nginx) ==="
 
 if [[ "$NO_BUILD" != "--no-build" ]]; then
     echo "→ Build ($FILTER)..."
+
+    # === Configura env de produção (PEÇA ESQUECIDA na migração SWA→VPS #465) ===
+    # .env.production (frontend) e .env (swap-ui) são gitignored → ausentes em
+    # worktree limpo. Sem eles o Vite embute fallbacks errados (localhost,
+    # chain ID local, stats '—', Wharfkit 'reading array'). Replica o que o
+    # deploy-frontend.sh (SWA, deletado) fazia: garantir .env.production.
+    APP_ENV="$ROOT_DIR/apps/$APP/.env.production"
+    if [[ "$APP" == "landing" ]]; then
+        # landing usa VITE_API_URL absoluto (host landing-api, NUNCA relativo '/api')
+        export VITE_API_URL="https://landing-api.cryptobingo.bet/api"
+        echo "   landing: VITE_API_URL=$VITE_API_URL (host absoluto)"
+    elif [[ "$APP" == "frontend" ]]; then
+        if [[ -f "$APP_ENV" ]]; then
+            echo "   frontend: .env.production OK"
+        else
+            echo "❌ frontend .env.production ausente em $APP_ENV"; exit 1
+        fi
+    elif [[ "$APP" == "swap-ui" ]]; then
+        if [[ ! -f "$APP_ENV" ]]; then
+            cat > "$APP_ENV" <<'EOF'
+VITE_API_GATEWAY_URL=https://test-api.cryptobingo.bet
+VITE_WAX_RPC_URL=https://waxtestnet.greymass.com
+VITE_CHAIN_ID=f16b1833c747c43682f4386fca9cbb327929334a762755ebec17f6f23c9b8a12
+VITE_SWAP_CONTRACT=bingogameswp
+VITE_GAME_URL=https://test.cryptobingo.bet
+VITE_EXPLORER_URL=https://testnet.waxblock.io
+EOF
+            echo "   swap-ui: .env.production (testnet) criado"
+        else
+            echo "   swap-ui: .env.production OK"
+        fi
+    fi
+
     if [[ "$APP" == "landing" ]]; then
         # landing-page SSG exige submodule content/ (slugs.json)
         git submodule update --init --recursive
     fi
-    if [[ -n "$ENV_MODE" ]]; then
-        (cd "$ROOT_DIR" && pnpm --filter "$FILTER" build)
-    else
-        (cd "$ROOT_DIR" && pnpm --filter "$FILTER" build)
-    fi
+    (cd "$ROOT_DIR" && pnpm --filter "$FILTER" build)
     # Gate CSP (frontend/swap-ui têm staticwebapp.config.json; landing também)
     if [[ -f "$ROOT_DIR/apps/$APP/staticwebapp.config.json" ]]; then
         echo "→ Validando CSP (gate anti-regressão)..."
@@ -89,6 +118,21 @@ rsync -az --delete "$BUILD_DIR/" "$VPS_HOST:$STATIC_ROOT/$APP/"
 
 echo "→ nginx -s reload ($NGINX_CONTAINER)..."
 ssh "$VPS_HOST" "docker exec $NGINX_CONTAINER nginx -s reload"
+
+# Purge Cloudflare (cutover step 2): o CF cacheia o HTML/asset antigo e a
+# página pode continuar servindo o build anterior após reload.
+if [[ -n "${CF_API_TOKEN:-}" && -n "${CF_ZONE_ID:-}" ]]; then
+    echo "→ Purge Cloudflare cache (zone $CF_ZONE_ID)..."
+    if curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+        -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+        --data '{"purge_everything":true}' | grep -q '"success":true'; then
+        echo "   purge OK"
+    else
+        echo "   ⚠️ purge Falhou — purgue manualmente no dashboard CF"
+    fi
+else
+    echo "⚠️ CF_API_TOKEN/CF_ZONE_ID não setados — purge Cloudflare MANUAL necessário"
+fi
 
 echo "=== ✅ Deploy $APP concluído ==="
 case "$APP" in
