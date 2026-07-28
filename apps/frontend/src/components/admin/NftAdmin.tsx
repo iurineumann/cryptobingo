@@ -10,8 +10,9 @@ import { useTranslation } from 'react-i18next';
 import { X, TriangleAlert, Check } from 'lucide-react';
 import type { Session } from '@wharfkit/session';
 import { ATOMIC_API } from '@/config/env';
-const COLLECTION   = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo1';
-const EXPLORER_URL = import.meta.env.VITE_EXPLORER_URL      ?? 'https://wax.bloks.io';
+const COLLECTION    = import.meta.env.VITE_ATOMIC_COLLECTION ?? 'cryptobingo1';
+const EXPLORER_URL  = import.meta.env.VITE_EXPLORER_URL      ?? 'https://wax.bloks.io';
+const ATOMICHUB_URL = import.meta.env.VITE_ATOMICHUB_URL     ?? 'wax-test.atomichub.io';
 
 // ── Tipos AtomicAssets ────────────────────────────────────────────────────────
 
@@ -317,7 +318,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                         {t('admin.nft_desc')} · {t('admin.nft_collection_label')}: <span className="font-mono text-[--cb-brand]">{COLLECTION}</span>
                     </p>
                 </div>
-                <a href={`${EXPLORER_URL}/account/${COLLECTION}`} target="_blank" rel="noreferrer"
+                <a href={`https://${ATOMICHUB_URL}/explorer/collection/wax-testnet/${COLLECTION}`} target="_blank" rel="noreferrer"
                    className="cb-btn cb-btn-ghost cb-btn-sm text-xs" style={{ whiteSpace: 'nowrap' }}>
                     ↗ AtomicHub
                 </a>
@@ -404,7 +405,7 @@ export default function NftAdmin({ session }: NftAdminProps) {
                                         <span className="font-bold font-mono text-[--cb-brand]">{col.collection_name}</span>
                                         {col.data?.name && <p className="text-sm text-[--cb-text-secondary] mt-0.5">{String(col.data.name)}</p>}
                                     </div>
-                                    <a href={`https://atomichub.io/collection/${col.collection_name}`} target="_blank" rel="noreferrer"
+                                    <a href={`https://${ATOMICHUB_URL}/explorer/collection/wax-testnet/${col.collection_name}`} target="_blank" rel="noreferrer"
                                        className="text-xs text-[--cb-text-tertiary] hover:text-[--cb-brand]">↗ Hub</a>
                                 </div>
                                 <div className="mt-3 text-xs text-[--cb-text-tertiary] space-y-1">
