@@ -16,6 +16,9 @@
     "discord": "Discord",
     "home": "Início"
   },
+  "tagFilter": {
+    "all": "Todos"
+  },
   "hero": {
     "badge": "BINGO GameFi na WAX",
     "title": "Ganhe prêmios reais com provably fair em cada partida",
