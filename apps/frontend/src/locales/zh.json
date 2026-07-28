@@ -44,7 +44,8 @@
     "connecting": "连接中...",
     "dev_login": "快速登录（开发）",
     "auth_failed": "认证失败。请重试。",
-    "wallet_connected": "钱包已连接"
+    "wallet_connected": "钱包已连接",
+    "retry": "重试"
   },
   "game": {
     "status": {
@@ -94,10 +95,9 @@
     "tickets_loading": "加载卡中...",
     "tickets_empty_funding": "您还没有此房间的卡。",
     "tickets_empty_default": "本轮没有卡。",
-    "chat": "房间聊天",
+    "chat": "聊天",
     "chat_you": "你",
     "chat_empty": "暂无消息，快来第一条吧！",
-    "chat": "聊天",
     "chat_placeholder": "输入消息...",
     "chat_send": "发送",
     "chat_close": "关闭聊天",
@@ -188,7 +188,8 @@
     "room_prizes_summary": "房间向 {{count}} 位中奖者支付了 {{total}}",
     "prize_preparing": "处理付款中...",
     "prize_confirming": "在区块链上确认中...",
-    "prize_confirmed": "已确认"
+    "prize_confirmed": "已确认",
+    "social_feed_empty": "暂无人中奖"
   },
   "lobby": {
     "title": "游戏大厅",
@@ -734,7 +735,12 @@
     "content_translate_regenerate": "重新生成",
     "content_translate_original": "原文",
     "content_translate_en": "英语",
-    "content_translate_zh": "中文"
+    "content_translate_zh": "中文",
+    "error": "错误",
+    "new_org": "新建组织",
+    "org_name": "组织名称",
+    "org_name_placeholder": "输入组织名称",
+    "org_owner_wallet": "所有者钱包"
   },
   "replay": {
     "back_to_lobby": "返回大厅",
@@ -915,7 +921,9 @@
     "b2b_desc": "推出您自己的品牌宾果房间，配备自定义掉落活动。触达CryptoBingo社区。",
     "b2b_cta": "成为赞助商",
     "footer_copyright": "© {{year}} CryptoBingo。保留所有权利。",
-    "footer_tagline": "可证明公平 · 链上宾果"
+    "footer_tagline": "可证明公平 · 链上宾果",
+    "community_desc": "获取最新动态、报告问题并与其他宾果玩家交流。",
+    "community_title": "加入社区"
   },
   "leaderboard": {
     "title_global": "全球排行榜",
