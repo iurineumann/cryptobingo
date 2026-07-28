@@ -174,22 +174,31 @@ export function loadBlogPosts(locale: string = 'pt'): BlogPost[] {
 
 export function loadBlogPost(slug: string, locale: string = 'pt'): BlogPost | null {
   const canonicalId = getCanonicalId('blog', slug, locale);
-  if (!canonicalId) return null;
-  const filePath = path.join(contentDir, 'blog', locale, `${canonicalId}.md`);
-  if (!fs.existsSync(filePath)) return null;
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const { data, content } = matter(raw);
-  return {
-    slug,
-    title: data.title || '',
-    description: data.description || '',
-    date: data.date || '',
-    author: data.author || '',
-    cover: data.cover || '',
-    tags: data.tags || [],
-    body: String(marked.parse(content.trim())),
-    faq: data.faq as FAQEntry[] | undefined,
-  } satisfies BlogPost;
+  // O slugs.json 'blog' usa canonicalId em PT, mas os arquivos .md usam o slug
+  // (filename) como nome. Se o arquivo do canonicalId não existir, tenta o slug direto
+  // como filename — espelha o que loadBlogPosts (listagem) já faz. Sem isso, o post
+  // individual cai no fallback 'Post not found' no cliente, divergindo do SSG e
+  // disparando React #418 (mismatch de texto na hidratação).
+  const candidates = [canonicalId, slug].filter(Boolean) as string[];
+  for (const id of candidates) {
+    const filePath = path.join(contentDir, 'blog', locale, `${id}.md`);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const { data, content } = matter(raw);
+      return {
+        slug,
+        title: data.title || '',
+        description: data.description || '',
+        date: data.date || '',
+        author: data.author || '',
+        cover: data.cover || '',
+        tags: data.tags || [],
+        body: String(marked.parse(content.trim())),
+        faq: data.faq as FAQEntry[] | undefined,
+      } satisfies BlogPost;
+    }
+  }
+  return null;
 }
 
 interface TutorialItem {
