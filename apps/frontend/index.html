@@ -69,18 +69,18 @@
       gtag('set','url_passthrough',true);
     </script>
 
-    <!-- Google Tag Manager (consent-aware — defaults=denied) -->
+    <!-- Google Tag Manager (consent-aware — 1ª parte via Cloudflare Tag Gateway em /tg) -->
     <script>
       (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
       new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
       j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-      'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+      '/tg/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
       })(window,document,'script','dataLayer','GTM-N88CZVJF');
     </script>
     <!-- End Google Tag Manager -->
 
-    <!-- CookieConsent CSS + theme → CryptoBingo design system -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.css" crossorigin="anonymous" />
+    <!-- CookieConsent CSS + theme → CryptoBingo design system (self-host 1ª parte) -->
+    <link rel="stylesheet" href="/static/vendor/cookieconsent.css" />
     <style>
     :root {
       --cc-bg: #0f0f1a;
@@ -181,8 +181,8 @@
     }
     </style>
 
-    <!-- CookieConsent JS + init LGPD-compliant -->
-    <script defer src="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.umd.js" crossorigin="anonymous"></script>
+    <!-- CookieConsent JS + init LGPD-compliant (self-host 1ª parte) -->
+    <script defer src="/static/vendor/cookieconsent.umd.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded',function(){
 
@@ -213,12 +213,16 @@
       function logConsent(cookie){
         try{
           var cats=getCats(cookie.categories);
+          var lang = (window.CookieConsent && window.CookieConsent.getLanguage && window.CookieConsent.getLanguage()) || 'pt';
           localStorage.setItem('cb_consent',JSON.stringify({
             timestamp: new Date().toISOString(),
             categories: Object.keys(cats).filter(function(k){return cats[k];}),
             consentId: (crypto.randomUUID&&crypto.randomUUID())||Date.now().toString(36),
             version: '2026.07'
           }));
+          localStorage.setItem('cb_lang', lang);
+          // cookie p/ api-gateway ler consent gate (HTTP-only nao, precisa JS-readable)
+          document.cookie = 'cb_consent=1; Path=/; Max-Age=34214400; SameSite=Lax';
         }catch(e){}
       }
 
@@ -226,7 +230,7 @@
         if(window.clarity) return;
         (function(c,l,a,r,i,t,y){
           c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-          t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;
+          t=l.createElement(r);t.async=1;t.src='/cl/tag/'+i;
           y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
         })(window,document,'clarity','script','xge781i2so');
       }
@@ -241,6 +245,12 @@
         var cats=getCats(cookie.categories);
         window._analyticsConsented = cats.analytics;
         cats.analytics ? startClarity() : stopClarity();
+        if(cats.analytics && typeof clarity==='function'){
+          clarity('consentv2', {
+            analytics_Storage: cats.analytics?'granted':'denied',
+            ad_Storage: cats.ads?'granted':'denied'
+          });
+        }
         if(cats.analytics||cats.marketing){
           window.dataLayer.push({
             event: 'page_view',
@@ -252,9 +262,12 @@
 
       if(typeof CookieConsent==='undefined') return;
 
+      var savedLang = localStorage.getItem('cb_lang');
       CookieConsent.run({
 
         autoclearCookies: true,
+
+        language: savedLang ? { current: savedLang } : undefined,
 
         categories: {
           necessary: {
@@ -402,9 +415,9 @@
     <!-- End CookieConsent -->
   </head>
   <body>
-    <!-- Google Tag Manager (noscript) -->
+    <!-- Google Tag Manager (noscript) — 1ª parte via /tg -->
     <noscript>
-      <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
+      <iframe src="/tg/ns.html?id=GTM-N88CZVJF"
           height="0" width="0" style="display:none;visibility:hidden">
       </iframe>
     </noscript>

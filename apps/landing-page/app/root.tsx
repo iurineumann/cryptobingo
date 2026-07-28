@@ -19,6 +19,10 @@ declare global {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
     _analyticsConsented?: boolean;
+    CookieConsent?: {
+      setLanguage: (lang: string) => void;
+      getLanguage?: () => string;
+    };
   }
 }
 
@@ -117,6 +121,13 @@ export default function Root() {
     if (i18n.language !== urlLocale) {
       i18n.changeLanguage(urlLocale);
     }
+    // Mantém o banner de consent no idioma ativo do site (pt/en/zh)
+    try {
+      localStorage.setItem('cb_lang', urlLocale);
+      if (typeof window.CookieConsent !== 'undefined' && window.CookieConsent.setLanguage) {
+        window.CookieConsent.setLanguage(urlLocale);
+      }
+    } catch { /* silencioso */ }
   }, [urlLocale, i18n]);
 
   return (
@@ -131,7 +142,7 @@ export default function Root() {
         <head>
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.css" />
+          <link rel="stylesheet" href="/static/vendor/cookieconsent.css" />
           <style dangerouslySetInnerHTML={{ __html: CONSENT_STYLES }} />
           <Meta />
           <Links />
@@ -146,7 +157,7 @@ export default function Root() {
           </a>
           <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="a11y-live-region" />
           <noscript>
-            <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
+            <iframe src="/tg/ns.html?id=GTM-N88CZVJF"
               height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}>
             </iframe>
           </noscript>

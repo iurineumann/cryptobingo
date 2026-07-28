@@ -383,6 +383,17 @@ function AppRoot() {
         }
     }, [i18n, session]);
 
+    // Mantém o banner de consent no idioma ativo do site (pt/en/zh)
+    useEffect(() => {
+        const lang = i18n.language.split('-')[0] as 'pt' | 'en' | 'zh';
+        try {
+            localStorage.setItem('cb_lang', lang);
+            if (typeof window.CookieConsent !== 'undefined' && window.CookieConsent.setLanguage) {
+                window.CookieConsent.setLanguage(lang);
+            }
+        } catch { /* silencioso */ }
+    }, [i18n.language]);
+
     const handleRpcChange = useCallback((url: string) => {
         setSelectedRpcUrl(url);
         window.location.reload();
