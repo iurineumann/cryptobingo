@@ -230,6 +230,11 @@
     "tokenomics_title": "Tokenomics — CryptoBingo",
     "tokenomics_desc": "Modelo econômico, RTP 85%, distribuição de tokens e tesouro",
     "whitepaper_title": "Whitepaper — CryptoBingo",
-    "whitepaper_desc": "Whitepaper técnico — arquitetura, RNG, RTP e modelo econômico"
+    "whitepaper_desc": "Whitepaper técnico — arquitetura, RNG, RTP e modelo econômico",
+    "page_not_found": "Página não encontrada — CryptoBingo"
+  },
+  "page_not_found": "Página não encontrada",
+  "whitepaper": {
+    "coming_soon": "Em breve"
   }
 }
