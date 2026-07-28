@@ -13,7 +13,7 @@ import MatchStats from './gameroom/MatchStats';
 import TicketsGrid from './gameroom/TicketsGrid';
 import ReplayControls from './replayroom/ReplayControls';
 import ReplayPatternsPanel from './replayroom/ReplayPatternsPanel';
-import ReplaySummary from './replayroom/ReplaySummary';
+import PrizePanels from './gameroom/PrizePanels';
 
 interface ReplayRoomProps {
   gameId: string;
@@ -43,7 +43,6 @@ export default function ReplayRoom({ gameId, session, playerAccount, onLeave }: 
   const patternsRef = useRef<HTMLElement>(null);
 
   const [showPatterns, setShowPatterns] = useState(true);
-  const [showSummary,  setShowSummary]  = useState(false);
   const density = 'comfortable' as const;
 
   const lastDrawn = revealedBalls.length > 0 ? revealedBalls[revealedBalls.length - 1] : null;
@@ -52,9 +51,31 @@ export default function ReplayRoom({ gameId, session, playerAccount, onLeave }: 
   const color = BINGO_COLORS[col];
   const currencySymbol = game?.ticket_price?.quantity?.trim().split(' ').pop() ?? 'WAX';
 
-  useEffect(() => {
-    if (isComplete && gameEnded) setShowSummary(true);
-  }, [isComplete, gameEnded]);
+  // Deriva localWinners e playerWinEntries para PrizePanels
+  const prizeData = useMemo(() => {
+    const localWinners = tickets.flatMap(t =>
+      winners
+        .filter(w => w.ticket_id === t.id)
+        .flatMap(w => w.patterns.map(p => ({
+          ticket_id: w.ticket_id,
+          win_pattern: p.name,
+          payouts: [p.prize + ' ' + currencySymbol],
+        })))
+    );
+    const byCurrency = new Map<string, number>();
+    for (const w of localWinners) {
+      const amt = parseFloat(w.payouts[0]) || 0;
+      byCurrency.set(currencySymbol, (byCurrency.get(currencySymbol) || 0) + amt);
+    }
+    const playerWinEntries = [...byCurrency.entries()].map(([c, total]) => ({
+      name: t('replay.total_prize', 'Prêmio total'),
+      total,
+      currency: c,
+      precision: (game?.ticket_price?.quantity?.split('.')[1] ?? '').length || 4,
+      isCombination: false,
+    }));
+    return { localWinners, playerWinEntries };
+  }, [tickets, winners, currencySymbol, game, t]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -212,23 +233,26 @@ export default function ReplayRoom({ gameId, session, playerAccount, onLeave }: 
           onSeek={handleSeek}
         />
 
-        <ReplaySummary
-          show={showSummary}
-          isComplete={isComplete}
-          totalBalls={totalBalls}
-          winners={winners}
-          winnerMap={winnerMap}
-          currencySymbol={currencySymbol}
-          aggregate={aggregate}
-          totalWagered={game?.total_wagered?.quantity}
-          sponsorPool={game?.sponsor_pool}
-          goldenBall={goldenBall}
-          gameEnded={gameEnded}
-          gameId={gameId}
-          onRestart={restart}
-          onLeave={onLeave}
-          onClose={() => setShowSummary(false)}
-        />
+        {(isComplete || gameEnded) && (
+          <PrizePanels
+            gameId={gameId}
+            hasBanners={!!goldenBall || gameEnded}
+            goldenBall={goldenBall}
+            goldenMultiplierProgress={null}
+            clearedStages={[]}
+            isEffectiveGameEnded={gameEnded}
+            isStaticFinalState={isComplete}
+            playerWinEntries={prizeData.playerWinEntries}
+            localWinners={prizeData.localWinners}
+            playerTickets={tickets}
+            nextGame={null}
+            nextGameTimer={''}
+            game={game}
+            room={null}
+            now={Date.now()}
+            onLeave={onLeave}
+          />
+        )}
 
         <TicketsGrid
           playerTickets={tickets}

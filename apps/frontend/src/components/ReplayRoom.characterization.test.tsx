@@ -186,10 +186,13 @@ describe('ReplayRoom — caracterização R0', () => {
       sponsor_pool: [],
     } as any;
     replayState.totalBalls = 3;
+    replayState.gameEnded = true;
     replayState.goldenBall = { ballNum: 7, multiplier: 3 };
+    replayState.tickets = [{ id: 'T1', matrix: [1,2,3] }];
+    replayState.winners = [{ ticket_id: 'T1', patterns: [{ name: 'ROW_0', prize: '1.00', cells: [1,0,0,0,0] }] }];
     renderReplay();
 
-    expect(screen.getByTestId('replay-golden-banner')).toBeTruthy();
+    expect(document.querySelector('.gr-golden-banner')).toBeTruthy();
   });
 
   it('exibe ended banner quando gameEnded', async () => {
@@ -201,12 +204,14 @@ describe('ReplayRoom — caracterização R0', () => {
     } as any;
     replayState.totalBalls = 3;
     replayState.gameEnded = true;
+    replayState.tickets = [{ id: 'T1', matrix: [1,2,3] }];
+    replayState.winners = [{ ticket_id: 'T1', patterns: [{ name: 'ROW_0', prize: '1.00', cells: [1,0,0,0,0] }] }];
     renderReplay();
 
-    expect(screen.getByTestId('replay-ended-banner')).toBeTruthy();
+    expect(screen.getByTestId('gr-ended-overlay')).toBeTruthy();
   });
 
-  it('exibe summary quando isComplete e gameEnded', async () => {
+  it('existe share button quando isComplete e gameEnded', async () => {
     replayState.isLoading = false;
     replayState.game = {
       game_id: '100', status: 'drawn', drawn_balls: [1, 2, 3],
@@ -214,12 +219,13 @@ describe('ReplayRoom — caracterização R0', () => {
       sponsor_pool: [],
     } as any;
     replayState.totalBalls = 3;
-    replayState.revealedBalls = [1, 2, 3];
-    replayState.isComplete = true;
     replayState.gameEnded = true;
+    replayState.isComplete = true;
+    replayState.tickets = [{ id: 'T1', matrix: [1,2,3] }];
+    replayState.winners = [{ ticket_id: 'T1', patterns: [{ name: 'ROW_0', prize: '1.00', cells: [1,0,0,0,0] }] }];
     renderReplay();
 
-    expect(screen.getByTestId('replay-summary')).toBeTruthy();
+    expect(screen.getByTestId('share-win-buttons')).toBeTruthy();
   });
 
   it('aceita playerAccount opcional sem erros', async () => {
