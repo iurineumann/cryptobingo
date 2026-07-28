@@ -157,7 +157,8 @@ export default function Root() {
           </a>
           <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="a11y-live-region" />
           <noscript>
-            <iframe src="/tg/ns.html?id=GTM-N88CZVJF"
+            {/* gtm.js é 1ª parte (/tg); ns.html mantém origem Google (fallback no-JS) */}
+            <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N88CZVJF"
               height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}>
             </iframe>
           </noscript>
