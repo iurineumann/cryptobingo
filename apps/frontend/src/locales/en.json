@@ -1098,7 +1098,7 @@
     "reward_ticket": "1 Free Ticket"
   },
   "share_win": {
-    "text": "I just won {{amount}} on @CryptoBingo_Bet! 🎰💰",
+    "text": "I just won {{formatted_amounts}} on @CryptoBingo_Bet! 🎰💰",
     "section_title": "Share your win",
     "twitter_label": "X",
     "telegram_label": "Telegram",

@@ -493,9 +493,9 @@ namespace bingo {
         // Callback do orng.wax — compatível com legacy callback do ORNG de produção.
         // random_value: checksum256 = sha256(rsa_sig_hex) entregue pelo orng.wax::setrand.
         [[eosio::action]] void receiverand(uint64_t assoc_id, eosio::checksum256 random_value);
-        // C4: notify moderno ORNG v3.2 — randnotify(request_id, dapp, assoc_id, rnd).
-        // Mesmo corpo de receiverand via _apply_random (Fisher-Yates + drawn + grava seed).
-        [[eosio::action]] void randnotify(uint64_t request_id, eosio::name dapp, uint64_t assoc_id, const eosio::checksum256& rnd);
+        // C4: notify handler ORNG v3.2 — on_notify captura notificacao de bingogamerng::randnotify
+        [[eosio::on_notify("bingogamerng::randnotify")]]
+        void on_randnotify(uint64_t request_id, eosio::name dapp, uint64_t assoc_id, const eosio::checksum256& rnd);
         // ADR-028 §7 (Fase 2): boost_nft_ids — prize boost. Param trailing
         // binary_extension. Todos os callers (worker + harness) passam o campo
         // explicitamente (wharfkit não omite binary_extension de array). O contrato

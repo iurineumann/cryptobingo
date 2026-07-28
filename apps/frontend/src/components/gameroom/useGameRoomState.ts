@@ -86,7 +86,7 @@ export interface GameRoomState {
   localWinners: Array<{ ticket_id: string; win_pattern: string; payouts: string[] }>;
   winnerMap: Map<string, { prize: string; patternName: string; totalPrize: number; patternCount: number }>;
   patternByName: Map<string, Pattern>;
-  playerWinEntries: Array<{ name: string; total: number; currency: string; isCombination: boolean; goldenMultiplier?: number }>;
+  playerWinEntries: Array<{ name: string; total: number; currency: string; precision: number; isCombination: boolean; goldenMultiplier?: number }>;
   adjustedPatternWinCount: Map<string, number>;
   allGameCombinationWinCount: Map<string, number>;
   completedCombinationsPerTicket: Map<string, Array<{ name: string; weight: number }>>;
@@ -452,7 +452,7 @@ export function useGameRoomState(
       return undefined;
     };
 
-    type WinEntry = { total: number; currency: string; goldenMultiplier?: number };
+    type WinEntry = { total: number; currency: string; precision: number; goldenMultiplier?: number };
     const GOLD_KEY = '::gld';
 
     const byTicket = new Map<string, Array<{ pattern: string; payout: string }>>();
@@ -479,10 +479,11 @@ export function useGameRoomState(
         const parts  = w.payout.trim().split(' ');
         const amount = parseFloat(parts[0]) || 0;
         const curr   = parts[1] || priceCurrency;
+        const prec   = (parts[0].split('.')[1] ?? '').length;
         const k = isWinGolden(ticketId, w.pattern) ? w.pattern + GOLD_KEY : w.pattern;
         const existing = comboMap.get(k);
         if (existing) existing.total += amount;
-        else comboMap.set(k, { total: amount, currency: curr, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
+        else comboMap.set(k, { total: amount, currency: curr, precision: prec, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
       }
 
       // caso 2: padrões individuais → detecta combos e aplica max_weight
@@ -506,17 +507,18 @@ export function useGameRoomState(
           const k = isWinGolden(ticketId, comboName) ? comboName + GOLD_KEY : comboName;
           const existing = comboMap.get(k);
           if (existing) existing.total += comboTotal;
-          else comboMap.set(k, { total: comboTotal, currency: priceCurrency, goldenMultiplier: isWinGolden(ticketId, comboName) });
+          else comboMap.set(k, { total: comboTotal, currency: priceCurrency, precision: (pricePaidStr.split('.')[1] ?? '').length, goldenMultiplier: isWinGolden(ticketId, comboName) });
         }
         for (const w of patternWins) {
           if (subsumed.has(w.pattern)) continue;
           const parts    = w.payout.trim().split(' ');
           const amount   = parseFloat(parts[0]) || 0;
           const currency = parts[1] ?? '';
+          const prec     = (parts[0].split('.')[1] ?? '').length;
           const k = isWinGolden(ticketId, w.pattern) ? w.pattern + GOLD_KEY : w.pattern;
           const existing = patternMap.get(k);
           if (existing) existing.total += amount;
-          else patternMap.set(k, { total: amount, currency, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
+          else patternMap.set(k, { total: amount, currency, precision: prec, goldenMultiplier: isWinGolden(ticketId, w.pattern) });
         }
       }
     }

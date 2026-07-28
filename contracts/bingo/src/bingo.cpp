@@ -1063,8 +1063,10 @@ namespace bingo {
     }
 
     // randnotify — ORNG v3.2 notify moderno.
-    // Assinatura oficial: randnotify(request_id, dapp, assoc_id, rnd).
-    void bingo_contract::randnotify(uint64_t /*request_id*/, eosio::name dapp, uint64_t assoc_id,
+    // NOTIFY handler: ORNG chama randnotify em si mesmo e notifica bingogamectr.
+    // on_notify recebe a notificação — ANTES era [[eosio::action]] (só chamada direta).
+    [[eosio::on_notify("bingogamerng::randnotify")]]
+    void bingo_contract::on_randnotify(uint64_t /*request_id*/, eosio::name dapp, uint64_t assoc_id,
                                     const eosio::checksum256& rnd) {
         config_singleton config_table(get_self(), get_self().value);
         check(config_table.exists(), "Contract configuration not initialized.");
@@ -1533,7 +1535,7 @@ namespace bingo {
             }
         }
 
-        // ADR-XXX: Se ninguém comprou cartela, deleta a row em vez de marcar aborted
+        // ADR-060: Se ninguém comprou cartela, deleta a row em vez de marcar aborted
         // — libera RAM do contrato sem necessidade de cleargame posterior.
         if (game_itr->total_wagered.quantity.amount == 0) {
             games.erase(game_itr);
@@ -1621,13 +1623,14 @@ namespace bingo {
     // ==========================================
 
     void bingo_contract::clearbatch(const std::vector<uint64_t>& game_ids) {
-        require_auth(permission_level{get_self(), "admin"_n});
+        bool by_ms = has_auth("bingogamesvc"_n);
+        if (!by_ms) require_auth(permission_level{get_self(), "admin"_n});
         games_table games(get_self(), get_self().value);
         rooms_table rooms(get_self(), get_self().value);
 
         for (auto g : game_ids) {
             auto itr = games.find(g);
-            check(itr != games.end(), ("clearbatch: game " + std::to_string(g) + " not found").c_str());
+            if (itr == games.end()) continue;  // jogo ja foi deletado
             check(itr->status == "aborted"_n,
                 ("clearbatch: game " + std::to_string(g) + " not in ABORTED status").c_str());
             check(itr->total_wagered.quantity.amount == 0,
