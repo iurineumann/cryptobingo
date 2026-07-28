@@ -22,6 +22,7 @@ gtag('consent','default',{
 });
 gtag('set','ads_data_redaction',true);
 gtag('set','url_passthrough',true);
+gtag('set','transport_url','https://www.cryptobingo.bet/ga');
 
 (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -62,7 +63,7 @@ function updateGtag(cookie){
 function logConsent(cookie){
   try{
     var cats=getCats(cookie.categories);
-    var lang=(window.CookieConsent&&window.CookieConsent.getLanguage&&window.CookieConsent.getLanguage())||'en';
+    var lang=(window.CookieConsent&&window.CookieConsent.getLanguage&&window.CookieConsent.getLanguage())||'pt';
     localStorage.setItem('cb_consent',JSON.stringify({
       timestamp:new Date().toISOString(),
       categories:Object.keys(cats).filter(function(k){return cats[k];}),
@@ -115,16 +116,16 @@ CookieConsent.run({
     analytics:{cookies:[{name:/^_ga/},{name:/^_gid/},{name:/^_cl_/},{name:/^_clsk/}]},
     marketing:{cookies:[{name:/^_gcl_/},{name:/^_fbp/}]}
   },
-    language:{
-      current:(function(){try{return localStorage.getItem('cb_lang')||null;}catch(e){return null;}})()
-    },
-      translations:{
+  language:{
+    default:'en',
+    current:(function(){try{var l=localStorage.getItem('cb_lang');if(l)return l;var m=location.pathname.match(new RegExp('^/(en|pt|zh)/'));return m?m[1]:'en';}catch(e){return 'en';}})()
+  ,
+    translations:{
         en:{consentModal:{title:'🍪 We use cookies',description:'We use cookies to ensure the site works, analyze traffic, and with your consent, personalize your experience. See our <a href="/privacy" class="cc-link">Privacy Policy</a>.',acceptAllBtn:'Accept all',acceptNecessaryBtn:'Only necessary',showPreferencesBtn:'Customize',footer:'<a href="/privacy">Privacy Policy</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'},preferencesModal:{title:'Cookie Preferences',acceptAllBtn:'Accept all',acceptNecessaryBtn:'Only necessary',savePreferencesBtn:'Save preferences',closeIconLabel:'Close',sections:[{title:'Cookie Usage',description:'We use cookies to improve your experience. You can choose which categories to allow.'},{title:'Strictly Necessary',description:'Essential for basic site functionality. Cannot be disabled.',linkedCategory:'necessary'},{title:'Analytics',description:'Collect anonymous usage data to improve our services. Includes Google Analytics and Microsoft Clarity.',linkedCategory:'analytics'},{title:'Marketing',description:'Allow tracking conversions and showing relevant ads.',linkedCategory:'marketing'},{title:'Your Rights',description:'You can revoke or change your consent at any time.'}]}},
-        pt:{consentModal:{title:'🍪 Usamos cookies',description:'Utilizamos cookies para garantir o funcionamento do site, analisar o tráfego e, com seu consentimento, personalizar sua experiência.',acceptAllBtn:'Aceitar todos',acceptNecessaryBtn:'Apenas necessários',showPreferencesBtn:'Personalizar',footer:'<a href="/privacy">Política de Privacidade</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'},preferencesModal:{title:'Central de Preferências',acceptAllBtn:'Aceitar todos',acceptNecessaryBtn:'Apenas necessários',savePreferencesBtn:'Salvar',closeIconLabel:'Fechar',sections:[{title:'Uso de Cookies',description:'Usamos cookies para melhorar sua experiência.'},{title:'Necessários',description:'Essenciais para o funcionamento do site.',linkedCategory:'necessary'},{title:'Analíticos',description:'Coletam dados anônimos de uso.',linkedCategory:'analytics'},{title:'Marketing',description:'Permitem rastrear conversões.',linkedCategory:'marketing'},{title:'Seus direitos',description:'Você pode revogar seu consentimento a qualquer momento.'}]}}
+        pt:{consentModal:{title:'🍪 Usamos cookies',description:'Utilizamos cookies para garantir o funcionamento do site, analisar o tráfego e, com seu consentimento, personalizar sua experiência.',acceptAllBtn:'Aceitar todos',acceptNecessaryBtn:'Apenas necessários',showPreferencesBtn:'Personalizar',footer:'<a href="/privacy">Política de Privacidade</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'},preferencesModal:{title:'Central de Preferências',acceptAllBtn:'Aceitar todos',acceptNecessaryBtn:'Apenas necessários',savePreferencesBtn:'Salvar',closeIconLabel:'Fechar',sections:[{title:'Uso de Cookies',description:'Usamos cookies para melhorar sua experiência.'},{title:'Necessários',description:'Essenciais para o funcionamento do site.',linkedCategory:'necessary'},{title:'Analíticos',description:'Coletam dados anônimos de uso.',linkedCategory:'analytics'},{title:'Marketing',description:'Permitem rastrear conversões.',linkedCategory:'marketing'},{title:'Seus direitos',description:'Você pode revogar seu consentimento a qualquer momento.'}]}},
+        zh:{consentModal:{title:'🍪 我们使用 Cookie',description:'我们使用 Cookie 来确保网站功能、分析流量，并在您同意的情况下个性化您的体验。请参阅我们的<a href="/privacy" class="cc-link">隐私政策</a>。',acceptAllBtn:'接受全部',acceptNecessaryBtn:'仅必要',showPreferencesBtn:'自定义',footer:'<a href="/privacy">隐私政策</a> · <a href="mailto:dpo@cryptobingo.bet">数据保护官</a>'},preferencesModal:{title:'Cookie 偏好设置',acceptAllBtn:'接受全部',acceptNecessaryBtn:'仅必要',savePreferencesBtn:'保存偏好',closeIconLabel:'关闭',sections:[{title:'Cookie 使用说明',description:'我们使用 Cookie 来改善您的体验。选择您允许的类别。',linkedCategory:'necessary'},{title:'严格必要',description:'网站基本功能所必需。无法禁用。',linkedCategory:'necessary'},{title:'分析',description:'收集匿名使用数据以改进我们的服务。包括 Google Analytics 和 Microsoft Clarity。',linkedCategory:'analytics'},{title:'营销',description:'跟踪转化并展示相关广告。仅在您明确同意后使用。',linkedCategory:'marketing'},{title:'您的权利',description:'您可随时撤销或更改同意。'}]}}
       },
-        zh:{consentModal:{title:'🍪 我们使用 Cookie',description:'我们使用 Cookie 来确保网站功能、分析流量，并在您同意的情况下个性化您的体验。请参阅我们的<a href='/privacy' class='cc-link'>隐私政策</a>。',acceptAllBtn:'接受全部',acceptNecessaryBtn:'仅必要',showPreferencesBtn:'自定义',footer:'<a href=\'/privacy\'>隐私政策</a> · <a href=\'mailto:dpo@cryptobingo.bet\'>数据保护官</a>'},preferencesModal:{title:'Cookie 偏好设置',acceptAllBtn:'接受全部',acceptNecessaryBtn:'仅必要',savePreferencesBtn:'保存偏好',closeIconLabel:'关闭',sections:[{title:'Cookie 使用说明',description:'我们使用 Cookie 来改善您的体验。选择您允许的类别。',linkedCategory:'necessary'},{title:'严格必要',description:'网站基本功能所必需。无法禁用。',linkedCategory:'necessary'},{title:'分析',description:'收集匿名使用数据以改进我们的服务。包括 Google Analytics 和 Microsoft Clarity。',linkedCategory:'analytics'},{title:'营销',description:'跟踪转化并展示相关广告。仅在您明确同意后使用。',linkedCategory:'marketing'},{title:'您的权利',description:'您可随时撤销或更改同意。'}]}}
-      }
-    },
+  },
   guiOptions:{consentModal:{layout:'cloud',position:'bottom center',equalWeightButtons:true,flipButtons:false},preferencesModal:{layout:'box',equalWeightButtons:true,flipButtons:false}},
   onFirstConsent:function({cookie}){handleConsent(cookie);},
   onConsent:function({cookie}){handleConsent(cookie);},
@@ -153,4 +154,20 @@ export function injectCookieConsent(): void {
     document.body.appendChild(initScript);
   };
   document.body.appendChild(umdScript);
+
+  // Listener global para botão "Alterar Preferências de Cookies"
+  // (classe .cc-change-settings na Privacy Policy)
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    while (target && target !== document) {
+      if (target.classList && target.classList.contains('cc-change-settings')) {
+        if (typeof CookieConsent !== 'undefined' && CookieConsent.showPreferences) {
+          CookieConsent.showPreferences();
+        }
+        e.preventDefault();
+        return;
+      }
+      target = target.parentElement;
+    }
+  });
 }
