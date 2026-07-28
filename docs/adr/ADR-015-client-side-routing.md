@@ -180,3 +180,17 @@ Para ser tratado em sprint futura se houver reclamação de UX.
 - ADR-009 — Admin Panel (seção admin afetada)
 - ADR-010 — Rooms (rotas de sala afetadas)
 - `SPEC.md §1` — Arquitetura Frontend
+
+## Errata (2026-07-28) — Replay público
+
+A rota `/replay/:gameId` foi movida para fora do AuthGuard, tornando-se pública.
+Justificativa: transparência e auditabilidade — os dados (games, tickets, patterns)
+são todos públicos na blockchain. O parâmetro opcional `/:player` define o ponto de
+vista inicial do replay (quais cartelas destacar), sem função de autenticação.
+
+Tabela atualizada:
+
+| Rota | Página | Pública | Admin | Notas |
+|------|--------|---------|-------|-------|
+| `/replay/:gameId` | `PublicReplayPage` (full-screen) | ✅ | — | Agora público (antes AuthGuard). Dados globais. |
+| `/replay/:gameId/:player` | `PublicReplayPage` (full-screen) | ✅ | — | Público. `:player` define ponto de vista. |
