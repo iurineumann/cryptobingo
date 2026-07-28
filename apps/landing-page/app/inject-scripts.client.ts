@@ -22,6 +22,7 @@ gtag('consent','default',{
 });
 gtag('set','ads_data_redaction',true);
 gtag('set','url_passthrough',true);
+gtag('set','transport_url','https://www.cryptobingo.bet/ga');
 
 (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
