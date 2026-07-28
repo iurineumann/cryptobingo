@@ -5,6 +5,7 @@
 import { Session } from '@wharfkit/session';
 import { UInt64 }  from '@wharfkit/antelope';
 import type { CombinationRuleInput, CombinationClauseInput, ExtendedRule } from '../services/api';
+import { fetchTableRows } from '../utils/rpc';
 
 export type { CombinationRuleInput, CombinationClauseInput, ExtendedRule };
 
@@ -668,6 +669,42 @@ export async function fetchGamePatterns(session: Session, gametypeId: string): P
         upper_bound: UInt64.from(String(rule.pattern_id)),
         limit: 1, json: true,
       });
+      if (patRes.rows.length) {
+        const pat = patRes.rows[0] as any;
+        results.push({
+          id:    String(rule.pattern_id),
+          name:  pat.name,
+          prize: weightToPrize(rule.weight),
+          cells: maskToCells(Number(pat.mask)),
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchGamePatternsPublic(gametypeId: string): Promise<Pattern[]> {
+  const c = import.meta.env.VITE_CONTRACT_ACCOUNT ?? 'bingogamectr';
+  try {
+    const gtRes = await fetchTableRows({
+      code: c, scope: c, table: 'gametypes',
+      lower_bound: gametypeId, upper_bound: gametypeId,
+      limit: 1,
+    }, null);
+    if (!gtRes.rows.length) return [];
+    const gametype = gtRes.rows[0] as any;
+    const rules: Array<{ pattern_id: string | number; weight: number }> = gametype.rules ?? [];
+    if (!rules.length) return [];
+
+    const results: Pattern[] = [];
+    for (const rule of rules) {
+      const patRes = await fetchTableRows({
+        code: c, scope: c, table: 'patterns',
+        lower_bound: String(rule.pattern_id), upper_bound: String(rule.pattern_id),
+        limit: 1,
+      }, null);
       if (patRes.rows.length) {
         const pat = patRes.rows[0] as any;
         results.push({
