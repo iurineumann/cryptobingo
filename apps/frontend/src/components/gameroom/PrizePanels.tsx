@@ -180,8 +180,15 @@ export default function PrizePanels({
                       <div className="gr-ended-breakdown-row gr-ended-breakdown-total">
                         <span>{t('game_room.game_ended_total')}</span>
                         <span>
-                          {playerWinEntries.reduce((s, e) => s + e.total, 0).toFixed(4)}{' '}
-                          {playerWinEntries[0]?.currency}
+                          {(() => {
+                            const byCurrency = new Map<string, number>();
+                            for (const e of playerWinEntries) {
+                              byCurrency.set(e.currency, (byCurrency.get(e.currency) || 0) + e.total);
+                            }
+                            return [...byCurrency.entries()]
+                              .map(([c, t]) => `${t.toFixed(4)} ${c}`)
+                              .join(' + ');
+                          })()}
                         </span>
                       </div>
                     )}
@@ -190,9 +197,17 @@ export default function PrizePanels({
 
                 {playerWinEntries.length > 0 && (
                   <ShareWinButton
-                    amount={playerWinEntries.reduce((s, e) => s + e.total, 0)}
+                    formattedAmounts={(() => {
+                      const byCurrency = new Map<string, number>();
+                      for (const e of playerWinEntries) {
+                        byCurrency.set(e.currency, (byCurrency.get(e.currency) || 0) + e.total);
+                      }
+                      return [...byCurrency.entries()]
+                        .map(([c, t]) => `${t.toFixed(4)} ${c}`)
+                        .join(' + ');
+                    })()}
                     gameId={gameId}
-                    gameUrl={`${window.location.origin}/game/${gameId}`}
+                    gameUrl={`${window.location.origin}/replay/${gameId}`}
                   />
                 )}
 

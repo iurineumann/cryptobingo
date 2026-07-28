@@ -1098,7 +1098,7 @@
     "reward_ticket": "1 Cartela Grátis"
   },
   "share_win": {
-    "text": "Acabei de ganhar {{amount}} no @CryptoBingo! 🎰💰",
+    "text": "Acabei de ganhar {{formatted_amounts}} no @CryptoBingo_Bet! 🎰💰",
     "section_title": "Compartilhar vitória",
     "twitter_label": "X",
     "telegram_label": "Telegram",

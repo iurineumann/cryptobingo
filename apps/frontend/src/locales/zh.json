@@ -1094,7 +1094,7 @@
     "reward_ticket": "1张免费卡"
   },
   "share_win": {
-    "text": "我刚刚在@CryptoBingo赢了 {{amount}}！🎰💰",
+    "text": "我刚刚在@CryptoBingo_Bet赢了 {{formatted_amounts}}！🎰💰",
     "section_title": "分享胜利",
     "twitter_label": "X",
     "telegram_label": "Telegram",
