@@ -26,7 +26,7 @@ gtag('set','url_passthrough',true);
 (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'tg/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+'/tg/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-N88CZVJF');
 `;
 
@@ -145,7 +145,7 @@ export function injectCookieConsent(): void {
 
   // UMD do CookieConsent — ao carregar, dispara CookieConsent.run
   const umdScript = document.createElement('script');
-  umdScript.src = 'https://cdn.jsdelivr.net/npm/vanilla-cookieconsent@3/dist/cookieconsent.umd.js';
+  umdScript.src = '/static/vendor/cookieconsent.umd.js';
   umdScript.onload = () => {
     const initScript = document.createElement('script');
     initScript.textContent = CONSENT_INIT;
