@@ -118,7 +118,7 @@ CookieConsent.run({
   },
   language:{
     default:'en',
-    current:(function(){try{return localStorage.getItem('cb_lang')||'pt';}catch(e){return 'pt';}})()
+    current:(function(){try{var l=localStorage.getItem('cb_lang');if(l)return l;var m=location.pathname.match(new RegExp('^/(en|pt|zh)/'));return m?m[1]:'en';}catch(e){return 'en';}})()
   ,
     translations:{
         en:{consentModal:{title:'🍪 We use cookies',description:'We use cookies to ensure the site works, analyze traffic, and with your consent, personalize your experience. See our <a href="/privacy" class="cc-link">Privacy Policy</a>.',acceptAllBtn:'Accept all',acceptNecessaryBtn:'Only necessary',showPreferencesBtn:'Customize',footer:'<a href="/privacy">Privacy Policy</a> · <a href="mailto:dpo@cryptobingo.bet">DPO</a>'},preferencesModal:{title:'Cookie Preferences',acceptAllBtn:'Accept all',acceptNecessaryBtn:'Only necessary',savePreferencesBtn:'Save preferences',closeIconLabel:'Close',sections:[{title:'Cookie Usage',description:'We use cookies to improve your experience. You can choose which categories to allow.'},{title:'Strictly Necessary',description:'Essential for basic site functionality. Cannot be disabled.',linkedCategory:'necessary'},{title:'Analytics',description:'Collect anonymous usage data to improve our services. Includes Google Analytics and Microsoft Clarity.',linkedCategory:'analytics'},{title:'Marketing',description:'Allow tracking conversions and showing relevant ads.',linkedCategory:'marketing'},{title:'Your Rights',description:'You can revoke or change your consent at any time.'}]}},
