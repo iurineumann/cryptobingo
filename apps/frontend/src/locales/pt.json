@@ -44,7 +44,8 @@
     "connecting": "Conectando...",
     "dev_login": "Login Rápido (Dev)",
     "auth_failed": "Falha na autenticação. Tente novamente.",
-    "wallet_connected": "Carteira Conectada"
+    "wallet_connected": "Carteira Conectada",
+    "retry": "Tentar novamente"
   },
   "game": {
     "status": {
@@ -94,10 +95,9 @@
     "tickets_loading": "Carregando cartelas...",
     "tickets_empty_funding": "Você ainda não tem cartelas nesta sala.",
     "tickets_empty_default": "Sem cartelas nesta rodada.",
-    "chat": "Chat da Sala",
+    "chat": "Chat",
     "chat_you": "Você",
     "chat_empty": "Nenhuma mensagem ainda. Seja o primeiro!",
-    "chat": "Chat",
     "chat_placeholder": "Digite sua mensagem...",
     "chat_send": "Enviar",
     "chat_close": "Fechar chat",
@@ -188,7 +188,8 @@
     "room_prizes_summary": "Sala pagou {{total}} a {{count}} vencedor(es)",
     "prize_preparing": "Processando pagamento...",
     "prize_confirming": "Confirmando na blockchain...",
-    "prize_confirmed": "Confirmado"
+    "prize_confirmed": "Confirmado",
+    "social_feed_empty": "Ninguém ganhou ainda"
   },
   "lobby": {
     "title": "Lobby de Jogos",
@@ -738,7 +739,12 @@
     "content_translate_regenerate": "Regerar",
     "content_translate_original": "Original",
     "content_translate_en": "Inglês",
-    "content_translate_zh": "Chinês"
+    "content_translate_zh": "Chinês",
+    "error": "Erro",
+    "new_org": "Nova organização",
+    "org_name": "Nome da organização",
+    "org_name_placeholder": "Digite o nome da organização",
+    "org_owner_wallet": "Carteira do proprietário"
   },
   "replay": {
     "back_to_lobby": "Voltar ao Lobby",
@@ -919,7 +925,9 @@
     "b2b_desc": "Crie sua própria sala de bingo com campanhas de drops personalizadas. Alcance a comunidade CryptoBingo.",
     "b2b_cta": "Seja um Patrocinador",
     "footer_copyright": "© {{year}} CryptoBingo. Todos os direitos reservados.",
-    "footer_tagline": "Provavelmente Justo · Bingo On-Chain"
+    "footer_tagline": "Provavelmente Justo · Bingo On-Chain",
+    "community_desc": "Fique por dentro, reporte bugs e conecte-se com outros jogadores de Bingo.",
+    "community_title": "Junte-se à Comunidade"
   },
   "leaderboard": {
     "title_global": "Ranking Global",

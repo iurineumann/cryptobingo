@@ -44,7 +44,8 @@
     "connecting": "Connecting...",
     "dev_login": "Quick Login (Dev)",
     "auth_failed": "Authentication failed. Please try again.",
-    "wallet_connected": "Wallet Connected"
+    "wallet_connected": "Wallet Connected",
+    "retry": "Retry"
   },
   "game": {
     "status": {
@@ -94,10 +95,9 @@
     "tickets_loading": "Loading tickets...",
     "tickets_empty_funding": "You don't have tickets in this room yet.",
     "tickets_empty_default": "No tickets this round.",
-    "chat": "Room Chat",
+    "chat": "Chat",
     "chat_you": "You",
     "chat_empty": "No messages yet. Be the first!",
-    "chat": "Chat",
     "chat_placeholder": "Type your message...",
     "chat_send": "Send",
     "chat_close": "Close chat",
@@ -188,7 +188,8 @@
     "room_prizes_summary": "Room paid {{total}} to {{count}} winner(s)",
     "prize_preparing": "Processing payment...",
     "prize_confirming": "Confirming on blockchain...",
-    "prize_confirmed": "Confirmed"
+    "prize_confirmed": "Confirmed",
+    "social_feed_empty": "No one has won yet"
   },
   "lobby": {
     "title": "Game Lobby",
@@ -738,7 +739,12 @@
     "content_translate_regenerate": "Regenerate",
     "content_translate_original": "Original",
     "content_translate_en": "English",
-    "content_translate_zh": "Chinese"
+    "content_translate_zh": "Chinese",
+    "error": "Error",
+    "new_org": "New organization",
+    "org_name": "Organization name",
+    "org_name_placeholder": "Enter organization name",
+    "org_owner_wallet": "Owner wallet"
   },
   "replay": {
     "back_to_lobby": "Back to Lobby",
@@ -919,7 +925,9 @@
     "b2b_desc": "Launch your own branded bingo room with custom drops campaign. Reach the CryptoBingo community.",
     "b2b_cta": "Become a Sponsor",
     "footer_copyright": "© {{year}} CryptoBingo. All rights reserved.",
-    "footer_tagline": "Provably Fair · On-Chain Bingo"
+    "footer_tagline": "Provably Fair · On-Chain Bingo",
+    "community_desc": "Stay updated, report bugs, and connect with fellow Bingo players.",
+    "community_title": "Join the Community"
   },
   "leaderboard": {
     "title_global": "Global Rankings",
