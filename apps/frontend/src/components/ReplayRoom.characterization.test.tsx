@@ -221,4 +221,28 @@ describe('ReplayRoom — caracterização R0', () => {
 
     expect(screen.getByTestId('replay-summary')).toBeTruthy();
   });
+
+  it('aceita playerAccount opcional sem erros', async () => {
+    replayState.isLoading = false;
+    replayState.game = {
+      game_id: '100', status: 'drawn', drawn_balls: [1, 2, 3],
+      end_time: 0, total_wagered: { quantity: '100.0000 WAX', contract: 'eosio.token' },
+      sponsor_pool: [],
+    } as any;
+    replayState.totalBalls = 1;
+    render(<ReplayRoom gameId="100" session={SESSION_MOCK} playerAccount="vencedor123" onLeave={vi.fn()} />);
+    expect(screen.getByTestId('replay-page')).toBeTruthy();
+  });
+
+  it('aceita session=null sem erros', async () => {
+    replayState.isLoading = false;
+    replayState.game = {
+      game_id: '100', status: 'drawn', drawn_balls: [1, 2, 3],
+      end_time: 0, total_wagered: { quantity: '100.0000 WAX', contract: 'eosio.token' },
+      sponsor_pool: [],
+    } as any;
+    replayState.totalBalls = 1;
+    render(<ReplayRoom gameId="100" session={null} onLeave={vi.fn()} />);
+    expect(screen.getByTestId('replay-page')).toBeTruthy();
+  });
 });

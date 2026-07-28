@@ -53,7 +53,7 @@ import { RPC_PRESETS, getSelectedRpcUrl, setSelectedRpcUrl } from './utils/rpcSt
 import LandingPage       from './components/LandingPage';
 import Lobby             from './components/Lobby';
 import GameRoom          from './components/GameRoom';
-import ReplayRoom        from './components/ReplayRoom';
+import PublicReplayPage from './pages/PublicReplayPage';
 import RoomHistoryPanel  from './components/RoomHistoryPanel';
 import MyHistoryPage     from './components/MyHistoryPage';
 import WalletPage           from './components/WalletPage';
@@ -198,20 +198,6 @@ function GameRoomPage({ session, profile, isAdmin, theme, onToggleTheme, onLangu
             theme={theme}
             onToggleTheme={onToggleTheme}
             onLanguageChange={onLanguageChange}
-        />
-    );
-}
-
-function ReplayPage({ session }: { session: Session }) {
-    const { gameId } = useParams<{ gameId: string }>();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/lobby';
-    return (
-        <ReplayRoom
-            gameId={gameId!}
-            session={session}
-            onLeave={() => navigate(returnTo)}
         />
     );
 }
@@ -645,8 +631,10 @@ function AppRoot() {
             {/* ── Rotas públicas sem auth (ADR-015 + ADR-024 + ADR-037) ── */}
             <Route path="/room/:roomId/history" element={<RoomHistoryPage session={session} />} />
             <Route path="/leaderboard"          element={<LeaderboardPage />} />
+            <Route path="/replay/:gameId"       element={<PublicReplayPage session={session} />} />
+            <Route path="/replay/:gameId/:player" element={<PublicReplayPage session={session} />} />
 
-            {/* ── Páginas públicas de conteúdo (PublicLayout) ── */}
+            {/* Páginas públicas de conteúdo (PublicLayout) */}
             <Route element={<PublicLayout />}>
                 <Route path="/how-it-works" element={<HowItWorksPage />} />
                 <Route path="/sponsors"     element={<SponsorsPage />} />
@@ -698,7 +686,6 @@ function AppRoot() {
 
                 {/* ── Telas full-screen ── */}
                 <Route path="/room/:roomId/:gameId" element={<GameRoomPage {...pageProps} />} />
-                <Route path="/replay/:gameId"       element={<ReplayPage session={session!} />} />
 
                 {/* ── Admin (requer role admin) ── */}
                 <Route element={<AdminGuard isAdmin={isAdmin} />}>

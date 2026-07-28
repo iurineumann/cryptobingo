@@ -1,7 +1,7 @@
 // Testes unitários para ticketUtils.ts
 // Foca em: getCol, maskToCells, sortTickets (deduplicação), isCombinationSatisfied
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     getCol,
     maskToCells,
@@ -298,6 +298,85 @@ describe('getCompletedCombinationsForTicket — badge de combinação', () => {
         );
         expect(combos[0].name).toBe('3x Simples');
         expect(combos[0].weight).toBe(600);
+    });
+});
+
+// ── fetchGamePatternsPublic ─────────────────────────────────────────────
+
+vi.mock('../utils/rpc', () => ({
+    fetchTableRows: vi.fn(),
+}));
+
+import { fetchGamePatternsPublic } from './ticketUtils';
+import { fetchTableRows } from '../utils/rpc';
+const mockFetchTableRows = vi.mocked(fetchTableRows);
+
+describe('fetchGamePatternsPublic', () => {
+    const GAMETYPE_ID = '42';
+
+    it('retorna array vazio quando gametype nao existe', async () => {
+        mockFetchTableRows.mockResolvedValue({ rows: [], more: false });
+        const result = await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(result).toEqual([]);
+    });
+
+    it('retorna array vazio quando gametype nao tem rules', async () => {
+        mockFetchTableRows.mockResolvedValue({ rows: [{ rules: [] }], more: false });
+        const result = await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(result).toEqual([]);
+    });
+
+    it('retorna patterns parseados corretamente', async () => {
+        mockFetchTableRows
+            // 1a chamada: gametypes
+            .mockResolvedValueOnce({
+                rows: [{
+                    rules: [{ pattern_id: '1', weight: 100 }, { pattern_id: '2', weight: 200 }],
+                }],
+                more: false,
+            })
+            // 2a chamada: pattern 1
+            .mockResolvedValueOnce({
+                rows: [{ name: 'ROW_0', mask: 1082401 }],
+                more: false,
+            })
+            // 3a chamada: pattern 2
+            .mockResolvedValueOnce({
+                rows: [{ name: 'DIAG_TL_BR', mask: 132176 }],
+                more: false,
+            });
+
+        const result = await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(result).toHaveLength(2);
+        expect(result[0].name).toBe('ROW_0');
+        expect(result[1].name).toBe('DIAG_TL_BR');
+    });
+
+    it('ignora patterns que falham ao buscar (mock retorna vazio)', async () => {
+        mockFetchTableRows
+            .mockResolvedValueOnce({
+                rows: [{ rules: [{ pattern_id: '99', weight: 100 }] }],
+                more: false,
+            })
+            .mockResolvedValueOnce({ rows: [], more: false });
+
+        const result = await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(result).toHaveLength(0);
+    });
+
+    it('retorna array vazio em caso de erro na API', async () => {
+        mockFetchTableRows.mockRejectedValue(new Error('RPC error'));
+        const result = await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(result).toEqual([]);
+    });
+
+    it('chama fetchTableRows com session=null', async () => {
+        mockFetchTableRows.mockResolvedValue({ rows: [{ rules: [] }], more: false });
+        await fetchGamePatternsPublic(GAMETYPE_ID);
+        expect(mockFetchTableRows).toHaveBeenCalledWith(
+            expect.objectContaining({ table: 'gametypes' }),
+            null,
+        );
     });
 });
 
