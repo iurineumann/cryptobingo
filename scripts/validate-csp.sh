@@ -1,144 +1,120 @@
 #!/usr/bin/env bash
-# validate-csp.sh — Gate de validação da Content-Security-Policy do frontend.
 #
-# OBJETIVO
-#   Impedir que domínios de TERCEIROS que o app usa em runtime (analytics, RPC
-#   WAX, fontes, wallets) fiquem BLOQUEADOS pela CSP em produção — a causa dos
-#   erros recorrentes no console, ex.:
-#     "Connecting to 'https://n.clarity.ms/collect' violates the CSP directive
-#      connect-src ..."
+# validate-csp.sh — Gate de CSP para os frontends estáticos no nginx VPS.
 #
-# COMO FUNCIONA
-#   Mantém uma LISTA CURADA (abaixo) dos domínios de terceiros que o app
-#   realmente carrega, separada por diretiva. Faz parse da CSP em
-#   staticwebapp.config.json e verifica se CADA domínio da lista está coberto
-#   (match exato ou por wildcard *.dominio). Falha (exit 1) se faltar algum.
+# O que valida:
+#   1. Sintaxe do nginx no container VPS (nginx -t).
+#   2. O header Content-Security-Policy SERVIDO EM PRODUÇÃO contém os
+#      domínios esperados em cada directive (img-src, script-src, connect-src).
 #
-#   Um scan estático do código foi descartado de propósito: gera ruído (URLs em
-#   comentários, docs, RPCs de outras chains embutidos no wharfkit). A lista
-#   curada é determinística e reflete o que de fato roda em produção.
+# Por que existe: mudanças em infra/nginx/apps.conf não têm suíte pnpm.
+# Este script é o "teste" equivalente — quebra o deploy se o CSP servido
+# divergir do esperado (ex.: bind mount obsoleto do container, Cloudflare
+# servindo header antigo, domínio esquecido).
 #
-#   MANUTENÇÃO: ao adicionar um novo serviço de terceiro no frontend (novo
-#   analytics, nova wallet, novo RPC), acrescente o domínio na lista da diretiva
-#   correspondente. O gate então garante que a CSP acompanhou.
+# Uso:
+#   scripts/validate-csp.sh                       # defaults (landing www)
+#   CSP_URL=https://test.cryptobingo.bet scripts/validate-csp.sh
+#   SKIP_NGINX_T=1 scripts/validate-csp.sh        # pula o nginx -t (só header)
 #
-# Uso:  bash scripts/validate-csp.sh [caminho/para/staticwebapp.config.json]
-#       (default: apps/frontend/staticwebapp.config.json)
-#       Segundo argumento opcional URL: valida também o header AO VIVO
-#       Ex.: bash scripts/validate-csp.sh "" https://test.cryptobingo.bet
-
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CONFIG="${1:-$ROOT_DIR/apps/frontend/staticwebapp.config.json}"
-LIVE_URL="${2:-}"
+# ── Config ────────────────────────────────────────────────────────────
+VPS_HOST="${VPS_HOST:-vps}"
+NGINX_CONTAINER="${NGINX_CONTAINER:-cryptobingo-nginx}"
+CSP_URL="${CSP_URL:-https://www.cryptobingo.bet/en/blog}"
+SKIP_NGINX_T="${SKIP_NGINX_T:-0}"
 
-if [ ! -f "$CONFIG" ]; then
-    echo "❌ Config não encontrado: $CONFIG"
-    exit 1
+# Domínios esperados por directive (SWA parity + ajustes deste projeto).
+# clarity.ms/bing  → Microsoft Clarity (pixel c.bing.com/c.gif)
+# unsplash.com     → imagens do blog (landing)
+# google-analytics → fallback <img> do GTM/GA quando beacon é bloqueado
+EXPECTED_IMG=(
+  "https://www.googletagmanager.com"
+  "https://ssl.gstatic.com"
+  "https://*.clarity.ms"
+  "https://*.bing.com"
+  "https://images.unsplash.com"
+  "https://www.google-analytics.com"
+  "https://static.cloudflareinsights.com"
+)
+EXPECTED_SCRIPT=(
+  "https://www.googletagmanager.com"
+  "https://tagmanager.google.com"
+  "https://*.clarity.ms"
+  "https://*.bing.com"
+  "https://images.unsplash.com"
+  "https://www.google-analytics.com"
+  "https://cdn.jsdelivr.net"
+  "https://static.cloudflareinsights.com"
+)
+EXPECTED_CONNECT=(
+  "https://*.cryptobingo.bet"
+  "https://www.google-analytics.com"
+  "https://analytics.google.com"
+  "https://*.clarity.ms"
+  "https://*.bing.com"
+  "https://images.unsplash.com"
+  "https://static.cloudflareinsights.com"
+)
+
+log()  { printf '[validate-csp] %s\n' "$*"; }
+fail() { printf '[validate-csp] FAIL: %s\n' "$*" >&2; exit 1; }
+
+# ── 1. nginx -t no container VPS ──────────────────────────────────────
+if [[ "$SKIP_NGINX_T" != "1" ]]; then
+  log "Rodando nginx -t no container $NGINX_CONTAINER ($VPS_HOST)…"
+  if ! ssh "$VPS_HOST" "docker exec $NGINX_CONTAINER nginx -t" 2>&1 \
+       | grep -q "test is successful"; then
+    fail "nginx -t falhou no container $NGINX_CONTAINER (ssh $VPS_HOST)"
+  fi
+  log "nginx -t OK"
+else
+  log "nginx -t pulado (SKIP_NGINX_T=1)"
 fi
 
-echo "=== Validação de CSP ==="
-echo "Config: $CONFIG"
-[ -n "$LIVE_URL" ] && echo "Live:   $LIVE_URL"
-echo ""
+# ── 2. Buscar header CSP servido em produção ──────────────────────────
+log "Buscando header CSP em $CSP_URL…"
+# cache-bust para evitar resposta cacheada do Cloudflare
+URL_WITH_CB="${CSP_URL}${CSP_URL:+?}"
+URL_WITH_CB="${CSP_URL}$( [[ "$CSP_URL" == *\?* ]] && echo '&' || echo '?' )cb=$(date +%s)"
+HEADER="$(curl -fsS -D - -o /dev/null "$URL_WITH_CB" 2>/dev/null \
+          | grep -i '^content-security-policy:' | head -1 || true)"
 
-python3 - "$CONFIG" "$LIVE_URL" <<'PY'
-import json, re, sys, subprocess
+[[ -n "$HEADER" ]] || fail "Header Content-Security-Policy não encontrado em $CSP_URL"
+log "Header CSP obtido ($(wc -c <<<"$HEADER") bytes)"
 
-config_path, live_url = sys.argv[1], sys.argv[2]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LISTA CURADA: domínios de terceiros que o frontend USA em runtime, por
-# diretiva. Adicione aqui ao introduzir um novo serviço externo.
-# ─────────────────────────────────────────────────────────────────────────────
-REQUIRED = {
-    "connect-src": [
-        "*.clarity.ms",                 # Microsoft Clarity -> n.clarity.ms/collect
-        "www.google-analytics.com",     # GA4
-        "www.googletagmanager.com",     # GTM
-        "waxtestnet.greymass.com",      # RPC WAX (presets do dropdown do lobby)
-        "wax-testnet.eosphere.io",
-        "testnet.waxsweden.org",
-        "testnet.wax.eosusa.io",
-        "cb.anchor.link",               # Anchor wallet
-        "wax-testnet.api.atomicassets.io",
-    ],
-    "script-src": [
-        "*.clarity.ms",
-        "www.googletagmanager.com",
-        "cdn.jsdelivr.net",             # cookieconsent
-    ],
+# Extrai o valor de uma directive do header CSP.
+# Uso: directive_value "img-src" "$HEADER"
+directive_value() {
+  local dir="$1" hdr="$2"
+  # pega o valor da directive: tudo entre "$dir " e o próximo ";"
+  printf '%s' "$hdr" | grep -oiE "${dir}[[:space:]]+[^;]*" | head -1 | sed "s/^${dir}[[:space:]]*//I" | tr -d '\r'
 }
 
-with open(config_path) as f:
-    cfg = json.load(f)
-csp = cfg.get("globalHeaders", {}).get("Content-Security-Policy", "")
-if not csp:
-    print("❌ Nenhuma Content-Security-Policy em globalHeaders.")
-    sys.exit(1)
+check_directive() {
+  local dir="$1"; shift
+  local value; value="$(directive_value "$dir" "$HEADER")"
+  [[ -n "$value" ]] || fail "Directive '$dir' ausente no CSP servido"
+  local missing=()
+  for want in "$@"; do
+    # comparação tolerante: *.clarity.ms casa clarity.ms e subdomínios
+    if [[ "$want" == *'*.'* ]]; then
+      local base="${want#\*.*}"
+      [[ "$value" == *"$base"* ]] || missing+=("$want")
+    else
+      [[ "$value" == *"$want"* ]] || missing+=("$want")
+    fi
+  done
+  if (( ${#missing[@]} > 0 )); then
+    fail "'$dir' servido está faltando: ${missing[*]}  | valor atual: $value"
+  fi
+  log "'$dir' OK (${#@} domínios esperados presentes)"
+}
 
-def parse(csp_str):
-    d = {}
-    for part in csp_str.split(";"):
-        toks = part.split()
-        if toks:
-            d[toks[0]] = set(toks[1:])
-    return d
+# ── 3. Checar directives ───────────────────────────────────────────────
+check_directive "img-src"          "${EXPECTED_IMG[@]}"
+check_directive "script-src"       "${EXPECTED_SCRIPT[@]}"
+check_directive "connect-src"      "${EXPECTED_CONNECT[@]}"
 
-def host(src):
-    s = re.sub(r'^[a-z]+://', '', src).strip("'")
-    return s
-
-def covered(domain, directive, directives):
-    sources = directives.get(directive, set()) | directives.get("default-src", set())
-    d = host(domain)
-    for s in sources:
-        sh = host(s)
-        if sh == d:
-            return True
-        if sh.startswith("*.") and (d == sh[2:] or d.endswith("." + sh[2:])):
-            return True
-        if d.startswith("*.") and sh.endswith("." + d[2:]):
-            return True  # config usa host específico coberto pelo wildcard exigido
-    return False
-
-def check(csp_str, label):
-    directives = parse(csp_str)
-    missing = []
-    for directive, domains in REQUIRED.items():
-        for dom in domains:
-            if not covered(dom, directive, directives):
-                missing.append((directive, dom))
-    print(f"[{label}]")
-    if missing:
-        print("  ❌ CSP INCOMPLETA — faltam:")
-        for directive, dom in missing:
-            print(f"     - {dom}  em '{directive}'")
-        return False
-    print("  ✅ todos os domínios de terceiros exigidos estão cobertos")
-    return True
-
-ok = check(csp, "config")
-
-# Validação opcional do header AO VIVO
-if live_url:
-    print("")
-    try:
-        out = subprocess.run(
-            ["curl", "-sI", live_url], capture_output=True, text=True, timeout=20
-        ).stdout
-        live_csp = ""
-        for line in out.splitlines():
-            if line.lower().startswith("content-security-policy:"):
-                live_csp = line.split(":", 1)[1].strip()
-                break
-        if not live_csp:
-            print("[live] ⚠️  header Content-Security-Policy não encontrado (CDN ainda propagando?)")
-        else:
-            ok = check(live_csp, "live") and ok
-    except Exception as e:
-        print(f"[live] ⚠️  não foi possível checar ao vivo: {e}")
-
-sys.exit(0 if ok else 1)
-PY
+log "SUCESSO — CSP servido em produção está conforme o esperado."

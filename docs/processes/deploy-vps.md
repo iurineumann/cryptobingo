@@ -104,6 +104,31 @@ O script faz: `git submodule update --init` (landing) → `pnpm build` → gate 
 (`validate-csp.sh`, frontend/swap-ui/landing) → rsync build → `/opt/cryptobingo/static/<app>`
 → `docker exec cryptobingo-nginx nginx -s reload`.
 
+### 9.3.1 Gate de CSP pós-deploy (`pnpm run validate:csp`)
+`scripts/validate-csp.sh` valida que o **header CSP SERVIDO EM PRODUÇÃO** está
+conforme o esperado (SWA parity + ajustes: clarity/bing/unsplash/google-analytics).
+Ele faz `nginx -t` no container VPS e checa `img-src`/`script-src`/`connect-src`
+contra uma lista de domínios esperados. Falha o deploy se faltar domínio.
+Uso: `pnpm run validate:csp` (ou `CSP_URL=https://test.cryptobingo.bet pnpm run validate:csp`).
+Sem acesso ao VPS/SSH, use `SKIP_NGINX_T=1` para validar só o header.
+
+### 9.3.2 Caveat: bind mount obsoleto do nginx
+Se após `rsync` + `nginx -s reload` o header CSP servido continuar ANTIGO, o
+container `cryptobingo-nginx` pode estar servindo um `apps.conf` obsoleto (o bind
+mount nem sempre reflete a substituição do inode pelo rsync). Sintoma: `grep` no
+host mostra o novo domínio, mas `docker exec ... grep` no container não. Correção:
+recriar o container para remontar o volume:
+```bash
+ssh vps "docker stop cryptobingo-nginx && docker rm cryptobingo-nginx && \
+docker run -d --name cryptobingo-nginx --network cryptobingo_cb-front \
+  -p 80:80 -p 443:443 \
+  -v /opt/cryptobingo/nginx/apps.conf:/etc/nginx/conf.d/apps.conf:ro \
+  -v /etc/letsencrypt:/etc/letsencrypt:ro \
+  -v /opt/cryptobingo/static:/usr/share/nginx/static:ro \
+  nginx:1.31-alpine"
+```
+Depois: `pnpm run validate:csp` para confirmar.
+
 ### 9.3 Build dir por app
 - landing → `apps/landing-page/build/client`
 - frontend → `apps/frontend/dist`
