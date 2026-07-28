@@ -1,0 +1,8 @@
+name = "clarity-proxy"
+main = "clarity-proxy.js"
+account_id = "e236aaa6209b68c292a4d3e53f8588ac"
+compatibility_date = "2024-09-23"
+routes = [
+  { pattern = "www.cryptobingo.bet/cl/*", zone_name = "cryptobingo.bet" },
+  { pattern = "cryptobingo.bet/cl/*", zone_name = "cryptobingo.bet" }
+]

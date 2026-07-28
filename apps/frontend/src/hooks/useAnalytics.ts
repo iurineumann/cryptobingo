@@ -1,12 +1,16 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { setAdblockDetected, trackEvent as trackEventService } from '~/services/analytics';
+import { setAdblockDetected, trackEvent as trackEventService, getClientId } from '~/services/analytics';
 
 declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
     _analyticsConsented?: boolean;
+    CookieConsent?: {
+      setLanguage: (lang: string) => void;
+      getLanguage?: () => string;
+    };
   }
 }
 
@@ -69,15 +73,25 @@ export function useAnalytics() {
   }, [adblock]);
 
   useEffect(() => {
-    if (prevPath.current !== location.pathname && window._analyticsConsented) {
+    if (prevPath.current !== location.pathname) {
       prevPath.current = location.pathname;
-      window.dataLayer?.push({
-        event: 'page_view',
-        page_path: location.pathname,
-        page_title: document.title,
-      });
+      if (window._analyticsConsented) {
+        window.dataLayer?.push({
+          event: 'page_view',
+          page_path: location.pathname,
+          page_title: document.title,
+        });
+      }
+      // adblock: dataLayer/GTM pode estar bloqueado → manda page_view pelo proxy
+      if (adblock) {
+        trackEventService('page_view', {
+          page_path: location.pathname,
+          page_title: document.title,
+          client_id: getClientId(),
+        });
+      }
     }
-  }, [location]);
+  }, [location, adblock]);
 
   return { trackEvent };
 }
