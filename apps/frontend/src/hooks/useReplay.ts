@@ -108,7 +108,8 @@ export function useReplay(gameId: string, session?: Session | null, playerAccoun
 
         const gameResP = fetchTableRows({
           code: CONTRACT, scope: CONTRACT, table: 'games',
-          lower_bound: UInt64.from(gameId).toString(), upper_bound: UInt64.from(gameId).toString(), limit: 1,
+          lower_bound: UInt64.from(gameId).toString(), upper_bound: UInt64.from(gameId).toString(),
+          key_type: 'i64', limit: 1,
         }, session);
 
         const ticketsResP = effectivePlayer
@@ -122,7 +123,7 @@ export function useReplay(gameId: string, session?: Session | null, playerAccoun
 
         const allTicketsResP = fetchTableRows({
           code: CONTRACT, scope: UInt64.from(gameId).toString(), table: 'tickets',
-          limit: 500,
+          key_type: 'i64', limit: 500,
         }, session);
 
         const [gameRes, ticketsRes, allTicketsRes] = await Promise.all([gameResP, ticketsResP, allTicketsResP]);
@@ -140,7 +141,7 @@ export function useReplay(gameId: string, session?: Session | null, playerAccoun
               code: CONTRACT, scope: CONTRACT, table: 'gametypes',
               lower_bound: UInt64.from(gametypeId).toString(),
               upper_bound: UInt64.from(gametypeId).toString(),
-              limit: 1,
+              key_type: 'i64', limit: 1,
             }, session);
             if (gtRes.rows.length) {
               const gt = gtRes.rows[0] as any;
