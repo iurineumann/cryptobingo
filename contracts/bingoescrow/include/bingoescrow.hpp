@@ -36,7 +36,7 @@ namespace bingoescrow {
         bool                    allow_notify;
         std::vector<name>       authorized_accounts;
         std::vector<name>       notify_accounts;
-        std::vector<double>     market_fee;
+        double                  market_fee;         // testnet custom: float64 (nao vector)
         std::vector<uint8_t>    serialized_data;
         uint64_t primary_key() const { return collection_name.value; }
     };

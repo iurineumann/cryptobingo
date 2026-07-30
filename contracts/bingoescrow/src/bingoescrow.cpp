@@ -251,7 +251,9 @@ namespace bingoescrow {
                 "mintasset"_n,
                 std::make_tuple(get_self(), tp->collection_name,
                                 tp->schema_name, tp->template_id, from,
-                                std::vector<asset>{}, std::vector<asset>{})
+                                std::vector<std::pair<std::string, std::string>>{},
+                                std::vector<std::pair<std::string, std::string>>{},
+                                std::vector<asset>{})
             ).send();
 
             return;
