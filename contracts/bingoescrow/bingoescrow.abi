@@ -1,322 +1,306 @@
 {
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
     "version": "eosio::abi/1.2",
     "types": [],
     "structs": [
         {
-            "name": "init",
-            "base": "",
-            "fields": []
-        },
-        {
-            "name": "setconfig",
-            "base": "",
-            "fields": [
-                {"name": "max_backings_per_asset", "type": "uint8"}
-            ]
-        },
-        {
-            "name": "settoken",
-            "base": "",
-            "fields": [
-                {"name": "contract", "type": "name"},
-                {"name": "sym", "type": "symbol"},
-                {"name": "precision", "type": "uint8"},
-                {"name": "active", "type": "bool"},
-                {"name": "can_back", "type": "bool"}
-            ]
-        },
-        {
-            "name": "settierprice",
-            "base": "",
-            "fields": [
-                {"name": "collection_name", "type": "name"},
-                {"name": "schema_name", "type": "name"},
-                {"name": "template_id", "type": "int32"},
-                {"name": "depositor", "type": "name"},
-                {"name": "max_backings", "type": "uint8"},
-                {"name": "mode", "type": "uint8"},
-                {"name": "ref_ratio", "type": "float64"},
-                {"name": "max_ratio", "type": "float64"}
-            ]
-        },
-        {
-            "name": "setbacking",
-            "base": "",
-            "fields": [
-                {"name": "tierprice_id", "type": "uint64"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "token_amount", "type": "asset"},
-                {"name": "active", "type": "bool"}
-            ]
-        },
-        {
-            "name": "setaccpay",
-            "base": "",
-            "fields": [
-                {"name": "tierprice_id", "type": "uint64"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "base_price", "type": "asset"},
-                {"name": "escalation", "type": "float64"},
-                {"name": "active", "type": "bool"}
-            ]
-        },
-        {
-            "name": "releaseburn",
-            "base": "",
-            "fields": [
-                {"name": "asset_id", "type": "uint64"},
-                {"name": "owner", "type": "name"}
-            ]
-        },
-        {
             "name": "addbacking",
             "base": "",
             "fields": [
-                {"name": "depositor", "type": "name"},
-                {"name": "asset_id", "type": "uint64"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "amount", "type": "asset"}
-            ]
-        },
-        {
-            "name": "cancelback",
-            "base": "",
-            "fields": [
-                {"name": "esc_id", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "rescueasset",
-            "base": "",
-            "fields": [
-                {"name": "asset_id", "type": "uint64"}
-            ]
-        },
-        {
-            "name": "adminrescue",
-            "base": "",
-            "fields": [
-                {"name": "asset_id", "type": "uint64"},
-                {"name": "to", "type": "name"}
-            ]
-        },
-        {
-            "name": "withdraw",
-            "base": "",
-            "fields": [
-                {"name": "depositor", "type": "name"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "amount", "type": "asset"}
+                {
+                    "name": "depositor",
+                    "type": "name"
+                },
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "token_contract",
+                    "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "asset"
+                }
             ]
         },
         {
             "name": "adminrel",
             "base": "",
             "fields": [
-                {"name": "owner", "type": "name"},
-                {"name": "asset_id", "type": "uint64"}
+                {
+                    "name": "owner",
+                    "type": "name"
+                },
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                }
             ]
         },
         {
-            "name": "config_row",
+            "name": "adminrescue",
             "base": "",
             "fields": [
-                {"name": "max_backings_per_asset", "type": "uint8"}
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "to",
+                    "type": "name"
+                }
             ]
         },
         {
-            "name": "token_row",
+            "name": "cancelback",
             "base": "",
             "fields": [
-                {"name": "contract", "type": "name"},
-                {"name": "sym", "type": "symbol"},
-                {"name": "precision", "type": "uint8"},
-                {"name": "active", "type": "bool"},
-                {"name": "can_back", "type": "bool"}
+                {
+                    "name": "esc_id",
+                    "type": "uint64"
+                }
             ]
         },
         {
-            "name": "balance_row",
+            "name": "init",
+            "base": "",
+            "fields": []
+        },
+        {
+            "name": "releaseburn",
             "base": "",
             "fields": [
-                {"name": "id", "type": "uint64"},
-                {"name": "depositor", "type": "name"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "balance", "type": "asset"}
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "owner",
+                    "type": "name"
+                }
             ]
         },
         {
-            "name": "tierprice_row",
+            "name": "rescueasset",
             "base": "",
             "fields": [
-                {"name": "id", "type": "uint64"},
-                {"name": "collection_name", "type": "name"},
-                {"name": "schema_name", "type": "name"},
-                {"name": "template_id", "type": "int32"},
-                {"name": "depositor", "type": "name"},
-                {"name": "max_backings", "type": "uint8"},
-                {"name": "mode", "type": "uint8"},
-                {"name": "ref_ratio", "type": "float64"},
-                {"name": "max_ratio", "type": "float64"}
+                {
+                    "name": "asset_id",
+                    "type": "uint64"
+                }
             ]
         },
         {
-            "name": "backing_row",
+            "name": "setaccpay",
             "base": "",
             "fields": [
-                {"name": "id", "type": "uint64"},
-                {"name": "tierprice_id", "type": "uint64"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "token_amount", "type": "asset"},
-                {"name": "active", "type": "bool"}
+                {
+                    "name": "tierprice_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "token_contract",
+                    "type": "name"
+                },
+                {
+                    "name": "base_price",
+                    "type": "asset"
+                },
+                {
+                    "name": "escalation",
+                    "type": "float64"
+                },
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
             ]
         },
         {
-            "name": "accepted_pay_row",
+            "name": "setbacking",
             "base": "",
             "fields": [
-                {"name": "id", "type": "uint64"},
-                {"name": "tierprice_id", "type": "uint64"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "base_price", "type": "asset"},
-                {"name": "escalation", "type": "float64"},
-                {"name": "active", "type": "bool"}
+                {
+                    "name": "tierprice_id",
+                    "type": "uint64"
+                },
+                {
+                    "name": "token_contract",
+                    "type": "name"
+                },
+                {
+                    "name": "token_amount",
+                    "type": "asset"
+                },
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
             ]
         },
         {
-            "name": "escrow_row",
+            "name": "setconfig",
             "base": "",
             "fields": [
-                {"name": "esc_id", "type": "uint64"},
-                {"name": "asset_id", "type": "uint64"},
-                {"name": "owner", "type": "name"},
-                {"name": "depositor", "type": "name"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "token_amount", "type": "asset"},
-                {"name": "claimed", "type": "bool"},
-                {"name": "source", "type": "uint8"}
+                {
+                    "name": "max_backings_per_asset",
+                    "type": "uint8"
+                }
             ]
         },
         {
-            "name": "audit_row",
+            "name": "settierprice",
             "base": "",
             "fields": [
-                {"name": "id", "type": "uint64"},
-                {"name": "actor", "type": "name"},
-                {"name": "action_name", "type": "name"},
-                {"name": "ts", "type": "time_point"}
+                {
+                    "name": "collection_name",
+                    "type": "name"
+                },
+                {
+                    "name": "schema_name",
+                    "type": "name"
+                },
+                {
+                    "name": "template_id",
+                    "type": "int32"
+                },
+                {
+                    "name": "depositor",
+                    "type": "name"
+                },
+                {
+                    "name": "max_backings",
+                    "type": "uint8"
+                },
+                {
+                    "name": "mode",
+                    "type": "uint8"
+                },
+                {
+                    "name": "ref_ratio",
+                    "type": "float64"
+                },
+                {
+                    "name": "max_ratio",
+                    "type": "float64"
+                }
             ]
         },
         {
-            "name": "pending_mint_row",
+            "name": "settoken",
             "base": "",
             "fields": [
-                {"name": "mint_id", "type": "uint64"},
-                {"name": "buyer", "type": "name"},
-                {"name": "collection_name", "type": "name"},
-                {"name": "template_id", "type": "int32"},
-                {"name": "depositor", "type": "name"},
-                {"name": "token_contract", "type": "name"},
-                {"name": "token_amount", "type": "asset"},
-                {"name": "has_backing", "type": "bool"}
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "sym",
+                    "type": "symbol"
+                },
+                {
+                    "name": "precision",
+                    "type": "uint8"
+                },
+                {
+                    "name": "active",
+                    "type": "bool"
+                },
+                {
+                    "name": "can_back",
+                    "type": "bool"
+                }
             ]
         },
         {
-            "name": "stray_row",
+            "name": "withdraw",
             "base": "",
             "fields": [
-                {"name": "asset_id", "type": "uint64"},
-                {"name": "from", "type": "name"}
+                {
+                    "name": "depositor",
+                    "type": "name"
+                },
+                {
+                    "name": "token_contract",
+                    "type": "name"
+                },
+                {
+                    "name": "amount",
+                    "type": "asset"
+                }
             ]
         }
     ],
     "actions": [
-        {"name": "init", "type": "init", "ricardian_contract": ""},
-        {"name": "setconfig", "type": "setconfig", "ricardian_contract": ""},
-        {"name": "settoken", "type": "settoken", "ricardian_contract": ""},
-        {"name": "settierprice", "type": "settierprice", "ricardian_contract": ""},
-        {"name": "setbacking", "type": "setbacking", "ricardian_contract": ""},
-        {"name": "setaccpay", "type": "setaccpay", "ricardian_contract": ""},
-        {"name": "releaseburn", "type": "releaseburn", "ricardian_contract": ""},
-        {"name": "addbacking", "type": "addbacking", "ricardian_contract": ""},
-        {"name": "cancelback", "type": "cancelback", "ricardian_contract": ""},
-        {"name": "rescueasset", "type": "rescueasset", "ricardian_contract": ""},
-        {"name": "adminrescue", "type": "adminrescue", "ricardian_contract": ""},
-        {"name": "withdraw", "type": "withdraw", "ricardian_contract": ""},
-        {"name": "adminrel", "type": "adminrel", "ricardian_contract": ""}
-    ],
-    "tables": [
         {
-            "name": "config",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "config_row"
+            "name": "addbacking",
+            "type": "addbacking",
+            "ricardian_contract": ""
         },
         {
-            "name": "tokens",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "token_row"
+            "name": "adminrel",
+            "type": "adminrel",
+            "ricardian_contract": ""
         },
         {
-            "name": "balances",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "balance_row"
+            "name": "adminrescue",
+            "type": "adminrescue",
+            "ricardian_contract": ""
         },
         {
-            "name": "tierprices",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "tierprice_row"
+            "name": "cancelback",
+            "type": "cancelback",
+            "ricardian_contract": ""
         },
         {
-            "name": "backings",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "backing_row"
+            "name": "init",
+            "type": "init",
+            "ricardian_contract": ""
         },
         {
-            "name": "acceptedpays",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "accepted_pay_row"
+            "name": "releaseburn",
+            "type": "releaseburn",
+            "ricardian_contract": ""
         },
         {
-            "name": "escrows",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "escrow_row"
+            "name": "rescueasset",
+            "type": "rescueasset",
+            "ricardian_contract": ""
         },
         {
-            "name": "audits",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "audit_row"
+            "name": "setaccpay",
+            "type": "setaccpay",
+            "ricardian_contract": ""
         },
         {
-            "name": "pendingmints",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "pending_mint_row"
+            "name": "setbacking",
+            "type": "setbacking",
+            "ricardian_contract": ""
         },
         {
-            "name": "strays",
-            "index_type": "i64",
-            "key_names": [],
-            "key_types": [],
-            "type": "stray_row"
+            "name": "setconfig",
+            "type": "setconfig",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "settierprice",
+            "type": "settierprice",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "settoken",
+            "type": "settoken",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "withdraw",
+            "type": "withdraw",
+            "ricardian_contract": ""
         }
     ],
+    "tables": [],
     "ricardian_clauses": [],
     "variants": [],
     "action_results": []

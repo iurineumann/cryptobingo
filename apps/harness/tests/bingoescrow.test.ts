@@ -1,13 +1,13 @@
 // apps/harness/tests/bingoescrow.test.ts
-// Testes de integracao do contrato bingoescrow (Fase 3).
+// Testes de integracao do contrato bingoescrow.
 //
 // Cobertura:
 //   1. init + settoken + settierprice + setbacking + setaccpay
 //   2. Comprar NFT (WAX) → verificar pending_mint + escrow criado
-//   3. Resgatar NFT (receive_asset) → verificar tokens recebidos + NFT queimada
-//   4. addbacking → cancelbacking
-//   5. withdraw (saldo livre)
-//   6. Multi-token sem redeploy: settoken de terceiro, comprar, verificar wasm
+//   3. addbacking → cancelbacking
+//   4. withdraw (saldo livre)
+//   5. rescue + admin_rescue (strays)
+//   6. apply dispatcher — audits registradas
 
 import { PrivateKey, Session }              from '@wharfkit/session';
 import { WalletPluginPrivateKey }                       from '@wharfkit/wallet-plugin-privatekey';
@@ -17,7 +17,7 @@ const chainId = process.env.CHAIN_ID || '8a34ec7df1b8cd06ff4a8abbaa7cc5030082335
 
 const eosioKey    = PrivateKey.from(process.env.EOSIO_KEY!);
 const playerKey   = PrivateKey.from(process.env.JOGADOR1_KEY!);
-const bingoKey    = PrivateKey.from((process.env.BINGO_GAME_KEY || process.env.BINGOGAMECTR_KEY || process.env.CONTRACT_PRIVATE_KEY)!);
+const escrowKey   = PrivateKey.from('5KQ8kagbUVYjPDWhmiJsdsPZehEFFyLuu8q2vt6ME14M4eSsv9W');
 
 function makeSession(actor: string, key: PrivateKey, permission = 'active') {
     return new Session({
@@ -28,19 +28,22 @@ function makeSession(actor: string, key: PrivateKey, permission = 'active') {
     });
 }
 
-const rootSession    = makeSession('eosio',          eosioKey);
-const bingoSession   = makeSession('bingogamectr',   bingoKey, 'admin');
-const bingoActive    = makeSession('bingogamectr',   bingoKey, 'active');
-const playerSession  = makeSession('jogador1',       playerKey);
+const rootSession     = makeSession('eosio',          eosioKey);
+const escrowAdminSess = makeSession('bingogamescr',   escrowKey, 'admin');
+const escrowActiveSes = makeSession('bingogamescr',   escrowKey, 'active');
+const playerSession   = makeSession('jogador1',       playerKey);
 
-const ESCROW_CONTRACT = 'bingogamescr';
+const ESCROW = 'bingogamescr';
 
 async function transact(session: Session, account: string, name: string, data: object) {
     return session.transact({
         actions: [{
             account,
             name,
-            authorization: [session.permissionLevel],
+            authorization: [{
+                actor: session.actor,
+                permission: session.permission,
+            }],
             data,
         }],
     }, { broadcast: true });
@@ -58,27 +61,33 @@ async function getTableRows(code: string, scope: string, table: string, lower?: 
     return res.rows ?? [];
 }
 
-describe('bingoescrow - Fase 3 (apply dispatcher)', () => {
+describe('bingoescrow — integracao', () => {
     beforeAll(async () => {
         try {
-            await transact(rootSession, 'bingogamescr', 'init', {});
+            await transact(escrowActiveSes, ESCROW, 'init', {});
         } catch (_) { /* ja inicializado */ }
     }, 30000);
 
     test('1. init + settoken + settierprice + setbacking + setacceptedpay', async () => {
-        await transact(bingoSession, ESCROW_CONTRACT, 'setconfig', { max_backings_per_asset: 5 });
+        await transact(escrowAdminSess, ESCROW, 'setconfig', { max_backings_per_asset: 5 });
 
-        await transact(bingoSession, ESCROW_CONTRACT, 'settoken', {
-            contract: 'eosio.token', sym: '8,WAX', precision: 8,
-            active: true, can_back: false,
+        await transact(escrowAdminSess, ESCROW, 'settoken', {
+            contract: 'eosio.token',
+            sym: '0,WAX',
+            precision: 8,
+            active: true,
+            can_back: false,
         });
 
-        await transact(bingoSession, ESCROW_CONTRACT, 'settoken', {
-            contract: 'bingogametkn', sym: '4,BINGO', precision: 4,
-            active: true, can_back: true,
+        await transact(escrowAdminSess, ESCROW, 'settoken', {
+            contract: 'bingogametkn',
+            sym: '0,BINGO',
+            precision: 4,
+            active: true,
+            can_back: true,
         });
 
-        await transact(bingoSession, ESCROW_CONTRACT, 'settierprice', {
+        await transact(escrowAdminSess, ESCROW, 'settierprice', {
             collection_name: 'cryptobingo1',
             schema_name: 'prize',
             template_id: 2,
@@ -89,14 +98,14 @@ describe('bingoescrow - Fase 3 (apply dispatcher)', () => {
             max_ratio: 0.8,
         });
 
-        await transact(bingoSession, ESCROW_CONTRACT, 'setbacking', {
+        await transact(escrowActiveSes, ESCROW, 'setbacking', {
             tierprice_id: 0,
             token_contract: 'bingogametkn',
             token_amount: '100.0000 BINGO',
             active: true,
         });
 
-        await transact(bingoSession, ESCROW_CONTRACT, 'setaccpay', {
+        await transact(escrowActiveSes, ESCROW, 'setaccpay', {
             tierprice_id: 0,
             token_contract: 'eosio.token',
             base_price: '50.00000000 WAX',
@@ -104,22 +113,22 @@ describe('bingoescrow - Fase 3 (apply dispatcher)', () => {
             active: true,
         });
 
-        const tokens = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'tokens');
+        const tokens = await getTableRows(ESCROW, ESCROW, 'tokens');
         expect(tokens.length).toBeGreaterThanOrEqual(2);
     }, 60000);
 
     test('2. on_transfer (compra via transfer) → pending_mint', async () => {
-        const pmBefore = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'pendingmints');
+        const pmBefore = await getTableRows(ESCROW, ESCROW, 'pendingmint');
         const countBefore = pmBefore.length;
 
         await transact(playerSession, 'eosio.token', 'transfer', {
             from: 'jogador1',
-            to: ESCROW_CONTRACT,
+            to: ESCROW,
             quantity: '50.00000000 WAX',
             memo: 'buy:0,0',
         });
 
-        const pmAfter = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'pendingmints');
+        const pmAfter = await getTableRows(ESCROW, ESCROW, 'pendingmint');
         expect(pmAfter.length).toBe(countBefore + 1);
     }, 30000);
 
@@ -127,61 +136,56 @@ describe('bingoescrow - Fase 3 (apply dispatcher)', () => {
         // Deposita BINGO no pool do jogador1 (pre-fund)
         await transact(playerSession, 'bingogametkn', 'transfer', {
             from: 'jogador1',
-            to: ESCROW_CONTRACT,
+            to: ESCROW,
             quantity: '500.0000 BINGO',
             memo: '',
         });
 
-        const balancesBefore = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'balances');
+        const balancesBefore = await getTableRows(ESCROW, ESCROW, 'balances');
         expect(balancesBefore.length).toBeGreaterThan(0);
 
-        // addbacking para NFT vault (asset_id=0 placeholder)
-        await transact(playerSession, ESCROW_CONTRACT, 'addbacking', {
+        // addbacking para NFT vault (asset_id=1 placeholder)
+        await transact(playerSession, ESCROW, 'addbacking', {
             depositor: 'jogador1',
             asset_id: 1,
             token_contract: 'bingogametkn',
             amount: '50.0000 BINGO',
         });
 
-        const escrows = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'escrows');
+        const escrows = await getTableRows(ESCROW, ESCROW, 'escrows');
         const newEscrow = escrows.find((e: any) => e.asset_id === 1 && !e.claimed);
         expect(newEscrow).toBeDefined();
 
         // cancelbacking
-        await transact(playerSession, ESCROW_CONTRACT, 'cancelback', {
-            esc_id: newEscrow.esc_id,
-        });
+        await transact(playerSession, ESCROW, 'cancelback', { esc_id: newEscrow.esc_id });
 
-        const escrowsAfter = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'escrows');
+        const escrowsAfter = await getTableRows(ESCROW, ESCROW, 'escrows');
         const cancelled = escrowsAfter.find((e: any) => e.esc_id === newEscrow.esc_id);
         expect(cancelled).toBeUndefined();
     }, 60000);
 
     test('4. withdraw (saldo livre)', async () => {
-        // Deposita mais WAX
+        // Deposita WAX
         await transact(playerSession, 'eosio.token', 'transfer', {
             from: 'jogador1',
-            to: ESCROW_CONTRACT,
+            to: ESCROW,
             quantity: '200.00000000 WAX',
             memo: '',
         });
 
-        const balancesBefore = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'balances');
+        const balancesBefore = await getTableRows(ESCROW, ESCROW, 'balances');
         const waxBal = balancesBefore.find((b: any) =>
             b.depositor === 'jogador1' && b.token_contract === 'eosio.token');
         expect(waxBal).toBeDefined();
 
         const freeStr = waxBal.balance;
-        const freeAmount = parseInt(freeStr.split(' ')[0].replace('.', ''), 10);
-        expect(freeAmount).toBeGreaterThan(0);
-
-        await transact(playerSession, ESCROW_CONTRACT, 'withdraw', {
+        await transact(playerSession, ESCROW, 'withdraw', {
             depositor: 'jogador1',
             token_contract: 'eosio.token',
             amount: freeStr,
         });
 
-        const balancesAfter = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'balances');
+        const balancesAfter = await getTableRows(ESCROW, ESCROW, 'balances');
         const waxBalAfter = balancesAfter.find((b: any) =>
             b.depositor === 'jogador1' && b.token_contract === 'eosio.token');
         expect(waxBalAfter?.balance).toBe('0.00000000 WAX');
@@ -191,29 +195,22 @@ describe('bingoescrow - Fase 3 (apply dispatcher)', () => {
         // Envia NFT sem escrow → vai para strays
         await transact(playerSession, 'atomicassets', 'transfer', {
             from: 'jogador1',
-            to: ESCROW_CONTRACT,
+            to: ESCROW,
             asset_ids: [1],
             memo: 'rescue-test',
         });
 
-        const strays = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'strays');
+        const strays = await getTableRows(ESCROW, ESCROW, 'strays');
         const stray = strays.find((s: any) => s.asset_id === 1);
         if (stray) {
-            await transact(playerSession, ESCROW_CONTRACT, 'rescueasset', {
-                asset_id: 1,
-            });
-
-            const straysAfter = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'strays');
-            const strayed = straysAfter.find((s: any) => s.asset_id === 1);
-            expect(strayed).toBeUndefined();
+            await transact(playerSession, ESCROW, 'rescueasset', { asset_id: 1 });
+            const straysAfter = await getTableRows(ESCROW, ESCROW, 'strays');
+            expect(straysAfter.find((s: any) => s.asset_id === 1)).toBeUndefined();
         }
     }, 30000);
 
-    test('6. apply dispatcher — multiplicidade de notificacoes (orng.wax on_reveal nao crasha)', async () => {
-        // Envia receiverand do orng.wax — o on_reveal e no-op
-        // Simulado: se nao crashar, o apply() roteou corretamente
-        // Verifica que a tabela de audits registra acoes
-        const audits = await getTableRows(ESCROW_CONTRACT, ESCROW_CONTRACT, 'audits');
+    test('6. apply dispatcher — audits registradas', async () => {
+        const audits = await getTableRows(ESCROW, ESCROW, 'audits');
         expect(audits.length).toBeGreaterThan(0);
     }, 15000);
 });

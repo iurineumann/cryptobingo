@@ -792,12 +792,9 @@ namespace bingoescrow {
 
     void bingoescrow_contract::_audit(name action_name) {
         audits_t audits(get_self(), get_self().value);
-        name signer = get_self();
-        for (auto& a : get_action(0, 0).authorization)
-            if (a.actor != get_self()) { signer = a.actor; break; }
         audits.emplace(get_self(), [&](auto& row) {
             row.id          = audits.available_primary_key();
-            row.actor       = signer;
+            row.actor       = get_self();
             row.action_name = action_name;
             row.ts          = current_time_point();
         });
