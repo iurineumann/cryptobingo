@@ -115,6 +115,7 @@ namespace bingoescrow {
     struct [[eosio::table("tierprices")]] tierprice_row {
         uint64_t   id;
         name       collection_name;
+        name       schema_name;
         int32_t    template_id;
         name       depositor;
         uint8_t    max_backings;
@@ -252,6 +253,49 @@ namespace bingoescrow {
 
         [[eosio::action]] void init();
 
+        [[eosio::action]] void setconfig(uint8_t max_backings_per_asset);
+
+        [[eosio::action]] void settoken(name contract, symbol sym, uint8_t precision,
+                                        bool active, bool can_back);
+
+        [[eosio::action]] void settierprice(name collection_name, name schema_name,
+                                            int32_t template_id, name depositor,
+                                            uint8_t max_backings, uint8_t mode,
+                                            double ref_ratio, double max_ratio);
+
+        [[eosio::action]] void setbacking(uint64_t tierprice_id, name token_contract,
+                                          asset token_amount, bool active);
+
+        [[eosio::action]] void setaccpay(uint64_t tierprice_id, name token_contract,
+                                            asset base_price, double escalation,
+                                            bool active);
+
+        [[eosio::action]] void releaseburn(uint64_t asset_id, name owner);
+
+        [[eosio::action]] void addbacking(name depositor, uint64_t asset_id,
+                                          name token_contract, asset amount);
+
+        [[eosio::action]] void cancelback(uint64_t esc_id);
+
+        [[eosio::action]] void rescueasset(uint64_t asset_id);
+
+        [[eosio::action]] void adminrescue(uint64_t asset_id, name to);
+
+        [[eosio::action]] void withdraw(name depositor, name token_contract, asset amount);
+
+        [[eosio::action]] void adminrel(name owner, uint64_t asset_id);
+
+        // Notification handlers (called via apply())
+        void on_transfer(name from, name to, asset quantity, std::string memo);
+
+        void receive_asset(name from, name to, std::vector<uint64_t> asset_ids,
+                           std::string memo);
+
+        [[eosio::on_notify("atomicassets::logmint")]]
+        void on_mint(uint64_t asset_id, name authorized_minter,
+                     name collection_name, name schema_name,
+                     int32_t template_id, name new_asset_owner);
+
     private:
         // ── Invariantes (§2) ──────────────────────────────────────────────────
 
@@ -289,6 +333,8 @@ namespace bingoescrow {
         // ── Auditoria ─────────────────────────────────────────────────────────
 
         void _audit(name action_name);
+
+        void _redeem_asset(name to, uint64_t asset_id);
     };
 
 }
