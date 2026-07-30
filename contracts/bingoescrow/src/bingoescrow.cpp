@@ -803,4 +803,111 @@ namespace bingoescrow {
         });
     }
 
+    // ==========================================
+    // on_reveal — ORNG callback (lootbox F3 stub)
+    // ==========================================
+
+    void bingoescrow_contract::on_reveal(uint64_t, eosio::checksum256) {
+    }
+
+} // namespace bingoescrow
+
+// ==============================================
+// apply() — dispatcher manual hibrido
+// Filtra notificacoes por code em runtime
+// (multi-token sem redeploy)
+// ==============================================
+
+extern "C" void apply(uint64_t receiver, uint64_t code, uint64_t action) {
+    using namespace eosio;
+    using namespace bingoescrow;
+
+    // 1) Notificacoes de transfer (qualquer token)
+    if (action == "transfer"_n.value) {
+        name contract_name = name(code);
+
+        // NFT atomicassets → receive_asset
+        if (contract_name == ATOMICASSETS) {
+            execute_action(name(receiver), name(code),
+                           &bingoescrow_contract::receive_asset);
+            return;
+        }
+
+        // Token → on_transfer
+        execute_action(name(receiver), name(code),
+                       &bingoescrow_contract::on_transfer);
+        return;
+    }
+
+    // 2) logmint — capturar asset_id pos-mint
+    if (action == "logmint"_n.value && name(code) == ATOMICASSETS) {
+        execute_action(name(receiver), name(code),
+                       &bingoescrow_contract::on_mint);
+        return;
+    }
+
+    // 3) ORNG callback — lootbox (F3)
+    if (action == "receiverand"_n.value && name(code) == ORNG_CONTRACT) {
+        execute_action(name(receiver), name(code),
+                       &bingoescrow_contract::on_reveal);
+        return;
+    }
+
+    // 4) Acoes internas do contrato (code == receiver)
+    if (code == receiver) {
+        switch (action) {
+            case "init"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::init);
+                break;
+            case "setconfig"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::setconfig);
+                break;
+            case "settoken"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::settoken);
+                break;
+            case "settierprice"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::settierprice);
+                break;
+            case "setbacking"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::setbacking);
+                break;
+            case "setaccpay"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::setaccpay);
+                break;
+            case "releaseburn"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::releaseburn);
+                break;
+            case "addbacking"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::addbacking);
+                break;
+            case "cancelback"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::cancelback);
+                break;
+            case "rescueasset"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::rescueasset);
+                break;
+            case "adminrescue"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::adminrescue);
+                break;
+            case "withdraw"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::withdraw);
+                break;
+            case "adminrel"_n.value:
+                execute_action(name(receiver), name(code),
+                               &bingoescrow_contract::adminrel);
+                break;
+        }
+    }
 }

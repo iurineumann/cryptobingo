@@ -1,0 +1,29 @@
+{
+  "name": "@cryptobingo/escrow-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --passWithNoTests",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@cryptobingo/blockchain-core": "workspace:*",
+    "@cryptobingo/shared-types": "workspace:*",
+    "@wharfkit/antelope": "^1.0.0",
+    "@wharfkit/session": "^1.0.0",
+    "@wharfkit/wallet-plugin-privatekey": "^1.0.0",
+    "amqplib": "^2.0.1",
+    "dotenv": "^16.4.5",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.0",
+    "jest": "^29.0.0",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^6.0.3"
+  }
+}

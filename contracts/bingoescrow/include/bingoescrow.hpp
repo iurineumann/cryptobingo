@@ -291,10 +291,11 @@ namespace bingoescrow {
         void receive_asset(name from, name to, std::vector<uint64_t> asset_ids,
                            std::string memo);
 
-        [[eosio::on_notify("atomicassets::logmint")]]
         void on_mint(uint64_t asset_id, name authorized_minter,
                      name collection_name, name schema_name,
                      int32_t template_id, name new_asset_owner);
+
+        void on_reveal(uint64_t assoc_id, eosio::checksum256 random_value);
 
     private:
         // ── Invariantes (§2) ──────────────────────────────────────────────────
