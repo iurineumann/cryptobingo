@@ -1,8 +1,6 @@
 packages:
   # Pasta para os microsserviços e frontend
   - 'apps/*'
-  # Excluir escrow-service (serviço off-chain separado, roda independente na VPS)
-  - '!apps/escrow-service'
   # Pasta para os pacotes compartilhados (ex: tipos do C++ exportados para TypeScript)
   - 'packages/*'
   # Opcional: ignorar a pasta de contratos se o pnpm tentar ler algo lá

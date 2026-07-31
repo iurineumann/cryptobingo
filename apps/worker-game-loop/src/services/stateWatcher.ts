@@ -21,7 +21,6 @@ import {
 } from './metrics';
 
 const REDIS_CURSOR_KEY = 'statewatcher:last_global_seq';
-const REDIS_CURSOR_KEY_ESCROW = 'statewatcher:escrow_burn_last_block';
 
 let cursor: number = 0;
 let currentSource: 'firehose' | 'hyperion' = 'firehose';
@@ -153,89 +152,5 @@ export function stopStateWatcher(): void {
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
-  }
-}
-
-// ── Escrow Burn Watcher (Rota 3) ─────────────────────────────────────
-// Monitora escrows nao claimed e verifica se o asset foi queimado.
-// Reusa RabbitMQ + Redis + metrics do estadoWatcher principal.
-// Poll a cada BURN_POLL_INTERVAL_MS.
-
-const ATOMIC_CONTRACT  = process.env.ATOMICASSETS_ACCOUNT || 'atomicassets';
-const ESCROW_CONTRACT  = process.env.ESCROW_CONTRACT || 'bingogamescr';
-const BURN_POLL_INTERVAL_MS = parseInt(process.env.BURN_POLL_INTERVAL_MS || '60000', 10);
-const BURN_COLLECTION  = process.env.BURN_COLLECTION || 'cryptobingo1';
-
-let escrowPollTimer: NodeJS.Timeout | null = null;
-
-async function pollEscrowBurns(): Promise<void> {
-  try {
-    const { rpcClient } = await import('@cryptobingo/blockchain-core');
-
-    const escrows = await rpcClient.v1.chain.get_table_rows({
-      code: ESCROW_CONTRACT,
-      scope: ESCROW_CONTRACT,
-      table: 'escrows',
-      limit: 500,
-      json: true,
-    }).then((r: any) => r.rows ?? []);
-
-    for (const esc of escrows) {
-      if (esc.claimed) continue;
-
-      // Verificar no atomicassets se o asset ainda existe
-      // Tentamos 2 scopes: atomicassets (indice global) + owner conhecido
-      let assetFound = false;
-      for (const scope of [esc.owner, 'atomicassets']) {
-        if (!scope) continue;
-        const rows = await rpcClient.v1.chain.get_table_rows({
-          code: ATOMIC_CONTRACT,
-          scope,
-          table: 'assets',
-          lower_bound: esc.asset_id,
-          upper_bound: esc.asset_id,
-          limit: 1,
-          json: true,
-          key_type: 'i64',
-        }).then((r: any) => r.rows ?? []);
-        if (rows.length > 0) { assetFound = true; break; }
-      }
-
-      if (!assetFound) {
-        // Asset foi queimado — publicar na fila
-        await publishGameEvent('escrow_burn_events', 'releaseburn', {
-          asset_id: esc.asset_id,
-          owner: esc.owner,
-          esc_id: esc.esc_id,
-        });
-        logger.info({ asset_id: esc.asset_id, owner: esc.owner }, 'Escrow: burn detectado via poll');
-      }
-    }
-  } catch (err) {
-    logger.error({ err, tag: 'EscrowBurn' }, 'Erro no poll de burns');
-  }
-}
-
-/**
- * Inicia o poll de deteccao de queimas. Modo fallback ate termos Firehose dedicado.
- * Usa as mesmas conexoes Redis e RabbitMQ do stateWatcher principal.
- */
-export function startEscrowBurnWatcher(): void {
-  (async () => {
-    logger.info({ intervalMs: BURN_POLL_INTERVAL_MS }, 'EscrowBurnWatcher: iniciando (poll)');
-
-    // Primeira passagem imediata
-    await pollEscrowBurns();
-
-    escrowPollTimer = setInterval(pollEscrowBurns, BURN_POLL_INTERVAL_MS);
-  })().catch((err) => {
-    logger.error({ err, tag: 'EscrowBurn' }, 'Falha ao iniciar EscrowBurnWatcher:');
-  });
-}
-
-export function stopEscrowBurnWatcher(): void {
-  if (escrowPollTimer) {
-    clearInterval(escrowPollTimer);
-    escrowPollTimer = null;
   }
 }

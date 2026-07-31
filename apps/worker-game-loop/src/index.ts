@@ -13,8 +13,7 @@ import { ensureFirstGameForActiveRooms } from './services/roomManager';
 import { connectRedis }        from './services/redis';
 import { startBurnSyncCron }   from './services/burnCron';
 import { startBlockchainIndexer } from './services/blockchainIndexer';
-import { startStateWatcher, startEscrowBurnWatcher } from './services/stateWatcher';
-import { startEscrowConsumer } from './services/escrowConsumer';
+import { startStateWatcher } from './services/stateWatcher';
 import { logger } from './services/logger';
 
 logger.info('=============================================');
@@ -102,11 +101,13 @@ export async function bootstrap(): Promise<void> {
 
     // ── 7. State Watcher (Firehose/Hyperion) — publica eventos em tempo real ──
     startStateWatcher();
-
-    // ── 8. Escrow Burn Watcher (Rota 3) — detecta queimas e chama releaseburn ──
-    startEscrowBurnWatcher();
-    startEscrowConsumer();
 }
+
+// NOTA (2026-07-31): Rota 3 (Escrow Burn Watcher + releaseburn) REMOVIDA do worker.
+// Era resquício da época em que o escrow foi mesclado no worker. O escrow-service
+// (apps/escrow-service) é o dono legítimo: detecta burns, publica em escrow_burn_events
+// e chama releaseburn (bingogamescr@bot). burnCron (ADR-028 §8) permanece — é engine
+// do jogo (recordburn + XP), NÃO é escrow.
 
 // NOSONAR (S7785) — módulo CJS não suporta top-level await; padrão .catch() é o equivalente seguro
 // Só auto-executa quando é o entrypoint real (evita disparar no import sob testes).
