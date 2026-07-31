@@ -2,6 +2,7 @@
 
 #include <eosio/eosio.hpp>
 #include <eosio/asset.hpp>
+#include <eosio/binary_extension.hpp>
 #include <eosio/singleton.hpp>
 #include <eosio/transaction.hpp>
 #include <eosio/system.hpp>
@@ -122,6 +123,11 @@ namespace bingoescrow {
         price_mode mode;
         double     ref_ratio;
         double     max_ratio;
+        eosio::binary_extension<eosio::time_point_sec> start_time;
+        eosio::binary_extension<eosio::time_point_sec> end_time;
+        eosio::binary_extension<uint64_t>              max_mints;
+        eosio::binary_extension<uint64_t>              mint_count;
+        eosio::binary_extension<bool>                  active;
 
         uint64_t  primary_key() const { return id; }
         uint128_t by_key() const {
@@ -261,7 +267,11 @@ namespace bingoescrow {
         [[eosio::action]] void settierprice(name collection_name, name schema_name,
                                             int32_t template_id, name depositor,
                                             uint8_t max_backings, uint8_t mode,
-                                            double ref_ratio, double max_ratio);
+                                            double ref_ratio, double max_ratio,
+                                            eosio::time_point_sec start_time,
+                                            eosio::time_point_sec end_time,
+                                            uint64_t max_mints,
+                                            bool active);
 
         [[eosio::action]] void setbacking(uint64_t tierprice_id, name token_contract,
                                           asset token_amount, bool active);
@@ -314,6 +324,8 @@ namespace bingoescrow {
                                double ref_ratio, double max_ratio);
 
         // ── Helpers de lookup (§2.7) ──────────────────────────────────────────
+
+        void _check_admin_or_depositor(uint64_t tp_id);
 
         symbol _get_symbol(name token_contract);
 

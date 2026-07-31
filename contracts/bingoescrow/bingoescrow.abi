@@ -185,6 +185,22 @@
         {
           "name": "max_ratio",
           "type": "float64"
+        },
+        {
+          "name": "start_time",
+          "type": "time_point_sec"
+        },
+        {
+          "name": "end_time",
+          "type": "time_point_sec"
+        },
+        {
+          "name": "max_mints",
+          "type": "uint64"
+        },
+        {
+          "name": "active",
+          "type": "bool"
         }
       ]
     },
@@ -329,6 +345,26 @@
         {
           "name": "max_ratio",
           "type": "float64"
+        },
+        {
+          "name": "start_time",
+          "type": "time_point_sec$"
+        },
+        {
+          "name": "end_time",
+          "type": "time_point_sec$"
+        },
+        {
+          "name": "max_mints",
+          "type": "uint64$"
+        },
+        {
+          "name": "mint_count",
+          "type": "uint64$"
+        },
+        {
+          "name": "active",
+          "type": "bool$"
         }
       ]
     },
