@@ -19,12 +19,21 @@ import {
   getSnapshot,
   saveSnapshot,
   recalcAggRatio,
+  upsertAssetEscrow,
+  removeAssetEscrow,
+  deleteAssetEscrows,
+  markEscrowClaimed,
   type EscrowMeta,
+  type AssetEscrowEntry,
 } from './escrowCacheManager';
 import { eventsReceived, handlerErrors, nftsBought, nftsRedeemed, revenueTotal } from './metrics';
 import { logger } from './logger';
 
 const ESCROW_CONTRACT = process.env.ESCROW_CONTRACT || 'bingogamescr';
+
+/** Backoff do retry de RPC (mockável nos testes). 500ms × tentativa, máx 10. */
+export const RETRY_BACKOFF_MS = 500;
+const RETRY_MAX_ATTEMPTS = 10;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -39,12 +48,32 @@ function errorTypeOf(err: unknown): string {
   return 'unknown';
 }
 
-/** Converte asset string ("100.0000 WAX") para unidades mínimas (int). */
+/**
+ * Converte asset string ("100.0000 WAX") para unidades mínimas (int).
+ * Precisão derivada do símbolo (grill v2-grill-api P5#5 — NUNCA fator fixo
+ * ×10000: WAX tem 8 casas, BINGO 4).
+ */
 function assetToRaw(asset: string | undefined | null): number {
   if (!asset) return 0;
   const [amount] = asset.split(' ');
-  const raw = Math.round(parseFloat(amount) * 10000);
+  const [, decimals = ''] = amount.split('.');
+  const factor = Math.pow(10, decimals.length);
+  const raw = Math.round(parseFloat(amount) * factor);
   return Number.isFinite(raw) ? raw : 0;
+}
+
+/** Monta a entry do índice by_asset a partir de uma row da tabela escrows. */
+function toAssetEntry(row: any, updatedAt = Date.now()): AssetEscrowEntry {
+  return {
+    esc_id: String(row.esc_id),
+    asset_id: String(row.asset_id),
+    owner: row.owner ?? '',
+    depositor: row.depositor,
+    token_contract: row.token_contract,
+    token_amount: row.token_amount ?? '',
+    token_amount_raw: String(assetToRaw(row.token_amount)),
+    updated_at: updatedAt,
+  };
 }
 
 function fail(handler: string, err: unknown): void {
@@ -54,81 +83,134 @@ function fail(handler: string, err: unknown): void {
 
 // ─── Handlers ──────────────────────────────────────────────────────────
 
-/** addbacking — novo escrow criado. Salva meta preventiva + obligated += amount. */
+/** addbacking — novo escrow criado. Salva meta preventiva (por asset_id — B2) + obligated += amount. */
 async function handleAddbacking(data: any): Promise<void> {
   const depositor = data.depositor;
   const tokenContract = data.token_contract;
   const amountRaw = assetToRaw(data.amount);
+  const assetId = String(data.asset_id ?? '');
 
   if (!depositor || !tokenContract) {
     handlerErrors.inc({ handler: 'addbacking', error_type: 'validation_error' });
     return;
   }
 
-  // Cache preventivo: cancelback lê daqui (0 RPC)
+  // Cache preventivo (B2): meta keyed por ASSET_ID (o evento não carrega esc_id —
+  // o contrato gera internamente). cancelback usa RPC por esc_id (não lê meta aqui).
   const meta: EscrowMeta = {
     depositor,
     token_contract: tokenContract,
     amount: data.amount ?? '',
     amount_raw: String(amountRaw),
     owner: data.owner ?? '',
-    asset_id: String(data.asset_id ?? ''),
-    esc_id: String(data.esc_id ?? ''),
+    asset_id: assetId,
+    esc_id: '',
   };
-  if (data.esc_id !== undefined && data.esc_id !== null) {
-    await setEscrowMeta(data.esc_id, meta);
+  if (assetId) {
+    await setEscrowMeta(assetId, meta);
+  }
+
+  // C2: upsert no índice by_asset — resolver esc_id via RPC byasset (o evento não
+  // traz esc_id; a row do addbacking existe na chain pós-action, retry 500ms×10).
+  if (assetId) {
+    let row: any = null;
+    for (let i = 1; i <= RETRY_MAX_ATTEMPTS; i++) {
+      try {
+        const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+          code: ESCROW_CONTRACT,
+          scope: ESCROW_CONTRACT,
+          table: 'escrows',
+          index_position: 2, // byasset
+          lower_bound: Number(assetId),
+          upper_bound: Number(assetId),
+          limit: 10,
+          json: true,
+        });
+        // Seleciona a row não-claimada do (depositor, token_contract) mais recente
+        const match = (res?.rows ?? []).filter(
+          (r: any) => !r.claimed && r.depositor === depositor && r.token_contract === tokenContract,
+        );
+        if (match.length > 0) {
+          row = match[match.length - 1];
+          break;
+        }
+      } catch {
+        // continua tentando
+      }
+      await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS * i));
+    }
+    if (row) {
+      await upsertAssetEscrow(assetId, toAssetEntry(row));
+    } else {
+      // Pré-mint (source=1 ainda não indexado) — logmint/reconciliação cobrem
+      handlerErrors.inc({ handler: 'addbacking', error_type: 'rpc_empty' });
+    }
   }
 
   await adjustCounter(depositor, tokenContract, amountRaw, 'obligated');
   await recalcAggRatio(depositor, tokenContract);
 }
 
-/** cancelback — escrow cancelado. Lê meta (0 RPC) para saber valores. */
+/** cancelback — escrow cancelado (só source=1). ABI = [esc_id] (sem asset_id). C2: RPC por PK como caminho primário + guarda claimed. */
 async function handleCancelback(data: any): Promise<void> {
   const escId = data.esc_id;
-  const meta = escId !== undefined ? await getEscrowMeta(escId) : null;
-
-  if (!meta) {
-    // Meta não existe (escrow pré-v8 ou expirou) — fallback RPC
-    try {
-      const res: any = await rpcClient.v1.chain.get_table_rows({
-        code: ESCROW_CONTRACT,
-        scope: ESCROW_CONTRACT,
-        table: 'escrows',
-        lower_bound: escId,
-        upper_bound: escId,
-        limit: 1,
-        json: true,
-      });
-      const row = res?.rows?.[0];
-      if (!row) {
-        handlerErrors.inc({ handler: 'cancelback', error_type: 'rpc_empty' });
-        return;
-      }
-      await adjustCounter(row.depositor, row.token_contract, -assetToRaw(row.token_amount), 'obligated');
-      await recalcAggRatio(row.depositor, row.token_contract);
-    } catch (err) {
-      fail('cancelback', err);
-    }
+  if (escId === undefined || escId === null) {
+    handlerErrors.inc({ handler: 'cancelback', error_type: 'validation_error' });
     return;
   }
 
-  await adjustCounter(meta.depositor, meta.token_contract, -parseInt(meta.amount_raw || '0', 10), 'obligated');
-  await recalcAggRatio(meta.depositor, meta.token_contract);
+  try {
+    const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+      code: ESCROW_CONTRACT,
+      scope: ESCROW_CONTRACT,
+      table: 'escrows',
+      lower_bound: Number(escId),
+      upper_bound: Number(escId),
+      limit: 1,
+      json: true,
+    });
+    const row = res?.rows?.[0];
+    if (!row) {
+      handlerErrors.inc({ handler: 'cancelback', error_type: 'rpc_empty' });
+      return;
+    }
+    if (row.claimed) return; // guarda claimed — evita decremento 2× (replay)
 
-  // Remover do snapshot do depositor
-  const snap = await getSnapshot(meta.depositor);
-  const filtered = snap.filter((e: any) => String(e.esc_id) !== String(escId));
-  if (filtered.length !== snap.length) {
-    await saveSnapshot(meta.depositor, filtered);
+    await adjustCounter(row.depositor, row.token_contract, -assetToRaw(row.token_amount), 'obligated');
+    await recalcAggRatio(row.depositor, row.token_contract);
+
+    // Remover do snapshot do depositor
+    const snap = await getSnapshot(row.depositor);
+    const filtered = snap.filter((e: any) => String(e.esc_id) !== String(escId));
+    if (filtered.length !== snap.length) {
+      await saveSnapshot(row.depositor, filtered);
+    }
+
+    // Remover do índice by_asset (C2) + meta
+    await removeAssetEscrow(row.asset_id, escId);
+    await delEscrowMeta(row.asset_id);
+  } catch (err) {
+    fail('cancelback', err);
   }
-  await delEscrowMeta(escId);
 }
 
-/** transfer — depósito de backing. Só se to == bingogamescr e memo sem "buy:". */
+/**
+ * transfer — roteamento por shape (B4):
+ *  - atomicassets::transfer (asset_ids, SEM quantity) → claim de NFT (redeem)
+ *  - eosio.token::transfer (quantity, SEM asset_ids) → depósito/compra de backing
+ * Mutuamente exclusivos por protocolo — determinístico, não heurístico.
+ */
 async function handleTransfer(data: any): Promise<void> {
-  const memo = String(data.memo ?? '');
   if (data.to !== ESCROW_CONTRACT) return;
+
+  // Claim de NFT: atomicassets::transfer carrega asset_ids (sem quantity)
+  if (Array.isArray(data.asset_ids) && data.asset_ids.length > 0) {
+    await handleClaim(data);
+    return;
+  }
+
+  // Depósito/compra de token: eosio.token::transfer carrega quantity (sem asset_ids)
+  const memo = String(data.memo ?? '');
   if (memo.startsWith('buy:')) {
     // Compra de NFT — faturamento de negócio
     revenueTotal.inc(assetToRaw(data.quantity));
@@ -139,59 +221,11 @@ async function handleTransfer(data: any): Promise<void> {
   await recalcAggRatio(data.to, data.from === 'eosio.token' ? 'eosio.token' : data.from);
 }
 
-/** withdraw — saque de backing. balance -= amount. */
-async function handleWithdraw(data: any): Promise<void> {
-  await adjustCounter(data.depositor, data.token_contract, -assetToRaw(data.amount), 'balance');
-  await recalcAggRatio(data.depositor, data.token_contract);
-}
-
-/** logmint — NFT mintado (on_mint do contrato cria escrows). */
-async function handleLogmint(data: any): Promise<void> {
-  if (data.authorized_minter !== ESCROW_CONTRACT) return;
-  nftsBought.inc();
-
-  // Firehose entrega evento ANTES do chain state refletir (grill C4).
-  // Retry com backoff: 500ms × tentativa, máx 10 (≈ 27.5s total).
-  let pendingRows: any[] = [];
-  for (let i = 1; i <= 10; i++) {
-    try {
-      const res: any = await rpcClient.v1.chain.get_table_rows({
-        code: ESCROW_CONTRACT,
-        scope: ESCROW_CONTRACT,
-        table: 'pending_mints',
-        lower_bound: data.asset_id,
-        upper_bound: data.asset_id,
-        limit: 1,
-        json: true,
-      });
-      pendingRows = res?.rows ?? [];
-      if (pendingRows.length > 0) break;
-    } catch {
-      // continua tentando
-    }
-    await new Promise((r) => setTimeout(r, 500 * i));
-  }
-
-  if (pendingRows.length === 0) {
-    // Delegar para a reconciliação forçada (próximo ciclo corrige)
-    handlerErrors.inc({ handler: 'logmint', error_type: 'rpc_empty' });
-    logger.warn({ asset_id: data.asset_id }, 'logmint: pending_mints não encontrado após retries — aguardando reconciliação');
-    return;
-  }
-
-  const pending = pendingRows[0];
-  const depositor = pending.depositor;
-  const tokenContract = pending.token_contract;
-  const backingRaw = assetToRaw(pending.backing_amount);
-
-  // O on_mint: balance -= backing (vira NFT), obligated += backing (escrow ativo)
-  await adjustCounter(depositor, tokenContract, -backingRaw, 'balance');
-  await adjustCounter(depositor, tokenContract, backingRaw, 'obligated');
-  await recalcAggRatio(depositor, tokenContract);
-}
-
-/** receive_asset — resgate (memo "redeem") ou transferência. */
-async function handleReceiveAsset(data: any): Promise<void> {
+/**
+ * Claim de NFT (redeem) — corpo do antigo handleReceiveAsset com fallback RPC.
+ * receive_asset/releaseburn carregam asset_ids → roteado aqui (B4).
+ */
+async function handleClaim(data: any): Promise<void> {
   const memo = String(data.memo ?? '');
   if (memo !== 'redeem') return;
   nftsRedeemed.inc();
@@ -201,8 +235,40 @@ async function handleReceiveAsset(data: any): Promise<void> {
     : [String(data.asset_id ?? '')];
 
   for (const assetId of assetIds) {
-    const meta = await getEscrowMeta(assetId);
-    if (!meta) continue;
+    let meta = await getEscrowMeta(assetId);
+    if (!meta) {
+      // Fallback RPC byasset (escrows pré-fix ou meta expirada) — B4
+      try {
+        const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+          code: ESCROW_CONTRACT,
+          scope: ESCROW_CONTRACT,
+          table: 'escrows',
+          index_position: 2, // byasset
+          lower_bound: Number(assetId),
+          upper_bound: Number(assetId),
+          limit: 1,
+          json: true,
+        });
+        const row = res?.rows?.[0];
+        if (row && !row.claimed) {
+          meta = {
+            depositor: row.depositor,
+            token_contract: row.token_contract,
+            amount: row.token_amount ?? '',
+            amount_raw: String(assetToRaw(row.token_amount)),
+            owner: row.owner ?? '',
+            asset_id: assetId,
+            esc_id: String(row.esc_id ?? ''),
+          };
+        }
+      } catch (err) {
+        fail('claim', err);
+      }
+    }
+    if (!meta) {
+      handlerErrors.inc({ handler: 'claim', error_type: 'rpc_empty' });
+      continue;
+    }
     await adjustCounter(meta.depositor, meta.token_contract, -parseInt(meta.amount_raw || '0', 10), 'obligated');
     await adjustCounter(meta.depositor, meta.token_contract, -parseInt(meta.amount_raw || '0', 10), 'balance');
 
@@ -215,14 +281,126 @@ async function handleReceiveAsset(data: any): Promise<void> {
       await saveSnapshot(meta.depositor, updated);
     }
     await recalcAggRatio(meta.depositor, meta.token_contract);
-    await delEscrowMeta(assetId);
+
+    // C2: meta marcada claimed (nunca deletada — guard anti-ressurreição) + DEL do índice (asset sai de circulação)
+    await markEscrowClaimed(assetId);
+    await deleteAssetEscrows(assetId);
   }
 }
 
-/** releaseburn — burn da NFT (mesmo efeito financeiro do redeem). */
+/** receive_asset — alias defensivo (a notification pode chegar com esse nome). */
+async function handleReceiveAsset(data: any): Promise<void> {
+  await handleClaim(data);
+}
+
+/** withdraw — saque de backing. balance -= amount. */
+async function handleWithdraw(data: any): Promise<void> {
+  await adjustCounter(data.depositor, data.token_contract, -assetToRaw(data.amount), 'balance');
+  await recalcAggRatio(data.depositor, data.token_contract);
+}
+
+/** logmint — NFT mintado (on_mint cria escrows). B1+B3: lê escrows via byasset (não pendingmints), grava meta por asset_id. */
+async function handleLogmint(data: any): Promise<void> {
+  if (data.authorized_minter !== ESCROW_CONTRACT) return;
+  nftsBought.inc();
+  const assetId = String(data.asset_id ?? '');
+  const owner = data.new_asset_owner ?? '';
+
+  // B1: pendingmint é inviável (sem índice por asset_id; logmint não carrega mint_id).
+  // Fonte correta: escrows via índice byasset (mesma tx do mint; retry 500ms×10).
+  let rows: any[] = [];
+  for (let i = 1; i <= RETRY_MAX_ATTEMPTS; i++) {
+    try {
+      const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+        code: ESCROW_CONTRACT,
+        scope: ESCROW_CONTRACT,
+        table: 'escrows',
+        index_position: 2, // byasset (i64)
+        lower_bound: Number(assetId),
+        upper_bound: Number(assetId),
+        limit: 10,
+        json: true,
+      });
+      rows = res?.rows ?? [];
+      if (rows.length > 0) break;
+    } catch {
+      // continua tentando
+    }
+    await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS * i));
+  }
+
+  if (rows.length === 0) {
+    // Delegar para a reconciliação forçada (próximo ciclo corrige)
+    handlerErrors.inc({ handler: 'logmint', error_type: 'rpc_empty' });
+    logger.warn({ asset_id: assetId }, 'logmint: escrows byasset não encontrado após retries — aguardando reconciliação');
+    return;
+  }
+
+  for (const row of rows) {
+    if (row.claimed) continue; // B1: não re-ajustar escrow já claimado (reclaim/reorg)
+    const depositor = row.depositor;
+    const tokenContract = row.token_contract;
+    const backingRaw = assetToRaw(row.token_amount);
+
+    // B3: gravar meta por asset_id (fecha o ciclo do claim — receive_asset/releaseburn acertam com 0 RPC)
+    if (assetId) {
+      await setEscrowMeta(assetId, {
+        depositor,
+        token_contract: tokenContract,
+        amount: row.token_amount ?? '',
+        amount_raw: String(backingRaw),
+        owner,
+        asset_id: assetId,
+        esc_id: String(row.esc_id ?? ''),
+      });
+    }
+
+    // C2: upsert no índice by_asset (mint cria M escrows — 1 entry por row)
+    if (assetId) {
+      await upsertAssetEscrow(assetId, toAssetEntry(row));
+    }
+
+    // O on_mint: balance -= backing (vira NFT), obligated += backing (escrow ativo)
+    await adjustCounter(depositor, tokenContract, -backingRaw, 'balance');
+    await adjustCounter(depositor, tokenContract, backingRaw, 'obligated');
+    await recalcAggRatio(depositor, tokenContract);
+  }
+}
+
+/** releaseburn — burn da NFT (mesmo efeito financeiro do redeem). B4: claim por asset_id + fallback RPC + guarda claimed. */
 async function handleReleaseburn(data: any): Promise<void> {
   nftsRedeemed.inc();
-  const meta = await getEscrowMeta(data.asset_id);
+  const assetId = String(data.asset_id ?? '');
+  let meta = await getEscrowMeta(assetId);
+  if (!meta) {
+    // Fallback RPC byasset (escrows pré-fix ou meta expirada) — B4
+    try {
+      const res: any = await (rpcClient.v1.chain.get_table_rows as Function)({
+        code: ESCROW_CONTRACT,
+        scope: ESCROW_CONTRACT,
+        table: 'escrows',
+        index_position: 2, // byasset
+        lower_bound: Number(assetId),
+        upper_bound: Number(assetId),
+        limit: 1,
+        json: true,
+      });
+      const row = res?.rows?.[0];
+      if (row && !row.claimed) {
+        meta = {
+          depositor: row.depositor,
+          token_contract: row.token_contract,
+          amount: row.token_amount ?? '',
+          amount_raw: String(assetToRaw(row.token_amount)),
+          owner: row.owner ?? '',
+          asset_id: assetId,
+          esc_id: String(row.esc_id ?? ''),
+        };
+      }
+    } catch (err) {
+      fail('releaseburn', err);
+    }
+  }
   if (!meta) {
     handlerErrors.inc({ handler: 'releaseburn', error_type: 'rpc_empty' });
     return;
@@ -232,13 +410,16 @@ async function handleReleaseburn(data: any): Promise<void> {
 
   const snap = await getSnapshot(meta.depositor);
   const updated = snap.map((e: any) =>
-    String(e.asset_id) === String(data.asset_id) ? { ...e, claimed: true } : e,
+    String(e.asset_id) === assetId ? { ...e, claimed: true } : e,
   );
   if (JSON.stringify(updated) !== JSON.stringify(snap)) {
     await saveSnapshot(meta.depositor, updated);
   }
   await recalcAggRatio(meta.depositor, meta.token_contract);
-  await delEscrowMeta(data.asset_id);
+
+  // C2: meta marcada claimed (guard anti-ressurreição) + DEL do índice (asset fora de circulação)
+  await markEscrowClaimed(assetId);
+  await deleteAssetEscrows(assetId);
 }
 
 // ─── Dispatch ──────────────────────────────────────────────────────────

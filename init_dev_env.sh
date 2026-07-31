@@ -40,6 +40,7 @@ ACCOUNT_NAMES=(
     bingogamectr
     alien.worlds
     bingogamesvc
+    bingogamescr
     jogador1
     jogador2
     gameadmin11
@@ -179,6 +180,7 @@ if [[ "${1:-}" == "--reset" ]]; then
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm   "$CONTAINER_NAME" 2>/dev/null || true
     rm -f .waxdev.env
+    rm -f .wallet_password.tmp
 
     # Para o daemon oracle se estiver rodando
     if [ -f ".orng-oracle.pid" ]; then
@@ -488,7 +490,7 @@ cleos push action bingogametkn issue \
     -p bingogamectr@active 2>/dev/null || true
 
 echo "[*] Distribuindo BINGO..."
-for dest in bingogamesvc jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
+for dest in bingogamesvc bingogamescr jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
     cleos push action bingogametkn open \
         "[\"$dest\", \"4,BINGO\", \"bingogamectr\"]" \
         -p bingogamectr@active > /dev/null 2>&1 || true
@@ -498,7 +500,7 @@ for dest in bingogamesvc jogador1 jogador2 gameadmin11 contractad1 sponsor1111 b
 done
 
 echo "[*] Distribuindo WAX para contas de desenvolvimento..."
-for dest in bingogamectr bingogametkn bingogamesvc jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
+for dest in bingogamectr bingogametkn bingogamesvc bingogamescr jogador1 jogador2 gameadmin11 contractad1 sponsor1111 bingogameswp; do
     cleos push action eosio.token transfer \
         "[\"eosio\", \"$dest\", \"100000.0000 WAX\", \"Dev WAX\"]" \
         -p eosio@active 2>/dev/null || true
@@ -762,9 +764,11 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
             -p atomicassets@active 2>/dev/null || true
 
         # ── 8f-4. Seed: collection "cryptobingo1" (12 chars — restrição AtomicAssets)
+        # notify_accounts inclui bingogamescr (escrow): sem isso o contrato escrow
+        # nunca recebe as notifications logmint/transfer do atomicassets em dev.
         echo "[*] Criando collection 'cryptobingo1'..."
         cleos push action atomicassets createcol \
-            '{"author":"bingogamectr","collection_name":"cryptobingo1","allow_notify":true,"authorized_accounts":["bingogamectr"],"notify_accounts":["bingogamectr"],"market_fee":0.05,"data":[]}' \
+            '{"author":"bingogamectr","collection_name":"cryptobingo1","allow_notify":true,"authorized_accounts":["bingogamectr"],"notify_accounts":["bingogamectr","bingogamescr"],"market_fee":0.05,"data":[]}' \
             -p bingogamectr@active 2>/dev/null || true
 
         # ── 8f-4b. Pin imagens de NFT no IPFS local (se disponível) ────────
@@ -841,6 +845,94 @@ if [ "$ATOMIC_FAILED" = "false" ] && \
     fi
 else
     echo "[!] atomicassets.wasm/abi ausentes — deploy pulado."
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8g. BINGOESCROW — Deploy + permissões admin/bot + init + settoken
+#
+# Contrato de escrow de NFTs (bingogamescr). O wasm/abi JÁ vêm compilados em
+# contracts/bingoescrow/ (mesmo padrão do bingogamectr — sem build no script).
+#
+# Permissões (espelha a VPS/testnet):
+#   admin — bingogamescr@active + bingogamesvc@active (ADR-026, padrão do repo)
+#           → settoken/setconfig/setbacking/settierprice/adminrel/adminrescue/
+#             rescueasset/setaccpay (linkauth)
+#   bot   — chave dedicada do escrow-service (ESCROW_BOT_PRIVATE_KEY), limitada
+#           por linkauth a releaseburn. NUNCA a cold key.
+#
+# eosio.code é obrigatório: o contrato faz 5 inline actions (transfere tokens
+# no releaseburn/withdraw/rescue etc.).
+# ──────────────────────────────────────────────────────────────────────────────
+
+ESCROW_SRC_HOST="$(pwd)/contracts/bingoescrow"
+ESCROW_SRC_CONTAINER="/app/contracts/bingoescrow"
+
+echo "[*] Deploy do contrato bingoescrow (bingogamescr)..."
+if [ -f "${ESCROW_SRC_HOST}/bingoescrow.wasm" ] && [ -f "${ESCROW_SRC_HOST}/bingoescrow.abi" ]; then
+    if cleos set contract bingogamescr "$ESCROW_SRC_CONTAINER" \
+            bingoescrow.wasm bingoescrow.abi -p bingogamescr@active; then
+        # eosio.code: inline actions (releaseburn/withdraw/rescue transferem tokens)
+        cleos set account permission bingogamescr active --add-code \
+            -p bingogamescr@active 2>/dev/null || true
+
+        # Permissão admin (ADR-026 — padrão bingogamectr): bingogamescr@active OU bingogamesvc@active
+        cleos set account permission bingogamescr admin \
+          '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"bingogamescr","permission":"active"},"weight":1},{"permission":{"actor":"bingogamesvc","permission":"active"},"weight":1}],"waits":[]}' \
+          active -p bingogamescr@active 2>/dev/null || true
+
+        # linkauth: restringe as actions administrativas à permissão admin
+        for ACTION in settoken setconfig setbacking settierprice \
+                      adminrel adminrescue rescueasset setaccpay; do
+            cleos set action permission bingogamescr bingogamescr "$ACTION" admin \
+              -p bingogamescr@active 2>/dev/null || true
+        done
+
+        # Chave do bot (releaseburn) — gerada e importada na wallet
+        echo "[*] Gerando chave do bot (permissão bot — releaseburn)..."
+        BOT_KEYS=$(docker exec "$CONTAINER_NAME" \
+            "$WAX_BIN/cleos" --wallet-url http://127.0.0.1:8900 \
+            create key --to-console 2>/dev/null)
+        ESCROW_BOT_PRIV=$(echo "$BOT_KEYS" | grep "Private key:" | awk '{print $3}')
+        ESCROW_BOT_PUB=$(echo  "$BOT_KEYS" | grep "Public key:"  | awk '{print $3}')
+
+        if [ -n "$ESCROW_BOT_PRIV" ] && [ -n "$ESCROW_BOT_PUB" ]; then
+            docker exec "$CONTAINER_NAME" \
+                "$WAX_BIN/cleos" --url http://127.0.0.1:8888 --wallet-url http://127.0.0.1:8900 \
+                wallet import -n "$WALLET_NAME" --private-key "$ESCROW_BOT_PRIV" 2>/dev/null || true
+
+            cleos set account permission bingogamescr bot \
+              "{\"threshold\":1,\"keys\":[{\"key\":\"${ESCROW_BOT_PUB}\",\"weight\":1}],\"accounts\":[],\"waits\":[]}" \
+              active -p bingogamescr@active 2>/dev/null || true
+
+            # Defesa em profundidade: o bot SÓ pode chamar releaseburn
+            cleos set action permission bingogamescr bingogamescr releaseburn bot \
+              -p bingogamescr@active 2>/dev/null || true
+
+            echo "ESCROW_BOT_KEY=$ESCROW_BOT_PRIV" >> .waxdev.env
+            echo "[✓] Permissão bot configurada (releaseburn)."
+        else
+            echo "[!] Aviso: falha ao gerar chave do bot — releaseburn indisponível."
+        fi
+
+        # init (require_auth(get_self()); config singleton max_backings_per_asset=5)
+        cleos push action bingogamescr init '[]' \
+            -p bingogamescr@active 2>/dev/null || \
+            echo "[!] Aviso: init falhou (pode já estar inicializado — idempotente)."
+
+        # settoken: registra o BINGO (bingogametkn) como token de backing ativo
+        cleos push action bingogamescr settoken \
+            '["bingogametkn","4,BINGO",4,true,true]' \
+            -p bingogamescr@admin 2>/dev/null && \
+            echo "[✓] settoken bingogametkn registrado." || \
+            echo "[!] Aviso: settoken falhou (pode já estar registrado — idempotente)."
+
+        echo "[✓] bingoescrow deployado + admin/bot + init + settoken (ADR-027/escrow)."
+    else
+        echo "[!] Aviso: deploy do bingoescrow falhou."
+    fi
+else
+    echo "[!] bingoescrow.wasm/abi não encontrados em ${ESCROW_SRC_HOST}"
+    echo "    Compile o contrato e execute novamente."
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -973,6 +1065,8 @@ _upsert_env "$F" "JWT_SECRET"               "$JWT_SECRET"
 _upsert_env "$F" "ALLOWED_ORIGINS"          "http://localhost:5173,http://localhost:3001"
 _upsert_env "$F" "VERIFY_KEY_ONCHAIN"       "false"
 _upsert_env "$F" "ATOMIC_CONTRACT"          "atomicassets"
+# Fase C (escrow /my): Atomic API proxy — testnet alinhada ao VITE_ATOMIC_API do frontend
+_upsert_env "$F" "ATOMICAPI_PROXY_URL"      "https://test.api.atomicassets.io"
 
 F="apps/worker-game-loop/.env"
 _upsert_env "$F" "CHAIN_ID"                    "$CHAIN_ID"
@@ -994,6 +1088,19 @@ _upsert_env "$F" "INDEXER_INTERVAL_MS"         "15000"
 _upsert_env "$F" "ORNG_RSA_PRIVATE_KEY_PATH"   "${ORNG_RSA_PRIVATE_KEY_PATH:-$(pwd)/contracts/orng/dev-rsa-private.pem}"
 _upsert_env "$F" "ORNG_WAX_KEY"                "${ORNG_WAX_KEY:-}"
 _upsert_env "$F" "ORNG_POLL_INTERVAL_MS"       "2000"
+
+F="apps/escrow-service/.env"
+_upsert_env "$F" "REDIS_URL"                 "redis://localhost:6379"
+_upsert_env "$F" "RABBITMQ_URL"              "amqp://rabbit_admin:rabbit_secure_pass_2026@localhost:5672"
+_upsert_env "$F" "ESCROW_CONTRACT"           "bingogamescr"
+_upsert_env "$F" "RPC_URL"                   "http://127.0.0.1:8888"
+_upsert_env "$F" "CHAIN_ID"                  "$CHAIN_ID"
+# Chave do bot (permissão bot do bingogamescr — limitada a releaseburn por linkauth)
+_upsert_env "$F" "ESCROW_BOT_PRIVATE_KEY"    "${ESCROW_BOT_KEY:-}"
+_upsert_env "$F" "METRICS_PORT"              "9093"
+_upsert_env "$F" "LOG_LEVEL"                 "info"
+# Sem PINAX_KEY em dev local: stateWatcher cai no fallback Hyperion (testnet).
+# Em dev a chain é local — a reconciliação RPC (30min/startup) é a fonte primária.
 
 _upsert_env ".env" "EOSIO_KEY"              "$EOSIO_PRIV"
 _upsert_env ".env" "CHAIN_ID"               "$CHAIN_ID"
@@ -1049,6 +1156,9 @@ echo "[*] Gerando .dev.env..."
     echo ""
     echo "# ── Worker ──────────────────────────────────────────────────────"
     grep -v '^#' "apps/worker-game-loop/.env" 2>/dev/null | grep -v '^$' || true
+    echo ""
+    echo "# ── Escrow-service ──────────────────────────────────────────────"
+    grep -v '^#' "apps/escrow-service/.env" 2>/dev/null | grep -v '^$' || true
 } > .dev.env
 
 ORACLE_PID_DISPLAY=$(cat .orng-oracle.pid 2>/dev/null || echo "não iniciado")

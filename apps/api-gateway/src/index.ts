@@ -75,6 +75,12 @@ import {
 } from "./controllers/statisticsController";
 import { ensureLedgerTables } from "./database/ledger";
 import {
+  getMyEscrows,
+  getEscrowStatusByDepositor,
+  getTierPrices,
+  getEscrowHealth,
+} from "./controllers/escrowController";
+import {
   listCampaigns,
   getCampaign,
   linkCampaignToGame,
@@ -761,6 +767,13 @@ function registerRoutes(): void {
   app.get("/api/v1/referral/status", playerLimiter, requireAuth, getReferralStatus);
   app.post("/api/v1/referral/generate", playerLimiter, requireAuth, generateReferralCode);
   app.post("/api/v1/referral/apply", playerLimiter, requireAuth, applyReferralCode);
+
+  // ── Escrow (Fase C) ────────────────────────────────────────────────────────
+  // Matriz Redis → RPC → 503 fail-closed; self-only + no-store (grill P3/P4)
+  app.get("/api/v1/escrow/my", playerLimiter, requireAuth, getMyEscrows);
+  app.get("/api/v1/escrow/status/:depositor", playerLimiter, requireAuth, getEscrowStatusByDepositor);
+  app.get("/api/v1/escrow/tierprices", playerLimiter, getTierPrices);
+  app.get("/api/v1/escrow/health", playerLimiter, getEscrowHealth);
 
   // ── 404 catch-all ─────────────────────────────────────────────────────────
   app.use((_req, res) => {
