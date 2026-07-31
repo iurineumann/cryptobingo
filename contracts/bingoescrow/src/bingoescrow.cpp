@@ -75,9 +75,11 @@ namespace bingoescrow {
     void bingoescrow_contract::settierprice(name collection_name, name schema_name,
                                             int32_t template_id, name depositor,
                                             uint8_t max_backings, uint8_t mode,
-                                            double ref_ratio, double max_ratio) {
-        require_auth(permission_level{get_self(), "admin"_n});
-
+                                            double ref_ratio, double max_ratio,
+                                            eosio::time_point_sec start_time,
+                                            eosio::time_point_sec end_time,
+                                            uint64_t max_mints,
+                                            bool active) {
         check(mode <= 1, "mode must be 0 (FIXED) or 1 (DYNAMIC)");
         check(template_id >= 0, "template_id must be >= 0");
 
@@ -91,15 +93,23 @@ namespace bingoescrow {
         auto tp_it = tp_idx.find(key);
 
         if (tp_it != tp_idx.end()) {
+            // Edit path: admin OR depositor
+            _check_admin_or_depositor(tp_it->id);
             tp_idx.modify(tp_it, same_payer, [&](auto& row) {
+                // NÃO modificar: depositor, mint_count
                 row.schema_name   = schema_name;
-                row.depositor     = depositor;
                 row.max_backings  = max_backings;
                 row.mode          = (price_mode)mode;
                 row.ref_ratio     = ref_ratio;
                 row.max_ratio     = max_ratio;
+                row.start_time    = start_time;
+                row.end_time      = end_time;
+                row.max_mints     = max_mints;
+                row.active        = active;
             });
         } else {
+            // Create path: admin only
+            require_auth(permission_level{get_self(), "admin"_n});
             tps.emplace(get_self(), [&](auto& row) {
                 row.id              = tps.available_primary_key();
                 row.collection_name = collection_name;
@@ -110,6 +120,11 @@ namespace bingoescrow {
                 row.mode            = (price_mode)mode;
                 row.ref_ratio       = ref_ratio;
                 row.max_ratio       = max_ratio;
+                row.start_time      = start_time;
+                row.end_time        = end_time;
+                row.max_mints       = max_mints;
+                row.mint_count      = uint64_t{0};
+                row.active          = active;
             });
         }
 
@@ -122,7 +137,7 @@ namespace bingoescrow {
 
     void bingoescrow_contract::setbacking(uint64_t tierprice_id, name token_contract,
                                           asset token_amount, bool active) {
-        require_auth(permission_level{get_self(), "admin"_n});
+        _check_admin_or_depositor(tierprice_id);
 
         tokens_t tkns(get_self(), get_self().value);
         auto tkn = tkns.require_find(token_contract.value,
@@ -136,13 +151,30 @@ namespace bingoescrow {
         tps.require_find(tierprice_id, "Tierprice not found");
 
         backings_t bks(get_self(), get_self().value);
-        bks.emplace(get_self(), [&](auto& row) {
-            row.id            = bks.available_primary_key();
-            row.tierprice_id  = tierprice_id;
-            row.token_contract = token_contract;
-            row.token_amount  = token_amount;
-            row.active        = active;
-        });
+        auto bk_idx = bks.get_index<"bytierprice"_n>();
+        auto it = bk_idx.lower_bound(tierprice_id);
+        bool found = false;
+
+        for (; it != bk_idx.end() && it->tierprice_id == tierprice_id; it++) {
+            if (it->token_contract == token_contract) {
+                bk_idx.modify(it, same_payer, [&](auto& row) {
+                    row.token_amount = token_amount;
+                    row.active       = active;
+                });
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            bks.emplace(get_self(), [&](auto& row) {
+                row.id             = bks.available_primary_key();
+                row.tierprice_id   = tierprice_id;
+                row.token_contract = token_contract;
+                row.token_amount   = token_amount;
+                row.active         = active;
+            });
+        }
 
         _audit("setbacking"_n);
     }
@@ -154,7 +186,7 @@ namespace bingoescrow {
     void bingoescrow_contract::setaccpay(uint64_t tierprice_id, name token_contract,
                                          asset base_price, double escalation,
                                          bool active) {
-        require_auth(permission_level{get_self(), "admin"_n});
+        _check_admin_or_depositor(tierprice_id);
 
         tokens_t tkns(get_self(), get_self().value);
         auto tkn = tkns.require_find(token_contract.value,
@@ -165,14 +197,32 @@ namespace bingoescrow {
         tps.require_find(tierprice_id, "Tierprice not found");
 
         accepted_pays_t aps(get_self(), get_self().value);
-        aps.emplace(get_self(), [&](auto& row) {
-            row.id            = aps.available_primary_key();
-            row.tierprice_id  = tierprice_id;
-            row.token_contract = token_contract;
-            row.base_price    = base_price;
-            row.escalation    = escalation;
-            row.active        = active;
-        });
+        auto ap_idx = aps.get_index<"bytierprice"_n>();
+        auto it = ap_idx.lower_bound(tierprice_id);
+        bool found = false;
+
+        for (; it != ap_idx.end() && it->tierprice_id == tierprice_id; it++) {
+            if (it->token_contract == token_contract) {
+                ap_idx.modify(it, same_payer, [&](auto& row) {
+                    row.base_price = base_price;
+                    row.escalation = escalation;
+                    row.active     = active;
+                });
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            aps.emplace(get_self(), [&](auto& row) {
+                row.id             = aps.available_primary_key();
+                row.tierprice_id   = tierprice_id;
+                row.token_contract = token_contract;
+                row.base_price     = base_price;
+                row.escalation     = escalation;
+                row.active         = active;
+            });
+        }
 
         _audit("setaccpay"_n);
     }
@@ -206,6 +256,25 @@ namespace bingoescrow {
 
             tierprices_t tps(get_self(), get_self().value);
             auto tp = tps.require_find(tp_id, "Tierprice not found");
+
+            // Validações v8: active, start_time, end_time, max_mints
+            check(!tp->active.has_value() || tp->active.value(),
+                "Sale is paused");
+
+            if (tp->start_time.has_value() && tp->start_time.value().utc_seconds > 0) {
+                check(tp->start_time.value() <= current_time_point(),
+                    "Sale has not started yet");
+            }
+
+            if (tp->end_time.has_value() && tp->end_time.value().utc_seconds > 0) {
+                check(tp->end_time.value() >= current_time_point(),
+                    "Sale has ended");
+            }
+
+            if (tp->max_mints.has_value() && tp->max_mints.value() > 0) {
+                check(tp->mint_count.value_or() < tp->max_mints.value(),
+                    "Sold out (max mints reached)");
+            }
 
             accepted_pays_t aps(get_self(), get_self().value);
             auto pay = aps.require_find(pay_id, "Accepted payment not found");
@@ -317,6 +386,16 @@ namespace bingoescrow {
                 });
             }
             bk_it++;
+        }
+
+        // Incrementar mint_count
+        {
+            tierprices_t tps_upd(get_self(), get_self().value);
+            auto tp_upd_idx = tps_upd.get_index<"bykey"_n>();
+            tp_upd_idx.modify(tp_upd_idx.require_find(tp_key, "Tierprice not found"),
+                same_payer, [&](auto& row) {
+                    row.mint_count = row.mint_count.value_or() + 1;
+                });
         }
 
         pm_idx.erase(pm_it);
@@ -655,6 +734,18 @@ namespace bingoescrow {
         auto& accs = coll->notify_accounts;
         check(std::find(accs.begin(), accs.end(), get_self()) != accs.end(),
             "Not in notify_accounts of collection");
+    }
+
+    // ==========================================
+    // §2.3b — _check_admin_or_depositor
+    // ==========================================
+
+    void bingoescrow_contract::_check_admin_or_depositor(uint64_t tp_id) {
+        tierprices_t tps(get_self(), get_self().value);
+        auto tp = tps.require_find(tp_id, "Tierprice not found");
+        if (!has_auth(tp->depositor)) {
+            require_auth(permission_level{get_self(), "admin"_n});
+        }
     }
 
     // ==========================================
