@@ -88,6 +88,18 @@ interface AtomicAsset {
   img_url?: string;
 }
 
+/** Shape real do snapshot do escrow-service (reconciliation.ts) — NÃO tem
+ * token_contract/token_amount_raw/updated_at (cast para EscrowEntry seria
+ * interface mentirosa — padrão B5). Os saldos vêm em `balances` por token. */
+interface SnapshotEscrow {
+  esc_id: string;
+  asset_id: string;
+  owner: string;
+  depositor: string;
+  token_amount: string;
+  claimed: boolean;
+}
+
 /** Ownership via Atomic API — path FIXO, query derivada do JWT (anti-SSRF, grill P4#1). */
 async function fetchAtomicOwnership(owner: string): Promise<AtomicAsset[]> {
   const url =
@@ -323,14 +335,30 @@ export async function getEscrowStatusByDepositor(req: Request, res: Response): P
   const age = now - lastModified;
   const hasCache = snapshot !== null;
 
-  const respond = (escrows: EscrowEntry[], source: 'redis' | 'rpc', stale: boolean, cached: boolean) => {
+  const respond = (
+    escrows: Array<Partial<SnapshotEscrow> & { esc_id: string; asset_id: string; token_contract?: string }>,
+    source: 'redis' | 'rpc',
+    stale: boolean,
+    cached: boolean,
+  ) => {
     if (source === 'rpc' && !cached) escrowCacheMisses.inc({ endpoint: 'status' });
     else escrowCacheHits.inc({ endpoint: 'status', source });
+    // Normaliza os dois shapes (snapshot sem token_contract / RPC sem claimed)
+    // — nunca servir campos undefined (padrão B5).
+    const normalized = escrows.map((e) => ({
+      esc_id: e.esc_id,
+      asset_id: e.asset_id,
+      owner: e.owner ?? '',
+      depositor: e.depositor ?? '',
+      token_amount: e.token_amount ?? '',
+      claimed: e.claimed ?? false,
+      ...(e.token_contract ? { token_contract: e.token_contract } : {}),
+    }));
     res.status(200).json({
       depositor,
       stale,
       cached,
-      escrows,
+      escrows: normalized,
       balances,
       last_modified: lastModified || null,
     });
@@ -338,11 +366,11 @@ export async function getEscrowStatusByDepositor(req: Request, res: Response): P
 
   // Snapshot Redis é array de {esc_id, asset_id, owner, depositor, token_amount, claimed}
   if (hasCache && age <= FRESH_MS) {
-    respond(snapshot as EscrowEntry[], 'redis', false, true);
+    respond(snapshot as SnapshotEscrow[], 'redis', false, true);
     return;
   }
   if (hasCache && age <= STALE_MS) {
-    respond(snapshot as EscrowEntry[], 'redis', true, true);
+    respond(snapshot as SnapshotEscrow[], 'redis', true, true);
     return;
   }
   if (hasCache) {
@@ -351,7 +379,7 @@ export async function getEscrowStatusByDepositor(req: Request, res: Response): P
       const escrows = await rpcFetchEscrowsByDepositor(depositor);
       respond(escrows, 'rpc', false, false);
     } catch {
-      respond(snapshot as EscrowEntry[], 'redis', true, true);
+      respond(snapshot as SnapshotEscrow[], 'redis', true, true);
     }
     return;
   }

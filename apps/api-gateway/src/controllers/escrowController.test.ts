@@ -181,6 +181,10 @@ describe('GET /api/v1/escrow/status/:depositor', () => {
     expect(res.headers['Cache-Control']).toBe('private, no-store');
     expect(res.body).toMatchObject({ stale: false, cached: true });
     expect(res.body.escrows).toHaveLength(1);
+    // Normalização (self-review): nunca servir campos undefined (padrão B5)
+    const e = res.body.escrows[0];
+    expect(e).toMatchObject({ esc_id: '7', asset_id: '100', claimed: false });
+    for (const v of Object.values(e)) expect(v).not.toBeUndefined();
   });
 
   it('sem cache + RPC falha → 503 financial fail-closed (nunca inventar)', async () => {
