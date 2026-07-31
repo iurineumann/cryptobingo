@@ -78,7 +78,17 @@ export async function startConsumer(): Promise<void> {
     logger.warn('Consumer rodando sem sessao WAX (apenas log)');
   }
 
-  const conn: ChannelModel = await amqp.connect(RABBITMQ_URL);
+  let conn: ChannelModel;
+  try {
+    conn = await amqp.connect(RABBITMQ_URL);
+  } catch (err) {
+    // Não derruba o serviço se o RabbitMQ estiver fora — reconecta com backoff.
+    // (Mesmo padrão do worker rabbitmq.ts; o Redis/watcher continuam vivos.)
+    logger.error({ err }, 'Consumer: falha ao conectar RabbitMQ — retry em 10s');
+    setTimeout(() => startConsumer(), 10_000);
+    return;
+  }
+
   const ch: Channel = await conn.createChannel();
   await ch.assertQueue(QUEUE_NAME, { durable: true });
 
