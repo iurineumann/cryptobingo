@@ -26,6 +26,7 @@ export const keys = {
   balance: (depositor: string, tokenContract: string) => `${PREFIX}:balance:${depositor}:${tokenContract}`,
   obligated: (depositor: string, tokenContract: string) => `${PREFIX}:obligated:${depositor}:${tokenContract}`,
   aggRatio: (depositor: string, tokenContract: string) => `${PREFIX}:agg_ratio:${depositor}:${tokenContract}`,
+  byAsset: (assetId: number | string) => `${PREFIX}:by_asset:${assetId}`,
   cursor: `${PREFIX}:statewatcher:cursor`,
   heartbeat: `${PREFIX}:heartbeat`,
   lastModified: `${PREFIX}:last_modified`,
@@ -89,6 +90,78 @@ redis.call('INCRBY', KEYS[1], ARGV[1])
 redis.call('EXPIRE', KEYS[1], ARGV[2])
 return 1
 `;
+
+// ─── Lua scripts do índice by_asset (Fase C v2, grill 2026-07-31) ──────
+
+/**
+ * Upsert de um escrow no índice by_asset:<asset_id>.
+ * KEYS[1] = by_asset:<asset_id>   KEYS[2] = meta:<asset_id>
+ * ARGV[1] = esc_id  ARGV[2] = JSON card  ARGV[3] = TTL  ARGV[4] = now
+ * Guard anti-ressurreição: se meta.claimed == 'true' (claim já ocorreu),
+ * NÃO re-adiciona o card (protege contra replay/reorg — d2 design §3.2).
+ */
+const LUA_UPSERT_ASSET = `
+local asset_key = KEYS[1]
+if redis.call('HGET', KEYS[2], 'claimed') == 'true' then
+  return 0
+end
+redis.call('HSET', asset_key, ARGV[1], ARGV[2])
+redis.call('HSET', asset_key, '__lm__', ARGV[4])
+redis.call('EXPIRE', asset_key, tonumber(ARGV[3]))
+return 1
+`;
+
+/**
+ * Remove um escrow do índice por esc_id (cancelback).
+ * KEYS[1] = by_asset:<asset_id>
+ * ARGV[1] = esc_id  ARGV[2] = TTL  ARGV[3] = now
+ * HLEN==0 → DEL atômico (cleanup de asset sem escrows, race-free).
+ */
+const LUA_REMOVE_ASSET = `
+local asset_key = KEYS[1]
+local removed = redis.call('HDEL', asset_key, ARGV[1])
+if redis.call('HLEN', asset_key) == 0 then
+  redis.call('DEL', asset_key)
+else
+  redis.call('EXPIRE', asset_key, tonumber(ARGV[2]))
+  redis.call('HSET', asset_key, '__lm__', ARGV[3])
+end
+return removed
+`;
+
+/**
+ * Rebuild do índice (reconciliação) com timestamp guard POR-CHAVE.
+ * KEYS[1] = by_asset:<asset_id>
+ * ARGV[1] = T0 (início do scan)  ARGV[2] = JSON {esc_id: card}  ARGV[3] = now  ARGV[4] = TTL
+ * Se um evento tocou o asset durante o scan (__lm__ > T0), o rebuild é pulado
+ * (evento vence — d2 design §3.3).
+ */
+const LUA_REBUILD_ASSET = `
+local asset_key = KEYS[1]
+local min_lm = tonumber(ARGV[1] or '0')
+local current_lm = tonumber(redis.call('HGET', asset_key, '__lm__') or '0')
+if current_lm > min_lm then
+  return 0
+end
+redis.call('DEL', asset_key)
+local cards = cjson.decode(ARGV[2])
+for esc_id, card in pairs(cards) do
+  redis.call('HSET', asset_key, esc_id, cjson.encode(card))
+end
+redis.call('HSET', asset_key, '__lm__', ARGV[3])
+redis.call('EXPIRE', asset_key, tonumber(ARGV[4]))
+return 1
+`;
+
+/**
+ * Marca o meta de um asset como claimado (nunca deleta — guard anti-ressurreição
+ * + histórico; d2 design §3.4). TTL 24h mantido.
+ */
+export async function markEscrowClaimed(assetId: number | string): Promise<void> {
+  await redisClient.hSet(keys.meta(assetId), { claimed: 'true' });
+  await redisClient.expire(keys.meta(assetId), TTL_META_SEC);
+  cacheUpdates.inc({ key: 'meta' });
+}
 
 // ─── Operações públicas ────────────────────────────────────────────────
 
@@ -206,6 +279,90 @@ export async function saveSnapshot(depositor: string, snapshot: any[], now = Dat
   });
   await redisClient.set(keys.lastModified, String(now));
   cacheUpdates.inc({ key: 'snapshot' });
+}
+
+// ─── Índice by_asset (Fase C v2) ───────────────────────────────────────
+
+/** Entry do índice escrow:by_asset:<asset_id> (field = esc_id, value = JSON). */
+export interface AssetEscrowEntry {
+  esc_id: string;
+  asset_id: string;
+  owner: string;
+  depositor: string;
+  token_contract: string;
+  token_amount: string;       // asset string (ex: "100.0000 BINGO")
+  token_amount_raw: string;   // unidades mínimas
+  updated_at: number;         // epoch ms (momento da indexação)
+}
+
+const LM_FIELD = '__lm__'; // campo reservado: última verificação (guard reconciliação + staleness)
+
+/** Upsert atômico de um escrow no índice (LUA_UPSERT_ASSET — guard anti-ressurreição). */
+export async function upsertAssetEscrow(assetId: number | string, entry: AssetEscrowEntry): Promise<boolean> {
+  const res = await redisClient.eval(LUA_UPSERT_ASSET, {
+    keys: [keys.byAsset(assetId), keys.meta(assetId)],
+    arguments: [String(entry.esc_id), JSON.stringify(entry), String(TTL_CACHE_SEC), String(Date.now())],
+  });
+  if (Number(res) === 1) cacheUpdates.inc({ key: 'by_asset' });
+  return Number(res) === 1;
+}
+
+/** Remove um escrow do índice por esc_id (cancelback) — HLEN→DEL atômico. */
+export async function removeAssetEscrow(assetId: number | string, escId: number | string): Promise<number> {
+  const res = await redisClient.eval(LUA_REMOVE_ASSET, {
+    keys: [keys.byAsset(assetId)],
+    arguments: [String(escId), String(TTL_CACHE_SEC), String(Date.now())],
+  });
+  cacheUpdates.inc({ key: 'by_asset' });
+  return Number(res);
+}
+
+/** DEL do índice inteiro (claim — asset sai de circulação). */
+export async function deleteAssetEscrows(assetId: number | string): Promise<void> {
+  await redisClient.del(keys.byAsset(assetId));
+  cacheUpdates.inc({ key: 'by_asset' });
+}
+
+/** Lê todos os escrows ativos de um asset (filtra __lm__). [] se ausente. */
+export async function getAssetEscrows(assetId: number | string): Promise<AssetEscrowEntry[]> {
+  const raw = await redisClient.hGetAll(keys.byAsset(assetId));
+  if (!raw || Object.keys(raw).length === 0) return [];
+  const entries: AssetEscrowEntry[] = [];
+  for (const [field, value] of Object.entries(raw)) {
+    if (field === LM_FIELD) continue;
+    try {
+      entries.push(JSON.parse(value) as AssetEscrowEntry);
+    } catch {
+      handlerErrors.inc({ handler: 'cache', error_type: 'by_asset_parse_error' });
+    }
+  }
+  return entries;
+}
+
+/** Lê o __lm__ (última verificação) do índice de um asset; 0 se ausente. */
+export async function getAssetLastModified(assetId: number | string): Promise<number> {
+  const v = await redisClient.hGet(keys.byAsset(assetId), LM_FIELD);
+  return v ? parseInt(v, 10) : 0;
+}
+
+/**
+ * Rebuild do índice a partir do scan (reconciliação) — LUA_REBUILD_ASSET com
+ * guard por-chave (evento durante scan vence). Retorna false se pulado.
+ */
+export async function rebuildAssetEscrows(
+  assetId: number | string,
+  entries: AssetEscrowEntry[],
+  minLastModified: number,
+  now = Date.now(),
+): Promise<boolean> {
+  const cards: Record<string, AssetEscrowEntry> = {};
+  for (const e of entries) cards[String(e.esc_id)] = e;
+  const res = await redisClient.eval(LUA_REBUILD_ASSET, {
+    keys: [keys.byAsset(assetId)],
+    arguments: [String(minLastModified), JSON.stringify(cards), String(now), String(TTL_CACHE_SEC)],
+  });
+  if (Number(res) === 1) cacheUpdates.inc({ key: 'by_asset' });
+  return Number(res) === 1;
 }
 
 // ─── Cursor + heartbeat ────────────────────────────────────────────────

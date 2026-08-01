@@ -9,12 +9,14 @@
 // Grill C1/A2: usa timestamp guard — o SET só aplica se NENHUM evento
 // modificou a chave desde o início do scan (não sobrescreve eventos vivos).
 
-import { rpcClient } from '@cryptobingo/blockchain-core';
+import { rpcClient, assetToRaw } from '@cryptobingo/blockchain-core';
 import {
   keys,
   saveSnapshot,
   setAbsolute,
   touchHeartbeat,
+  rebuildAssetEscrows,
+  type AssetEscrowEntry,
 } from './escrowCacheManager';
 import { reconciliations, reconciliationDuration, handlerErrors } from './metrics';
 import { logger } from './logger';
@@ -36,8 +38,6 @@ interface EscrowRow {
   token_contract: string;
   token_amount: string;
   claimed: boolean;
-  backing_amount: string;
-  template_id: number;
 }
 
 /** Pagina uma tabela inteira via next_key. */
@@ -78,6 +78,8 @@ export async function runReconciliation(trigger: 'startup' | 'scheduled' | 'forc
 
     // Agregar por (depositor, token_contract)
     const agg = new Map<string, { balance: number; obligated: number; snapshot: any[] }>();
+    // C2: agrupar escrows ativos por asset_id p/ rebuild do índice by_asset
+    const byAsset = new Map<string, AssetEscrowEntry[]>();
 
     for (const b of balances as BalanceRow[]) {
       const k = `${b.depositor}:${b.token_contract}`;
@@ -96,11 +98,23 @@ export async function runReconciliation(trigger: 'startup' | 'scheduled' | 'forc
         esc_id: esc.esc_id,
         asset_id: esc.asset_id,
         owner: esc.owner,
-        template_id: esc.template_id,
         depositor: esc.depositor,
         token_amount: esc.token_amount,
-        backing_amount: esc.backing_amount,
         claimed: false,
+      });
+
+      // C2: entry do índice by_asset
+      const aKey = String(esc.asset_id);
+      if (!byAsset.has(aKey)) byAsset.set(aKey, []);
+      byAsset.get(aKey)!.push({
+        esc_id: String(esc.esc_id),
+        asset_id: aKey,
+        owner: esc.owner ?? '',
+        depositor: esc.depositor,
+        token_contract: esc.token_contract,
+        token_amount: esc.token_amount ?? '',
+        token_amount_raw: String(assetToRaw(esc.token_amount)),
+        updated_at: Date.now(),
       });
     }
 
@@ -117,11 +131,20 @@ export async function runReconciliation(trigger: 'startup' | 'scheduled' | 'forc
     }
 
     // Chaves de depositores que sumiram — expiram sozinhas (TTL 1h)
+
+    // C2: rebuild do índice by_asset com guard por-chave — se um evento tocou o
+    // asset durante o scan (__lm__ > start), o rebuild é pulado (evento vence).
+    let rebuilt = 0;
+    for (const [assetId, entries] of byAsset.entries()) {
+      const ok = await rebuildAssetEscrows(assetId, entries, start, Date.now());
+      if (ok) rebuilt += 1;
+    }
+
     await touchHeartbeat();
 
     timer();
     reconciliations.inc({ trigger });
-    logger.info({ trigger, groups: agg.size, applied, durationMs: Date.now() - start }, 'Reconciliação concluída');
+    logger.info({ trigger, groups: agg.size, applied, rebuiltAssets: rebuilt, durationMs: Date.now() - start }, 'Reconciliação concluída');
   } catch (err) {
     timer();
     handlerErrors.inc({ handler: 'reconciliation', error_type: 'rpc_timeout' });
@@ -134,11 +157,4 @@ export function startReconciliationScheduler(): void {
   setInterval(() => {
     runReconciliation('scheduled').catch(() => undefined);
   }, RECONCILE_INTERVAL_MS);
-}
-
-function assetToRaw(asset: string | undefined | null): number {
-  if (!asset) return 0;
-  const [amount] = asset.split(' ');
-  const raw = Math.round(parseFloat(amount) * 10000);
-  return Number.isFinite(raw) ? raw : 0;
 }
