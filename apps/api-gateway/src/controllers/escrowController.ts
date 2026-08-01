@@ -14,7 +14,7 @@
 // api_escrow_* (grill: prefixo api_, não escrow_).
 
 import { Request, Response } from 'express';
-import { rpcClient } from '@cryptobingo/blockchain-core';
+import { rpcClient, assetToRaw } from '@cryptobingo/blockchain-core';
 import { Counter } from 'prom-client';
 import { registry } from '../services/metrics';
 import { redisClient } from '../database/redis';
@@ -191,15 +191,6 @@ async function rpcFetchEscrowsByAsset(assetId: string): Promise<EscrowEntry[]> {
       token_amount_raw: String(assetToRaw(r.token_amount)),
       updated_at: Date.now(),
     }));
-}
-
-/** assetToRaw com precisão do símbolo (grill P5#5 — nunca fator fixo ×10000). */
-function assetToRaw(asset: string | undefined | null): number {
-  if (!asset) return 0;
-  const [amount] = asset.split(' ');
-  const [, decimals = ''] = amount.split('.');
-  const raw = Math.round(parseFloat(amount) * Math.pow(10, decimals.length));
-  return Number.isFinite(raw) ? raw : 0;
 }
 
 /** RPC bydepositor (index_position 3) — fallback do /status. */

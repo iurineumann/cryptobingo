@@ -9,7 +9,7 @@
 // Grill C1/A2: usa timestamp guard — o SET só aplica se NENHUM evento
 // modificou a chave desde o início do scan (não sobrescreve eventos vivos).
 
-import { rpcClient } from '@cryptobingo/blockchain-core';
+import { rpcClient, assetToRaw } from '@cryptobingo/blockchain-core';
 import {
   keys,
   saveSnapshot,
@@ -157,11 +157,4 @@ export function startReconciliationScheduler(): void {
   setInterval(() => {
     runReconciliation('scheduled').catch(() => undefined);
   }, RECONCILE_INTERVAL_MS);
-}
-
-function assetToRaw(asset: string | undefined | null): number {
-  if (!asset) return 0;
-  const [amount] = asset.split(' ');
-  const raw = Math.round(parseFloat(amount) * 10000);
-  return Number.isFinite(raw) ? raw : 0;
 }

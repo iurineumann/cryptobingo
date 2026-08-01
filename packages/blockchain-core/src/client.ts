@@ -55,6 +55,33 @@ export function parseHexBytes(hex: string): number[] {
 }
 
 /**
+ * Converte asset string ("100.0000 BINGO") para unidades mínimas (int).
+ * Precisão derivada do símbolo — NUNCA fator fixo ×10000 (WAX tem 8 casas,
+ * BINGO 4). Fonte única compartilhada entre escrow-service e api-gateway
+ * (evita 3 cópias — duplicação no Sonar).
+ */
+export function assetToRaw(asset: string | undefined | null): number {
+    if (!asset) return 0;
+    const [amount] = asset.split(' ');
+    const [, decimals = ''] = amount.split('.');
+    const raw = Math.round(parseFloat(amount) * Math.pow(10, decimals.length));
+    return Number.isFinite(raw) ? raw : 0;
+}
+
+/** Row da tabela `escrows` do bingoescrow (ABI: esc_id, asset_id, owner,
+ * depositor, token_contract, token_amount, claimed, source). */
+export interface EscrowRow {
+    esc_id: number;
+    asset_id: number;
+    owner: string;
+    depositor: string;
+    token_contract: string;
+    token_amount: string;
+    claimed: boolean;
+    source: number;
+}
+
+/**
  * Busca o estado de um jogo na tabela `games` (scope: bingogamectr).
  * Retorna null se o jogo não existir.
  *

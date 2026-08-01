@@ -10,7 +10,7 @@
 //   logmint (on_mint), receive_asset (memo redeem), releaseburn.
 
 import type { ContractEvent } from '@cryptobingo/blockchain-core';
-import { rpcClient } from '@cryptobingo/blockchain-core';
+import { rpcClient, assetToRaw } from '@cryptobingo/blockchain-core';
 import {
   adjustCounter,
   getEscrowMeta,
@@ -46,20 +46,6 @@ function errorTypeOf(err: unknown): string {
   if (/redis|ECONNREFUSED/i.test(msg)) return 'redis_error';
   if (/invalid|validation/i.test(msg)) return 'validation_error';
   return 'unknown';
-}
-
-/**
- * Converte asset string ("100.0000 WAX") para unidades mínimas (int).
- * Precisão derivada do símbolo (grill v2-grill-api P5#5 — NUNCA fator fixo
- * ×10000: WAX tem 8 casas, BINGO 4).
- */
-function assetToRaw(asset: string | undefined | null): number {
-  if (!asset) return 0;
-  const [amount] = asset.split(' ');
-  const [, decimals = ''] = amount.split('.');
-  const factor = Math.pow(10, decimals.length);
-  const raw = Math.round(parseFloat(amount) * factor);
-  return Number.isFinite(raw) ? raw : 0;
 }
 
 /** Monta a entry do índice by_asset a partir de uma row da tabela escrows. */

@@ -26,6 +26,12 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
       },
     },
   },
+  assetToRaw: (asset: string | null | undefined) => {
+    if (!asset) return 0;
+    const [amount] = asset.split(' ');
+    const [, decimals = ''] = amount.split('.');
+    return Math.round(parseFloat(amount) * Math.pow(10, decimals.length));
+  },
 }));
 
 import { redisClient } from '../database/redis';

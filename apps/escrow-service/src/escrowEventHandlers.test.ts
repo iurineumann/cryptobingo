@@ -36,6 +36,12 @@ jest.mock('@cryptobingo/blockchain-core', () => ({
   rpcClient: {
     v1: { chain: { get_table_rows: (...args: any[]) => mockGetTableRows(...args) } },
   },
+  assetToRaw: (asset: string | null | undefined) => {
+    if (!asset) return 0;
+    const [amount] = asset.split(' ');
+    const [, decimals = ''] = amount.split('.');
+    return Math.round(parseFloat(amount) * Math.pow(10, decimals.length));
+  },
 }));
 
 import { rpcClient } from '@cryptobingo/blockchain-core';

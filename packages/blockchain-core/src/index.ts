@@ -7,6 +7,8 @@ export {
     fetchPlayerTickets, 
     fetchPlayerBalance,
     parseHexBytes,
+    assetToRaw,
+    type EscrowRow,
 } from './client';
 
 // Exporta o cliente de eventos on-chain (Firehose gRPC + Hyperion fallback)
