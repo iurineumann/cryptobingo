@@ -18,7 +18,7 @@
     "amqplib": "^2.0.1",
     "dotenv": "^16.4.5",
     "jsonwebtoken": "^9.0.0",
-    "mongoose": "^9.7.1",
+    "mongoose": "^9.7.2",
     "pg": "^8.22.0",
     "pino": "^10.3.1",
     "prom-client": "^15.1.3",
